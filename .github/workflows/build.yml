@@ -1,1 +1,30 @@
+on:
+  push: # 每次 push 的时候触发
 
+name: Build Release
+jobs:
+  release:
+    if: startsWith(github.ref, 'refs/tags/') # 只有这次 Commit 是 创建 Tag 时，才进行后续发布操作
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@master # checkout 代码
+      - uses: actions/setup-go@v2 # 配置 Go 环境
+        with:
+          go-version: "1.18" # 改成自己的版本
+
+      - run: bash .cross_compile.sh
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with: # 将下述可执行文件 release 上去
+          files: |
+            BetterTrace_darwin_amd64
+            BetterTrace_darwin_arm64
+            BetterTrace_linux_386
+            BetterTrace_linux_amd64
+            BetterTrace_linux_arm
+            BetterTrace_linux_arm64
+            BetterTrace_windows/386
+            BetterTrace_windows/amd64
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
