@@ -1,12 +1,12 @@
 package main
 
 import (
-	"traceroute/methods"
-	"traceroute/methods/tcp"
-	"traceroute/methods/udp"
+    "traceroute/methods"
+    "traceroute/methods/tcp"
+    "traceroute/methods/udp"
     "os"
-	"net"
-	"time"
+    "net"
+    "time"
     "fmt"
     "net/http"
     "io/ioutil"
