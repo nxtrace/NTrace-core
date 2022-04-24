@@ -18,9 +18,9 @@ jobs:
         uses: softprops/action-gh-release@v1
         with: # 将下述可执行文件 release 上去
           files: |
-            BetterTrace_darwin_amd64
-            BetterTrace_darwin_arm64
-            BetterTrace_linux_amd64
-            BetterTrace_linux_arm64
+            dist/BetterTrace_darwin_amd64
+            dist/BetterTrace_darwin_arm64
+            dist/BetterTrace_linux_amd64
+            dist/BetterTrace_linux_arm64
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
