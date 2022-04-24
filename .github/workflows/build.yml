@@ -20,11 +20,7 @@ jobs:
           files: |
             BetterTrace_darwin_amd64
             BetterTrace_darwin_arm64
-            BetterTrace_linux_386
             BetterTrace_linux_amd64
-            BetterTrace_linux_arm
             BetterTrace_linux_arm64
-            BetterTrace_windows/386
-            BetterTrace_windows/amd64
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
