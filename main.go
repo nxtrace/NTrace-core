@@ -33,7 +33,7 @@ var maxHops = flag.Int("m", 30, "Set the max number of hops (max TTL to be reach
 
 
 func main() {
-    fmt.Println("ManGoTrace v0.0.1 Alpha \nOwO Organiztion Leo (leo.moe) & Vincent (vincent.moe)")
+    fmt.Println("BetterTrace v0.0.1 Alpha \nOwO Organiztion Leo (leo.moe) & Vincent (vincent.moe)")
     ip := domainLookUp(flagApply())
     fmt.Printf("traceroute to %s, 30 hops max, 32 byte packets\n", ip.String())
 
@@ -87,7 +87,7 @@ func flagApply() string{
     flag.Parse()
     ipArg := flag.Args()
     if (flag.NArg() != 1) {
-        fmt.Println("Args Error")
+        fmt.Println("Args Error\nUsage : ./bettertrace [-T] [ -m <hops> ] [ -p <port> ] [ -q <probes> ] [ -r <parallelrequests> ] <hostname>")
         os.Exit(2)
     }
     return ipArg[0]
@@ -113,7 +113,7 @@ func getIPGeo(ip string, c chan IPGeoData) {
 func domainLookUp(host string) net.IP {
     ips, err := net.LookupIP(host)
     if (err != nil) {
-        fmt.Println("Domain Lookup Fail.")
+        fmt.Println("Domain" + host + "Lookup Fail.")
         os.Exit(1)
     }
     
