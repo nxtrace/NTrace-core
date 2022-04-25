@@ -94,7 +94,7 @@ func flagApply() string{
 }
 
 func getIPGeo(ip string, c chan IPGeoData) {
-    resp, err := http.Get("https://leo.moe/api.php?ip=" + ip)
+    resp, err := http.Get("https://api.leo.moe/ip/?ip=" + ip)
     if err != nil {
         fmt.Println(err)
     }
