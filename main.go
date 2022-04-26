@@ -1,16 +1,17 @@
 package main
 
 import (
-    "traceroute/methods"
-    "traceroute/methods/tcp"
-    "traceroute/methods/udp"
+	"traceroute/methods"
+	"traceroute/methods/tcp"
+	"traceroute/methods/udp"
     "os"
-    "net"
-    "time"
+	"net"
+	"time"
     "fmt"
     "net/http"
     "io/ioutil"
     "encoding/json"
+    "strconv"
     "flag"
     "strings"
 )
@@ -25,17 +26,71 @@ type IPGeoData struct {
 	Isp string `json:"isp"`
 }
 
+type IPInSightData struct {
+	IP              string `json:"ip"`
+	Version         string `json:"version"`
+	IsEuropeanUnion bool   `json:"is_european_union"`
+	ContinentCode   string `json:"continent_code"`
+	IddCode         string `json:"idd_code"`
+	CountryCode     string `json:"country_code"`
+	CountryName     string `json:"country_name"`
+	RegionName      string `json:"region_name"`
+	CityName        string `json:"city_name"`
+	Latitude        float64    `json:"latitude"`
+	Longitude       float64    `json:"longitude"`
+}
+
+type IPSBData struct {
+	Organization    string  `json:"organization"`
+	Longitude       float64 `json:"longitude"`
+	City            string  `json:"city"`
+	Timezone        string  `json:"timezone"`
+	Isp             string  `json:"isp"`
+	Offset          int     `json:"offset"`
+	Region          string  `json:"region"`
+	Asn             int     `json:"asn"`
+	AsnOrganization string  `json:"asn_organization"`
+	Country         string  `json:"country"`
+	IP              string  `json:"ip"`
+	Latitude        float64 `json:"latitude"`
+	PostalCode      string  `json:"postal_code"`
+	ContinentCode   string  `json:"continent_code"`
+	CountryCode     string  `json:"country_code"`
+	RegionCode      string  `json:"region_code"`
+}
+
+type IPInfoData struct {
+	IP       string `json:"ip"`
+	Hostname string `json:"hostname"`
+	City     string `json:"city"`
+	Region   string `json:"region"`
+	Country  string `json:"country"`
+	Loc      string `json:"loc"`
+	Org      string `json:"org"`
+	Postal   string `json:"postal"`
+	Timezone string `json:"timezone"`
+}
+
 var tcpSYNFlag = flag.Bool("T", false, "Use TCP SYN for tracerouting (default port is 80 in TCP, 53 in UDP)")
 var port = flag.Int("p", 80, "Set SYN Traceroute Port")
 var numMeasurements = flag.Int("q", 3, "Set the number of probes per each hop.")
 var parallelRequests = flag.Int("r", 18, "Set ParallelRequests number. It should be 1 when there is a multi-routing.")
 var maxHops = flag.Int("m", 30, "Set the max number of hops (max TTL to be reached).")
+var dataOrigin = flag.String("d", "LeoMoeAPI", "Choose IP Geograph Data Provider [LeoMoeAPI, IP.SB, IPInfo, IPInsight]")
 
 
 func main() {
-    fmt.Println("BetterTrace v0.0.1 Alpha \nOwO Organiztion Leo (leo.moe) & Vincent (vincent.moe)")
+    fmt.Println("BetterTrace v0.0.4 Alpha \nOwO Organiztion Leo (leo.moe) & Vincent (vincent.moe)")
     ip := domainLookUp(flagApply())
-    fmt.Printf("traceroute to %s, 30 hops max, 32 byte packets\n", ip.String())
+
+    fmt.Println("IP Geo Data Provider: " + *dataOrigin)
+
+    if (ip.String() == flagApply()) {
+        fmt.Printf("traceroute to %s, 30 hops max, 32 byte packets\n", ip.String())
+    } else {
+        fmt.Printf("traceroute to %s (%s), 30 hops max, 32 byte packets\n", ip.String(), flagApply())
+    }
+    
 
     if (*tcpSYNFlag) {
         tcpTraceroute := tcp.New(ip, methods.TracerouteConfig{
@@ -87,10 +142,84 @@ func flagApply() string{
     flag.Parse()
     ipArg := flag.Args()
     if (flag.NArg() != 1) {
-        fmt.Println("Args Error\nUsage : ./bettertrace [-T] [ -m <hops> ] [ -p <port> ] [ -q <probes> ] [ -r <parallelrequests> ] <hostname>")
+        fmt.Println("Args Error\nUsage : ./bettertrace [-T] [-d <dataOrigin> ] [ -m <hops> ] [ -p <port> ] [ -q <probes> ] [ -r <parallelrequests> ] <hostname>")
         os.Exit(2)
     }
     return ipArg[0]
+}
+
+func getIPGeoByIPInfo(ip string, c chan IPGeoData) {
+    
+    resp, err := http.Get("https://ipinfo.io/" + ip + "?token=42764a944dabd0")
+    if err != nil {
+        fmt.Println(err)
+    }
+    defer resp.Body.Close()
+    body, _ := ioutil.ReadAll(resp.Body)
+    
+    iPInfoData := &IPInfoData{}
+    err = json.Unmarshal(body,&iPInfoData)
+    
+    if err != nil {
+        fmt.Println(err)
+    }
+
+    ipGeoData := IPGeoData{
+        Country: iPInfoData.Country,
+        City: iPInfoData.City,
+        Prov: iPInfoData.Region}
+
+    c <- ipGeoData
+}
+
+func getIPGeoByIPSB(ip string, c chan IPGeoData) {
+    resp, err := http.Get("https://api.ip.sb/geoip/" + ip)
+    if err != nil {
+        fmt.Println(err)
+    }
+    defer resp.Body.Close()
+    body, _ := ioutil.ReadAll(resp.Body)
+    
+    iPSBData := &IPSBData{}
+    err = json.Unmarshal(body,&iPSBData)
+    
+    if err != nil {
+        fmt.Println("您当前出口IP被IP.SB视为风控IP，请求被拒绝")
+        c <- IPGeoData{}
+    }
+
+    ipGeoData := IPGeoData{
+        Asnumber: strconv.Itoa(iPSBData.Asn),
+        Isp: iPSBData.Isp,
+        Country: iPSBData.Country,
+        City: iPSBData.City,
+        Prov: iPSBData.Region}
+
+    c <- ipGeoData
+}
+
+func getIPGeoByIPInsight(ip string, c chan IPGeoData) {
+    
+    resp, err := http.Get("https://ipinsight.io/query?ip=" + ip)
+    if err != nil {
+        fmt.Println(err)
+    }
+    defer resp.Body.Close()
+    body, _ := ioutil.ReadAll(resp.Body)
+    
+    iPInSightData := &IPInSightData{}
+    err = json.Unmarshal(body,&iPInSightData)
+    
+    if err != nil {
+        fmt.Println(err)
+    }
+
+    ipGeoData := IPGeoData{
+        Country: iPInSightData.CountryName,
+        City: iPInSightData.CityName,
+        Prov: iPInSightData.RegionName}
+
+    c <- ipGeoData
 }
 
 func getIPGeo(ip string, c chan IPGeoData) {
@@ -149,7 +278,23 @@ func hopPrinter(hopIndex uint16, ip net.IP, v2 methods.TracerouteHop, c chan uin
         ptr, err := net.LookupAddr(ip_str)
 
         ch_b := make(chan IPGeoData)
-        go getIPGeo(ip_str, ch_b)
+
+        if (*dataOrigin == "LeoMoeAPI") {
+            go getIPGeo(ip_str, ch_b)
+
+        } else if (*dataOrigin == "IP.SB") {
+            go getIPGeoByIPSB(ip_str, ch_b)
+
+        } else if (*dataOrigin == "IPInfo") {
+            go getIPGeoByIPInfo(ip_str, ch_b)
+
+        } else if (*dataOrigin == "IPInsight") {
+            go getIPGeoByIPInsight(ip_str, ch_b)
+
+        } else {
+            go getIPGeo(ip_str, ch_b)
+        }
+        
         iPGeoData := <-ch_b
 
         if (ip.String() == ip_str) {
