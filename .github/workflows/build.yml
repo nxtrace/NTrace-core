@@ -19,9 +19,9 @@ jobs:
         with: # 将下述可执行文件 release 上去
           draft: false # Release草稿
           files: |
-            dist/bettertrace_darwin_amd64
-            dist/bettertrace_darwin_arm64
-            dist/bettertrace_linux_amd64
-            dist/bettertrace_linux_arm64
+            dist/nexttrace_darwin_amd64
+            dist/nexttrace_darwin_arm64
+            dist/nexttrace_linux_amd64
+            dist/nexttrace_linux_arm64
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
