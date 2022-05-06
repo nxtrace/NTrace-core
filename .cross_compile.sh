@@ -2,7 +2,7 @@
 
 set -e
 
-DIST_PREFIX="bettertrace"
+DIST_PREFIX="nexttrace"
 DEBUG_MODE=${2}
 TARGET_DIR="dist"
 PLATFORMS="darwin/amd64 darwin/arm64 linux/amd64 linux/arm64"
