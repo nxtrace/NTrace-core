@@ -1,12 +1,12 @@
 package main
 
 import (
-	"traceroute/methods"
-	"traceroute/methods/tcp"
-	"traceroute/methods/udp"
+    "traceroute/methods"
+    "traceroute/methods/tcp"
+    "traceroute/methods/udp"
     "os"
-	"net"
-	"time"
+    "net"
+    "time"
     "fmt"
     "net/http"
     "io/ioutil"
@@ -80,7 +80,7 @@ var dataOrigin = flag.String("d", "LeoMoeAPI", "Choose IP Geograph Data Provider
 
 
 func main() {
-    fmt.Println("BetterTrace v0.0.4 Alpha \nOwO Organiztion Leo (leo.moe) & Vincent (vincent.moe)")
+    fmt.Println("NextTrace v0.0.5 Alpha \nOwO Organiztion Leo (leo.moe) & Vincent (vincent.moe)")
     ip := domainLookUp(flagApply())
 
     fmt.Println("IP Geo Data Provider: " + *dataOrigin)
@@ -336,7 +336,14 @@ func hopPrinter(hopIndex uint16, ip net.IP, v2 methods.TracerouteHop, c chan uin
             return
         }
 
-        if (iPGeoData.Prov == "" && iPGeoData.City == "") {
+        if (iPGeoData.Prov != "" && iPGeoData.City == "") {
+            // Province Only
+            if err != nil {
+                fmt.Printf("\t%-15s %.2fms %s %s, %s, %s\n",v2.Address, v2.RTT.Seconds()*1000, iPGeoData.Asnumber, iPGeoData.Country, iPGeoData.Prov, iPGeoData.Owner)
+            } else {
+                fmt.Printf("\t%-15s (%s) %.2fms %s %s, %s, %s\n",ptr[0], v2.Address, v2.RTT.Seconds()*1000, iPGeoData.Asnumber, iPGeoData.Country, iPGeoData.Prov, iPGeoData.Owner) 
+            }
+        } else if (iPGeoData.Prov == "" && iPGeoData.City == "") {
 
             if err != nil {
                 fmt.Printf("\t%-15s %.2fms %s %s, %s, %s 骨干网\n",v2.Address, v2.RTT.Seconds()*1000, iPGeoData.Asnumber, iPGeoData.Country, iPGeoData.Owner, iPGeoData.Owner)
