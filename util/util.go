@@ -5,7 +5,7 @@ import (
 	"net"
 )
 
-// get the local ip and port based on our destination ip
+// LocalIPPort get the local ip and port based on our destination ip
 func LocalIPPort(dstip net.IP) (net.IP, int) {
 	serverAddr, err := net.ResolveUDPAddr("udp", dstip.String()+":12345")
 	if err != nil {
