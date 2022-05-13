@@ -24,4 +24,4 @@ jobs:
             dist/nexttrace_linux_amd64
             dist/nexttrace_linux_arm64
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
