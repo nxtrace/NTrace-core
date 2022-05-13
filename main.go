@@ -19,7 +19,8 @@ var numMeasurements = flag.Int("q", 3, "Set the number of probes per each hop.")
 var parallelRequests = flag.Int("r", 18, "Set ParallelRequests number. It should be 1 when there is a multi-routing.")
 var maxHops = flag.Int("m", 30, "Set the max number of hops (max TTL to be reached).")
 var dataOrigin = flag.String("d", "LeoMoeAPI", "Choose IP Geograph Data Provider [LeoMoeAPI, IP.SB, IPInfo, IPInsight]")
-var displayMode = flag.String("displayMode", "table", "Choose The Display Mode [table, Besttrace]")
+var displayMode = flag.String("displayMode", "table", "Choose The Display Mode [table, classic]")
+var rdnsenable = flag.Bool("rdns", false, "Set whether rDNS will be display")
 
 func main() {
 	printer.PrintCopyRight()
@@ -40,13 +41,13 @@ func main() {
 		if err != nil {
 			fmt.Println("请赋予 sudo (root) 权限运行本程序")
 		} else {
-			if *displayMode == "Besttrace" {
-				printer.TraceroutePrinter(ip, *res, *dataOrigin)
-			} else if *displayMode == "table" {
-				printer.TracerouteTablePrinter(ip, *res, *dataOrigin)
-			} else {
-				printer.TracerouteTablePrinter(ip, *res, *dataOrigin)
-			}
+			util.Printer(&util.PrinterConfig{
+				IP:          ip,
+				DisplayMode: *displayMode,
+				DataOrigin:  *dataOrigin,
+				Rdnsenable:  *rdnsenable,
+				Results:     *res,
+			})
 		}
 
 	} else {
@@ -65,13 +66,13 @@ func main() {
 		if err != nil {
 			fmt.Println("请赋予 sudo (root) 权限运行本程序")
 		} else {
-			if *displayMode == "Besttrace" {
-				printer.TraceroutePrinter(ip, *res, *dataOrigin)
-			} else if *displayMode == "table" {
-				printer.TracerouteTablePrinter(ip, *res, *dataOrigin)
-			} else {
-				printer.TracerouteTablePrinter(ip, *res, *dataOrigin)
-			}
+			util.Printer(&util.PrinterConfig{
+				IP:          ip,
+				DisplayMode: *displayMode,
+				DataOrigin:  *dataOrigin,
+				Rdnsenable:  *rdnsenable,
+				Results:     *res,
+			})
 		}
 	}
 }

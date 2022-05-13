@@ -22,12 +22,12 @@ type rowData struct {
 	Owner    string
 }
 
-func TracerouteTablePrinter(ip net.IP, res map[uint16][]methods.TracerouteHop, dataOrigin string) {
+func TracerouteTablePrinter(ip net.IP, res map[uint16][]methods.TracerouteHop, dataOrigin string, rdnsenable bool) {
 	// 初始化表格
 	tbl := New()
 	for hi := uint16(1); hi < 30; hi++ {
 		for _, v := range res[hi] {
-			data := tableDataGenerator(v)
+			data := tableDataGenerator(v, rdnsenable)
 			tbl.AddRow(data.Hop, data.IP, data.Latency, data.Asnumber, data.Country, data.Prov, data.City, data.Owner)
 			if v.Address != nil && ip.String() == v.Address.String() {
 				hi = 31
@@ -48,7 +48,7 @@ func New() table.Table {
 	return tbl
 }
 
-func tableDataGenerator(v2 methods.TracerouteHop) *rowData {
+func tableDataGenerator(v2 methods.TracerouteHop, rdnsenable bool) *rowData {
 	if v2.Address == nil {
 		return &rowData{
 			Hop: int64(v2.TTL),
@@ -75,15 +75,18 @@ func tableDataGenerator(v2 methods.TracerouteHop) *rowData {
 			iPGeoData, err = ipgeo.LeoIP(ipStr)
 		}
 
-		ptr, err_LookupAddr := net.LookupAddr(ipStr)
+		if rdnsenable {
+			ptr, err_LookupAddr := net.LookupAddr(ipStr)
+			if err_LookupAddr != nil {
+				IP = fmt.Sprint(ipStr)
+			} else {
+				IP = fmt.Sprint(ptr[0], " (", ipStr, ") ")
+			}
+		} else {
+			IP = fmt.Sprint(ipStr)
+		}
 
 		lantency = fmt.Sprintf("%.2fms", v2.RTT.Seconds()*1000)
-
-		if err_LookupAddr != nil {
-			IP = fmt.Sprint(ipStr)
-		} else {
-			IP = fmt.Sprint(ptr[0], " (", ipStr, ") ")
-		}
 
 		if iPGeoData.Owner == "" {
 			iPGeoData.Owner = iPGeoData.Isp

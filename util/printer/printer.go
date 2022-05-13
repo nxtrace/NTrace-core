@@ -11,11 +11,11 @@ import (
 
 var dataOrigin string
 
-func TraceroutePrinter(ip net.IP, res map[uint16][]methods.TracerouteHop, dataOrigin string) {
+func TraceroutePrinter(ip net.IP, res map[uint16][]methods.TracerouteHop, dataOrigin string, rdnsenable bool) {
 	for hi := uint16(1); hi < 30; hi++ {
 		fmt.Print(hi)
 		for _, v := range res[hi] {
-			hopPrinter(v)
+			hopPrinter(v, rdnsenable)
 			if v.Address != nil && ip.String() == v.Address.String() {
 				hi = 31
 			}
@@ -23,7 +23,7 @@ func TraceroutePrinter(ip net.IP, res map[uint16][]methods.TracerouteHop, dataOr
 	}
 }
 
-func hopPrinter(v2 methods.TracerouteHop) {
+func hopPrinter(v2 methods.TracerouteHop, rdnsenable bool) {
 	if v2.Address == nil {
 		fmt.Println("\t*")
 	} else {
@@ -52,14 +52,19 @@ func hopPrinter(v2 methods.TracerouteHop) {
 			geo = formatIpGeoData(ipStr, iPGeoData)
 		}
 
-		ptr, err := net.LookupAddr(ipStr)
-
 		txt := "\t"
-		if err != nil {
-			txt += fmt.Sprint(ipStr, " ", fmt.Sprintf("%.2f", v2.RTT.Seconds()*1000), "ms ", geo)
+
+		if rdnsenable {
+			ptr, err := net.LookupAddr(ipStr)
+			if err != nil {
+				txt += fmt.Sprint(ipStr, " ", fmt.Sprintf("%.2f", v2.RTT.Seconds()*1000), "ms ", geo)
+			} else {
+				txt += fmt.Sprint(ptr[0], " (", ipStr, ") ", fmt.Sprintf("%.2f", v2.RTT.Seconds()*1000), "ms ", geo)
+			}
 		} else {
-			txt += fmt.Sprint(ptr[0], " (", ipStr, ") ", fmt.Sprintf("%.2f", v2.RTT.Seconds()*1000), "ms ", geo)
+			txt += fmt.Sprint(ipStr, " ", fmt.Sprintf("%.2f", v2.RTT.Seconds()*1000), "ms ", geo)
 		}
+
 		fmt.Println(txt)
 	}
 }
