@@ -50,7 +50,10 @@ func New() table.Table {
 
 func tableDataGenerator(v2 methods.TracerouteHop) *rowData {
 	if v2.Address == nil {
-		return &rowData{}
+		return &rowData{
+			Hop: int64(v2.TTL),
+			IP:  "*",
+		}
 	} else {
 		// 初始化变量
 		var iPGeoData *ipgeo.IPGeoData
@@ -72,24 +75,28 @@ func tableDataGenerator(v2 methods.TracerouteHop) *rowData {
 			iPGeoData, err = ipgeo.LeoIP(ipStr)
 		}
 
+		ptr, err_LookupAddr := net.LookupAddr(ipStr)
+
+		lantency = fmt.Sprintf("%.2fms", v2.RTT.Seconds()*1000)
+
+		if err_LookupAddr != nil {
+			IP = fmt.Sprint(ipStr)
+		} else {
+			IP = fmt.Sprint(ptr[0], " (", ipStr, ") ")
+		}
+
+		if iPGeoData.Owner == "" {
+			iPGeoData.Owner = iPGeoData.Isp
+		}
+
 		if err != nil {
 			fmt.Print("Error: ", err)
-			return &rowData{}
+			return &rowData{
+				Hop:     int64(v2.TTL),
+				IP:      IP,
+				Latency: lantency,
+			}
 		} else {
-
-			ptr, err := net.LookupAddr(ipStr)
-
-			lantency = fmt.Sprintf("%.2fms", v2.RTT.Seconds()*1000)
-
-			if err != nil {
-				IP = fmt.Sprint(ipStr)
-			} else {
-				IP = fmt.Sprint(ptr[0], " (", ipStr, ") ")
-			}
-
-			if iPGeoData.Owner == "" {
-				iPGeoData.Owner = iPGeoData.Isp
-			}
 
 			return &rowData{
 				Hop:      int64(v2.TTL),
