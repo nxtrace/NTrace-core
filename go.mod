@@ -8,8 +8,15 @@ require (
 )
 
 require (
+	github.com/mattn/go-colorable v0.1.9 // indirect
+	github.com/mattn/go-isatty v0.0.14 // indirect
+)
+
+require (
 	github.com/davecgh/go-spew v1.1.0 // indirect
+	github.com/fatih/color v1.13.0
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/rodaine/table v1.0.1 // indirect
 	github.com/stretchr/testify v1.7.1 // indirect
 	github.com/tidwall/gjson v1.14.1 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
