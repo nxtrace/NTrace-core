@@ -28,15 +28,29 @@ func LocalIPPort(dstip net.IP) (net.IP, int) {
 func DomainLookUp(host string) net.IP {
 	ips, err := net.LookupIP(host)
 	if err != nil {
-		fmt.Println("Domain" + host + "Lookup Fail.")
+		fmt.Println("Domain " + host + " Lookup Fail.")
 		os.Exit(1)
 	}
 
 	var ipSlice = []net.IP{}
+	var ipv6Flag = false
 
 	for _, ip := range ips {
-		ipSlice = append(ipSlice, ip)
+		// 仅返回ipv4的ip
+		if ip.To4() != nil {
+			ipSlice = append(ipSlice, ip)
+		} else {
+			ipv6Flag = true
+		}
 	}
+
+	if ipv6Flag {
+		fmt.Println("[Info] IPv6 Traceroute is not supported right now.")
+		if len(ipSlice) == 0 {
+			os.Exit(0)
+		}
+	}
+
 	if len(ipSlice) == 1 {
 		return ipSlice[0]
 	} else {
