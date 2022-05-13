@@ -34,9 +34,14 @@ func main() {
 			Port:             *port,
 			Timeout:          time.Second / 2,
 		})
-		res, _ := tcpTraceroute.Start()
+		res, err := tcpTraceroute.Start()
 
-		printer.TraceroutePrinter(ip, *res, *dataOrigin)
+		if err != nil {
+			fmt.Println("请赋予 sudo (root) 权限运行本程序")
+		} else {
+			printer.TraceroutePrinter(ip, *res, *dataOrigin)
+		}
+
 	} else {
 		if *port == 80 {
 			*port = 53
@@ -48,9 +53,13 @@ func main() {
 			Port:             *port,
 			Timeout:          2 * time.Second,
 		})
-		res, _ := udpTraceroute.Start()
+		res, err := udpTraceroute.Start()
 
-		printer.TraceroutePrinter(ip, *res, *dataOrigin)
+		if err != nil {
+			fmt.Println("请赋予 sudo (root) 权限运行本程序")
+		} else {
+			printer.TraceroutePrinter(ip, *res, *dataOrigin)
+		}
 	}
 }
 
