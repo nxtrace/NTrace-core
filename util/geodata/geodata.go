@@ -6,7 +6,8 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strconv"
-	"traceroute/util"
+
+	"github.com/xgadget-lab/nexttrace/util"
 )
 
 type IPInSightData struct {

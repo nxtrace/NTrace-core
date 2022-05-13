@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"net"
 	"strings"
-	"traceroute/methods"
-	"traceroute/util"
-	"traceroute/util/geodata"
+
+	"github.com/xgadget-lab/nexttrace/methods"
+	"github.com/xgadget-lab/nexttrace/util"
+	"github.com/xgadget-lab/nexttrace/util/geodata"
 )
 
 var dataOrigin string

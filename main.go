@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"os"
 	"time"
-	"traceroute/methods"
-	"traceroute/methods/tcp"
-	"traceroute/methods/udp"
-	"traceroute/util"
-	"traceroute/util/printer"
+
+	"github.com/xgadget-lab/nexttrace/methods"
+	"github.com/xgadget-lab/nexttrace/methods/tcp"
+	"github.com/xgadget-lab/nexttrace/methods/udp"
+	"github.com/xgadget-lab/nexttrace/util"
+	"github.com/xgadget-lab/nexttrace/util/printer"
 )
 
 var tcpSYNFlag = flag.Bool("T", false, "Use TCP SYN for tracerouting (default port is 80 in TCP, 53 in UDP)")
