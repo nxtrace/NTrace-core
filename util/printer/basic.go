@@ -6,7 +6,7 @@ import (
 )
 
 func PrintCopyRight() {
-	fmt.Println("NextTrace v0.1.0 Alpha \nxgadget-lab 实验室 zhsh (xzhsh.ch) & leo (leo.moe)")
+	fmt.Println("NextTrace v0.1.0 Alpha \nxgadget-lab 实验室 zhshch (xzhsh.ch) & leo (leo.moe)")
 }
 
 func PrintTraceRouteNav(ip net.IP, domain string, dataOrigin string) {
