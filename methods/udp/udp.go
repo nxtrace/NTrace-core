@@ -5,7 +5,7 @@ import (
 	"math/rand"
 	"net"
 	"sync"
-	time "time"
+	"time"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
