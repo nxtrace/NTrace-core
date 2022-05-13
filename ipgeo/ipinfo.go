@@ -7,7 +7,7 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-func GetIPGeoByIPInfo(ip string) (*IPGeoData, error) {
+func IPInfo(ip string) (*IPGeoData, error) {
 
 	resp, err := http.Get("https://ipinfo.io/" + ip + "?token=42764a944dabd0")
 	if err != nil {

@@ -15,7 +15,7 @@ func TestLeoIP(t *testing.T) {
 }
 
 func TestIPSB(t *testing.T) {
-	res, err := GetIPGeoByIPSB("1.1.1.1")
+	res, err := IPSB("1.1.1.1")
 	assert.Nil(t, err)
 	assert.NotNil(t, res)
 	assert.NotEmpty(t, res.Asnumber)
@@ -23,7 +23,7 @@ func TestIPSB(t *testing.T) {
 }
 
 func TestIPInfo(t *testing.T) {
-	res, err := GetIPGeoByIPInfo("1.1.1.1")
+	res, err := IPInfo("1.1.1.1")
 	assert.Nil(t, err)
 	assert.NotNil(t, res)
 	assert.NotEmpty(t, res.Country)

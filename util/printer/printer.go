@@ -5,9 +5,8 @@ import (
 	"net"
 	"strings"
 
+	"github.com/xgadget-lab/nexttrace/ipgeo"
 	"github.com/xgadget-lab/nexttrace/methods"
-	"github.com/xgadget-lab/nexttrace/util"
-	"github.com/xgadget-lab/nexttrace/util/geodata"
 )
 
 var dataOrigin string
@@ -31,6 +30,7 @@ func TraceroutePrinter(ip net.IP, res *map[uint16][]methods.TracerouteHop, dataO
 }
 
 func hopPrinter(hopIndex uint16, ip net.IP, v2 methods.TracerouteHop, c chan uint16) {
+	var iPGeoData *ipgeo.IPGeoData
 	if v2.Address == nil {
 		fmt.Println("\t*")
 	} else {
@@ -38,25 +38,20 @@ func hopPrinter(hopIndex uint16, ip net.IP, v2 methods.TracerouteHop, c chan uin
 
 		ptr, err := net.LookupAddr(ip_str)
 
-		ch_b := make(chan util.IPGeoData)
-
 		if dataOrigin == "LeoMoeAPI" {
-			go geodata.GetIPGeo(ip_str, ch_b)
-
+			iPGeoData, _ = ipgeo.LeoIP(ip_str)
 		} else if dataOrigin == "IP.SB" {
-			go geodata.GetIPGeoByIPSB(ip_str, ch_b)
+			iPGeoData, _ = ipgeo.IPSB(ip_str)
 
 		} else if dataOrigin == "IPInfo" {
-			go geodata.GetIPGeoByIPInfo(ip_str, ch_b)
+			iPGeoData, _ = ipgeo.IPInfo(ip_str)
 
 		} else if dataOrigin == "IPInsight" {
-			go geodata.GetIPGeoByIPInsight(ip_str, ch_b)
+			iPGeoData, _ = ipgeo.IPInSight(ip_str)
 
 		} else {
-			go geodata.GetIPGeo(ip_str, ch_b)
+			iPGeoData, _ = ipgeo.LeoIP(ip_str)
 		}
-
-		iPGeoData := <-ch_b
 
 		if ip.String() == ip_str {
 			hopIndex = 30

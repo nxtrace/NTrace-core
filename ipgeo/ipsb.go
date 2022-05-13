@@ -7,7 +7,7 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-func GetIPGeoByIPSB(ip string) (*IPGeoData, error) {
+func IPSB(ip string) (*IPGeoData, error) {
 	resp, err := http.Get("https://api.ip.sb/geoip/" + ip)
 	if err != nil {
 		return nil, err
