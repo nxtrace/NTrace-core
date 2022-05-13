@@ -38,6 +38,7 @@ func hopPrinter(hopIndex uint16, ip net.IP, v2 methods.TracerouteHop, c chan uin
 
 		ptr, err := net.LookupAddr(ip_str)
 
+		// TODO: 判断 err 返回，并且在CLI终端提示错误
 		if dataOrigin == "LeoMoeAPI" {
 			iPGeoData, _ = ipgeo.LeoIP(ip_str)
 		} else if dataOrigin == "IP.SB" {
@@ -58,6 +59,7 @@ func hopPrinter(hopIndex uint16, ip net.IP, v2 methods.TracerouteHop, c chan uin
 			iPGeoData.Owner = iPGeoData.Isp
 		}
 
+		// TODO: 判断阿里云和腾讯云内网，数据不足，有待进一步完善
 		if strings.Index(ip_str, "9.31.") == 0 || strings.Index(ip_str, "11.72.") == 0 {
 			fmt.Printf("\t%-15s %.2fms * 局域网, 腾讯云\n", v2.Address, v2.RTT.Seconds()*1000)
 			c <- hopIndex
@@ -90,6 +92,7 @@ func hopPrinter(hopIndex uint16, ip net.IP, v2 methods.TracerouteHop, c chan uin
 			return
 		}
 
+		// TODO: if嵌套太多，很多重复判断，代码有待优化
 		if iPGeoData.Prov != "" && iPGeoData.City == "" {
 			// Province Only
 			if err != nil {
