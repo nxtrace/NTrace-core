@@ -94,7 +94,7 @@ func formatIpGeoData(ip string, data *ipgeo.IPGeoData) string {
 		if data.City != "" {
 			res = append(res, data.City)
 		}
-		if data.City != "" {
+		if data.Owner != "" {
 			res = append(res, data.Owner)
 		}
 	}
