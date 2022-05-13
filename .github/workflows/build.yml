@@ -1,10 +1,11 @@
 on:
-  push: # 每次 push 的时候触发
+  push: # 每次带有 tag 的 push 候触发
+    tags:
+      - 'v*'
 
 name: Build Release
 jobs:
   release:
-    if: startsWith(github.ref, 'refs/tags/') # 只有这次 Commit 是 创建 Tag 时，才进行后续发布操作
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@master # checkout 代码
