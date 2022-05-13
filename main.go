@@ -36,7 +36,7 @@ func main() {
 		})
 		res, _ := tcpTraceroute.Start()
 
-		printer.TraceroutePrinter(ip, res, *dataOrigin)
+		printer.TraceroutePrinter(ip, *res, *dataOrigin)
 	} else {
 		if *port == 80 {
 			*port = 53
@@ -50,7 +50,7 @@ func main() {
 		})
 		res, _ := udpTraceroute.Start()
 
-		printer.TraceroutePrinter(ip, res, *dataOrigin)
+		printer.TraceroutePrinter(ip, *res, *dataOrigin)
 	}
 }
 

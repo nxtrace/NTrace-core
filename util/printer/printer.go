@@ -11,107 +11,92 @@ import (
 
 var dataOrigin string
 
-func TraceroutePrinter(ip net.IP, res *map[uint16][]methods.TracerouteHop, dataOrigin string) {
-	hopIndex := uint16(1)
-	for hopIndex <= 29 {
-		for k, v := range *res {
-			if k == hopIndex {
-				fmt.Print(k)
-				for _, v2 := range v {
-					ch := make(chan uint16)
-					go hopPrinter(hopIndex, ip, v2, ch)
-					hopIndex = <-ch
-				}
-				hopIndex = hopIndex + 1
-				break
+func TraceroutePrinter(ip net.IP, res map[uint16][]methods.TracerouteHop, dataOrigin string) {
+	for hi := uint16(1); hi < 30; hi++ {
+		fmt.Print(hi)
+		for _, v := range res[hi] {
+			hopPrinter(v)
+			if v.Address != nil && ip.String() == v.Address.String() {
+				hi = 31
 			}
 		}
 	}
 }
 
-func hopPrinter(hopIndex uint16, ip net.IP, v2 methods.TracerouteHop, c chan uint16) {
-	var iPGeoData *ipgeo.IPGeoData
+func hopPrinter(v2 methods.TracerouteHop) {
 	if v2.Address == nil {
 		fmt.Println("\t*")
 	} else {
-		ip_str := fmt.Sprintf("%s", v2.Address)
+		var iPGeoData *ipgeo.IPGeoData
+		var err error
 
-		ptr, err := net.LookupAddr(ip_str)
+		ipStr := v2.Address.String()
 
 		if dataOrigin == "LeoMoeAPI" {
-			iPGeoData, _ = ipgeo.LeoIP(ip_str)
+			iPGeoData, err = ipgeo.LeoIP(ipStr)
 		} else if dataOrigin == "IP.SB" {
-			iPGeoData, _ = ipgeo.IPSB(ip_str)
-
+			iPGeoData, err = ipgeo.IPSB(ipStr)
 		} else if dataOrigin == "IPInfo" {
-			iPGeoData, _ = ipgeo.IPInfo(ip_str)
-
+			iPGeoData, err = ipgeo.IPInfo(ipStr)
 		} else if dataOrigin == "IPInsight" {
-			iPGeoData, _ = ipgeo.IPInSight(ip_str)
-
+			iPGeoData, err = ipgeo.IPInSight(ipStr)
 		} else {
-			iPGeoData, _ = ipgeo.LeoIP(ip_str)
+			iPGeoData, err = ipgeo.LeoIP(ipStr)
 		}
 
-		if ip.String() == ip_str {
-			hopIndex = 30
-			iPGeoData.Owner = iPGeoData.Isp
-		}
-
-		if strings.Index(ip_str, "9.31.") == 0 || strings.Index(ip_str, "11.72.") == 0 {
-			fmt.Printf("\t%-15s %.2fms * 局域网, 腾讯云\n", v2.Address, v2.RTT.Seconds()*1000)
-			c <- hopIndex
-			return
-		}
-
-		if strings.Index(ip_str, "11.13.") == 0 {
-			fmt.Printf("\t%-15s %.2fms * 局域网, 阿里云\n", v2.Address, v2.RTT.Seconds()*1000)
-			c <- hopIndex
-			return
-		}
-
-		if iPGeoData.Owner == "" {
-			iPGeoData.Owner = iPGeoData.Isp
-		}
-
-		if iPGeoData.Asnumber == "" {
-			iPGeoData.Asnumber = "*"
+		geo := ""
+		if err != nil {
+			geo = fmt.Sprint("Error: ", err)
 		} else {
-			iPGeoData.Asnumber = "AS" + iPGeoData.Asnumber
+			geo = formatIpGeoData(ipStr, iPGeoData)
 		}
 
-		if iPGeoData.District != "" {
-			iPGeoData.City = iPGeoData.City + ", " + iPGeoData.District
-		}
+		ptr, err := net.LookupAddr(ipStr)
 
-		if iPGeoData.Country == "" {
-			fmt.Printf("\t%-15s %.2fms * 局域网\n", v2.Address, v2.RTT.Seconds()*1000)
-			c <- hopIndex
-			return
-		}
-
-		if iPGeoData.Prov != "" && iPGeoData.City == "" {
-			// Province Only
-			if err != nil {
-				fmt.Printf("\t%-15s %.2fms %s %s, %s, %s\n", v2.Address, v2.RTT.Seconds()*1000, iPGeoData.Asnumber, iPGeoData.Country, iPGeoData.Prov, iPGeoData.Owner)
-			} else {
-				fmt.Printf("\t%-15s (%s) %.2fms %s %s, %s, %s\n", ptr[0], v2.Address, v2.RTT.Seconds()*1000, iPGeoData.Asnumber, iPGeoData.Country, iPGeoData.Prov, iPGeoData.Owner)
-			}
-		} else if iPGeoData.Prov == "" && iPGeoData.City == "" {
-
-			if err != nil {
-				fmt.Printf("\t%-15s %.2fms %s %s, %s, %s 骨干网\n", v2.Address, v2.RTT.Seconds()*1000, iPGeoData.Asnumber, iPGeoData.Country, iPGeoData.Owner, iPGeoData.Owner)
-			} else {
-				fmt.Printf("\t%-15s (%s) %.2fms %s %s, %s, %s 骨干网\n", ptr[0], v2.Address, v2.RTT.Seconds()*1000, iPGeoData.Asnumber, iPGeoData.Country, iPGeoData.Owner, iPGeoData.Owner)
-			}
+		txt := "\t"
+		if err != nil {
+			txt += fmt.Sprint(ipStr, " ", fmt.Sprintf("%.2f", v2.RTT.Seconds()*1000), "ms ", geo)
 		} else {
+			txt += fmt.Sprint(ptr[0], " (", ipStr, ") ", fmt.Sprintf("%.2f", v2.RTT.Seconds()*1000), "ms ", geo)
+		}
+		fmt.Println(txt)
+	}
+}
 
-			if err != nil {
-				fmt.Printf("\t%-15s %.2fms %s %s, %s, %s, %s\n", v2.Address, v2.RTT.Seconds()*1000, iPGeoData.Asnumber, iPGeoData.Country, iPGeoData.Prov, iPGeoData.City, iPGeoData.Owner)
-			} else {
-				fmt.Printf("\t%-15s (%s) %.2fms %s %s, %s, %s, %s\n", ptr[0], v2.Address, v2.RTT.Seconds()*1000, iPGeoData.Asnumber, iPGeoData.Country, iPGeoData.Prov, iPGeoData.City, iPGeoData.Owner)
-			}
+func formatIpGeoData(ip string, data *ipgeo.IPGeoData) string {
+	var res = make([]string, 0, 10)
+
+	if data.Asnumber == "" {
+		res = append(res, "*")
+	} else {
+		res = append(res, "AS"+data.Asnumber)
+	}
+
+	// TODO: 判断阿里云和腾讯云内网，数据不足，有待进一步完善
+	if strings.HasPrefix(ip, "9.31.") || strings.HasPrefix(ip, "11.72.") {
+		res = append(res, "局域网", "腾讯云")
+	} else if strings.HasPrefix(ip, "11.13.") {
+		res = append(res, "局域网", "阿里云")
+	} else if data.Country == "" {
+		res = append(res, "局域网")
+	} else {
+		if data.Owner == "" {
+			data.Owner = data.Isp
+		}
+		if data.District != "" {
+			data.City = data.City + ", " + data.District
+		}
+		res = append(res, data.Country)
+		if data.Prov != "" {
+			res = append(res, data.Prov)
+		}
+		if data.City != "" {
+			res = append(res, data.City)
+		}
+		if data.City != "" {
+			res = append(res, data.Owner)
 		}
 	}
-	c <- hopIndex
+
+	return strings.Join(res, ", ")
 }
