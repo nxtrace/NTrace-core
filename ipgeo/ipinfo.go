@@ -9,7 +9,7 @@ import (
 
 func IPInfo(ip string) (*IPGeoData, error) {
 
-	resp, err := http.Get("https://ipinfo.io/" + ip + "?token=42764a944dabd0")
+	resp, err := http.Get("https://ipinfo.io/" + ip + "?token=" + token.ipinfo)
 	if err != nil {
 		return nil, err
 	}

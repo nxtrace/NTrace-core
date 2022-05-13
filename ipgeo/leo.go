@@ -1,13 +1,14 @@
 package ipgeo
 
 import (
-	"github.com/tidwall/gjson"
 	"io/ioutil"
 	"net/http"
+
+	"github.com/tidwall/gjson"
 )
 
 func LeoIP(ip string) (*IPGeoData, error) {
-	resp, err := http.Get("https://api.leo.moe/ip/?ip=" + ip)
+	resp, err := http.Get("https://api.leo.moe/ip/?ip=" + ip + "&token=" + token.ipleo)
 	if err != nil {
 		return nil, err
 	}
