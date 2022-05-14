@@ -81,7 +81,7 @@ func flagApply() string {
 	flag.Parse()
 	ipArg := flag.Args()
 	if flag.NArg() != 1 {
-		fmt.Println("Args Error\nUsage : ./bettertrace [-T] [-d <dataOrigin> ] [ -m <hops> ] [ -p <port> ] [ -q <probes> ] [ -r <parallelrequests> ] <hostname>")
+		fmt.Println("Args Error\nUsage : ./nexttrace [-T] [-rdns] [-displayMode <displayMode>] [-d <dataOrigin> ] [ -m <hops> ] [ -p <port> ] [ -q <probes> ] [ -r <parallelrequests> ] <hostname>")
 		os.Exit(2)
 	}
 	return ipArg[0]
