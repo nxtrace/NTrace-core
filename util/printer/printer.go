@@ -33,15 +33,16 @@ func hopPrinter(v2 methods.TracerouteHop, rdnsenable bool) {
 		ipStr := v2.Address.String()
 
 		// 判断 err 返回，并且在CLI终端提示错误
-		if dataOrigin == "LeoMoeAPI" {
+		switch dataOrigin {
+		case "LeoMoeAPI":
 			iPGeoData, err = ipgeo.LeoIP(ipStr)
-		} else if dataOrigin == "IP.SB" {
+		case "IP.SB":
 			iPGeoData, err = ipgeo.IPSB(ipStr)
-		} else if dataOrigin == "IPInfo" {
+		case "IPInfo":
 			iPGeoData, err = ipgeo.IPInfo(ipStr)
-		} else if dataOrigin == "IPInsight" {
+		case "IPInsight":
 			iPGeoData, err = ipgeo.IPInSight(ipStr)
-		} else {
+		default:
 			iPGeoData, err = ipgeo.LeoIP(ipStr)
 		}
 
