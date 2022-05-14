@@ -32,7 +32,7 @@ func hopPrinter(v2 methods.TracerouteHop, rdnsenable bool) {
 
 		ipStr := v2.Address.String()
 
-		// TODO: 判断 err 返回，并且在CLI终端提示错误
+		// 判断 err 返回，并且在CLI终端提示错误
 		if dataOrigin == "LeoMoeAPI" {
 			iPGeoData, err = ipgeo.LeoIP(ipStr)
 		} else if dataOrigin == "IP.SB" {
@@ -79,9 +79,9 @@ func formatIpGeoData(ip string, data *ipgeo.IPGeoData) string {
 	}
 
 	// TODO: 判断阿里云和腾讯云内网，数据不足，有待进一步完善
-	if strings.HasPrefix(ip, "9.31.") || strings.HasPrefix(ip, "11.72.") {
+	if strings.HasPrefix(ip, "9.") {
 		res = append(res, "局域网", "腾讯云")
-	} else if strings.HasPrefix(ip, "11.13.") {
+	} else if strings.HasPrefix(ip, "11.") {
 		res = append(res, "局域网", "阿里云")
 	} else if data.Country == "" {
 		res = append(res, "局域网")
