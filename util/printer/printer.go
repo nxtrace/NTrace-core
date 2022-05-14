@@ -87,19 +87,28 @@ func formatIpGeoData(ip string, data *ipgeo.IPGeoData) string {
 	} else if data.Country == "" {
 		res = append(res, "局域网")
 	} else {
+		// 有些IP的归属信息为空，这个时候将ISP的信息填入
 		if data.Owner == "" {
 			data.Owner = data.Isp
 		}
 		if data.District != "" {
 			data.City = data.City + ", " + data.District
 		}
-		res = append(res, data.Country)
+		if data.Prov == "" && data.City == "" {
+			// anyCast或是骨干网数据不应该有国家信息
+			data.Owner = data.Owner + ", " + data.Owner
+		} else {
+			// 非骨干网正常填入IP的国家信息数据
+			res = append(res, data.Country)
+		}
+
 		if data.Prov != "" {
 			res = append(res, data.Prov)
 		}
 		if data.City != "" {
 			res = append(res, data.City)
 		}
+
 		if data.Owner != "" {
 			res = append(res, data.Owner)
 		}
