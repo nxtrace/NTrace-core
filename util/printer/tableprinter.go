@@ -3,6 +3,7 @@ package printer
 import (
 	"fmt"
 	"net"
+	"strings"
 
 	"github.com/fatih/color"
 	"github.com/rodaine/table"
@@ -61,6 +62,24 @@ func tableDataGenerator(v2 methods.TracerouteHop, rdnsenable bool) *rowData {
 		var lantency, IP string
 
 		ipStr := v2.Address.String()
+
+		if strings.HasPrefix(ipStr, "9.") {
+			return &rowData{
+				Hop:     int64(v2.TTL),
+				IP:      ipStr,
+				Latency: lantency,
+				Country: "局域网",
+				Owner:   "腾讯云",
+			}
+		} else if strings.HasPrefix(ipStr, "11.") {
+			return &rowData{
+				Hop:     int64(v2.TTL),
+				IP:      ipStr,
+				Latency: lantency,
+				Country: "局域网",
+				Owner:   "阿里云",
+			}
+		}
 
 		// TODO: 判断 err 返回，并且在CLI终端提示错误
 		if dataOrigin == "LeoMoeAPI" {
