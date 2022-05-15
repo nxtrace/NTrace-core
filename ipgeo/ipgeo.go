@@ -11,3 +11,16 @@ type IPGeoData struct {
 }
 
 type Source = func(ip string) (*IPGeoData, error)
+
+func GetSource(s string) Source {
+	switch s {
+	case "LeoMoeAPI":
+		return LeoIP
+	case "IP.SB":
+		return IPSB
+	case "IPInsight":
+		return IPInSight
+	default:
+		return nil
+	}
+}
