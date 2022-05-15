@@ -10,15 +10,22 @@ import (
 )
 
 func TestPrint(t *testing.T) {
-	ip := util.DomainLookUp("1.1.1.1")
+	ip := util.DomainLookUp("213.226.68.73")
 	tcpTraceroute := tcp.New(ip, methods.TracerouteConfig{
 		MaxHops:          uint16(30),
 		NumMeasurements:  uint16(1),
-		ParallelRequests: uint16(1),
+		ParallelRequests: uint16(12),
 		Port:             80,
 		Timeout:          time.Second / 2,
 	})
 	res, _ := tcpTraceroute.Start()
-	r := New(*res)
+	util.Printer(&util.PrinterConfig{
+		IP:          ip,
+		DisplayMode: "classic",
+		DataOrigin:  "LeoMoeAPI",
+		Rdnsenable:  true,
+		Results:     *res,
+	})
+	r := New(*res, ip.String())
 	r.Print()
 }

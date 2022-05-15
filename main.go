@@ -11,6 +11,7 @@ import (
 	"github.com/xgadget-lab/nexttrace/methods/udp"
 	"github.com/xgadget-lab/nexttrace/util"
 	"github.com/xgadget-lab/nexttrace/util/printer"
+	"github.com/xgadget-lab/nexttrace/util/reporter"
 )
 
 var tcpSYNFlag = flag.Bool("T", false, "Use TCP SYN for tracerouting (default port is 80 in TCP, 53 in UDP)")
@@ -21,6 +22,7 @@ var maxHops = flag.Int("m", 30, "Set the max number of hops (max TTL to be reach
 var dataOrigin = flag.String("d", "LeoMoeAPI", "Choose IP Geograph Data Provider [LeoMoeAPI, IP.SB, IPInfo, IPInsight]")
 var displayMode = flag.String("displayMode", "table", "Choose The Display Mode [table, classic]")
 var rdnsenable = flag.Bool("rdns", false, "Set whether rDNS will be display")
+var routeReport = flag.Bool("report", false, "Auto-Generate a Route-Path Report by TCPTraceroute")
 
 func main() {
 	printer.PrintCopyRight()
@@ -41,13 +43,18 @@ func main() {
 		if err != nil {
 			fmt.Println("请赋予 sudo (root) 权限运行本程序")
 		} else {
-			util.Printer(&util.PrinterConfig{
-				IP:          ip,
-				DisplayMode: *displayMode,
-				DataOrigin:  *dataOrigin,
-				Rdnsenable:  *rdnsenable,
-				Results:     *res,
-			})
+			if *routeReport {
+				r := reporter.New(*res, ip.String())
+				r.Print()
+			} else {
+				util.Printer(&util.PrinterConfig{
+					IP:          ip,
+					DisplayMode: *displayMode,
+					DataOrigin:  *dataOrigin,
+					Rdnsenable:  *rdnsenable,
+					Results:     *res,
+				})
+			}
 		}
 
 	} else {
@@ -66,13 +73,18 @@ func main() {
 		if err != nil {
 			fmt.Println("请赋予 sudo (root) 权限运行本程序")
 		} else {
-			util.Printer(&util.PrinterConfig{
-				IP:          ip,
-				DisplayMode: *displayMode,
-				DataOrigin:  *dataOrigin,
-				Rdnsenable:  *rdnsenable,
-				Results:     *res,
-			})
+			if *routeReport {
+				r := reporter.New(*res, ip.String())
+				r.Print()
+			} else {
+				util.Printer(&util.PrinterConfig{
+					IP:          ip,
+					DisplayMode: *displayMode,
+					DataOrigin:  *dataOrigin,
+					Rdnsenable:  *rdnsenable,
+					Results:     *res,
+				})
+			}
 		}
 	}
 }
