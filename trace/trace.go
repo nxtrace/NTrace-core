@@ -2,10 +2,11 @@ package trace
 
 import (
 	"errors"
-	"github.com/xgadget-lab/nexttrace/ipgeo"
 	"net"
 	"sync"
 	"time"
+
+	"github.com/xgadget-lab/nexttrace/ipgeo"
 )
 
 var (
@@ -53,6 +54,8 @@ func Traceroute(method Method, config Config) (*Result, error) {
 	switch method {
 	case UDPTrace:
 		tracer = &UDPTracer{Config: config}
+	case TCPTrace:
+		tracer = &TCPTracer{Config: config}
 	default:
 		return &Result{}, ErrInvalidMethod
 	}
