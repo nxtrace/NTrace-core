@@ -27,3 +27,7 @@ Usage of nexttrace:
         Auto-Generate a Route-Path Report by Traceroute
 ```
 
+## Thanks
+
+Vincent Young (i@yyt.moe)
+
