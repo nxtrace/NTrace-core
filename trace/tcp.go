@@ -218,12 +218,15 @@ func (t *TCPTracer) send(ttl int) error {
 	hopCh := make(chan Hop)
 	t.inflightRequest[int(sequenceNumber)] = hopCh
 	t.inflightRequestLock.Unlock()
-	defer func() {
-		t.inflightRequestLock.Lock()
-		close(hopCh)
-		delete(t.inflightRequest, srcPort)
-		t.inflightRequestLock.Unlock()
-	}()
+	/*
+		// 关了会有问题，偶见 panic: send on closed channel 报错
+		defer func() {
+			t.inflightRequestLock.Lock()
+			close(hopCh)
+			delete(t.inflightRequest, srcPort)
+			t.inflightRequestLock.Unlock()
+		}()
+	*/
 	select {
 	case <-t.ctx.Done():
 		return nil
