@@ -7,14 +7,14 @@ import (
 	"strings"
 
 	"github.com/xgadget-lab/nexttrace/ipgeo"
-	"github.com/xgadget-lab/nexttrace/methods"
+	"github.com/xgadget-lab/nexttrace/trace"
 )
 
 type Reporter interface {
 	Print()
 }
 
-func New(rs map[uint16][]methods.TracerouteHop, ip string) Reporter {
+func New(rs *trace.Result, ip string) Reporter {
 	experimentTag()
 	r := reporter{
 		routeResult: rs,
@@ -26,7 +26,7 @@ func New(rs map[uint16][]methods.TracerouteHop, ip string) Reporter {
 type reporter struct {
 	targetIP    string
 	routeReport map[uint16][]routeReportNode
-	routeResult map[uint16][]methods.TracerouteHop
+	routeResult *trace.Result
 }
 
 type routeReportNode struct {
@@ -37,10 +37,10 @@ type routeReportNode struct {
 }
 
 func experimentTag() {
-	fmt.Println("Route-Path是一个实验性功能，我们的IP库不能很好的支持我们提供骨干网的地理位置信息，所以IP位置有时候会异常")
+	fmt.Println("Route-Path 功能实验室")
 }
 
-func reduceRouteReportNode(ip string, ipGeoData ipgeo.IPGeoData) (routeReportNode, error) {
+func (r *reporter) generateRouteReportNode(ip string, ipGeoData ipgeo.IPGeoData) (routeReportNode, error) {
 	rpn := routeReportNode{}
 	ptr, err := net.LookupAddr(ip)
 	if err == nil {
@@ -59,11 +59,15 @@ func reduceRouteReportNode(ip string, ipGeoData ipgeo.IPGeoData) (routeReportNod
 	} else {
 		rpn.asn = ipGeoData.Asnumber
 	}
-
-	if ipGeoData.Country == "" || ipGeoData.City == "" {
+	// 无论最后一跳是否为存在地理位置信息（AnyCast），都应该给予显示
+	if ipGeoData.Country == "" || ipGeoData.City == "" && ip != r.targetIP {
 		return rpn, errors.New("GeoData Search Failed")
 	} else {
-		rpn.geo = []string{ipGeoData.Country, ipGeoData.City}
+		if ipGeoData.City == "" {
+			rpn.geo = []string{ipGeoData.Country, ipGeoData.Country}
+		} else {
+			rpn.geo = []string{ipGeoData.Country, ipGeoData.City}
+		}
 	}
 	if ipGeoData.Isp == "" {
 		rpn.isp = ipGeoData.Owner
@@ -76,12 +80,11 @@ func reduceRouteReportNode(ip string, ipGeoData ipgeo.IPGeoData) (routeReportNod
 func (r *reporter) InitialBaseData() Reporter {
 	var nodeIndex uint16 = 1
 	reportNodes := map[uint16][]routeReportNode{}
-	for i := uint16(1); int(i) < len(r.routeResult)+1; i++ {
-		traceHop := r.routeResult[i][0]
+	for i := uint16(0); int(i) < len(r.routeResult.Hops); i++ {
+		traceHop := r.routeResult.Hops[i][0]
 		if traceHop.Success {
 			currentIP := traceHop.Address.String()
-			ipGeoData, _ := ipgeo.LeoIP(currentIP)
-			rpn, err := reduceRouteReportNode(currentIP, *ipGeoData)
+			rpn, err := r.generateRouteReportNode(currentIP, *traceHop.Geo)
 			if err == nil {
 				reportNodes[nodeIndex] = append(reportNodes[nodeIndex], rpn)
 				nodeIndex += 1
@@ -94,7 +97,6 @@ func (r *reporter) InitialBaseData() Reporter {
 
 func (r *reporter) Print() {
 	r.InitialBaseData()
-	//fmt.Println(r.routeReport)
 	for i := uint16(1); int(i) < len(r.routeReport)+1; i++ {
 		nodeReport := r.routeReport[i][0]
 		if i == 1 {

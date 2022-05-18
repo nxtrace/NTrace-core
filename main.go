@@ -3,13 +3,15 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/xgadget-lab/nexttrace/ipgeo"
-	"github.com/xgadget-lab/nexttrace/printer"
-	"github.com/xgadget-lab/nexttrace/trace"
-	"github.com/xgadget-lab/nexttrace/util"
 	"log"
 	"os"
 	"time"
+
+	"github.com/xgadget-lab/nexttrace/ipgeo"
+	"github.com/xgadget-lab/nexttrace/printer"
+	"github.com/xgadget-lab/nexttrace/reporter"
+	"github.com/xgadget-lab/nexttrace/trace"
+	"github.com/xgadget-lab/nexttrace/util"
 )
 
 var tcpSYNFlag = flag.Bool("T", false, "Use TCP SYN for tracerouting (default port is 80 in TCP, 53 in UDP)")
@@ -20,6 +22,7 @@ var maxHops = flag.Int("m", 30, "Set the max number of hops (max TTL to be reach
 var dataOrigin = flag.String("d", "LeoMoeAPI", "Choose IP Geograph Data Provider [LeoMoeAPI, IP.SB, IPInfo, IPInsight]")
 var displayMode = flag.String("displayMode", "table", "Choose The Display Mode [table, classic]")
 var rdnsenable = flag.Bool("rdns", false, "Set whether rDNS will be display")
+var routePath = flag.Bool("report", false, "Route Path")
 
 func flagApply() string {
 	flag.Parse()
@@ -68,6 +71,12 @@ func main() {
 
 	if err != nil {
 		log.Fatalln(err)
+	}
+
+	if *routePath {
+		r := reporter.New(res, ip.String())
+		r.Print()
+		return
 	}
 
 	if *displayMode == "table" {
