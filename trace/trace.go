@@ -30,8 +30,9 @@ type Config struct {
 type Method string
 
 const (
-	UDPTrace Method = "udp"
-	TCPTrace Method = "tcp"
+	ICMPTrace Method = "icmp"
+	UDPTrace  Method = "udp"
+	TCPTrace  Method = "tcp"
 )
 
 type Tracer interface {
@@ -52,6 +53,8 @@ func Traceroute(method Method, config Config) (*Result, error) {
 	}
 
 	switch method {
+	case ICMPTrace:
+		tracer = &ICMPTracer{Config: config}
 	case UDPTrace:
 		tracer = &UDPTracer{Config: config}
 	case TCPTrace:

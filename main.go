@@ -14,7 +14,8 @@ import (
 	"github.com/xgadget-lab/nexttrace/util"
 )
 
-var tcpSYNFlag = flag.Bool("T", false, "Use TCP SYN for tracerouting (default port is 80 in TCP, 53 in UDP)")
+var tcpSYNFlag = flag.Bool("T", false, "Use TCP SYN for tracerouting (default port is 80)")
+var udpPackageFlag = flag.Bool("U", false, "Use UDP Package for tracerouting (default port is 53 in UDP)")
 var port = flag.Int("p", 80, "Set SYN Traceroute Port")
 var numMeasurements = flag.Int("q", 3, "Set the number of probes per each hop.")
 var parallelRequests = flag.Int("r", 18, "Set ParallelRequests number. It should be 1 when there is a multi-routing.")
@@ -44,10 +45,14 @@ func main() {
 	printer.PrintTraceRouteNav(ip, domain, *dataOrigin)
 
 	var m trace.Method = ""
-	if *tcpSYNFlag {
+
+	switch {
+	case *tcpSYNFlag:
 		m = trace.TCPTrace
-	} else {
+	case *udpPackageFlag:
 		m = trace.UDPTrace
+	default:
+		m = trace.ICMPTrace
 	}
 
 	if !*tcpSYNFlag && *port == 80 {
