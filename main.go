@@ -68,7 +68,7 @@ func main() {
 		RDns:             *rdnsenable,
 		IPGeoSource:      ipgeo.GetSource(*dataOrigin),
 		Timeout:          2 * time.Second,
-
+		RoutePath:        *routePath,
 		//Quic:    false,
 	}
 

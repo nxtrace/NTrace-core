@@ -1,6 +1,11 @@
 package trace
 
 import (
+	"log"
+	"net"
+	"sync"
+	"time"
+
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/xgadget-lab/nexttrace/util"
@@ -8,10 +13,6 @@ import (
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv4"
 	"golang.org/x/sync/semaphore"
-	"log"
-	"net"
-	"sync"
-	"time"
 )
 
 type UDPTracer struct {
@@ -99,8 +100,8 @@ func (t *UDPTracer) handleICMPMessage(msg ReceivedMessage, data []byte) {
 		return
 	}
 	srcPort := util.GetUDPSrcPort(header)
-	t.inflightRequestLock.Lock()
-	defer t.inflightRequestLock.Unlock()
+	//t.inflightRequestLock.Lock()
+	//defer t.inflightRequestLock.Unlock()
 	ch, ok := t.inflightRequest[int(srcPort)]
 	if !ok {
 		return
@@ -128,7 +129,6 @@ func (t *UDPTracer) getUDPConn(try int) (net.IP, int, net.PacketConn) {
 		}
 		return t.getUDPConn(try + 1)
 	}
-
 	return srcIP, udpConn.LocalAddr().(*net.UDPAddr).Port, udpConn
 }
 
@@ -184,6 +184,7 @@ func (t *UDPTracer) send(ttl int) error {
 		return err
 	}
 
+	// 在对inflightRequest进行写操作的时候应该加锁保护，以免多个goroutine协程试图同时写入造成panic
 	t.inflightRequestLock.Lock()
 	hopCh := make(chan Hop)
 	t.inflightRequest[srcPort] = hopCh

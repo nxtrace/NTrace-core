@@ -1,19 +1,21 @@
 package trace
 
 import (
+	"fmt"
 	"log"
 	"net"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
 	"golang.org/x/net/context"
 	"golang.org/x/net/icmp"
-	"golang.org/x/net/ipv4"
+	"golang.org/x/net/ipv6"
 	"golang.org/x/sync/semaphore"
 )
 
-type ICMPTracer struct {
+type ICMPTracerv6 struct {
 	Config
 	wg                  sync.WaitGroup
 	res                 Result
@@ -28,19 +30,14 @@ type ICMPTracer struct {
 	sem *semaphore.Weighted
 }
 
-type workFork struct {
-	ttl int
-	num int
-}
-
-func (t *ICMPTracer) Execute() (*Result, error) {
+func (t *ICMPTracerv6) Execute() (*Result, error) {
 	if len(t.res.Hops) > 0 {
 		return &t.res, ErrTracerouteExecuted
 	}
 
 	var err error
 
-	t.icmpListen, err = net.ListenPacket("ip4:1", "0.0.0.0")
+	t.icmpListen, err = net.ListenPacket("ip6:58", "::")
 	if err != nil {
 		return &t.res, err
 	}
@@ -70,7 +67,7 @@ func (t *ICMPTracer) Execute() (*Result, error) {
 	return &t.res, nil
 }
 
-func (t *ICMPTracer) listenICMP() {
+func (t *ICMPTracerv6) listenICMP() {
 	lc := NewPacketListener(t.icmpListen, t.ctx)
 	go lc.Start()
 	for {
@@ -81,25 +78,26 @@ func (t *ICMPTracer) listenICMP() {
 			if msg.N == nil {
 				continue
 			}
-			rm, err := icmp.ParseMessage(1, msg.Msg[:*msg.N])
+			rm, err := icmp.ParseMessage(58, msg.Msg[:*msg.N])
 			if err != nil {
 				log.Println(err)
 				continue
 			}
+			// log.Println(msg.Peer)
 			switch rm.Type {
-			case ipv4.ICMPTypeTimeExceeded:
+			case ipv6.ICMPTypeTimeExceeded:
 				t.handleICMPMessage(msg, 0, rm.Body.(*icmp.TimeExceeded).Data)
-			case ipv4.ICMPTypeEchoReply:
+			case ipv6.ICMPTypeEchoReply:
 				t.handleICMPMessage(msg, 1, rm.Body.(*icmp.Echo).Data)
 			default:
-				log.Println("received icmp message of unknown type", rm.Type)
+				// log.Println("received icmp message of unknown type", rm.Type)
 			}
 		}
 	}
 
 }
 
-func (t *ICMPTracer) handleICMPMessage(msg ReceivedMessage, icmpType int8, data []byte) {
+func (t *ICMPTracerv6) handleICMPMessage(msg ReceivedMessage, icmpType int8, data []byte) {
 
 	t.inflightRequestLock.Lock()
 	defer t.inflightRequestLock.Unlock()
@@ -114,11 +112,12 @@ func (t *ICMPTracer) handleICMPMessage(msg ReceivedMessage, icmpType int8, data 
 	}
 }
 
-func (t *ICMPTracer) send(fork workFork) error {
+func (t *ICMPTracerv6) send(fork workFork) error {
 	err := t.sem.Acquire(context.Background(), 1)
 	if err != nil {
 		return err
 	}
+
 	defer t.sem.Release(1)
 
 	defer t.wg.Done()
@@ -127,14 +126,17 @@ func (t *ICMPTracer) send(fork workFork) error {
 	}
 
 	icmpHeader := icmp.Message{
-		Type: ipv4.ICMPTypeEcho, Code: 0,
+		Type: ipv6.ICMPTypeEchoRequest, Code: 0,
 		Body: &icmp.Echo{
 			ID:   os.Getpid() & 0xffff,
 			Data: []byte("HELLO-R-U-THERE"),
 		},
 	}
 
-	ipv4.NewPacketConn(t.icmpListen).SetTTL(fork.ttl)
+	p := ipv6.NewPacketConn(t.icmpListen)
+
+	icmpHeader.Body.(*icmp.Echo).Seq = fork.ttl
+	p.SetHopLimit(fork.ttl)
 
 	wb, err := icmpHeader.Marshal(nil)
 	if err != nil {
@@ -159,6 +161,10 @@ func (t *ICMPTracer) send(fork workFork) error {
 		delete(t.inflightRequest, fork.ttl)
 		t.inflightRequestLock.Unlock()
 	}()
+
+	if fork.num == 0 && t.Config.RoutePath {
+		fmt.Print(strconv.Itoa(fork.ttl))
+	}
 
 	select {
 	case <-t.ctx.Done():
@@ -186,6 +192,9 @@ func (t *ICMPTracer) send(fork workFork) error {
 		h.RTT = rtt
 
 		h.fetchIPData(t.Config)
+		if t.Config.RoutePath {
+			HopPrinter(h)
+		}
 
 		t.res.add(h)
 
@@ -201,6 +210,9 @@ func (t *ICMPTracer) send(fork workFork) error {
 			RTT:     0,
 			Error:   ErrHopLimitTimeout,
 		})
+		if t.Config.RoutePath {
+			fmt.Println("\t" + "*")
+		}
 	}
 
 	return nil

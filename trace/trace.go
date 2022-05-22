@@ -25,6 +25,7 @@ type Config struct {
 	Quic             bool
 	IPGeoSource      ipgeo.Source
 	RDns             bool
+	RoutePath        bool
 }
 
 type Method string
@@ -54,11 +55,24 @@ func Traceroute(method Method, config Config) (*Result, error) {
 
 	switch method {
 	case ICMPTrace:
-		tracer = &ICMPTracer{Config: config}
+		if config.DestIP.To4() != nil {
+			tracer = &ICMPTracer{Config: config}
+		} else {
+			tracer = &ICMPTracerv6{Config: config}
+		}
+
 	case UDPTrace:
-		tracer = &UDPTracer{Config: config}
+		if config.DestIP.To4() != nil {
+			tracer = &UDPTracer{Config: config}
+		} else {
+			return nil, errors.New("IPv6 UDP Traceroute is not supported")
+		}
 	case TCPTrace:
-		tracer = &TCPTracer{Config: config}
+		if config.DestIP.To4() != nil {
+			tracer = &TCPTracer{Config: config}
+		} else {
+			return nil, errors.New("IPv6 TCP Traceroute is not supported")
+		}
 	default:
 		return &Result{}, ErrInvalidMethod
 	}

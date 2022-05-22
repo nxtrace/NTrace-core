@@ -42,14 +42,16 @@ func experimentTag() {
 
 func (r *reporter) generateRouteReportNode(ip string, ipGeoData ipgeo.IPGeoData) (routeReportNode, error) {
 	rpn := routeReportNode{}
-	ptr, err := net.LookupAddr(ip)
-	if err == nil {
-		if strings.Contains(strings.ToLower(ptr[0]), "ix") {
-			rpn.ix = true
-		} else {
-			rpn.ix = false
+	go func() {
+		ptr, err := net.LookupAddr(ip)
+		if err == nil {
+			if strings.Contains(strings.ToLower(ptr[0]), "ix") {
+				rpn.ix = true
+			} else {
+				rpn.ix = false
+			}
 		}
-	}
+	}()
 
 	if strings.Contains(strings.ToLower(ipGeoData.Isp), "exchange") || strings.Contains(strings.ToLower(ipGeoData.Isp), "ix") || strings.Contains(strings.ToLower(ipGeoData.Owner), "exchange") || strings.Contains(strings.ToLower(ipGeoData.Owner), "ix") {
 		rpn.ix = true
@@ -60,7 +62,7 @@ func (r *reporter) generateRouteReportNode(ip string, ipGeoData ipgeo.IPGeoData)
 		rpn.asn = ipGeoData.Asnumber
 	}
 	// 无论最后一跳是否为存在地理位置信息（AnyCast），都应该给予显示
-	if ipGeoData.Country == "" || ipGeoData.City == "" && ip != r.targetIP {
+	if ipGeoData.Country == "" || ipGeoData.City == "" || ipGeoData.City == "-" && ip != r.targetIP {
 		return rpn, errors.New("GeoData Search Failed")
 	} else {
 		if ipGeoData.City == "" {

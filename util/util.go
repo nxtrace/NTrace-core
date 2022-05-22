@@ -36,12 +36,13 @@ func DomainLookUp(host string) net.IP {
 	var ipv6Flag = false
 
 	for _, ip := range ips {
+		ipSlice = append(ipSlice, ip)
 		// 仅返回ipv4的ip
-		if ip.To4() != nil {
-			ipSlice = append(ipSlice, ip)
-		} else {
-			ipv6Flag = true
-		}
+		// if ip.To4() != nil {
+		// 	ipSlice = append(ipSlice, ip)
+		// } else {
+		// 	ipv6Flag = true
+		// }
 	}
 
 	if ipv6Flag {
