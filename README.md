@@ -1,14 +1,19 @@
+<div align="center">
+
+<img src="asset/logo.png" height="200px"/>
+
+</div>
+
 # NextTrace
 
-可视化路由跟踪工具
+可视化路由跟踪工具。
 
 ## How To Use
 
 ```shell
-NextTrace v0.1.0 Alpha 
-xgadget-lab zhshch (xzhsh.ch) & leo (leo.moe)
 Usage of nexttrace:
-  -T    Use TCP SYN for tracerouting (default port is 80 in TCP, 53 in UDP)
+  -T    Use TCP SYN for tracerouting (default port is 80)
+  -U    Use UDP Package for tracerouting (default port is 53 in UDP)
   -d string
         Choose IP Geograph Data Provider [LeoMoeAPI, IP.SB, IPInfo, IPInsight] (default "LeoMoeAPI")
   -displayMode string
@@ -24,8 +29,10 @@ Usage of nexttrace:
   -rdns
         Set whether rDNS will be display
   -report
-        Auto-Generate a Route-Path Report by Traceroute
+        Route Path
 ```
+
+![](asset/screenshot.png)
 
 ## Thanks
 
