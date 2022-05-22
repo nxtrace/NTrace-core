@@ -71,6 +71,7 @@ func Traceroute(method Method, config Config) (*Result, error) {
 		if config.DestIP.To4() != nil {
 			tracer = &TCPTracer{Config: config}
 		} else {
+			// tracer = &TCPTracerv6{Config: config}
 			return nil, errors.New("IPv6 TCP Traceroute is not supported")
 		}
 	default:

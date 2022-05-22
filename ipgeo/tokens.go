@@ -8,6 +8,6 @@ type tokenData struct {
 
 var token = tokenData{
 	ipinsight: "",
-	ipinfo:    "42764a944dabd0",
+	ipinfo:    "",
 	ipleo:     "NextTraceDemo",
 }

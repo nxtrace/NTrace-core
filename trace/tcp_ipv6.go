@@ -41,7 +41,7 @@ func (t *TCPTracerv6) Execute() (*Result, error) {
 	}
 
 	t.SrcIP, _ = util.LocalIPPort(t.DestIP)
-
+	log.Println(util.LocalIPPort(t.DestIP))
 	var err error
 	t.tcp, err = net.ListenPacket("ip6:tcp", t.SrcIP.String())
 	if err != nil {
@@ -207,7 +207,7 @@ func (t *TCPTracerv6) send(ttl int) error {
 		return err
 	}
 
-	ipv6.NewPacketConn(t.tcp)
+	ipv6.NewPacketConn(t.tcp).SetHopLimit(ttl)
 	if err != nil {
 		return err
 	}

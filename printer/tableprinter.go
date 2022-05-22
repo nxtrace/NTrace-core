@@ -2,8 +2,9 @@ package printer
 
 import (
 	"fmt"
-	"github.com/xgadget-lab/nexttrace/trace"
 	"strings"
+
+	"github.com/xgadget-lab/nexttrace/trace"
 
 	"github.com/fatih/color"
 	"github.com/rodaine/table"
@@ -30,7 +31,16 @@ func TracerouteTablePrinter(res *trace.Result) {
 			if k > 0 {
 				data.Hop = ""
 			}
-			tbl.AddRow(data.Hop, data.IP, data.Latency, data.Asnumber, data.Country, data.Prov, data.City, data.Owner)
+			if data.Country == "" && data.Prov == "" && data.City == "" {
+				tbl.AddRow(data.Hop, data.IP, data.Latency, data.Asnumber, "", data.Owner)
+			} else {
+				if data.City != "" {
+					tbl.AddRow(data.Hop, data.IP, data.Latency, data.Asnumber, data.Country+", "+data.Prov+", "+data.City, data.Owner)
+				} else {
+					tbl.AddRow(data.Hop, data.IP, data.Latency, data.Asnumber, data.Country, data.Owner)
+				}
+
+			}
 		}
 	}
 	// 打印表格
@@ -42,7 +52,7 @@ func New() table.Table {
 	headerFmt := color.New(color.FgGreen, color.Underline).SprintfFunc()
 	columnFmt := color.New(color.FgYellow).SprintfFunc()
 
-	tbl := table.New("Hop", "IP", "Lantency", "ASN", "Country", "Province", "City", "Owner")
+	tbl := table.New("Hop", "IP", "Lantency", "ASN", "Location", "Owner")
 	tbl.WithHeaderFormatter(headerFmt).WithFirstColumnFormatter(columnFmt)
 	return tbl
 }
