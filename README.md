@@ -6,7 +6,7 @@
 
 # NextTrace
 
-可视化路由跟踪工具。
+一款开源的可视化路由跟踪工具，使用Golang开发。
 
 ## How To Use
 
@@ -36,5 +36,5 @@ Usage of nexttrace:
 
 ## Thanks
 
-Vincent Young (i@yyt.moe)
+[Vincent Young](https://github.com/missuo) (i@yyt.moe)
 
