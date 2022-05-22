@@ -1,12 +1,13 @@
 # NextTrace
 
-可视化路由跟踪工具
+![NT Logo](https://user-images.githubusercontent.com/13616352/169694168-383b380d-caf0-494f-83d4-fc4fd5fb4be4.svg)
+
+一款开源的可视化路由跟踪工具，使用Golang开发。
+
 
 ## How To Use
 
 ```shell
-NextTrace v0.1.0 Alpha 
-xgadget-lab zhshch (xzhsh.ch) & leo (leo.moe)
 Usage of nexttrace:
   -T    Use TCP SYN for tracerouting (default port is 80 in TCP, 53 in UDP)
   -d string
@@ -29,5 +30,5 @@ Usage of nexttrace:
 
 ## Thanks
 
-Vincent Young (i@yyt.moe)
+[Vincent Young](https://github.com/missuo) (i@yyt.moe)
 
