@@ -2,8 +2,9 @@ package printer
 
 import (
 	"fmt"
-	"github.com/xgadget-lab/nexttrace/trace"
 	"strings"
+
+	"github.com/xgadget-lab/nexttrace/trace"
 
 	"github.com/xgadget-lab/nexttrace/ipgeo"
 )

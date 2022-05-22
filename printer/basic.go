@@ -5,10 +5,6 @@ import (
 	"net"
 )
 
-func PrintCopyRight() {
-	fmt.Println("NextTrace v0.1.0 Alpha \nxgadget-lab zhshch (xzhsh.ch) & leo (leo.moe)")
-}
-
 func PrintTraceRouteNav(ip net.IP, domain string, dataOrigin string) {
 	fmt.Println("IP Geo Data Provider: " + dataOrigin)
 

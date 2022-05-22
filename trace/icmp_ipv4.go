@@ -155,12 +155,12 @@ func (t *ICMPTracer) send(fork workFork) error {
 	t.inflightRequest[fork.num] = hopCh
 	t.inflightRequestLock.Unlock()
 
-	defer func() {
-		t.inflightRequestLock.Lock()
-		close(hopCh)
-		delete(t.inflightRequest, fork.ttl)
-		t.inflightRequestLock.Unlock()
-	}()
+	// defer func() {
+	// 	t.inflightRequestLock.Lock()
+	// 	close(hopCh)
+	// 	delete(t.inflightRequest, fork.ttl)
+	// 	t.inflightRequestLock.Unlock()
+	// }()
 
 	if fork.num == 0 && t.Config.RoutePath {
 		fmt.Print(strconv.Itoa(fork.ttl))
