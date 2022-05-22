@@ -73,5 +73,6 @@ Usage of nexttrace:
 
 ## Thanks
 
+[Sam Sam](https://github.com/samleong123) (samsam123@samsam123.name.my)
 [Vincent Young](https://github.com/missuo) (i@yyt.moe)
 
