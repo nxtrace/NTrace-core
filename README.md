@@ -12,31 +12,8 @@
 
 ### Install
 
-快速安装指令：
-
-**macOS x64(Intel)**
 ```bash
-NT_VERSION="v0.1.2-beta.1"; NT_FILENAME="nexttrace_darwin_amd64"; wget "https://github.com/xgadget-lab/nexttrace/releases/download/${NT_VERSION}/${NT_FILENAME}" && sudo chmod +x $NT_FILENAME && sudo mv -f $NT_FILENAME /usr/local/bin/nexttrace
-```
-
-**macOS ARM(Apple Silicon)**
-```bash
-NT_VERSION="v0.1.2-beta.1"; NT_FILENAME="nexttrace_darwin_arm64"; wget "https://github.com/xgadget-lab/nexttrace/releases/download/${NT_VERSION}/${NT_FILENAME}" && sudo chmod +x $NT_FILENAME && sudo mv -f $NT_FILENAME /usr/local/bin/nexttrace
-```
-
-**Linux x64**
-```bash
-NT_VERSION="v0.1.2-beta.1"; NT_FILENAME="nexttrace_linux_amd64"; wget "https://github.com/xgadget-lab/nexttrace/releases/download/${NT_VERSION}/${NT_FILENAME}" && sudo chmod +x $NT_FILENAME && sudo mv -f $NT_FILENAME /usr/bin/nexttrace
-```
-
-**Linux ARM**
-```bash
-NT_VERSION="v0.1.2-beta.1"; NT_FILENAME="nexttrace_linux_arm64"; wget "https://github.com/xgadget-lab/nexttrace/releases/download/${NT_VERSION}/${NT_FILENAME}" && sudo chmod +x $NT_FILENAME && sudo mv -f $NT_FILENAME /usr/bin/nexttrace
-```
-
-**Linux MIPS**
-```bash
-NT_VERSION="v0.1.2-beta.1"; NT_FILENAME="nexttrace_linux_mips"; wget "https://github.com/xgadget-lab/nexttrace/releases/download/${NT_VERSION}/${NT_FILENAME}" && sudo chmod +x $NT_FILENAME && sudo mv -f $NT_FILENAME /usr/bin/nexttrace
+bash <(curl -Ls https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/nt_install.sh)
 ```
 
 ### Get Started
