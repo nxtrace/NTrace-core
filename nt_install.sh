@@ -255,7 +255,8 @@ checkRootPermit
 checkSystemDistribution
 checkSystemArch
 checkWgetPackage
-checkVersion
+# TODO: 检查版本并更新
+#checkVersion
 
 # Download Procedure
 getLocation
