@@ -22,11 +22,13 @@ bash -c "$(curl -Ls https://raw.githubusercontent.com/xgadget-lab/nexttrace/main
 
 ```bash
 # IPv4 ICMP Trace
-# Tips: 非实时数据，一次性出结果，需要等待30s左右
 ./nexttrace 1.0.0.1
 
-# Tips: 如果您需要ICMP的实时结果，请用如下命令
+# 获得 route-path
 ./nexttrace -report 1.0.0.1
+
+# 表格打印（一次性输出全部跳数，需等待20-40秒）
+./nexttrace -table 1.0.0.1
 
 # IPv6 ICMP Trace
 ./nexttrace 2606:4700:4700::1111
