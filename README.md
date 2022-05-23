@@ -13,7 +13,7 @@
 ### Install
 
 ```bash
-bash < <(curl -Ls https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/nt_install.sh)
+bash -c "$(curl -Ls https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/nt_install.sh)"
 ```
 
 ### Get Started
