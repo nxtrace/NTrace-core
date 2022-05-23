@@ -32,6 +32,10 @@ checkSystemDistribution() {
     esac
 }
 
+getLocation() {
+    countryCode=$(curl -s "http://ip-api.com/line/?fields=countryCode")
+}
+
 installWgetPackage() {
     # macOS should install wget originally. Nothing to do
     echo "wget 正在安装中..."
@@ -90,6 +94,24 @@ downloadBinrayFile() {
     echo "获取最新版的 NextTrace 发行版文件信息"
     # 简单说明一下，Github提供了一个API，可以获取最新发行版本的二进制文件下载地址（对应的是browser_download_url），根据刚刚测得的osDistribution、archParam，获取对应的下载地址
     latestURL=$(curl -s https://api.github.com/repos/xgadget-lab/nexttrace/releases/latest | grep -i "browser_download_url.*${osDistribution}.*${archParam}" | awk -F '"' '{print $4}')
+    
+    if [ "$countryCode" == "CN" ]; then
+        read -r -p "检测到国内网络环境，是否使用镜像下载以加速(y/n)" input
+        case $input in
+        [yY][eE][sS]|[yY])
+            latestURL="https://ghproxy.com/"$latestURL
+            ;;
+
+        [nN][oO]|[nN])
+            echo "您选择了不使用镜像，下载可能会变得异常缓慢，或者失败"
+            ;;
+
+        *)
+            latestURL="https://ghproxy.com/"$latestURL
+            ;;
+        esac
+    fi
+    
     echo "正在下载 NextTrace 二进制文件..."
     wget -O ${downPath} ${latestURL} &> /dev/null
     if [ $? -eq 0 ];
@@ -120,6 +142,7 @@ checkSystemArch
 checkWgetPackage
 
 # Download Procedure
+getLocation
 downloadBinrayFile
 
 # Run Procedure
