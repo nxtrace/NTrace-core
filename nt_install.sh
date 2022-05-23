@@ -1,5 +1,9 @@
 #!/bin/bash
 
+checkRootPermit() {
+    [[ $EUID -ne 0 ]] && echo "请使用sudo/root权限运行本脚本" && exit 1
+}
+
 checkSystemArch() {
     arch=$(uname -m)
     if [[ $arch == "x86_64" ]]; then
