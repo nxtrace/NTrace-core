@@ -156,7 +156,8 @@ downloadBinrayFile() {
     if [[ $? -eq 1 ]]; then
     # 支持 jq 不回退
     # echo nexttrace_${osDistribution}_${archParam}
-    latestURL=$(curl -s https://api.github.com/repos/xgadget-lab/nexttrace/releases/latest | jq ".assets[] | select(.name == \"nexttrace_${osDistribution}_${archParam}\") | .browser_download_url" | sed 's/\"//g')
+    latestURL=$(curl -s https://api.github.com/repos/xgadget-lab/nexttrace/releases/latest | jq ".assets[] | select(.name == \"nexttrace_${osDistribution}_${archParam}\") | .browser_download_url")
+    latestURL=${latestURL: 1: -1}
     else
     # 不支持 jq，用户拒绝安装，回退 awk
     latestURL=$(curl -s https://api.github.com/repos/xgadget-lab/nexttrace/releases/latest | grep -i "browser_download_url.*${osDistribution}.*${archParam}" | awk -F '"' '{print $4}')
