@@ -1,5 +1,7 @@
 #!/bin/bash
 
+usrPath="/usr/local/bin"
+
 checkRootPermit() {
     [[ $EUID -ne 0 ]] && echo "请使用sudo/root权限运行本脚本" && exit 1
 }
@@ -19,11 +21,11 @@ checkSystemDistribution() {
     case "$OSTYPE" in
     darwin*)  
     osDistribution="darwin"
-    downPath="nexttrace"
+    downPath="/var/tmp/nexttrace"
     ;; 
     linux*)   
     osDistribution="linux"
-    downPath="/usr/local/bin/nexttrace"
+    downPath="/var/tmp/nexttrace"
     ;;
     *)
     echo "unknown: $OSTYPE"
@@ -33,6 +35,7 @@ checkSystemDistribution() {
 }
 
 getLocation() {
+    echo "正在获取地理位置信息..."
     countryCode=$(curl -s "http://ip-api.com/line/?fields=countryCode")
 }
 
@@ -68,6 +71,38 @@ installWgetPackage() {
 
 }
 
+installJqPackage() {
+    # macOS should install wget originally. Nothing to do
+    echo "jq 正在安装中..."
+    # try apt
+    apt -h &> /dev/null
+    if [ $? -eq 0 ]; then
+    # 先更新一下数据源，有些机器数据源比较老可能会404
+    apt update -y &> /dev/null
+    apt install jq -y &> /dev/null
+    fi
+
+    # try yum
+    yum -h &> /dev/null
+    if [ $? -eq 0 ]; then
+    yum install jq -y &> /dev/null
+    fi
+
+    # try dnf
+    dnf -h &> /dev/null
+    if [ $? -eq 0 ]; then
+    dnf install jq -y &> /dev/null
+    fi
+
+    # try pacman
+    pacman -h &> /dev/null
+    if [ $? -eq 0 ]; then
+    pacman -Sy
+    pacman -S jq
+    fi
+
+}
+
 checkWgetPackage() {
     wget -h &> /dev/null
     if [ $? -ne 0 ]; then
@@ -90,11 +125,42 @@ checkWgetPackage() {
     fi
 }
 
+checkJqPackage() {
+    jq -h &> /dev/null
+    if [ $? -ne 0 ]; then
+    echo "您还没有安装jq， 当您取消安装，我们会使用awk获取当前版本号。"
+    read -r -p "但是如遇Github变更API，这可能会存在问题，是否安装? (y/n)" input
+
+    case $input in
+    [yY][eE][sS]|[yY])
+		installJqPackage
+		;;
+
+    [nN][oO]|[nN])
+		echo "您选择了取消安装"
+        return 0
+       	;;
+
+    *)
+		installJqPackage
+		;;
+    esac
+    fi
+    return 1
+}
+
 downloadBinrayFile() {
-    echo "获取最新版的 NextTrace 发行版文件信息"
+    echo "正在获取最新版的 NextTrace 发行版文件信息..." 
+    checkJqPackage
     # 简单说明一下，Github提供了一个API，可以获取最新发行版本的二进制文件下载地址（对应的是browser_download_url），根据刚刚测得的osDistribution、archParam，获取对应的下载地址
+    if [[ $? -eq 1 ]]; then
+    # 支持 jq 不回退
+    # echo nexttrace_${osDistribution}_${archParam}
+    latestURL=$(curl -s https://api.github.com/repos/xgadget-lab/nexttrace/releases/latest | jq ".assets[] | select(.name == \"nexttrace_${osDistribution}_${archParam}\") | .browser_download_url" | sed 's/\"//g')
+    else
+    # 不支持 jq，用户拒绝安装，回退 awk
     latestURL=$(curl -s https://api.github.com/repos/xgadget-lab/nexttrace/releases/latest | grep -i "browser_download_url.*${osDistribution}.*${archParam}" | awk -F '"' '{print $4}')
-    
+    fi
     if [ "$countryCode" == "CN" ]; then
         read -r -p "检测到国内网络环境，是否使用镜像下载以加速(y/n)" input
         case $input in
@@ -118,6 +184,7 @@ downloadBinrayFile() {
     then
     echo "NextTrace 现在已经在您的系统中可用"
     changeMode
+    mv ${downPath} ${usrPath}
     else
     echo "NextTrace 下载失败，请检查您的网络是否正常"
     exit 1
@@ -125,13 +192,12 @@ downloadBinrayFile() {
 }
 
 changeMode() {
-    chmod +x ./nexttrace &> /dev/null
     chmod +x ${downPath} &> /dev/null
 }
 
 runBinrayFileHelp() {
-    if [ -e ${downPath} ]; then
-    ${downPath} -h
+    if [ -e ${usrPath} ]; then
+    ${usrPath}/nexttrace -h
     fi
 }
 
