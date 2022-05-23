@@ -1,11 +1,9 @@
 package trace
 
 import (
-	"fmt"
 	"log"
 	"net"
 	"os"
-	"strconv"
 	"sync"
 	"time"
 
@@ -65,6 +63,9 @@ func (t *ICMPTracer) Execute() (*Result, error) {
 		}
 		// 一组TTL全部退出（收到应答或者超时终止）以后，再进行下一个TTL的包发送
 		t.wg.Wait()
+		if t.RealtimePrinter != nil {
+			t.RealtimePrinter(&t.res, t.workFork.ttl-1)
+		}
 		t.workFork.num = 0
 	}
 	t.res.reduce(t.final)
@@ -162,10 +163,6 @@ func (t *ICMPTracer) send(fork workFork) error {
 	// 	t.inflightRequestLock.Unlock()
 	// }()
 
-	if fork.num == 0 && t.Config.RoutePath {
-		fmt.Print(strconv.Itoa(fork.ttl))
-	}
-
 	select {
 	case <-t.ctx.Done():
 		return nil
@@ -192,9 +189,6 @@ func (t *ICMPTracer) send(fork workFork) error {
 		h.RTT = rtt
 
 		h.fetchIPData(t.Config)
-		if t.Config.RoutePath {
-			HopPrinter(h)
-		}
 
 		t.res.add(h)
 
@@ -210,9 +204,6 @@ func (t *ICMPTracer) send(fork workFork) error {
 			RTT:     0,
 			Error:   ErrHopLimitTimeout,
 		})
-		if t.Config.RoutePath {
-			fmt.Println("\t" + "*")
-		}
 	}
 
 	return nil

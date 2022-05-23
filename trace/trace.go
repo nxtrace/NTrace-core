@@ -25,7 +25,7 @@ type Config struct {
 	Quic             bool
 	IPGeoSource      ipgeo.Source
 	RDns             bool
-	RoutePath        bool
+	RealtimePrinter  func(res *Result, ttl int)
 }
 
 type Method string

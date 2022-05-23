@@ -21,9 +21,10 @@ var numMeasurements = flag.Int("q", 3, "Set the number of probes per each hop.")
 var parallelRequests = flag.Int("r", 18, "Set ParallelRequests number. It should be 1 when there is a multi-routing.")
 var maxHops = flag.Int("m", 30, "Set the max number of hops (max TTL to be reached).")
 var dataOrigin = flag.String("d", "LeoMoeAPI", "Choose IP Geograph Data Provider [LeoMoeAPI, IP.SB, IPInfo, IPInsight]")
-var displayMode = flag.String("displayMode", "table", "Choose The Display Mode [table, classic]")
 var rdnsenable = flag.Bool("rdns", false, "Set whether rDNS will be display")
 var routePath = flag.Bool("report", false, "Route Path")
+var realtimePrint = flag.Bool("realtime", false, "Output trace results in runtime")
+var tablePrint = flag.Bool("table", false, "Output trace results as table")
 
 func flagApply() string {
 	flag.Parse()
@@ -68,8 +69,10 @@ func main() {
 		RDns:             *rdnsenable,
 		IPGeoSource:      ipgeo.GetSource(*dataOrigin),
 		Timeout:          2 * time.Second,
-		RoutePath:        *routePath,
-		//Quic:    false,
+	}
+
+	if m == trace.ICMPTrace && !*tablePrint {
+		conf.RealtimePrinter = printer.RealtimePrinter
 	}
 
 	res, err := trace.Traceroute(m, conf)
@@ -84,9 +87,15 @@ func main() {
 		return
 	}
 
-	if *displayMode == "table" {
+	if m == trace.ICMPTrace && *tablePrint {
 		printer.TracerouteTablePrinter(res)
-	} else {
-		printer.TraceroutePrinter(res)
+	}
+
+	if m == trace.TCPTrace || m == trace.UDPTrace {
+		if *realtimePrint {
+			printer.TraceroutePrinter(res)
+		} else {
+			printer.TracerouteTablePrinter(res)
+		}
 	}
 }

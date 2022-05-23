@@ -15,12 +15,12 @@ func TraceroutePrinter(res *trace.Result) {
 	for i, hop := range res.Hops {
 		fmt.Print(i + 1)
 		for _, h := range hop {
-			hopPrinter(h)
+			HopPrinter(h)
 		}
 	}
 }
 
-func hopPrinter(h trace.Hop) {
+func HopPrinter(h trace.Hop) {
 	if h.Address == nil {
 		fmt.Println("\t*")
 	} else {

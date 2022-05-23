@@ -1,11 +1,9 @@
 package trace
 
 import (
-	"fmt"
 	"log"
 	"net"
 	"os"
-	"strconv"
 	"sync"
 	"time"
 
@@ -98,7 +96,6 @@ func (t *ICMPTracerv6) listenICMP() {
 }
 
 func (t *ICMPTracerv6) handleICMPMessage(msg ReceivedMessage, icmpType int8, data []byte) {
-
 	t.inflightRequestLock.Lock()
 	defer t.inflightRequestLock.Unlock()
 	ch, ok := t.inflightRequest[t.workFork.num]
@@ -162,10 +159,6 @@ func (t *ICMPTracerv6) send(fork workFork) error {
 	// 	t.inflightRequestLock.Unlock()
 	// }()
 
-	if fork.num == 0 && t.Config.RoutePath {
-		fmt.Print(strconv.Itoa(fork.ttl))
-	}
-
 	select {
 	case <-t.ctx.Done():
 		return nil
@@ -192,9 +185,6 @@ func (t *ICMPTracerv6) send(fork workFork) error {
 		h.RTT = rtt
 
 		h.fetchIPData(t.Config)
-		if t.Config.RoutePath {
-			HopPrinter(h)
-		}
 
 		t.res.add(h)
 
@@ -210,9 +200,6 @@ func (t *ICMPTracerv6) send(fork workFork) error {
 			RTT:     0,
 			Error:   ErrHopLimitTimeout,
 		})
-		if t.Config.RoutePath {
-			fmt.Println("\t" + "*")
-		}
 	}
 
 	return nil
