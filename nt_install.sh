@@ -113,8 +113,14 @@ runBinrayFileHelp() {
     fi
 }
 
+# Check Procedure
+checkRootPermit
 checkSystemDistribution
 checkSystemArch
 checkWgetPackage
+
+# Download Procedure
 downloadBinrayFile
+
+# Run Procedure
 runBinrayFileHelp
