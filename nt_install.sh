@@ -34,6 +34,8 @@ installWgetPackage() {
     # try apt
     apt -h &> /dev/null
     if [ $? -eq 0 ]; then
+    # 先更新一下数据源，有些机器数据源比较老可能会404
+    apt update -y &> /dev/null
     apt install wget -y &> /dev/null
     fi
 
