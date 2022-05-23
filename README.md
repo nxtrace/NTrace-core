@@ -22,30 +22,30 @@ bash -c "$(curl -Ls https://raw.githubusercontent.com/xgadget-lab/nexttrace/main
 
 ```bash
 # IPv4 ICMP Trace
-./nexttrace 1.0.0.1
+nexttrace 1.0.0.1
 
 # 获得 route-path
-./nexttrace -report 1.0.0.1
+nexttrace -report 1.0.0.1
 
 # 表格打印（一次性输出全部跳数，需等待20-40秒）
-./nexttrace -table 1.0.0.1
+nexttrace -table 1.0.0.1
 
 # IPv6 ICMP Trace
-./nexttrace 2606:4700:4700::1111
+nexttrace 2606:4700:4700::1111
 ```
 
 `NextTrace`也可以使用`TCP`和`UDP`协议发起`Traceroute`请求，不过目前只支持`IPv4`
 ```bash
 # TCP SYN Trace
-./nexttrace -T www.bing.com
+nexttrace -T www.bing.com
 
 # 可以自行指定端口[此处为443]，默认80端口
-./nexttrace -T -p 443 1.0.0.1
+nexttrace -T -p 443 1.0.0.1
 
 # UDP Trace
-./nexttrace -U 1.0.0.1
+nexttrace -U 1.0.0.1
 
-./nexttrace -U -p 53 1.0.0.1
+nexttrace -U -p 53 1.0.0.1
 ```
 
 ### IP数据库
