@@ -52,35 +52,35 @@ installWgetPackage() {
     # macOS should install wget originally. Nothing to do
     echo "wget 正在安装中..."
     # try apt
-    apt-get -h >/dev/null
+    apt-get -h &>/dev/null
     if [ $? -eq 0 ]; then
         # 先更新一下数据源，有些机器数据源比较老可能会404
-        apt-get update -y >/dev/null
-        apt-get install wget -y >/dev/null
+        apt-get update -y &>/dev/null
+        apt-get install wget -y &>/dev/null
     fi
 
     # try yum
-    yum -h >/dev/null
+    yum -h &>/dev/null
     if [ $? -eq 0 ]; then
-        yum -y update >/dev/null
-        yum install wget -y >/dev/null
+        yum -y update &>/dev/null
+        yum install wget -y &>/dev/null
     fi
 
     # try dnf
-    dnf -h >/dev/null
+    dnf -h &>/dev/null
     if [ $? -eq 0 ]; then
-        dnf check-update >/dev/null
-        dnf install wget -y >/dev/null
+        dnf check-update &>/dev/null
+        dnf install wget -y &>/dev/null
     fi
 
     # try pacman
-    pacman -h >/dev/null
+    pacman -h &>/dev/null
     if [ $? -eq 0 ]; then
-        pacman -Sy >/dev/null
-        pacman -S wget >/dev/null
+        pacman -Sy &>/dev/null
+        pacman -S wget &>/dev/null
     fi
 
-    wget -h >/dev/null
+    wget -h &>/dev/null
     if [ $? -ne 0 ]; then
         echo "wget 安装失败"
         exit 1
@@ -91,35 +91,35 @@ installJqPackage() {
     # macOS should install wget originally. Nothing to do
     echo "jq 正在安装中..."
     # try apt
-    apt-get -h >/dev/null
+    apt-get -h &>/dev/null
     if [ $? -eq 0 ]; then
         # 先更新一下数据源，有些机器数据源比较老可能会404
-        apt-get update -y >/dev/null
-        apt-get install jq -y >/dev/null
+        apt-get update -y &>/dev/null
+        apt-get install jq -y &>/dev/null
     fi
 
     # try yum
-    yum -h >/dev/null
+    yum -h &>/dev/null
     if [ $? -eq 0 ]; then
-        yum -y update >/dev/null
-        yum install jq -y >/dev/null
+        yum -y update &>/dev/null
+        yum install jq -y &>/dev/null
     fi
 
     # try dnf
-    dnf -h >/dev/null
+    dnf -h &>/dev/null
     if [ $? -eq 0 ]; then
-        dnf check-update >/dev/null
-        dnf install jq -y >/dev/null
+        dnf check-update &>/dev/null
+        dnf install jq -y &>/dev/null
     fi
 
     # try pacman
-    pacman -h >/dev/null
+    pacman -h &>/dev/null
     if [ $? -eq 0 ]; then
-        pacman -Sy >/dev/null
-        pacman -S jq >/dev/null
+        pacman -Sy &>/dev/null
+        pacman -S jq &>/dev/null
     fi
 
-    jq -h >/dev/null
+    jq -h &>/dev/null
     if [ $? -ne 0 ]; then
         echo "jq 安装失败"
         exit 1
@@ -127,7 +127,7 @@ installJqPackage() {
 }
 
 checkWgetPackage() {
-    wget -h >/dev/null
+    wget -h &>/dev/null
     if [ $? -ne 0 ]; then
         read -r -p "您还没有安装wget，是否安装? (y/n)" input
 
@@ -172,7 +172,7 @@ checkVersion() {
 }
 
 checkJqPackage() {
-    jq -h >/dev/null
+    jq -h &>/dev/null
     if [ $? -ne 0 ]; then
         echo "您还没有安装jq， 当您取消安装，我们会使用awk获取当前版本号。"
         read -r -p "但是如遇Github变更API，这可能会存在问题，是否安装? (y/n)" input
@@ -226,7 +226,7 @@ downloadBinrayFile() {
     fi
 
     echo "正在下载 NextTrace 二进制文件..."
-    wget -O ${downPath} ${latestURL} >/dev/null
+    wget -O ${downPath} ${latestURL} &>/dev/null
     if [ $? -eq 0 ]; then
         echo "NextTrace 现在已经在您的系统中可用"
         changeMode
@@ -241,7 +241,7 @@ downloadBinrayFile() {
 }
 
 changeMode() {
-    chmod +x ${downPath} >/dev/null
+    chmod +x ${downPath} &>/dev/null
 }
 
 runBinrayFileHelp() {
