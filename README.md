@@ -27,6 +27,9 @@ nexttrace 1.0.0.1
 # 获得 route-path
 nexttrace -report 1.0.0.1
 
+# 打开IP反向解析 rdns
+nexttrace -rdns 1.0.0.1
+
 # 表格打印（一次性输出全部跳数，需等待20-40秒）
 nexttrace -table 1.0.0.1
 
