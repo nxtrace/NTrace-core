@@ -84,9 +84,7 @@ Usage of nexttrace:
 ```
 ## 项目截图
 
-![](asset/screenshot2.png)
-
-![](asset/screenshot3.png)
+![](asset/screenshot_special.png)
 
 ![](asset/screenshot.png)
 
