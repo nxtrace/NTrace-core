@@ -24,12 +24,6 @@ bash -c "$(curl -Ls https://raw.githubusercontent.com/xgadget-lab/nexttrace/main
 # IPv4 ICMP Trace
 nexttrace 1.0.0.1
 
-# 获得 route-path
-nexttrace -report 1.0.0.1
-
-# 打开IP反向解析 rdns
-nexttrace -rdns 1.0.0.1
-
 # 表格打印（一次性输出全部跳数，需等待20-40秒）
 nexttrace -table 1.0.0.1
 
@@ -51,6 +45,19 @@ nexttrace -U 1.0.0.1
 nexttrace -U -p 53 1.0.0.1
 ```
 
+`NextTrace`也同样支持一些进阶功能，如IP反向解析、并发数控制、模式切换等
+
+```bash
+# 无并发，每次只发送一个探测包
+nexttrace -r 1 www.hkix.net
+
+# 打开IP反向解析功能，在IPv6的骨干网定位辅助有较大帮助
+nexttrace -rdns www.bbix.net
+
+# 联合使用
+nexttrace -r 1 -q 1 -report www.time.com.my
+```
+
 ### IP数据库
 
 目前使用的IP数据库默认为我们自己搭建的API服务，如果后期遇到滥用，我们可能会选择关闭。
@@ -65,10 +72,9 @@ NextTrace所有的的IP地理位置`API DEMO`可以参考[这里](https://github
 Usage of nexttrace:
   -T    Use TCP SYN for tracerouting (default port is 80)
   -U    Use UDP Package for tracerouting (default port is 53 in UDP)
+  -V    Check Version
   -d string
         Choose IP Geograph Data Provider [LeoMoeAPI, IP.SB, IPInfo, IPInsight] (default "LeoMoeAPI")
-  -displayMode string
-        Choose The Display Mode [table, classic] (default "table")
   -m int
         Set the max number of hops (max TTL to be reached). (default 30)
   -p int
@@ -79,15 +85,22 @@ Usage of nexttrace:
         Set ParallelRequests number. It should be 1 when there is a multi-routing. (default 18)
   -rdns
         Set whether rDNS will be display
+  -realtime
+        Output trace results in runtime
   -report
         Route Path
+  -table
+        Output trace results as table
 ```
+
 ## 项目截图
 
 ![](asset/screenshot_special.png)
 
 ![](asset/screenshot.png)
 
+<!--
+Leo注：描述可能不合适，建议再加以斟酌已经修改
 ## History
 
 - v0.0.6.alpha - Now
@@ -96,19 +109,15 @@ Usage of nexttrace:
 - 最初版本 - v0.0.5.alpha
   - https://github.com/OwO-Network/traceroute
   - 感谢 Leo (leo.moe) & Vincent (vincent.moe) 发起了这个项目，并完成了最初的工作。
-
+-->
 
 ## Thanks
 
-[Sam Sam](https://github.com/samleong123) (samsam123@samsam123.name.my)
-
 [Vincent Young](https://github.com/missuo) (i@yyt.moe)
 
-[waiting4new](https://github.com/waiting4new)
+[Sam Sam](https://github.com/samleong123) (samsam123@samsam123.name.my)
 
-FFEE_CO
-
-nsnnns
+[waiting4new](https://github.com/waiting4new)、[FFEE_CO](https://github.com/fkx4-p)、[nsnnns](https://github.com/tsosunchia)
 
 ## IP Database Copyright
 
