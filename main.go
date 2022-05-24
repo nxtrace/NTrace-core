@@ -25,11 +25,11 @@ var rdnsenable = flag.Bool("rdns", false, "Set whether rDNS will be display")
 var routePath = flag.Bool("report", false, "Route Path")
 var realtimePrint = flag.Bool("realtime", false, "Output trace results in runtime")
 var tablePrint = flag.Bool("table", false, "Output trace results as table")
-var version = flag.Bool("V", false, "Check Version")
+var ver = flag.Bool("V", false, "Check Version")
 
 func flagApply() string {
 	flag.Parse()
-	if *version {
+	if *ver {
 		printer.Version()
 		os.Exit(0)
 	}
