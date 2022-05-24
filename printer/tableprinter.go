@@ -2,6 +2,7 @@ package printer
 
 import (
 	"fmt"
+	"github.com/xgadget-lab/nexttrace/ipgeo"
 	"strings"
 
 	"github.com/xgadget-lab/nexttrace/trace"
@@ -87,6 +88,10 @@ func tableDataGenerator(h trace.Hop) *rowData {
 
 		if h.Hostname != "" {
 			IP = fmt.Sprint(h.Hostname, " (", IP, ") ")
+		}
+
+		if h.Geo == nil {
+			h.Geo = &ipgeo.IPGeoData{}
 		}
 
 		r := &rowData{

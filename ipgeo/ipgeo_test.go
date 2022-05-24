@@ -18,8 +18,9 @@ func TestIPSB(t *testing.T) {
 	res, err := IPSB("1.1.1.1")
 	assert.Nil(t, err)
 	assert.NotNil(t, res)
-	assert.NotEmpty(t, res.Asnumber)
-	assert.NotEmpty(t, res.Isp)
+	// Not available
+	//assert.NotEmpty(t, res.Asnumber)
+	//assert.NotEmpty(t, res.Isp)
 }
 
 func TestIPInfo(t *testing.T) {
