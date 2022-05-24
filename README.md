@@ -98,3 +98,29 @@ Usage of nexttrace:
 FFEE_CO
 
 nsnnns
+
+## IP Database Copyright
+
+### IPv4 Database
+
+#### China MainLand
+
+* 项目组自行维护 ~ 御三家骨干网数据 ~ 5%
+
+* 埃文科技 Paid Database ~ 95%
+
+#### WorldWide
+
+* 埃文科技 Paid Database ~ 15%
+
+* IpInfo Free ~ 15%
+
+* IPInSight Free ~ 70%
+
+### IPv6 Database
+
+This product includes IP2Location LITE data available from <a href="https://lite.ip2location.com">https://lite.ip2location.com</a>.
+
+### Others
+
+其他第三方API尽管集成在本项目内，但是具体的TOS以及AUP，请详见第三方API官网。如遇到IP数据错误，也请直接联系他们纠错。
