@@ -92,7 +92,7 @@ Usage of nexttrace:
 
 - v0.0.6.alpha - Now
   - https://github.com/xgadget-lab/nexttrace
-  - 因为项目计划调整，更名并转移到当前仓库。重构了部分代码，提高了效率吗，增加了ICMP(IPv4 & IPv6)支持，并规划了更多功能。
+  - 因为项目计划调整，更名并转移到当前仓库。重构了部分代码，提高了效率，增加了ICMP(IPv4 & IPv6)支持，并规划了更多功能。
 - 最初版本 - v0.0.5.alpha
   - https://github.com/OwO-Network/traceroute
   - 感谢 Leo (leo.moe) & Vincent (vincent.moe) 发起了这个项目，并完成了最初的工作。
