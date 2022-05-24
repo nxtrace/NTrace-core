@@ -29,8 +29,8 @@ var version = flag.Bool("V", false, "Check Version")
 
 func flagApply() string {
 	flag.Parse()
+	printer.Version()
 	if *version {
-		printer.Version()
 		os.Exit(0)
 	}
 	ipArg := flag.Args()
@@ -43,11 +43,11 @@ func flagApply() string {
 
 func main() {
 
+	domain := flagApply()
+
 	if os.Getuid() != 0 {
 		log.Fatalln("Traceroute requires root/sudo privileges.")
 	}
-
-	domain := flagApply()
 
 	ip := util.DomainLookUp(domain)
 	printer.PrintTraceRouteNav(ip, domain, *dataOrigin)
@@ -105,7 +105,4 @@ func main() {
 			printer.TracerouteTablePrinter(res)
 		}
 	}
-
-	printer.SpecialThanks()
-
 }

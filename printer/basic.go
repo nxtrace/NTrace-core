@@ -5,12 +5,9 @@ import (
 	"net"
 )
 
-func SpecialThanks() {
-	fmt.Println("\nSpecial thanks to Vincent Young (OwO Network / vincent.moe) for his help and support for this project.")
-}
-
 func Version() {
-	fmt.Println("NextTrace v0.1.2-Beta.missuo-special-version")
+	fmt.Print("NextTrace v0.1.2-Beta ") // TODO get version from git
+	fmt.Println("XGadget-lab Leo (leo.moe) & Vincent (vincent.moe) & zhshch (xzhsh.ch)")
 }
 
 func PrintTraceRouteNav(ip net.IP, domain string, dataOrigin string) {
