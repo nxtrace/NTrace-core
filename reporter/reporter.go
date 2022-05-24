@@ -62,15 +62,19 @@ func (r *reporter) generateRouteReportNode(ip string, ipGeoData ipgeo.IPGeoData)
 		rpn.asn = ipGeoData.Asnumber
 	}
 	// 无论最后一跳是否为存在地理位置信息（AnyCast），都应该给予显示
-	if ipGeoData.Country == "" || ipGeoData.City == "" || ipGeoData.City == "-" && ip != r.targetIP {
+	if (ipGeoData.Country == "" || ipGeoData.Country == "LAN Address" || ipGeoData.Country == "-") && ip != r.targetIP {
 		return rpn, errors.New("GeoData Search Failed")
 	} else {
 		if ipGeoData.City == "" {
-			rpn.geo = []string{ipGeoData.Country, ipGeoData.Country}
+			rpn.geo = []string{ipGeoData.Country, ipGeoData.Prov}
 		} else {
 			rpn.geo = []string{ipGeoData.Country, ipGeoData.City}
 		}
 	}
+	if ipGeoData.Asnumber == "" {
+		rpn.asn = "*"
+	}
+
 	if ipGeoData.Isp == "" {
 		rpn.isp = ipGeoData.Owner
 	} else {
