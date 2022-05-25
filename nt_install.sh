@@ -233,7 +233,7 @@ checkVersion() {
         echo "获取版本失败，请检查网络连接"
         exit 1
     fi
-    currentVersion=$(nexttrace -V | head -n 1 | awk '{print $2}')
+    currentVersion=$(nexttrace -V | head -n 1 | awk '{print $2}') &> /dev/null
     if [[ $currentVersion == $version ]]; then
         echo "当前版本已是最新版本"
         exit 0
@@ -243,7 +243,7 @@ checkVersion() {
     if [[ $auto == True ]]; then
         return 0
     fi
-    read -r -p "是否更新软件? (y/n)" input
+    read -r -p "是否安装/更新软件? (y/n)" input
     case $input in
     [yY][eE][sS] | [yY])
         return 0
