@@ -1,6 +1,8 @@
 package ipgeo
 
-import "strings"
+import (
+	"strings"
+)
 
 type IPGeoData struct {
 	Asnumber string
