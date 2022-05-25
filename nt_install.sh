@@ -52,11 +52,12 @@ installWgetPackage() {
     # macOS should install wget originally. Nothing to do
     echo "wget 正在安装中..."
     # try apt
-    apt-get -h &>/dev/null
+    # 是时候直接使用 APT 来管理包了
+    apt -h &>/dev/null
     if [ $? -eq 0 ]; then
         # 先更新一下数据源，有些机器数据源比较老可能会404
-        apt-get update -y &>/dev/null
-        apt-get install wget -y &>/dev/null
+        apt update -y &>/dev/null
+        apt install wget -y &>/dev/null
     fi
 
     # try yum
@@ -79,8 +80,9 @@ installWgetPackage() {
         pacman -Sy &>/dev/null
         pacman -S wget &>/dev/null
     fi
-
-    wget -h &>/dev/null
+    
+    # 有的发行版自带的wget，只有 --help 参数
+    wget --help &>/dev/null
     if [ $? -ne 0 ]; then
         echo "wget 安装失败"
         exit 1
