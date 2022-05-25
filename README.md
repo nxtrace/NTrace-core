@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="asset/logo.png" height="200px"/>
+<img src="asset/logo.png" height="200px" alt="NextTrace Logo"/>
 
 </div>
 
@@ -105,7 +105,7 @@ Usage of nexttrace:
 
 ## 项目截图
 
-![](asset/screenshot.png)
+![NextTrace Screenshot](asset/screenshot.png)
 
 ## FAQ 常见问题
 
