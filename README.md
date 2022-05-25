@@ -6,14 +6,14 @@
 
 # NextTrace
 
-一款开源的可视化路由跟踪工具，使用Golang开发。
+一款开源的可视化路由跟踪工具，使用 Golang 开发。
 
 ## How To Use
 
 ### Install
 
 ```bash
-bash -c "$(curl -Ls https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/nt_install.sh)"
+curl -Ls https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/nt_install.sh -O && sudo bash nt_install.sh
 ```
 
 ### Get Started
@@ -32,6 +32,7 @@ nexttrace 2606:4700:4700::1111
 ```
 
 `NextTrace`也可以使用`TCP`和`UDP`协议发起`Traceroute`请求，不过目前只支持`IPv4`
+
 ```bash
 # TCP SYN Trace
 nexttrace -T www.bing.com
@@ -45,7 +46,7 @@ nexttrace -U 1.0.0.1
 nexttrace -U -p 53 1.0.0.1
 ```
 
-`NextTrace`也同样支持一些进阶功能，如IP反向解析、并发数控制、模式切换等
+`NextTrace`也同样支持一些进阶功能，如 IP 反向解析、并发数控制、模式切换等
 
 ```bash
 # 无并发，每次只发送一个探测包
@@ -58,15 +59,15 @@ nexttrace -rdns www.bbix.net
 nexttrace -r 1 -q 1 -report www.time.com.my
 ```
 
-### IP数据库
+### IP 数据库
 
-目前使用的IP数据库默认为我们自己搭建的API服务，如果后期遇到滥用，我们可能会选择关闭。
+目前使用的 IP 数据库默认为我们自己搭建的 API 服务，如果后期遇到滥用，我们可能会选择关闭。
 
-我们也会在后期开放服务端源代码，您也可以根据该项目的源码自行搭建属于您的API服务器。
+我们也会在后期开放服务端源代码，您也可以根据该项目的源码自行搭建属于您的 API 服务器。
 
-NextTrace所有的的IP地理位置`API DEMO`可以参考[这里](https://github.com/xgadget-lab/nexttrace/blob/main/ipgeo/)
+NextTrace 所有的的 IP 地理位置`API DEMO`可以参考[这里](https://github.com/xgadget-lab/nexttrace/blob/main/ipgeo/)
 
-### 全部用法详见Usage菜单
+### 全部用法详见 Usage 菜单
 
 ```shell
 Usage of nexttrace:
@@ -97,8 +98,7 @@ Usage of nexttrace:
 
 如果你在安装或者使用的时候遇到了问题，我们建议你不要把新建一个 `issue` 作为首选项
 
-或许可以在这里找到答案 -> [前往 Github Wiki](
-https://github.com/xgadget-lab/nexttrace/wiki/FAQ---%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98%E8%A7%A3%E7%AD%94)
+或许可以在这里找到答案 -> [前往 Github Wiki](https://github.com/xgadget-lab/nexttrace/wiki/FAQ---%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98%E8%A7%A3%E7%AD%94)
 
 <!-- 等待一个更好的项目截图
 ## 项目截图
@@ -133,9 +133,9 @@ Leo注：描述可能不合适，建议再加以斟酌已经修改
 
 #### China MainLand
 
-* 项目组自行维护 ~ 御三家骨干网数据 ~ 5%
+- 项目组自行维护 ~ 御三家骨干网数据 ~ 5%
 
-* 埃文科技 Paid Database ~ 95%
+- 埃文科技 Paid Database ~ 95%
 
 **这里有朋友就要问了，为什么不全部使用埃文的付费库？**
 
@@ -147,11 +147,11 @@ Leo注：描述可能不合适，建议再加以斟酌已经修改
 
 #### WorldWide
 
-* 埃文科技 Paid Database ~ 15%
+- 埃文科技 Paid Database ~ 15%
 
-* IpInfo Free ~ 15%
+- IpInfo Free ~ 15%
 
-* IPInSight Free ~ 70%
+- IPInSight Free ~ 70%
 
 ### IPv6 Database
 
@@ -159,4 +159,4 @@ This product includes IP2Location LITE data available from <a href="https://lite
 
 ### Others
 
-其他第三方API尽管集成在本项目内，但是具体的TOS以及AUP，请详见第三方API官网。如遇到IP数据错误，也请直接联系他们纠错。
+其他第三方 API 尽管集成在本项目内，但是具体的 TOS 以及 AUP，请详见第三方 API 官网。如遇到 IP 数据错误，也请直接联系他们纠错。
