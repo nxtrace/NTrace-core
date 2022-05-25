@@ -93,11 +93,19 @@ Usage of nexttrace:
         Output trace results as table
 ```
 
+## FAQ 常见问题
+
+如果你在安装或者使用的时候遇到了问题，我们建议你不要把新建一个 `issue` 作为首选项
+
+或许可以在这里找到答案 -> [前往 Github Wiki](
+https://github.com/xgadget-lab/nexttrace/wiki/FAQ---%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98%E8%A7%A3%E7%AD%94)
+
+<!-- 等待一个更好的项目截图
 ## 项目截图
 
-![](asset/screenshot_special.png)
-
 ![](asset/screenshot.png)
+
+-->
 
 <!--
 Leo注：描述可能不合适，建议再加以斟酌已经修改
