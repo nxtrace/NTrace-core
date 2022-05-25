@@ -7,6 +7,10 @@ DEBUG_MODE=${2}
 TARGET_DIR="dist"
 PLATFORMS="darwin/amd64 darwin/arm64 linux/amd64 linux/arm64 linux/mips"
 
+BUILD_VERSION="$(git describe --tags --always)"
+BUILD_DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+COMMIT_SHA1="$(git rev-parse --short HEAD)"
+
 rm -rf ${TARGET_DIR}
 mkdir ${TARGET_DIR}
 
