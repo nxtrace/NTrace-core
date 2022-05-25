@@ -5,13 +5,27 @@ on:
 
 name: Build Release
 jobs:
-  release:
+  test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@master # checkout 代码
-      - uses: actions/setup-go@v2 # 配置 Go 环境
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-go@v2
         with:
-          go-version: "1.18" # 改成自己的版本
+          go-version: "1.18"
+
+      - name: Test
+        run: go test -v -coverprofile='coverage.out' -covermode=count ./...
+
+  release:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-go@v2
+        with:
+          go-version: "1.18"
 
       - run: bash .cross_compile.sh
 

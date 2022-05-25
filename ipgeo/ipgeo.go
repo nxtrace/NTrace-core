@@ -1,5 +1,7 @@
 package ipgeo
 
+import "strings"
+
 type IPGeoData struct {
 	Asnumber string
 	Country  string
@@ -13,12 +15,12 @@ type IPGeoData struct {
 type Source = func(ip string) (*IPGeoData, error)
 
 func GetSource(s string) Source {
-	switch s {
-	case "LeoMoeAPI":
+	switch strings.ToUpper(s) {
+	case "LEOMOEAPI":
 		return LeoIP
 	case "IP.SB":
 		return IPSB
-	case "IPInsight":
+	case "IPINSIGHT":
 		return IPInSight
 	default:
 		return nil

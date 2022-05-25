@@ -10,7 +10,6 @@ import (
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
-	"github.com/xgadget-lab/nexttrace/listener_channel"
 	"github.com/xgadget-lab/nexttrace/util"
 	"golang.org/x/net/context"
 	"golang.org/x/net/icmp"
@@ -110,10 +109,7 @@ func (t *TCPTracer) listenICMP() {
 // @title    listenTCP
 // @description   监听TCP的响应数据包
 func (t *TCPTracer) listenTCP() {
-	lc := listener_channel.New(t.tcp)
-
-	defer lc.Stop()
-
+	lc := NewPacketListener(t.tcp, t.ctx)
 	go lc.Start()
 
 	for {

@@ -25,9 +25,14 @@ var rdnsenable = flag.Bool("rdns", false, "Set whether rDNS will be display")
 var routePath = flag.Bool("report", false, "Route Path")
 var realtimePrint = flag.Bool("realtime", false, "Output trace results in runtime")
 var tablePrint = flag.Bool("table", false, "Output trace results as table")
+var ver = flag.Bool("V", false, "Check Version")
 
 func flagApply() string {
 	flag.Parse()
+	printer.Version()
+	if *ver {
+		os.Exit(0)
+	}
 	ipArg := flag.Args()
 	if flag.NArg() != 1 {
 		fmt.Println("Args Error\nUsage : ./nexttrace [-T] [-rdns] [-displayMode <displayMode>] [-d <dataOrigin> ] [ -m <hops> ] [ -p <port> ] [ -q <probes> ] [ -r <parallelrequests> ] <hostname>")
@@ -37,11 +42,13 @@ func flagApply() string {
 }
 
 func main() {
+
+	domain := flagApply()
+
 	if os.Getuid() != 0 {
 		log.Fatalln("Traceroute requires root/sudo privileges.")
 	}
 
-	domain := flagApply()
 	ip := util.DomainLookUp(domain)
 	printer.PrintTraceRouteNav(ip, domain, *dataOrigin)
 
