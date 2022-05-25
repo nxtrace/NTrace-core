@@ -190,6 +190,29 @@ checkWgetPackage() {
     fi
 }
 
+checkJqPackage() {
+    jq -h &>/dev/null
+    if [ $? -ne 0 ]; then
+        read -r -p "您还没有安装jq，是否安装? (y/n)" input
+
+        case $input in
+        [yY][eE][sS] | [yY])
+            installJqPackage
+            ;;
+
+        [nN][oO] | [nN])
+            echo "您选择了取消安装，脚本即将退出"
+            exit 1
+            ;;
+
+        *)
+            installJqPackage
+            ;;
+        esac
+    fi
+    return 1
+}
+
 checkVersion() {
     checkJqPackage
     echo "正在检查版本..."
@@ -198,8 +221,14 @@ checkVersion() {
         echo "获取版本失败，请检查网络连接"
         exit 1
     fi
+    currentVersion=$(nexttrace -V | head -n 1 | awk '{print $2}')
+    if [[ $currentVersion == $version ]]; then
+        echo "当前版本已是最新版本"
+        exit 0
+    fi
     echo 当前最新release版本：${version}
-    read -r -p "是否安装/更新软件? (y/n)" input
+    echo 您当前的版本：${currentVersion}
+    read -r -p "是否更新软件? (y/n)" input
     case $input in
     [yY][eE][sS] | [yY])
         break
@@ -212,30 +241,6 @@ checkVersion() {
         break
         ;;
     esac
-}
-
-checkJqPackage() {
-    jq -h &>/dev/null
-    if [ $? -ne 0 ]; then
-        echo "您还没有安装jq， 当您取消安装，我们会使用awk获取当前版本号。"
-        read -r -p "但是如遇Github变更API，这可能会存在问题，是否安装? (y/n)" input
-
-        case $input in
-        [yY][eE][sS] | [yY])
-            installJqPackage
-            ;;
-
-        [nN][oO] | [nN])
-            echo "您选择了取消安装"
-            return 0
-            ;;
-
-        *)
-            installJqPackage
-            ;;
-        esac
-    fi
-    return 1
 }
 
 downloadBinrayFile() {
@@ -298,8 +303,8 @@ checkRootPermit
 checkSystemDistribution
 checkSystemArch
 checkWgetPackage
-# TODO: 检查版本并更新
-#checkVersion
+checkJqPackage
+checkVersion
 
 # Download Procedure
 getLocation
