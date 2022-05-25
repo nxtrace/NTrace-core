@@ -53,11 +53,12 @@ installWgetPackage() {
     echo "wget 正在安装中..."
     # try apt
     # 是时候直接使用 APT 来管理包了
-    apt -h &>/dev/null
+    apt-get -h &>/dev/null
     if [ $? -eq 0 ]; then
         # 先更新一下数据源，有些机器数据源比较老可能会404
-        apt update -y &>/dev/null
-        apt install wget -y &>/dev/null
+        apt-get update -y &>/dev/null
+        apt-get --no-install-recommends install wget -y &>/dev/null
+        return 0
     fi
 
     # try yum
@@ -65,6 +66,7 @@ installWgetPackage() {
     if [ $? -eq 0 ]; then
         yum -y update &>/dev/null
         yum install wget -y &>/dev/null
+        return 0
     fi
 
     # try dnf
@@ -72,6 +74,7 @@ installWgetPackage() {
     if [ $? -eq 0 ]; then
         dnf check-update &>/dev/null
         dnf install wget -y &>/dev/null
+        return 0
     fi
 
     # try pacman
@@ -79,8 +82,25 @@ installWgetPackage() {
     if [ $? -eq 0 ]; then
         pacman -Sy &>/dev/null
         pacman -S wget &>/dev/null
+        return 0
     fi
-    
+
+    # try zypper
+    zypper -h &>/dev/null
+    if [ $? -eq 0 ]; then
+        zypper refresh &>/dev/null
+        zypper install -y --no-recommends wget &>/dev/null
+        return 0
+    fi
+
+    # try brew
+    brew -v &>/dev/null
+    if [ $? -eq 0 ]; then
+        brew update &>/dev/null
+        brew install wget &>/dev/null
+        return 0
+    fi
+
     # 有的发行版自带的wget，只有 --help 参数
     wget --help &>/dev/null
     if [ $? -ne 0 ]; then
@@ -97,7 +117,8 @@ installJqPackage() {
     if [ $? -eq 0 ]; then
         # 先更新一下数据源，有些机器数据源比较老可能会404
         apt-get update -y &>/dev/null
-        apt-get install jq -y &>/dev/null
+        apt-get --no-install-recommends install jq -y &>/dev/null
+        return 0
     fi
 
     # try yum
@@ -105,6 +126,7 @@ installJqPackage() {
     if [ $? -eq 0 ]; then
         yum -y update &>/dev/null
         yum install jq -y &>/dev/null
+        return 0
     fi
 
     # try dnf
@@ -112,6 +134,15 @@ installJqPackage() {
     if [ $? -eq 0 ]; then
         dnf check-update &>/dev/null
         dnf install jq -y &>/dev/null
+        return 0
+    fi
+
+    # try zypper
+    zypper -h &>/dev/null
+    if [ $? -eq 0 ]; then
+        zypper refresh &>/dev/null
+        zypper install -y --no-recommends jq &>/dev/null
+        return 0
     fi
 
     # try pacman
@@ -119,6 +150,15 @@ installJqPackage() {
     if [ $? -eq 0 ]; then
         pacman -Sy &>/dev/null
         pacman -S jq &>/dev/null
+        return 0
+    fi
+
+    # try brew
+    brew -v &>/dev/null
+    if [ $? -eq 0 ]; then
+        brew update &>/dev/null
+        brew install jq &>/dev/null
+        return 0
     fi
 
     jq -h &>/dev/null
