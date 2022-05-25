@@ -227,6 +227,10 @@ checkJqPackage() {
 
 checkVersion() {
     checkJqPackage
+    nexttrace -h &>/dev/null
+    if [ $? -ne 0 ]; then
+        return 0
+    fi
     echo "正在检查版本..."
     version=$(curl -sL https://api.github.com/repos/xgadget-lab/nexttrace/releases/latest | jq -r '.tag_name')
     if [[ $version == "" ]]; then
