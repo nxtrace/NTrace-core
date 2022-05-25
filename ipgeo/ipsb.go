@@ -4,6 +4,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/tidwall/gjson"
@@ -25,6 +26,11 @@ func IPSB(ip string) (*IPGeoData, error) {
 	}
 	body, _ := ioutil.ReadAll(content.Body)
 	res := gjson.ParseBytes(body)
+
+	if res.Get("country").String() == "" {
+		// 什么都拿不到，证明被Cloudflare风控了
+		os.Exit(1)
+	}
 
 	return &IPGeoData{
 		Asnumber: res.Get("asn").String(),
