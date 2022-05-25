@@ -1,11 +1,10 @@
 on:
-  push: # 每次带有 tag 的 push 候触发
-    tags:
-      - 'v*'
+  push:
+  pull_request:
 
-name: Build Release
+name: Test & Build Release
 jobs:
-  test:
+  Test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -17,8 +16,9 @@ jobs:
       - name: Test
         run: go test -v -coverprofile='coverage.out' -covermode=count ./...
 
-  release:
+  Build:
     needs: test
+    if: contains('{{ github.ref }}', 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
