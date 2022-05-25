@@ -59,6 +59,14 @@ nexttrace -rdns www.bbix.net
 nexttrace -r 1 -q 1 -report www.time.com.my
 ```
 
+### For Beginner
+
+如果你实在不想去了解这些参数如何使用，或目的只是为了快速测试服务器的到中国内地的线路;<br>
+那么建议你使用本仓库的 `quicklytest.sh` （使用此脚本钱请先按照 INSTALL 中的提示进行安装，才可使用）;<br>
+执行：
+`sudo bash -c "$(curl -sL https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/quicklytest.sh)"`
+，并按照提示进行操作即可。<br>
+
 ### IP 数据库
 
 目前使用的 IP 数据库默认为我们自己搭建的 API 服务，如果后期遇到滥用，我们可能会选择关闭。
