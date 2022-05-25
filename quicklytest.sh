@@ -68,7 +68,7 @@ set_alternative() {
 node_1() {
     echo -e "1.上海电信(天翼云)\n2.厦门电信CN2\n3.北京电信\n4.江苏电信\n5.广东深圳电信\n6.广州电信(天翼云)\n7.浙江电信" && read -p "输入数字以选择:" node
 
-    while [[ ! "${node}" =~ ^[1-6]$ ]]; do
+    while [[ ! "${node}" =~ ^[1-7]$ ]]; do
         echo -e "${Error} 无效输入"
         echo -e "${Info} 请重新选择" && read -p "输入数字以选择:" node
     done
@@ -84,7 +84,7 @@ node_1() {
 node_2() {
     echo -e "1.上海联通\n2.重庆联通\n3.北京联通\n4.安徽合肥联通\n5.江苏南京联通\n6.浙江杭州联通\n7.广东联通" && read -p "输入数字以选择:" node
 
-    while [[ ! "${node}" =~ ^[1-6]$ ]]; do
+    while [[ ! "${node}" =~ ^[1-7]$ ]]; do
         echo -e "${Error} 无效输入"
         echo -e "${Info} 请重新选择" && read -p "输入数字以选择:" node
     done
@@ -100,7 +100,7 @@ node_2() {
 node_3() {
     echo -e "1.上海移动\n2.四川成都移动\n3.北京移动\n4.浙江杭州移动5.广东移动\n6.江苏移动\n7.浙江移动" && read -p "输入数字以选择:" node
 
-    while [[ ! "${node}" =~ ^[1-4]$ ]]; do
+    while [[ ! "${node}" =~ ^[1-7]$ ]]; do
         echo -e "${Error} 无效输入"
         echo -e "${Info} 请重新选择" && read -p "输入数字以选择:" node
     done
