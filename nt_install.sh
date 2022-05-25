@@ -324,11 +324,15 @@ addCronTask() {
     read -r -p "是否添加自动更新任务？(y/n)" input
     case $input in
     [yY][eE][sS] | [yY])
-        crontab -l >crontab.bak
         if [[ ${osDistribution} == "darwin" ]]; then
+            crontab -l >crontab.bak
             sed -i '' '/nt_install.sh/d' crontab.bak
-        else
+        elif [[ ${osDistribution} == "linux" ]]; then
+            crontab -l >crontab.bak
             sed -i '/nt_install.sh/d' crontab.bak
+        else
+            echo "暂不支持您的系统,无法自动添加crontab任务"
+            return 0
         fi
         echo "1 1 * * * $(dirname $(readlink -f "$0"))/nt_install.sh --auto >> /var/log/nt_install.log" >>crontab.bak
         crontab crontab.bak
@@ -344,7 +348,6 @@ addCronTask() {
 }
 
 # Check Procedure
-addCronTask
 checkRootPermit
 checkSystemDistribution
 checkSystemArch
