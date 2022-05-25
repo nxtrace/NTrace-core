@@ -10,7 +10,7 @@ var buildDate = ""
 var commitID = ""
 
 func Version() {
-	fmt.Println("NextTrace ", version, buildDate, commitID)
+	fmt.Println("NextTrace", version, buildDate, commitID)
 	fmt.Println("XGadget-lab Leo (leo.moe) & Vincent (vincent.moe) & zhshch (xzhsh.ch)")
 }
 
