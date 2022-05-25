@@ -61,12 +61,13 @@ nexttrace -r 1 -q 1 -report www.time.com.my
 
 ### For Beginner
 
-如果你实在不想去了解这些参数如何使用，或目的只是为了快速测试服务器的到中国内地的线路;<br>
-那么建议你使用本仓库的 `quicklytest.sh` <br>
-使用此脚本前请先按照 [Install](#Install) 中的提示进行安装，才可使用;<br>
-执行：
-`sudo bash -c "$(curl -sL https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/quicklytest.sh)"`
-，并按照提示进行操作即可。<br>
+如果你实在不想去了解这些参数如何使用，或目的只是为了快速测试服务器的到中国内地的线路，那么建议你使用本仓库的 `quicklytest.sh`
+
+使用此脚本前请先按照 [Install](#Install) 中的提示进行安装，才可使用，并按照提示进行操作即可。
+
+```bash
+sudo bash -c "$(curl -sL https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/quicklytest.sh)"
+```
 
 ### IP 数据库
 
