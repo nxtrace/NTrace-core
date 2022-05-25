@@ -21,15 +21,15 @@ for pl in ${PLATFORMS}; do
     echo "build => ${TARGET}"
     if [ "${DEBUG_MODE}" == "debug" ]; then
         go build -trimpath -gcflags "all=-N -l" -o ${TARGET} \
-            -ldflags    "-X 'main.version=${BUILD_VERSION}' \
-                        -X 'main.buildDate=${BUILD_DATE}' \
-                        -X 'main.commitID=${COMMIT_SHA1}'\
+            -ldflags    "-X 'github.com/xgadget-lab/nexttrace/printer.version=${BUILD_VERSION}' \
+                        -X 'github.com/xgadget-lab/nexttrace/printer.buildDate=${BUILD_DATE}' \
+                        -X 'github.com/xgadget-lab/nexttrace/printer.commitID=${COMMIT_SHA1}'\
                         -w -s"
     else
         go build -trimpath -o ${TARGET} \
-            -ldflags    "-X 'main.version=${BUILD_VERSION}' \
-                        -X 'main.buildDate=${BUILD_DATE}' \
-                        -X 'main.commitID=${COMMIT_SHA1}'\
+            -ldflags    "-X 'github.com/xgadget-lab/nexttrace/printer.version=${BUILD_VERSION}' \
+                        -X 'github.com/xgadget-lab/nexttrace/printer.buildDate=${BUILD_DATE}' \
+                        -X 'github.com/xgadget-lab/nexttrace/printer.commitID=${COMMIT_SHA1}'\
                         -w -s"
     fi
 done

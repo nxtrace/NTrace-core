@@ -5,8 +5,12 @@ import (
 	"net"
 )
 
+var version = "v0.0.0.alpha"
+var buildDate = ""
+var commitID = ""
+
 func Version() {
-	fmt.Print("NextTrace v0.1.2-Beta ") // TODO get version from git
+	fmt.Println("NextTrace ", version, buildDate, commitID)
 	fmt.Println("XGadget-lab Leo (leo.moe) & Vincent (vincent.moe) & zhshch (xzhsh.ch)")
 }
 
