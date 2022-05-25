@@ -149,11 +149,7 @@ result_all() {
     echo -e "${Info} 测试路由 到 ${ISP_name} 完成 ！"
 }
 
-check_system
 check_root
-install
-cd besttrace
-
 echo -e "${Info} 选择你要使用的功能: "
 echo -e "1.选择一个节点进行测试\n2.四网路由快速测试\n3.手动输入 ip 进行测试"
 read -p "输入数字以选择:" function
