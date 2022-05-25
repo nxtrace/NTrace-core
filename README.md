@@ -103,30 +103,15 @@ Usage of nexttrace:
         Output trace results as table
 ```
 
+## 项目截图
+
+![](asset/screenshot.png)
+
 ## FAQ 常见问题
 
 如果你在安装或者使用的时候遇到了问题，我们建议你不要把新建一个 `issue` 作为首选项
 
 或许可以在这里找到答案 -> [前往 Github Wiki](https://github.com/xgadget-lab/nexttrace/wiki/FAQ---%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98%E8%A7%A3%E7%AD%94)
-
-<!-- 等待一个更好的项目截图
-## 项目截图
-
-![](asset/screenshot.png)
-
--->
-
-<!--
-Leo注：描述可能不合适，建议再加以斟酌已经修改
-## History
-
-- v0.0.6.alpha - Now
-  - https://github.com/xgadget-lab/nexttrace
-  - 因为项目计划调整，更名并转移到当前仓库。重构了部分代码，提高了效率，增加了ICMP(IPv4 & IPv6)支持，并规划了更多功能。
-- 最初版本 - v0.0.5.alpha
-  - https://github.com/OwO-Network/traceroute
-  - 感谢 Leo (leo.moe) & Vincent (vincent.moe) 发起了这个项目，并完成了最初的工作。
--->
 
 ## Thanks
 
