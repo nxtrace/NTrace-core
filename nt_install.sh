@@ -115,7 +115,7 @@ installWgetPackage() {
 }
 
 installJqPackage() {
-    echo "jq 正在安装中..."
+    echo "jq 正在安装中...(此步骤时间可能较长，请耐心等待)"
     # try apt
     apt-get -h &>/dev/null
     if [ $? -eq 0 ]; then
