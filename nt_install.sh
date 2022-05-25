@@ -1,5 +1,11 @@
 #!/bin/bash
 
+auto=False
+#是否忽略一切警告，按默认执行
+if [[ $1 == "--auto" ]]; then
+    auto=True
+fi
+
 usrPath="/usr/local/bin"
 
 checkRootPermit() {
@@ -49,7 +55,6 @@ getLocation() {
 }
 
 installWgetPackage() {
-    # macOS should install wget originally. Nothing to do
     echo "wget 正在安装中..."
     # try apt
     # 是时候直接使用 APT 来管理包了
@@ -110,7 +115,6 @@ installWgetPackage() {
 }
 
 installJqPackage() {
-    # macOS should install wget originally. Nothing to do
     echo "jq 正在安装中..."
     # try apt
     apt-get -h &>/dev/null
@@ -171,6 +175,10 @@ installJqPackage() {
 checkWgetPackage() {
     wget -h &>/dev/null
     if [ $? -ne 0 ]; then
+        if [[ $auto == True ]]; then
+            installWgetPackage
+            return 0
+        fi
         read -r -p "您还没有安装wget，是否安装? (y/n)" input
 
         case $input in
@@ -193,6 +201,10 @@ checkWgetPackage() {
 checkJqPackage() {
     jq -h &>/dev/null
     if [ $? -ne 0 ]; then
+        if [[ $auto == True ]]; then
+            installJqPackage
+            return 0
+        fi
         read -r -p "您还没有安装jq，是否安装? (y/n)" input
 
         case $input in
@@ -228,17 +240,20 @@ checkVersion() {
     fi
     echo 当前最新release版本：${version}
     echo 您当前的版本：${currentVersion}
+    if [[ $auto == True ]]; then
+        return 0
+    fi
     read -r -p "是否更新软件? (y/n)" input
     case $input in
     [yY][eE][sS] | [yY])
-        break
+        return 0
         ;;
     [nN][oO] | [nN])
         echo "您选择了取消安装/更新，脚本即将退出"
         exit 1
         ;;
     *)
-        break
+        return 0
         ;;
     esac
 }
@@ -257,20 +272,24 @@ downloadBinrayFile() {
         latestURL=$(curl -s https://api.github.com/repos/xgadget-lab/nexttrace/releases/latest | grep -i "browser_download_url.*${osDistribution}.*${archParam}" | awk -F '"' '{print $4}')
     fi
     if [ "$countryCode" == "CN" ]; then
-        read -r -p "检测到国内网络环境，是否使用镜像下载以加速(y/n)" input
-        case $input in
-        [yY][eE][sS] | [yY])
+        if [[ $auto == True ]]; then
             latestURL="https://ghproxy.com/"$latestURL
-            ;;
+        else
+            read -r -p "检测到国内网络环境，是否使用镜像下载以加速(y/n)" input
+            case $input in
+            [yY][eE][sS] | [yY])
+                latestURL="https://ghproxy.com/"$latestURL
+                ;;
 
-        [nN][oO] | [nN])
-            echo "您选择了不使用镜像，下载可能会变得异常缓慢，或者失败"
-            ;;
+            [nN][oO] | [nN])
+                echo "您选择了不使用镜像，下载可能会变得异常缓慢，或者失败"
+                ;;
 
-        *)
-            latestURL="https://ghproxy.com/"$latestURL
-            ;;
-        esac
+            *)
+                latestURL="https://ghproxy.com/"$latestURL
+                ;;
+            esac
+        fi
     fi
 
     echo "正在下载 NextTrace 二进制文件..."
@@ -279,7 +298,7 @@ downloadBinrayFile() {
         echo "NextTrace 现在已经在您的系统中可用"
         changeMode
         mv ${downPath} ${usrPath}
-        if [[ ${osDistribution} == "macOS" ]]; then
+        if [[ ${osDistribution} == "darwin" ]]; then
             xattr -r -d com.apple.quarantine ${usrPath}/nexttrace
         fi
     else
@@ -298,7 +317,34 @@ runBinrayFileHelp() {
     fi
 }
 
+addCronTask() {
+    if [[ $auto == True ]]; then
+        return 0
+    fi
+    read -r -p "是否添加自动更新任务？(y/n)" input
+    case $input in
+    [yY][eE][sS] | [yY])
+        crontab -l >crontab.bak
+        if [[ ${osDistribution} == "darwin" ]]; then
+            sed -i '' '/nt_install.sh/d' crontab.bak
+        else
+            sed -i '/nt_install.sh/d' crontab.bak
+        fi
+        echo "1 1 * * * $(dirname $(readlink -f "$0"))/nt_install.sh --auto >> /var/log/nt_install.log" >>crontab.bak
+        crontab crontab.bak
+        rm -f crontab.bak
+        ;;
+    [nN][oO] | [nN])
+        echo "您选择了不添加自动更新任务，您也可以通过命令 再次执行此脚本 手动更新"
+        ;;
+    *)
+        echo "您选择了不添加自动更新任务，您可以通过命令 再次执行此脚本 手动更新"
+        ;;
+    esac
+}
+
 # Check Procedure
+addCronTask
 checkRootPermit
 checkSystemDistribution
 checkSystemArch
@@ -312,3 +358,4 @@ downloadBinrayFile
 
 # Run Procedure
 runBinrayFileHelp
+addCronTask
