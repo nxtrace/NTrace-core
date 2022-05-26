@@ -4,8 +4,9 @@ auto=False
 #是否忽略一切警告，按默认执行
 if [[ $1 == "--auto" ]]; then
     auto=True
+    echo "自动运行."
 fi
-
+[[ $auto == True ]] &&  echo "自动运行.."
 usrPath="/usr/local/bin"
 
 function red(){
