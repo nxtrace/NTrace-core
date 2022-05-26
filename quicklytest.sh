@@ -33,12 +33,12 @@ ask_if()
 #检查脚本更新
 check_script_update()
 {
-    [ "$(md5sum "${BASH_SOURCE[0]}" | awk '{print $1}')" == "$(md5sum <(curl -sL "https://github.com/xgadget-lab/nexttrace/raw/main/quicklytest.sh") | awk '{print $1}')" ] && return 1 || return 0
+    [ "$(md5sum "${BASH_SOURCE[0]}" | awk '{print $1}')" == "$(md5sum <(curl -sL "https://github.com/tsosunchia/nexttrace/raw/main/quicklytest.sh") | awk '{print $1}')" ] && return 1 || return 0
 }
 #更新脚本
 update_script()
 {
-    if curl -o "${BASH_SOURCE[0]}" "https://github.com/xgadget-lab/nexttrace/raw/main/quicklytest.sh" || curl -o "${BASH_SOURCE[0]}" "https://github.com/xgadget-lab/nexttrace/raw/main/quicklytest.sh"; then
+    if curl -o "${BASH_SOURCE[0]}" "https://github.com/tsosunchia/nexttrace/raw/main/quicklytest.sh" || curl -o "${BASH_SOURCE[0]}" "https://github.com/tsosunchia/nexttrace/raw/main/quicklytest.sh"; then
         echo -e "${Info} 脚本更新完成，请重新运行脚本！"
         exit 0
     else
