@@ -21,7 +21,9 @@ check_root() {
 }
 checkNexttrace() {
     echo -e "${Info} 正在检查Nexttrace..."
-    bash -c "$(curl -sL https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh)" --auto > /dev/null
+    if curl -sL -O "https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh" || curl -sL -O "https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh"; then
+    bash nt_install.sh --auto #> /dev/null
+    fi
 } 
 ask_if()
 {
