@@ -20,7 +20,7 @@ ask_if()
     local choice=""
     while [ "$choice" != "y" ] && [ "$choice" != "n" ]
     do
-        echo -e "${Info} $1"
+        red $1
         read choice
     done
     [ $choice == y ] && return 0
@@ -35,21 +35,21 @@ check_script_update()
 update_script()
 {
     if curl -sL -o "${BASH_SOURCE[0]}" "https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh" || curl -sL -o "${BASH_SOURCE[0]}" "https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh"; then
-        echo -e "${Info} 脚本更新完成，正在重启脚本..."
+        red "脚本更新完成，正在重启脚本..."
         exec bash ${BASH_SOURCE[0]}
     else
-        echo -e "${Info} 更新脚本失败！"
+        red "更新脚本失败！"
         exit 1
     fi
 }
 ask_update_script()
 {
     if check_script_update; then
-        echo -e "${Info} 脚本可升级"
+        red "脚本可升级"
         [[ $auto == True ]] && update_script
         ask_if "是否升级脚本？(y/n)" && update_script
     else
-        echo -e "${Info} 脚本已经是最新版本"
+        red "脚本已经是最新版本"
     fi
 }
 checkSystemArch() {
