@@ -10,7 +10,7 @@
 
 ## How To Use
 
-### Install
+### Automated Install
 
 ```bash
 #下载nt_install.sh
@@ -19,9 +19,9 @@ curl -Ls https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh -O
 sudo bash nt_install.sh
 ```
 
-### For Beginner
+### Alternative methods
 
-如果你的目的只是为了快速测试服务器的到中国内地的线路，没有手动使用NextTrace的需求,那么建议你直接使用本仓库的 `quicklytest.sh`
+如果你的目的只是为了快速测试服务器的到中国内地的线路，没有手动使用NextTrace的需求，那么建议你直接使用本仓库的 `quicklytest.sh`
 
 ```bash
 #下载quicklytest.sh
