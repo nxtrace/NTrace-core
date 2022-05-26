@@ -19,6 +19,10 @@ ${Font_suffix}"
 check_root() {
     [[ "$(id -u)" != "0" ]] && echo -e "${Error} must be root user !" && exit 1
 }
+checkNexttrace() {
+    echo -e "${Info} 正在检查Nexttrace..."
+    bash -c "$(curl -sL https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh)" --auto > /dev/null
+} 
 ask_if()
 {
     local choice=""
@@ -213,6 +217,7 @@ result_all() {
 
 check_root
 ask_update_script
+checkNexttrace
 check_mode
 echo -e "${Info} 选择你要使用的功能: "
 echo -e "1.选择一个节点进行测试\n2.四网路由快速测试\n3.手动输入 ip 进行测试"
