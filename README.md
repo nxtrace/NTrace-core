@@ -118,6 +118,10 @@ Usage of nexttrace:
 
 或许可以在这里找到答案 -> [前往 Github Wiki](https://github.com/xgadget-lab/nexttrace/wiki/FAQ---%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98%E8%A7%A3%E7%AD%94)
 
+如果在搜索引擎，WiKi处还是没有解决，可以试试在本项目讨论区交流 -> [前往 Github Discussions](https://github.com/xgadget-lab/nexttrace/discussions)
+
+最终如果你确认遇到的是BUG、上述方法都不能解决的话，请按照提供好的模版在Issues区提出问题 -> [前往 Github Issues](https://github.com/xgadget-lab/nexttrace/issues)
+
 ## Thanks
 
 [Vincent Young](https://github.com/missuo) (i@yyt.moe)
