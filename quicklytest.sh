@@ -6,7 +6,7 @@ Info="${Green_font}[Info]${Font_suffix}"
 Error="${Red_font}[Error]${Font_suffix}"
 echo -e "${Green_font}
 #======================================
-# Project: NextTrace
+# Project: NextTrace https://github.com/xgadget-lab/nexttrace
 # Copyright Notice:
 # This script is ported from @KANIKIG https://github.com/KANIKIG/
 # The developer team made some modifications to adapt to NextTrace under the GPL-3.0 LICENSE
@@ -19,7 +19,42 @@ ${Font_suffix}"
 check_root() {
     [[ "$(id -u)" != "0" ]] && echo -e "${Error} must be root user !" && exit 1
 }
-
+ask_if()
+{
+    local choice=""
+    while [ "$choice" != "y" ] && [ "$choice" != "n" ]
+    do
+        echo -e "${Info} $1"
+        read choice
+    done
+    [ $choice == y ] && return 0
+    return 1
+}
+#检查脚本更新
+check_script_update()
+{
+    [ "$(md5sum "${BASH_SOURCE[0]}" | awk '{print $1}')" == "$(md5sum <(curl -sL "https://github.com/xgadget-lab/nexttrace/raw/main/quicklytest.sh") | awk '{print $1}')" ] && return 1 || return 0
+}
+#更新脚本
+update_script()
+{
+    if curl -sL -o "${BASH_SOURCE[0]}" "https://github.com/xgadget-lab/nexttrace/raw/main/quicklytest.sh" || curl -sL -o "${BASH_SOURCE[0]}" "https://github.com/xgadget-lab/nexttrace/raw/main/quicklytest.sh"; then
+        echo -e "${Info} 脚本更新完成，请重新运行脚本！"
+        exit 0
+    else
+        echo -e "${Info} 更新脚本失败！"
+        exit 1
+    fi
+}
+ask_update_script()
+{
+    if check_script_update; then
+        echo -e "${Info} 脚本可升级"
+        ask_if "是否升级脚本？(y/n)" && update_script
+    else
+        echo -e "${Info} 脚本已经是最新版本"
+    fi
+}
 check_mode() {
     echo -e "${Info} Nexttrace目前支持以下三种协议发起Traceroute请求:\n1.ICMP\n2.TCP(速度最快,但部分节点不支持)\n3.UDP\n(IPv6暂只支持ICMP模式)" && read -p "输入数字以选择:" node
 
@@ -32,32 +67,19 @@ check_mode() {
     [[ "${node}" == "2" ]] && TRACECMD="nexttrace -T"
     [[ "${node}" == "3" ]] && TRACECMD="nexttrace -U"
 
-    echo -e "${Info} 结果是否制表?(制表模式为非实时显示)" && read -r -p "输入y/n以选择模式:" input
-    case $input in
-            [yY][eE][sS] | [yY])
+
+    echo -e "${Info} 结果是否制表?(制表模式为非实时显示)" 
+    if ask_if "输入y/n以选择模式:" ; then
                 TRACECMD=${TRACECMD}" -rdns -table"
-                ;;
-            [nN][oO] | [nN])
+    else
                 TRACECMD=${TRACECMD}" -rdns -realtime"
-                ;;
-            *)
-                TRACECMD=${TRACECMD}" -rdns -table"
-                ;;
-    esac
+    fi
     
     return 0
     #未实现的功能:
-    echo -e "${Info} 是否输出Route-Path?" && read -r -p "输入y/n以选择模式:" input
-    case $input in
-            [yY][eE][sS] | [yY])
-                TRACECMD=${TRACECMD}" -report"
-                ;;
-            [nN][oO] | [nN])
-                ;;
-            *)
-                TRACECMD=${TRACECMD}" -report"
-                ;;
-    esac
+    ask_if "是否升级脚本？(y/n)" && update_script
+    echo -e "${Info} 是否输出Route-Path?" 
+    ask_if "输入y/n以选择模式:" && TRACECMD=${TRACECMD}" -report"
 }
 
 test_single() {
@@ -74,15 +96,12 @@ test_single() {
     repeat_test_single
 }
 repeat_test_single() {
-    echo -e "${Info} 是否继续测试其他目标 ip ?"
-    echo -e "1.是\n2.否"
-    read -p "请选择:" whether_repeat_single
-    while [[ ! "${whether_repeat_single}" =~ ^[1-2]$ ]]; do
-        echo -e "${Error} 无效输入"
-        echo -e "${Info} 请重新输入" && read -p "请选择:" whether_repeat_single
-    done
-    [[ "${whether_repeat_single}" == "1" ]] && test_single
-    [[ "${whether_repeat_single}" == "2" ]] && echo -e "${Info} 退出脚本 ..." && exit 0
+    echo -e "${Info} 是否继续测试其他目标 ip ?" 
+    if ask_if "输入y/n以选择:" ; then
+                test_single
+    else
+                echo -e "${Info} 退出脚本 ..." && exit 0
+    fi
 }
 
 test_alternative() {
@@ -164,15 +183,12 @@ result_alternative() {
     repeat_test_alternative
 }
 repeat_test_alternative() {
-    echo -e "${Info} 是否继续测试其他节点?"
-    echo -e "1.是\n2.否"
-    read -p "请选择:" whether_repeat_alternative
-    while [[ ! "${whether_repeat_alternative}" =~ ^[1-2]$ ]]; do
-        echo -e "${Error} 无效输入"
-        echo -e "${Info} 请重新输入" && read -p "请选择:" whether_repeat_alternative
-    done
-    [[ "${whether_repeat_alternative}" == "1" ]] && test_alternative
-    [[ "${whether_repeat_alternative}" == "2" ]] && echo -e "${Info} 退出脚本 ..." && exit 0
+    echo -e "${Info} 是否继续测试其他节点?" 
+    if ask_if "输入y/n以选择:" ; then
+                test_alternative
+    else
+                echo -e "${Info} 退出脚本 ..." && exit 0
+    fi
 }
 
 test_all() {
@@ -196,6 +212,7 @@ result_all() {
 }
 
 check_root
+ask_update_script
 check_mode
 echo -e "${Info} 选择你要使用的功能: "
 echo -e "1.选择一个节点进行测试\n2.四网路由快速测试\n3.手动输入 ip 进行测试"
