@@ -13,7 +13,10 @@
 ### Install
 
 ```bash
-curl -Ls https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/nt_install.sh -O && sudo bash nt_install.sh
+#下载nt_install.sh
+curl -Ls https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh -O
+#执行nt_install.sh
+sudo bash nt_install.sh
 ```
 
 ### Get Started
@@ -66,7 +69,10 @@ nexttrace -r 1 -q 1 -report www.time.com.my
 使用此脚本前请先按照 [Install](#Install) 中的提示进行安装，才可使用，并按照提示进行操作即可。
 
 ```bash
-sudo bash -c "$(curl -sL https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/quicklytest.sh)"
+#下载quicklytest.sh
+curl -Ls https://github.com/xgadget-lab/nexttrace/raw/main/quicklytest.sh -O
+#执行quicklytest.sh
+sudo bash quicklytest.sh
 ```
 
 ### IP 数据库
