@@ -36,7 +36,7 @@ update_script()
 {
     if curl -sL -o "${BASH_SOURCE[0]}" "https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh" || curl -sL -o "${BASH_SOURCE[0]}" "https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh"; then
         red "脚本更新完成，正在重启脚本..."
-        exec bash ${BASH_SOURCE[0]}
+        exec bash ${BASH_SOURCE[0]} --auto
     else
         red "更新脚本失败！"
         exit 1
