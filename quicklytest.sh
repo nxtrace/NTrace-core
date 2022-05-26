@@ -67,32 +67,19 @@ check_mode() {
     [[ "${node}" == "2" ]] && TRACECMD="nexttrace -T"
     [[ "${node}" == "3" ]] && TRACECMD="nexttrace -U"
 
-    echo -e "${Info} 结果是否制表?(制表模式为非实时显示)" && read -r -p "输入y/n以选择模式:" input
-    case $input in
-            [yY][eE][sS] | [yY])
+
+    echo -e "${Info} 结果是否制表?(制表模式为非实时显示)" 
+    if ask_if "输入y/n以选择模式:" ; then
                 TRACECMD=${TRACECMD}" -rdns -table"
-                ;;
-            [nN][oO] | [nN])
+    else
                 TRACECMD=${TRACECMD}" -rdns -realtime"
-                ;;
-            *)
-                TRACECMD=${TRACECMD}" -rdns -table"
-                ;;
-    esac
+    fi
     
     return 0
     #未实现的功能:
-    echo -e "${Info} 是否输出Route-Path?" && read -r -p "输入y/n以选择模式:" input
-    case $input in
-            [yY][eE][sS] | [yY])
-                TRACECMD=${TRACECMD}" -report"
-                ;;
-            [nN][oO] | [nN])
-                ;;
-            *)
-                TRACECMD=${TRACECMD}" -report"
-                ;;
-    esac
+    ask_if "是否升级脚本？(y/n)" && update_script
+    echo -e "${Info} 是否输出Route-Path?" 
+    ask_if "输入y/n以选择模式:" && TRACECMD=${TRACECMD}" -report"
 }
 
 test_single() {
@@ -109,15 +96,12 @@ test_single() {
     repeat_test_single
 }
 repeat_test_single() {
-    echo -e "${Info} 是否继续测试其他目标 ip ?"
-    echo -e "1.是\n2.否"
-    read -p "请选择:" whether_repeat_single
-    while [[ ! "${whether_repeat_single}" =~ ^[1-2]$ ]]; do
-        echo -e "${Error} 无效输入"
-        echo -e "${Info} 请重新输入" && read -p "请选择:" whether_repeat_single
-    done
-    [[ "${whether_repeat_single}" == "1" ]] && test_single
-    [[ "${whether_repeat_single}" == "2" ]] && echo -e "${Info} 退出脚本 ..." && exit 0
+    echo -e "${Info} 是否继续测试其他目标 ip ?" 
+    if ask_if "输入y/n以选择:" ; then
+                test_single
+    else
+                echo -e "${Info} 退出脚本 ..." && exit 0
+    fi
 }
 
 test_alternative() {
@@ -199,15 +183,12 @@ result_alternative() {
     repeat_test_alternative
 }
 repeat_test_alternative() {
-    echo -e "${Info} 是否继续测试其他节点?"
-    echo -e "1.是\n2.否"
-    read -p "请选择:" whether_repeat_alternative
-    while [[ ! "${whether_repeat_alternative}" =~ ^[1-2]$ ]]; do
-        echo -e "${Error} 无效输入"
-        echo -e "${Info} 请重新输入" && read -p "请选择:" whether_repeat_alternative
-    done
-    [[ "${whether_repeat_alternative}" == "1" ]] && test_alternative
-    [[ "${whether_repeat_alternative}" == "2" ]] && echo -e "${Info} 退出脚本 ..." && exit 0
+    echo -e "${Info} 是否继续测试其他节点?" 
+    if ask_if "输入y/n以选择:" ; then
+                test_alternative
+    else
+                echo -e "${Info} 退出脚本 ..." && exit 0
+    fi
 }
 
 test_all() {
