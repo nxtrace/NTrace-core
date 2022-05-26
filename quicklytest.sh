@@ -6,10 +6,10 @@ Info="${Green_font}[Info]${Font_suffix}"
 Error="${Red_font}[Error]${Font_suffix}"
 echo -e "${Green_font}
 #======================================
-# Project: nexttrace
-# 版权声明：
-# 此脚本移植自@KANIKIG https://github.com/KANIKIG/worst_testrace
-# @tsosunchia 做了部分修改以适配nexttrace
+# Project: NextTrace
+# Copyright Notice:
+# This script is ported from @KANIKIG https://github.com/KANIKIG/
+# The developer team made some modifications to adapt to NextTrace under the GPL-3.0 LICENSE
 # NextTrace:
 #   XGadget-lab Leo (leo.moe) & Vincent (vincent.moe) & zhshch (xzhsh.ch)
 #   IP Geo Data Provider: LeoMoeAPI
@@ -18,6 +18,81 @@ ${Font_suffix}"
 
 check_root() {
     [[ "$(id -u)" != "0" ]] && echo -e "${Error} must be root user !" && exit 1
+}
+ask_if()
+{
+    local choice=""
+    while [ "$choice" != "y" ] && [ "$choice" != "n" ]
+    do
+        echo -e "${Info} $1"
+        read choice
+    done
+    [ $choice == y ] && return 0
+    return 1
+}
+#检查脚本更新
+check_script_update()
+{
+    [ "$(md5sum "${BASH_SOURCE[0]}" | awk '{print $1}')" == "$(md5sum <(curl -sL "https://github.com/xgadget-lab/nexttrace/raw/main/quicklytest.sh") | awk '{print $1}')" ] && return 1 || return 0
+}
+#更新脚本
+update_script()
+{
+    if curl -o "${BASH_SOURCE[0]}" "https://github.com/xgadget-lab/nexttrace/raw/main/quicklytest.sh" || curl -o "${BASH_SOURCE[0]}" "https://github.com/xgadget-lab/nexttrace/raw/main/quicklytest.sh"; then
+        echo -e "${Info} 脚本更新完成，请重新运行脚本！"
+        exit 0
+    else
+        echo -e "${Info} 更新脚本失败！"
+        exit 1
+    fi
+}
+ask_update_script()
+{
+    if check_script_update; then
+        echo -e "${Info} 脚本可升级"
+        ask_if "是否升级脚本？(y/n)" && update_script
+    else
+        echo -e "${Info} 脚本已经是最新版本"
+    fi
+}
+check_mode() {
+    echo -e "${Info} Nexttrace目前支持以下三种协议发起Traceroute请求:\n1.ICMP\n2.TCP(速度最快,但部分节点不支持)\n3.UDP\n(IPv6暂只支持ICMP模式)" && read -p "输入数字以选择:" node
+
+    while [[ ! "${node}" =~ ^[1-3]$ ]]; do
+        echo -e "${Error} 无效输入"
+        echo -e "${Info} 请重新选择" && read -p "输入数字以选择:" node
+    done
+
+    [[ "${node}" == "1" ]] && TRACECMD="nexttrace"
+    [[ "${node}" == "2" ]] && TRACECMD="nexttrace -T"
+    [[ "${node}" == "3" ]] && TRACECMD="nexttrace -U"
+
+    echo -e "${Info} 结果是否制表?(制表模式为非实时显示)" && read -r -p "输入y/n以选择模式:" input
+    case $input in
+            [yY][eE][sS] | [yY])
+                TRACECMD=${TRACECMD}" -rdns -table"
+                ;;
+            [nN][oO] | [nN])
+                TRACECMD=${TRACECMD}" -rdns -realtime"
+                ;;
+            *)
+                TRACECMD=${TRACECMD}" -rdns -table"
+                ;;
+    esac
+    
+    return 0
+    #未实现的功能:
+    echo -e "${Info} 是否输出Route-Path?" && read -r -p "输入y/n以选择模式:" input
+    case $input in
+            [yY][eE][sS] | [yY])
+                TRACECMD=${TRACECMD}" -report"
+                ;;
+            [nN][oO] | [nN])
+                ;;
+            *)
+                TRACECMD=${TRACECMD}" -report"
+                ;;
+    esac
 }
 
 test_single() {
@@ -29,7 +104,7 @@ test_single() {
         echo -e "${Info} 请重新输入" && read -p "输入 ip 地址:" ip
     done
 
-    nexttrace -report ${ip} | grep -v -E 'NextTrace|XGadget-lab|Data\ Provider'
+    ${TRACECMD} ${ip} | grep -v -E 'NextTrace|XGadget-lab|Data\ Provider'
 
     repeat_test_single
 }
@@ -118,7 +193,7 @@ node_4() {
 }
 result_alternative() {
     echo -e "${Info} 测试路由 到 ${ISP_name} 中 ..."
-    nexttrace -report ${ip} | grep -v -E 'NextTrace|XGadget-lab|Data\ Provider'
+    ${TRACECMD} ${ip} | grep -v -E 'NextTrace|XGadget-lab|Data\ Provider'
     echo -e "${Info} 测试路由 到 ${ISP_name} 完成 ！"
 
     repeat_test_alternative
@@ -137,6 +212,7 @@ repeat_test_alternative() {
 
 test_all() {
     result_all '116.6.211.41' '广东东莞CN2'
+
     result_all '101.95.110.149' '上海电信'
 
     result_all '112.85.231.129' '江苏徐州联通'
@@ -150,11 +226,13 @@ test_all() {
 result_all() {
     ISP_name=$2
     echo -e "${Info} 测试路由 到 ${ISP_name} 中 ..."
-    nexttrace -report $1 | grep -v -E 'NextTrace|XGadget-lab|Data\ Provider'
+    ${TRACECMD} $1 | grep -v -E 'NextTrace|XGadget-lab|Data\ Provider'
     echo -e "${Info} 测试路由 到 ${ISP_name} 完成 ！"
 }
 
 check_root
+ask_update_script
+check_mode
 echo -e "${Info} 选择你要使用的功能: "
 echo -e "1.选择一个节点进行测试\n2.四网路由快速测试\n3.手动输入 ip 进行测试"
 read -p "输入数字以选择:" function
