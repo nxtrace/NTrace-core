@@ -137,15 +137,9 @@ checkVersion() {
 downloadBinrayFile() {
     red "正在获取最新版的 NextTrace 发行版文件信息..."
     # 简单说明一下，Github提供了一个API，可以获取最新发行版本的二进制文件下载地址（对应的是browser_download_url），根据刚刚测得的osDistribution、archParam，获取对应的下载地址
-    if [[ $? -eq 1 ]]; then
-        # 支持 jq 不回退
         # red nexttrace_${osDistribution}_${archParam}
         latestURL=$(curl -s https://api.github.com/repos/xgadget-lab/nexttrace/releases/latest | jq ".assets[] | select(.name == \"nexttrace_${osDistribution}_${archParam}\") | .browser_download_url")
         latestURL=${latestURL:1:-1}
-    else
-        # 不支持 jq，用户拒绝安装，回退 awk
-        latestURL=$(curl -s https://api.github.com/repos/xgadget-lab/nexttrace/releases/latest | grep -i "browser_download_url.*${osDistribution}.*${archParam}" | awk -F '"' '{print $4}')
-    fi
     if [ "$countryCode" == "CN" ]; then
         if [[ $auto == True ]]; then
             latestURL="https://ghproxy.com/"$latestURL
