@@ -6,10 +6,10 @@ Info="${Green_font}[Info]${Font_suffix}"
 Error="${Red_font}[Error]${Font_suffix}"
 echo -e "${Green_font}
 #======================================
-# Project: nexttrace
-# 版权声明：
-# 此脚本移植自@KANIKIG https://github.com/KANIKIG/worst_testrace
-# @tsosunchia 做了部分修改以适配nexttrace
+# Project: NextTrace
+# Copyright Notice:
+# This script is ported from @KANIKIG https://github.com/KANIKIG/
+# The developer team made some modifications to adapt to NextTrace under the GPL-3.0 LICENSE
 # NextTrace:
 #   XGadget-lab Leo (leo.moe) & Vincent (vincent.moe) & zhshch (xzhsh.ch)
 #   IP Geo Data Provider: LeoMoeAPI
@@ -18,6 +18,46 @@ ${Font_suffix}"
 
 check_root() {
     [[ "$(id -u)" != "0" ]] && echo -e "${Error} must be root user !" && exit 1
+}
+
+check_mode() {
+    echo -e "Nexttrace目前支持以下三种协议:\n1.ICMP\n2.TCP\n3.UDP\n(IPv6暂只支持ICMP模式)" && read -p "输入数字以选择:" node
+
+    while [[ ! "${node}" =~ ^[1-3]$ ]]; do
+        echo -e "${Error} 无效输入"
+        echo -e "${Info} 请重新选择" && read -p "输入数字以选择:" node
+    done
+
+    [[ "${node}" == "1" ]] && TRACECMD="nexttrace"
+    [[ "${node}" == "2" ]] && TRACECMD="nexttrace -T"
+    [[ "${node}" == "3" ]] && TRACECMD="nexttrace -U"
+
+    read -r -p "结果是否制表?(制表模式为非实时显示),输入y/n以选择模式:" input
+    case $input in
+            [yY][eE][sS] | [yY])
+                TRACECMD=${TRACECMD}" -rdns -table"
+                ;;
+            [nN][oO] | [nN])
+                TRACECMD=${TRACECMD}" -rdns -realtime"
+                ;;
+            *)
+                TRACECMD=${TRACECMD}" -rdns -table"
+                ;;
+    esac
+    
+    return 0
+    #未实现的功能:
+    read -r -p "是否输出Route-Path?输入y/n以选择模式:" input
+    case $input in
+            [yY][eE][sS] | [yY])
+                TRACECMD=${TRACECMD}" -report"
+                ;;
+            [nN][oO] | [nN])
+                ;;
+            *)
+                TRACECMD=${TRACECMD}" -report"
+                ;;
+    esac
 }
 
 test_single() {
@@ -29,7 +69,7 @@ test_single() {
         echo -e "${Info} 请重新输入" && read -p "输入 ip 地址:" ip
     done
 
-    nexttrace -report ${ip} | grep -v -E 'NextTrace|XGadget-lab|Data\ Provider'
+    ${TRACECMD} ${ip} | grep -v -E 'NextTrace|XGadget-lab|Data\ Provider'
 
     repeat_test_single
 }
@@ -118,7 +158,7 @@ node_4() {
 }
 result_alternative() {
     echo -e "${Info} 测试路由 到 ${ISP_name} 中 ..."
-    nexttrace -report ${ip} | grep -v -E 'NextTrace|XGadget-lab|Data\ Provider'
+    ${TRACECMD} ${ip} | grep -v -E 'NextTrace|XGadget-lab|Data\ Provider'
     echo -e "${Info} 测试路由 到 ${ISP_name} 完成 ！"
 
     repeat_test_alternative
@@ -150,11 +190,12 @@ test_all() {
 result_all() {
     ISP_name=$2
     echo -e "${Info} 测试路由 到 ${ISP_name} 中 ..."
-    nexttrace -report $1 | grep -v -E 'NextTrace|XGadget-lab|Data\ Provider'
+    ${TRACECMD} $1 | grep -v -E 'NextTrace|XGadget-lab|Data\ Provider'
     echo -e "${Info} 测试路由 到 ${ISP_name} 完成 ！"
 }
 
 check_root
+check_mode
 echo -e "${Info} 选择你要使用的功能: "
 echo -e "1.选择一个节点进行测试\n2.四网路由快速测试\n3.手动输入 ip 进行测试"
 read -p "输入数字以选择:" function
