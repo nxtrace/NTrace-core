@@ -21,7 +21,7 @@ check_root() {
 }
 
 check_mode() {
-    echo -e "Nexttrace目前支持以下三种协议:\n1.ICMP\n2.TCP\n3.UDP\n(IPv6暂只支持ICMP模式)" && read -p "输入数字以选择:" node
+    echo -e "Nexttrace目前支持以下三种协议:\n1.ICMP\n2.TCP(速度最快,但部分节点不支持)\n3.UDP\n(IPv6暂只支持ICMP模式)" && read -p "输入数字以选择:" node
 
     while [[ ! "${node}" =~ ^[1-3]$ ]]; do
         echo -e "${Error} 无效输入"
@@ -177,6 +177,7 @@ repeat_test_alternative() {
 
 test_all() {
     result_all '116.6.211.41' '广东东莞CN2'
+
     result_all '101.95.110.149' '上海电信'
 
     result_all '112.85.231.129' '江苏徐州联通'
