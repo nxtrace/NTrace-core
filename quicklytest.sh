@@ -77,12 +77,21 @@ check_mode() {
     echo -e "${Info} 结果是否制表?(制表模式为非实时显示)" 
     if ask_if "输入y/n以选择模式:" ; then
                 TRACECMD=${TRACECMD}" -rdns -table"
-    else
+                ##Route-Path功能还未完善,临时替代:
+                [[ "${node}" == "2" ]] && TRACECMD=${TRACECMD}" -report"
+                ##
+    else        
                 TRACECMD=${TRACECMD}" -rdns -realtime"
+                ##Route-Path功能还未完善,临时替代:
+                [[ "${node}" == "1" ]] && TRACECMD=${TRACECMD}" -report"
+                ##
     fi
     
-    echo -e "${Info} 是否输出Route-Path?" 
-    ask_if "输入y/n以选择模式:" && TRACECMD=${TRACECMD}" -report"
+    #echo -e "${Info} 是否输出Route-Path?" 
+    #ask_if "输入y/n以选择模式:" && TRACECMD=${TRACECMD}" -report"
+    
+    
+    
 }
 
 test_single() {
