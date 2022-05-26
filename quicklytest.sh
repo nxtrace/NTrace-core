@@ -21,7 +21,7 @@ check_root() {
 }
 
 check_mode() {
-    echo -e "Nexttrace目前支持以下三种协议:\n1.ICMP\n2.TCP(速度最快,但部分节点不支持)\n3.UDP\n(IPv6暂只支持ICMP模式)" && read -p "输入数字以选择:" node
+    echo -e "${Info} Nexttrace目前支持以下三种协议发起Traceroute请求:\n1.ICMP\n2.TCP(速度最快,但部分节点不支持)\n3.UDP\n(IPv6暂只支持ICMP模式)" && read -p "输入数字以选择:" node
 
     while [[ ! "${node}" =~ ^[1-3]$ ]]; do
         echo -e "${Error} 无效输入"
@@ -32,7 +32,7 @@ check_mode() {
     [[ "${node}" == "2" ]] && TRACECMD="nexttrace -T"
     [[ "${node}" == "3" ]] && TRACECMD="nexttrace -U"
 
-    read -r -p "结果是否制表?(制表模式为非实时显示),输入y/n以选择模式:" input
+    echo -e "${Info} 结果是否制表?(制表模式为非实时显示)" && read -r -p "输入y/n以选择模式:" input
     case $input in
             [yY][eE][sS] | [yY])
                 TRACECMD=${TRACECMD}" -rdns -table"
@@ -47,7 +47,7 @@ check_mode() {
     
     return 0
     #未实现的功能:
-    read -r -p "是否输出Route-Path?输入y/n以选择模式:" input
+    echo -e "${Info} 是否输出Route-Path?" && read -r -p "输入y/n以选择模式:" input
     case $input in
             [yY][eE][sS] | [yY])
                 TRACECMD=${TRACECMD}" -report"
