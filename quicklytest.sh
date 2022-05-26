@@ -39,8 +39,8 @@ check_script_update()
 update_script()
 {
     if curl -sL -o "${BASH_SOURCE[0]}" "https://github.com/xgadget-lab/nexttrace/raw/main/quicklytest.sh" || curl -sL -o "${BASH_SOURCE[0]}" "https://github.com/xgadget-lab/nexttrace/raw/main/quicklytest.sh"; then
-        echo -e "${Info} 脚本更新完成，请重新运行脚本！"
-        exit 0
+        echo -e "${Info} 脚本更新完成，正在重启脚本..."
+        exec bash ${BASH_SOURCE[0]}
     else
         echo -e "${Info} 更新脚本失败！"
         exit 1
