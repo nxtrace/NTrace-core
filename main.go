@@ -89,6 +89,10 @@ func main() {
 	}
 
 	if *routePath {
+		// 如果为TCP SYN，也打印路由跟踪结果
+		if *tcpSYNFlag {
+			printer.TracerouteTablePrinter(res)
+		}
 		r := reporter.New(res, ip.String())
 		r.Print()
 		return
