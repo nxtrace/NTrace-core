@@ -222,9 +222,6 @@ runBinrayFileHelp() {
 }
 
 addCronTask() {
-    if [[ $auto == True ]]; then
-        return 0
-    fi
     read -r -p "是否添加自动更新任务？(y/n)" input
     case $input in
     [yY][eE][sS] | [yY])
@@ -267,4 +264,4 @@ downloadBinrayFile
 
 # Run Procedure
 runBinrayFileHelp
-addCronTask
+[[ $auto != True ]] && addCronTask
