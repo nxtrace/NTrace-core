@@ -81,9 +81,6 @@ check_mode() {
                 TRACECMD=${TRACECMD}" -rdns -realtime"
     fi
     
-    return 0
-    #未实现的功能:
-    ask_if "是否升级脚本？(y/n)" && update_script
     echo -e "${Info} 是否输出Route-Path?" 
     ask_if "输入y/n以选择模式:" && TRACECMD=${TRACECMD}" -report"
 }
