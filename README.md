@@ -19,6 +19,17 @@ curl -Ls https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh -O
 sudo bash nt_install.sh
 ```
 
+### For Beginner
+
+如果你的目的只是为了快速测试服务器的到中国内地的线路，没有手动使用NextTrace的需求,那么建议你直接使用本仓库的 `quicklytest.sh`
+
+```bash
+#下载quicklytest.sh
+curl -Ls https://github.com/xgadget-lab/nexttrace/raw/main/quicklytest.sh -O
+#执行quicklytest.sh
+sudo bash quicklytest.sh
+```
+
 ### Get Started
 
 `NextTrace`默认使用`icmp`协议发起`TraceRoute`请求，该协议同时支持`IPv4`和`IPv6`
@@ -60,19 +71,6 @@ nexttrace -rdns www.bbix.net
 
 # 联合使用
 nexttrace -r 1 -q 1 -report www.time.com.my
-```
-
-### For Beginner
-
-如果你实在不想去了解这些参数如何使用，或目的只是为了快速测试服务器的到中国内地的线路，那么建议你使用本仓库的 `quicklytest.sh`
-
-使用此脚本前请先按照 [Install](#Install) 中的提示进行安装，才可使用，并按照提示进行操作即可。
-
-```bash
-#下载quicklytest.sh
-curl -Ls https://github.com/xgadget-lab/nexttrace/raw/main/quicklytest.sh -O
-#执行quicklytest.sh
-sudo bash quicklytest.sh
 ```
 
 ### IP 数据库
