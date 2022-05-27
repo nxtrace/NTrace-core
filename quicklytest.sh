@@ -1,6 +1,5 @@
 #!/bin/bash
-PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:~/bin
-export PATH
+
 Green_font="\033[32m" && Red_font="\033[31m" && Font_suffix="\033[0m"
 Info="${Green_font}[Info]${Font_suffix}"
 Error="${Red_font}[Error]${Font_suffix}"
@@ -23,7 +22,7 @@ check_root() {
 checkNexttrace() {
   echo -e "${Info} 正在检查Nexttrace..."
   if curl -sL -O "https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh" || curl -sL -O "https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh"; then
-    bash nt_install.sh --auto #>/dev/null
+    bash nt_install.sh #--auto #>/dev/null
   fi
 }
 

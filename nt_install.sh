@@ -140,7 +140,7 @@ install_software() {
 }
 
 checkVersion() {
-  which nexttrace > /dev/null 2>&1 || return
+  which nexttrace >/dev/null 2>&1 || return
   red "正在检查版本..."
   version=$(curl -sL https://api.github.com/repos/xgadget-lab/nexttrace/releases/latest | jq -r '.tag_name')
   if [[ $version == "" ]]; then
