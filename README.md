@@ -114,6 +114,8 @@ NextTrace 所有的的 IP 地理位置`API DEMO`可以参考[这里](https://git
 
 ```shell
 Usage of nexttrace:
+      nexttrace [options] <hostname>
+Options:
   -T    Use TCP SYN for tracerouting (default port is 80)
   -U    Use UDP Package for tracerouting (default port is 53 in UDP)
   -V    Check Version
