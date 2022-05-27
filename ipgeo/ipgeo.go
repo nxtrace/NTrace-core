@@ -24,6 +24,8 @@ func GetSource(s string) Source {
 		return IPSB
 	case "IPINSIGHT":
 		return IPInSight
+	case "ip-api.com":
+		return IPApiCom
 	default:
 		return nil
 	}
