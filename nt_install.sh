@@ -140,7 +140,9 @@ install_software() {
 }
 
 checkVersion() {
-  if nexttrace -h &>/dev/null; then
+  nexttrace -h >/dev/null 2>&1
+  # shellcheck disable=SC2181
+  if [ $? -ne 0 ]; then
     return 0
   fi
   red "正在检查版本..."
@@ -149,7 +151,7 @@ checkVersion() {
     red "获取版本失败，请检查网络连接"
     exit 1
   fi
-  currentVersion=$(nexttrace -V | head -n 1 | awk '{print $2}') &>/dev/null
+  currentVersion=$(nexttrace -V | head -n 1 | awk '{print $2}')
   if [[ $currentVersion == "$version" ]]; then
     red "当前版本已是最新版本"
     exit 0
@@ -203,7 +205,9 @@ downloadBinrayFile() {
   fi
 
   red "正在下载 NextTrace 二进制文件..."
-  if wget -O ${downPath} "${latestURL}" &>/dev/null; then
+  wget -O ${downPath} "${latestURL}"
+  # shellcheck disable=SC2181
+  if [ $? -ne 0 ]; then
     red "NextTrace 现在已经在您的系统中可用"
     changeMode
     mv ${downPath} ${usrPath}
@@ -214,7 +218,7 @@ downloadBinrayFile() {
 }
 
 changeMode() {
-  chmod +x ${downPath} &>/dev/null
+  chmod +x ${downPath}
   [[ ${osDistribution} == "darwin" ]] && xattr -r -d com.apple.quarantine ${downPath}
 }
 
