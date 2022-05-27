@@ -96,7 +96,7 @@ nexttrace -d IP.SB
 ## 另外：由于IP.SB被滥用比较严重，会经常出现无法查询的问题，请知悉。
 ```
 
-`NextTrace`目前不支持自定义参数位置，请按标准格式输入命令
+`NextTrace`支持参数混合使用
 
 ```bash
 Example:
@@ -116,7 +116,7 @@ NextTrace 所有的的 IP 地理位置`API DEMO`可以参考[这里](https://git
 
 ```shell
 Usage of nexttrace:
-      nexttrace [options] <hostname>
+      'nexttrace [options] <hostname>' or 'nexttrace <hostname> [option...]'
 Options:
   -T    Use TCP SYN for tracerouting (default port is 80)
   -U    Use UDP Package for tracerouting (default port is 53 in UDP)

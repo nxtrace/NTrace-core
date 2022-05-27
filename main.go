@@ -30,7 +30,7 @@ var tablePrint = fSet.Bool("table", false, "Output trace results as table")
 var ver = fSet.Bool("V", false, "Check Version")
 
 func printArgHelp() {
-	fmt.Println("\nArgs Error\nUsage : 'nexttrace [option...] <hostname>' or 'nexttrace <hostname> [option...]'")
+	fmt.Println("\nArgs Error\nUsage : 'nexttrace [option...] <hostname>' or 'nexttrace <hostname> [option...]'\nOPTIONS: [-VTU] [-d DATAORIGIN.STR ] [ -m TTL ] [ -p PORT ] [ -q PROBES.COUNT ] [ -r PARALLELREQUESTS.COUNT ] [-rdns] [ -realtime | -table ] -report")
 	fSet.PrintDefaults()
 	os.Exit(2)
 }
