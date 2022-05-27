@@ -35,7 +35,7 @@ func flagApply() string {
 	}
 	ipArg := flag.Args()
 	if flag.NArg() != 1 {
-		fmt.Println("Args Error\nUsage : ./nexttrace [-T] [-rdns] [-displayMode <displayMode>] [-d <dataOrigin> ] [ -m <hops> ] [ -p <port> ] [ -q <probes> ] [ -r <parallelrequests> ] <hostname>")
+		fmt.Println("Args Error\nUsage : nexttrace [-VTU] [-d DATAORIGIN.STR ] [ -m TTL ] [ -p PORT ] [ -q PROBES.COUNT ] [ -r PARALLELREQUESTS.COUNT ] [-rdns] [ -realtime | -table ] -report HOSTNAME")
 		os.Exit(2)
 	}
 	return ipArg[0]
