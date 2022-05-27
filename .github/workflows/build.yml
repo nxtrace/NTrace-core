@@ -38,6 +38,9 @@ jobs:
             dist/nexttrace_darwin_arm64
             dist/nexttrace_linux_amd64
             dist/nexttrace_linux_arm64
+            dist/nexttrace_linux_arm_v7
             dist/nexttrace_linux_mips
+            dist/nexttrace_openbsd_amd64
+            dist/nexttrace_freebsd_amd64
         env:
           GITHUB_TOKEN: ${{ secrets.GT_Token }}

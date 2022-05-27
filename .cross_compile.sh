@@ -17,6 +17,7 @@ mkdir ${TARGET_DIR}
 for pl in ${PLATFORMS}; do
     export GOOS=$(echo ${pl} | cut -d'/' -f1)
     export GOARCH=$(echo ${pl} | cut -d'/' -f2)
+    export GOARM=$(echo ${pl} | cut -d'v' -f2)
     export TARGET=${TARGET_DIR}/${DIST_PREFIX}_${GOOS}_${GOARCH}
     if [ "${GOOS}" == "windows" ]; then
         export TARGET=${TARGET_DIR}/${DIST_PREFIX}_${GOOS}_${GOARCH}.exe
