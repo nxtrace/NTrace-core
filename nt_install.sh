@@ -27,7 +27,11 @@ ask_if() {
 }
 #检查脚本更新
 check_script_update() {
-    [ "$(md5sum "${BASH_SOURCE[0]}" | awk '{print $1}')" == "$(md5sum <(curl -sL "https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh") | awk '{print $1}')" ] && return 1 || return 0
+    if [[ ${osDistribution} == "darwin" ]]; then
+        [ "$(cat "${BASH_SOURCE[0]}" | md5)" == "$(curl -sL "https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh" | md5)" ] && return 1 || return 0
+    else
+        [ "$(md5sum "${BASH_SOURCE[0]}" | awk '{print $1}')" == "$(md5sum <(curl -sL "https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh") | awk '{print $1}')" ] && return 1 || return 0
+    fi
 }
 #更新脚本
 update_script() {
@@ -43,7 +47,7 @@ ask_update_script() {
     if check_script_update; then
         red "脚本可升级"
         [[ $auto == True ]] && update_script
-        ask_if "是否升级脚本？(y/n)" && update_script
+        ask_if "是否升级脚本？(n/y)：[n]" && update_script
     else
         red "脚本已经是最新版本"
     fi
@@ -152,7 +156,7 @@ checkVersion() {
     if [[ $auto == True ]]; then
         return 0
     fi
-    read -r -p "是否更新软件? (y/n)" input
+    read -r -p "是否更新软件? (n/y)：[n]" input
     case $input in
     [yY][eE][sS] | [yY])
         return 0
@@ -177,7 +181,7 @@ downloadBinrayFile() {
         if [[ $auto == True ]]; then
             latestURL="https://ghproxy.com/"$latestURL
         else
-            read -r -p "检测到国内网络环境，是否使用镜像下载以加速(y/n)" input
+            read -r -p "检测到国内网络环境，是否使用镜像下载以加速(n/y)[y]" input
             case $input in
             [yY][eE][sS] | [yY])
                 latestURL="https://ghproxy.com/"$latestURL
@@ -219,7 +223,7 @@ runBinrayFileHelp() {
 }
 
 addCronTask() {
-    read -r -p "是否添加自动更新任务？(y/n)" input
+    read -r -p "是否添加自动更新任务？(n/y)：[n]" input
     case $input in
     [yY][eE][sS] | [yY])
         if [[ ${osDistribution} == "darwin" ]]; then
