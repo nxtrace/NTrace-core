@@ -5,7 +5,7 @@ set -e
 DIST_PREFIX="nexttrace"
 DEBUG_MODE=${2}
 TARGET_DIR="dist"
-PLATFORMS="darwin/amd64 darwin/arm64 linux/amd64 linux/arm64 linux/mips"
+PLATFORMS="darwin/amd64 darwin/arm64 linux/amd64 linux/arm64 linux/mips linux/arm/v7 openbsd/amd64 freebsd/amd64"
 
 BUILD_VERSION="$(git describe --tags --always)"
 BUILD_DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
@@ -19,6 +19,7 @@ for pl in ${PLATFORMS}; do
     export GOARCH=$(echo ${pl} | cut -d'/' -f2)
     export GOARM=$(echo ${pl} | cut -d'v' -f2)
     export TARGET=${TARGET_DIR}/${DIST_PREFIX}_${GOOS}_${GOARCH}
+    [[ `echo ${pl} | cut -d'/v' -f2` == '' ]] || export TARGET=${TARGET_DIR}/${DIST_PREFIX}_${GOOS}_${GOARCH}_v${GOARM}
     if [ "${GOOS}" == "windows" ]; then
         export TARGET=${TARGET_DIR}/${DIST_PREFIX}_${GOOS}_${GOARCH}.exe
     fi
