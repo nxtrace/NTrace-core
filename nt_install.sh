@@ -55,12 +55,9 @@ checkSystemDistribution() {
 
 ask_if() {
     local choice=""
-    while [ "$choice" != "y" ] && [ "$choice" != "n" ]; do
-        red $1
-        read choice
-    done
-    [ $choice == y ] && return 0
-    return 1
+    red $1
+    read choice
+    [[ $choice == y ]] && return 0 || return 1
 }
 
 #检查脚本更新
@@ -181,7 +178,7 @@ downloadBinrayFile() {
     # 简单说明一下，Github提供了一个API，可以获取最新发行版本的二进制文件下载地址（对应的是browser_download_url），根据刚刚测得的osDistribution、archParam，获取对应的下载地址
     # red nexttrace_${osDistribution}_${archParam}
     latestURL=$(curl -s https://api.github.com/repos/xgadget-lab/nexttrace/releases/latest | jq ".assets[] | select(.name == \"nexttrace_${osDistribution}_${archParam}\") | .browser_download_url")
-    latestURL=${latestURL:1:-1}
+    latestURL=${latestURL:1:$((${#latestURL} - 1 - 1))}
     if [ "$countryCode" == "CN" ]; then
         if [[ $auto == True ]]; then
             latestURL="https://ghproxy.com/"$latestURL
