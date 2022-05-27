@@ -40,8 +40,6 @@ nexttrace 1.0.0.1
 
 # 表格打印（一次性输出全部跳数，需等待20-40秒）
 nexttrace -table 1.0.0.1
-# 实时打印 (-realtime与-table不能同时选择)
-nexttrace -realtime 1.0.0.1
 
 # IPv6 ICMP Trace
 nexttrace 2606:4700:4700::1111
@@ -101,8 +99,8 @@ nexttrace -d IP.SB
 
 ```bash
 Example:
-nexttrace -d IPInsight -m 20 -p 443 -q 5 -r 20 -rdns -table 1.1.1.1
-nexttrace -T -q 2 -r 1 -rdns -realtime -report 2001:4860:4860::8888
+nexttrace -d IPInsight -m 20 -p 443 -q 5 -r 20 -rdns 1.1.1.1
+nexttrace -T -q 2 -r 1 -rdns -table -report 2001:4860:4860::8888
 ```
 
 ### IP 数据库
@@ -134,8 +132,6 @@ Options:
         Set ParallelRequests number. It should be 1 when there is a multi-routing. (default 18)
   -rdns
         Set whether rDNS will be display
-  -realtime
-        Output trace results in runtime
   -table
         Output trace results as table
   -report
