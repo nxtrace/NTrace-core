@@ -94,7 +94,7 @@ check_mode() {
     [[ "${node}" == "3" ]] && TRACECMD="nexttrace -U"
 
     echo -e "${Info} 结果是否制表?(制表模式为非实时显示)"
-    if ask_if "输入y/n以选择模式:"; then
+    if ask_if "输入n/y以选择模式:[n]"; then
         TRACECMD=${TRACECMD}" -rdns -table"
         ##Route-Path功能还未完善,临时替代:
         [[ "${node}" == "2" ]] && TRACECMD=${TRACECMD}" -report"
@@ -103,11 +103,12 @@ check_mode() {
         TRACECMD=${TRACECMD}" -rdns -realtime"
         ##Route-Path功能还未完善,临时替代:
         [[ "${node}" == "1" ]] && TRACECMD=${TRACECMD}" -report"
+        [[ "${node}" == "2" ]] && TRACECMD=${TRACECMD}" -report"
         ##
     fi
 
     #echo -e "${Info} 是否输出Route-Path?"
-    #ask_if "输入y/n以选择模式:" && TRACECMD=${TRACECMD}" -report"
+    #ask_if "输入n/y以选择模式:[n]" && TRACECMD=${TRACECMD}" -report"
 
 }
 
@@ -127,7 +128,7 @@ test_single() {
 
 repeat_test_single() {
     echo -e "${Info} 是否继续测试其他目标 ip ?"
-    if ask_if "输入y/n以选择:"; then
+    if ask_if "输入n/y以选择:[n]"; then
         test_single
     else
         echo -e "${Info} 退出脚本 ..." && exit 0
@@ -222,7 +223,7 @@ result_alternative() {
 
 repeat_test_alternative() {
     echo -e "${Info} 是否继续测试其他节点?"
-    if ask_if "输入y/n以选择:"; then
+    if ask_if "输入n/y以选择:[n]"; then
         test_alternative
     else
         echo -e "${Info} 退出脚本 ..." && exit 0
