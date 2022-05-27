@@ -53,9 +53,9 @@ checkSystemDistribution() {
 #检查脚本更新
 check_script_update() {
   if [[ ${osDistribution} == "darwin" ]]; then
-    [ "$(md5 <"${BASH_SOURCE[0]}")" == "$(curl -sL "https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh" | md5)" ] && return 1 || return 0
+    [ "$(md5 <"${BASH_SOURCE[0]}")" == "$(curl -sL "https://github.com/xgadget-lab/nexttrace/raw/main/quicklytest.sh" | md5)" ] && return 1 || return 0
   else
-    [ "$(md5sum "${BASH_SOURCE[0]}" | awk '{print $1}')" == "$(md5sum <(curl -sL "https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh") | awk '{print $1}')" ] && return 1 || return 0
+    [ "$(md5sum "${BASH_SOURCE[0]}" | awk '{print $1}')" == "$(md5sum <(curl -sL "https://github.com/xgadget-lab/nexttrace/raw/main/quicklytest.sh") | awk '{print $1}')" ] && return 1 || return 0
   fi
 }
 
