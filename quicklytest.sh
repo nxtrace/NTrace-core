@@ -20,7 +20,7 @@ check_root() {
 }
 
 checkNexttrace() {
-  echo -e "${Info} 正在检查Nexttrace..."
+  echo -e "${Info} 正在检查Nexttrace...(若未安装NextTrace则开始安装)"
   if curl -sL -O "https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh" || curl -sL -O "https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh"; then
     bash nt_install.sh #--auto #>/dev/null
   fi
@@ -61,20 +61,20 @@ check_script_update() {
 #更新脚本
 update_script() {
   if curl -sL -o "${BASH_SOURCE[0]}" "https://github.com/xgadget-lab/nexttrace/raw/main/quicklytest.sh" || curl -sL -o "${BASH_SOURCE[0]}" "https://github.com/xgadget-lab/nexttrace/raw/main/quicklytest.sh"; then
-    echo -e "${Info} 脚本更新完成，正在重启脚本..."
+    echo -e "${Info} quickylytest.sh更新完成，正在重启脚本..."
     exec bash "${BASH_SOURCE[0]}"
   else
-    echo -e "${Info} 更新脚本失败！"
+    echo -e "${Info} 更新quickylytest.sh失败！"
     exit 1
   fi
 }
 
 ask_update_script() {
   if check_script_update; then
-    echo -e "${Info} 脚本可升级"
+    echo -e "${Info} quickylytest.sh可升级"
     ask_if "是否升级脚本？(n/y)[n]" && update_script
   else
-    echo -e "${Info} 脚本已经是最新版本"
+    echo -e "${Info} quickylytest.sh已经是最新版本"
   fi
 }
 

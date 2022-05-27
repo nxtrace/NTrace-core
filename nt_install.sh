@@ -72,21 +72,21 @@ check_script_update() {
 #更新脚本
 update_script() {
   if curl -sL -o "${BASH_SOURCE[0]}" "https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh" || curl -sL -o "${BASH_SOURCE[0]}" "https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh"; then
-    red "脚本更新完成，正在重启脚本..."
+    red "nt_install.sh更新完成，正在重启脚本..."
     exec bash "${BASH_SOURCE[0]}" --auto
   else
-    red "更新脚本失败！"
+    red "更新nt_install.sh失败！"
     exit 1
   fi
 }
 
 ask_update_script() {
   if check_script_update; then
-    red "脚本可升级"
+    red "nt_install.sh可升级"
     [[ $auto == True ]] && update_script
     ask_if "是否升级脚本？(n/y)：[n]" && update_script
   else
-    red "脚本已经是最新版本"
+    red "nt_install.sh已经是最新版本"
   fi
 }
 
