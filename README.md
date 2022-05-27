@@ -78,11 +78,11 @@ nexttrace -rdns www.bbix.net
 # Route-Path图示例：
 # AS6453 塔塔通信「Singapore『Singapore』」
 #  ╭╯
-# ╰AS9299 Philippine Long Distance Telephone Co.「Philippines『Metro Manila』」
-# ╭╯
-# ╰AS36776 Five9 Inc.「Philippines『Metro Manila』」
-# ╭╯
-# ╰AS37963 阿里云「ALIDNS.COM『ALIDNS.COM』」
+#  ╰AS9299 Philippine Long Distance Telephone Co.「Philippines『Metro Manila』」
+#  ╭╯
+#  ╰AS36776 Five9 Inc.「Philippines『Metro Manila』」
+#  ╭╯
+#  ╰AS37963 阿里云「ALIDNS.COM『ALIDNS.COM』」
 nexttrace -report www.time.com.my
 ```
 
