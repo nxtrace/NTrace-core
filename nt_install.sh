@@ -96,11 +96,13 @@ getLocation() {
 }
 
 checkPackageManger() {
-  if [[ "$(which brew)" ]]; then #务必将brew置于第一位,macOS的apt是假的
+  if [[ ${osDistribution} == "darwin" ]]; then
     # brew update
     PACKAGE_MANAGEMENT_INSTALL='brew install'
     PACKAGE_MANAGEMENT_REMOVE='brew uninstall'
-  elif [[ "$(which apt)" ]]; then
+    return 0
+  fi
+  if [[ "$(which apt)" ]]; then
     apt-get update
     PACKAGE_MANAGEMENT_INSTALL='apt-get -y --no-install-recommends install'
     PACKAGE_MANAGEMENT_REMOVE='apt-get purge'
