@@ -10,7 +10,7 @@ fi
 usrPath="/usr/local/bin"
 
 function red() {
-    echo -e "\e[1;31m$1\e[0m"
+    echo -e "\033[31m$1\033[0m"
 }
 
 checkRootPermit() {
