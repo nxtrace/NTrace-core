@@ -130,7 +130,16 @@ func (r *reporter) InitialBaseData() Reporter {
 func (r *reporter) Print() {
 	var beforeActiveTTL uint16 = 0
 	r.InitialBaseData()
-	for i := uint16(1); i < r.targetTTL; i++ {
+	// 尝试首个有效 TTL
+	for i := uint16(0); i < r.targetTTL; i++ {
+		if len(r.routeReport[i]) != 0 {
+			beforeActiveTTL = i
+			// 找到以后便不再循环
+			break
+		}
+	}
+
+	for i := beforeActiveTTL; i < r.targetTTL; i++ {
 		// 计算该TTL内的数据长度，如果为0，则代表没有有效数据
 		if len(r.routeReport[i]) == 0 {
 			// 跳过改跃点的数据整理
@@ -138,7 +147,7 @@ func (r *reporter) Print() {
 		}
 		nodeReport := r.routeReport[i][0]
 
-		if i == 1 {
+		if i == beforeActiveTTL {
 			fmt.Printf("AS%s %s「%s『%s", nodeReport.asn, nodeReport.isp, nodeReport.geo[0], nodeReport.geo[1])
 		} else {
 			nodeReportBefore := r.routeReport[beforeActiveTTL][0]
