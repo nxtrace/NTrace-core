@@ -19,7 +19,7 @@ for pl in ${PLATFORMS}; do
     export GOARCH=$(echo ${pl} | cut -d'/' -f2)
     export GOARM=$(echo ${pl} | cut -d'v' -f2)
     export TARGET=${TARGET_DIR}/${DIST_PREFIX}_${GOOS}_${GOARCH}
-    [[ `echo ${pl} | cut -d'/v' -f2` == '' ]] || export TARGET=${TARGET_DIR}/${DIST_PREFIX}_${GOOS}_${GOARCH}_v${GOARM}
+    [[ `echo ${pl} | cut -d'v' -f2` == '' ]] && export GOARM="" || export TARGET=${TARGET_DIR}/${DIST_PREFIX}_${GOOS}_${GOARCH}_v${GOARM}
     if [ "${GOOS}" == "windows" ]; then
         export TARGET=${TARGET_DIR}/${DIST_PREFIX}_${GOOS}_${GOARCH}.exe
     fi
