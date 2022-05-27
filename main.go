@@ -18,7 +18,7 @@ import (
 var fSet = flag.NewFlagSet("", flag.ExitOnError)
 var tcpSYNFlag = fSet.Bool("T", false, "Use TCP SYN for tracerouting (default port is 80)")
 var udpPackageFlag = fSet.Bool("U", false, "Use UDP Package for tracerouting (default port is 53 in UDP)")
-var port = fSet.Int("p", -1, "Set SYN Traceroute Port")
+var port = flag.Int("p", 80, "Set SYN Traceroute Port")
 var numMeasurements = fSet.Int("q", 3, "Set the number of probes per each hop.")
 var parallelRequests = fSet.Int("r", 18, "Set ParallelRequests number. It should be 1 when there is a multi-routing.")
 var maxHops = fSet.Int("m", 30, "Set the max number of hops (max TTL to be reached).")
