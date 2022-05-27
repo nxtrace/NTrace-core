@@ -92,6 +92,8 @@ nexttrace -report www.time.com.my
 # 可以自行指定IP数据库[此处为IP.SB]，不指定则默认为LeoMoeAPI
 nexttrace -d IP.SB
 ## 特别的：其中 ipinfo API 需要从ipinfo自行购买服务，如有需要可以clone本项目添加其提供的token自行编译
+##        TOKEN填写路径：ipgeo/tokens.go
+## 另外：由于IP.SB被滥用比较严重，会经常出现无法查询的问题，请知悉。
 ```
 
 `NextTrace`目前不支持自定义参数位置，请按标准格式输入命令
