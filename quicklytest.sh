@@ -22,28 +22,26 @@ check_root() {
 checkNexttrace() {
     echo -e "${Info} 正在检查Nexttrace..."
     if curl -sL -O "https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh" || curl -sL -O "https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh"; then
-    bash nt_install.sh --auto > /dev/null
+        bash nt_install.sh --auto >/dev/null
     fi
-} 
-ask_if()
-{
+}
+ask_if() {
     local choice=""
-    while [ "$choice" != "y" ] && [ "$choice" != "n" ]
-    do
-        echo -e "${Info} $1"
-        read choice
-    done
-    [ $choice == y ] && return 0
+    echo -e "${Info} $1"
+    read choice
+    [[ $choice == y ]] && return 0
     return 1
 }
 #检查脚本更新
-check_script_update()
-{
-    [ "$(md5sum "${BASH_SOURCE[0]}" | awk '{print $1}')" == "$(md5sum <(curl -sL "https://github.com/xgadget-lab/nexttrace/raw/main/quicklytest.sh") | awk '{print $1}')" ] && return 1 || return 0
+check_script_update() {
+    if [[ ${osDistribution} == "darwin" ]]; then
+        [ "$(cat "${BASH_SOURCE[0]}" | md5)" == "$(curl -sL "https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh" | md5)" ] && return 1 || return 0
+    else
+        [ "$(md5sum "${BASH_SOURCE[0]}" | awk '{print $1}')" == "$(md5sum <(curl -sL "https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh") | awk '{print $1}')" ] && return 1 || return 0
+    fi
 }
 #更新脚本
-update_script()
-{
+update_script() {
     if curl -sL -o "${BASH_SOURCE[0]}" "https://github.com/xgadget-lab/nexttrace/raw/main/quicklytest.sh" || curl -sL -o "${BASH_SOURCE[0]}" "https://github.com/xgadget-lab/nexttrace/raw/main/quicklytest.sh"; then
         echo -e "${Info} 脚本更新完成，正在重启脚本..."
         exec bash ${BASH_SOURCE[0]}
@@ -52,11 +50,10 @@ update_script()
         exit 1
     fi
 }
-ask_update_script()
-{
+ask_update_script() {
     if check_script_update; then
         echo -e "${Info} 脚本可升级"
-        ask_if "是否升级脚本？(y/n)" && update_script
+        ask_if "是否升级脚本？(n/y)[n]" && update_script
     else
         echo -e "${Info} 脚本已经是最新版本"
     fi
@@ -73,25 +70,22 @@ check_mode() {
     [[ "${node}" == "2" ]] && TRACECMD="nexttrace -T"
     [[ "${node}" == "3" ]] && TRACECMD="nexttrace -U"
 
-
-    echo -e "${Info} 结果是否制表?(制表模式为非实时显示)" 
-    if ask_if "输入y/n以选择模式:" ; then
-                TRACECMD=${TRACECMD}" -rdns -table"
-                ##Route-Path功能还未完善,临时替代:
-                [[ "${node}" == "2" ]] && TRACECMD=${TRACECMD}" -report"
-                ##
-    else        
-                TRACECMD=${TRACECMD}" -rdns -realtime"
-                ##Route-Path功能还未完善,临时替代:
-                [[ "${node}" == "1" ]] && TRACECMD=${TRACECMD}" -report"
-                ##
+    echo -e "${Info} 结果是否制表?(制表模式为非实时显示)"
+    if ask_if "输入y/n以选择模式:"; then
+        TRACECMD=${TRACECMD}" -rdns -table"
+        ##Route-Path功能还未完善,临时替代:
+        [[ "${node}" == "2" ]] && TRACECMD=${TRACECMD}" -report"
+        ##
+    else
+        TRACECMD=${TRACECMD}" -rdns -realtime"
+        ##Route-Path功能还未完善,临时替代:
+        [[ "${node}" == "1" ]] && TRACECMD=${TRACECMD}" -report"
+        ##
     fi
-    
-    #echo -e "${Info} 是否输出Route-Path?" 
+
+    #echo -e "${Info} 是否输出Route-Path?"
     #ask_if "输入y/n以选择模式:" && TRACECMD=${TRACECMD}" -report"
-    
-    
-    
+
 }
 
 test_single() {
@@ -108,11 +102,11 @@ test_single() {
     repeat_test_single
 }
 repeat_test_single() {
-    echo -e "${Info} 是否继续测试其他目标 ip ?" 
-    if ask_if "输入y/n以选择:" ; then
-                test_single
+    echo -e "${Info} 是否继续测试其他目标 ip ?"
+    if ask_if "输入y/n以选择:"; then
+        test_single
     else
-                echo -e "${Info} 退出脚本 ..." && exit 0
+        echo -e "${Info} 退出脚本 ..." && exit 0
     fi
 }
 
@@ -195,11 +189,11 @@ result_alternative() {
     repeat_test_alternative
 }
 repeat_test_alternative() {
-    echo -e "${Info} 是否继续测试其他节点?" 
-    if ask_if "输入y/n以选择:" ; then
-                test_alternative
+    echo -e "${Info} 是否继续测试其他节点?"
+    if ask_if "输入y/n以选择:"; then
+        test_alternative
     else
-                echo -e "${Info} 退出脚本 ..." && exit 0
+        echo -e "${Info} 退出脚本 ..." && exit 0
     fi
 }
 
