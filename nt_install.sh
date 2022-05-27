@@ -140,11 +140,7 @@ install_software() {
 }
 
 checkVersion() {
-  nexttrace -h >/dev/null 2>&1
-  # shellcheck disable=SC2181
-  if [ $? -ne 0 ]; then
-    return 0
-  fi
+  which nexttrace > /dev/null 2>&1 || return
   red "正在检查版本..."
   version=$(curl -sL https://api.github.com/repos/xgadget-lab/nexttrace/releases/latest | jq -r '.tag_name')
   if [[ $version == "" ]]; then
@@ -205,9 +201,7 @@ downloadBinrayFile() {
   fi
 
   red "正在下载 NextTrace 二进制文件..."
-  wget -O ${downPath} "${latestURL}"
-  # shellcheck disable=SC2181
-  if [ $? -ne 0 ]; then
+  if wget -O ${downPath} "${latestURL}"; then
     red "NextTrace 现在已经在您的系统中可用"
     changeMode
     mv ${downPath} ${usrPath}
@@ -241,7 +235,7 @@ addCronTask() {
       sed -i '/nt_install.sh/d' crontab.bak
     else
       red "暂不支持您的系统,无法自动添加crontab任务"
-      return 0
+      return
     fi
     echo "1 1 * * * $(dirname "$(readlink -f "$0")")/nt_install.sh --auto >> /var/log/nt_install.log" >>crontab.bak
     crontab crontab.bak
