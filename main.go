@@ -25,6 +25,7 @@ var maxHops = fSet.Int("m", 30, "Set the max number of hops (max TTL to be reach
 var dataOrigin = fSet.String("d", "LeoMoeAPI", "Choose IP Geograph Data Provider [LeoMoeAPI, IP.SB, IPInfo, IPInsight, IPAPI.com]")
 var rdnsenable = fSet.Bool("rdns", false, "Set whether rDNS will be display")
 var routePath = fSet.Bool("report", false, "Route Path")
+var realtimePrint = fSet.Bool("realtime", false, "Output trace results in runtime")
 var tablePrint = fSet.Bool("table", false, "Output trace results as table")
 var ver = fSet.Bool("V", false, "Check Version")
 
@@ -104,14 +105,25 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	if !(*tcpSYNFlag || *udpPackageFlag) && *tablePrint {
-		printer.TracerouteTablePrinter(res)
-	} else if *tcpSYNFlag || *udpPackageFlag {
-		printer.TraceroutePrinter(res)
-	}
-
 	if *routePath {
+		// 如果为TCP SYN，也打印路由跟踪结果
+		if *tcpSYNFlag {
+			printer.TracerouteTablePrinter(res)
+		}
 		r := reporter.New(res, ip.String())
 		r.Print()
+		return
+	}
+
+	if m == trace.ICMPTrace && *tablePrint {
+		printer.TracerouteTablePrinter(res)
+	}
+
+	if m == trace.TCPTrace || m == trace.UDPTrace {
+		if *realtimePrint {
+			printer.TraceroutePrinter(res)
+		} else {
+			printer.TracerouteTablePrinter(res)
+		}
 	}
 }
