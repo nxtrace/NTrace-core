@@ -1,11 +1,11 @@
 package ipgeo
 
 import (
+	"errors"
 	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
-	"strings"
+	"regexp"
 	"time"
 
 	"github.com/tidwall/gjson"
@@ -27,12 +27,14 @@ func IPApiCom(ip string) (*IPGeoData, error) {
 	body, _ := ioutil.ReadAll(content.Body)
 	res := gjson.ParseBytes(body)
 
-	if res.Get("country").String() == "" {
-		os.Exit(1)
+	if res.Get("status").String() != "success" {
+		return &IPGeoData{}, errors.New("超过API阈值")
 	}
-	log.Println("ip-api.com 正在使用")
+
+	re := regexp.MustCompile("[0-9]+")
+
 	return &IPGeoData{
-		Asnumber: strings.Split(res.Get("as").String(), " ")[0],
+		Asnumber: re.FindString(res.Get("as").String()),
 		Country:  res.Get("country").String(),
 		City:     res.Get("city").String(),
 		Prov:     res.Get("regionName").String(),
