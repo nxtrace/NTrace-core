@@ -121,7 +121,7 @@ checkPackageManger() {
 install_software() {
     package_name="$1"
     which "$package_name" >/dev/null 2>&1 && return
-    [[ ${osDistribution} == "darwin" ]] && echo -e "由于macOS brew的权限限制，请以非root权限执行该命令后再次运行本脚本(注意不要在该命令加sudo!):\nbrew update && ${PACKAGE_MANAGEMENT_INSTALL} $package_name " && exit 0
+    [[ ${osDistribution} == "darwin" ]] && echo -e "由于macOS brew的权限限制，请以非root权限执行下面一行提示的命令后再次运行本脚本(注意不要在该命令加sudo!):\nbrew update && ${PACKAGE_MANAGEMENT_INSTALL} $package_name " && exit 0
     red "${package_name} 正在安装中...(此步骤时间可能较长，请耐心等待)"
     if ${PACKAGE_MANAGEMENT_INSTALL} "$package_name"; then
         red "info: $package_name is installed."
