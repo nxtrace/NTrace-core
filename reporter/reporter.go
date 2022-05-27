@@ -128,9 +128,8 @@ func (r *reporter) InitialBaseData() Reporter {
 }
 
 func (r *reporter) Print() {
-	var beforeActiveTTL uint16 = 1
+	var beforeActiveTTL uint16 = 0
 	r.InitialBaseData()
-
 	for i := uint16(1); i < r.targetTTL; i++ {
 		// 计算该TTL内的数据长度，如果为0，则代表没有有效数据
 		if len(r.routeReport[i]) == 0 {
