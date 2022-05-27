@@ -251,9 +251,9 @@ addCronTask() {
 
 # Check Procedure
 checkRootPermit
-ask_update_script
 checkSystemDistribution
 checkSystemArch
+ask_update_script
 checkPackageManger
 install_software wget
 install_software jq
