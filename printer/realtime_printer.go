@@ -7,7 +7,7 @@ import (
 )
 
 func RealtimePrinter(res *trace.Result, ttl int) {
-	fmt.Print(ttl)
+	fmt.Print(ttl + 1)
 	for i := range res.Hops[ttl] {
 		HopPrinter(res.Hops[ttl][i])
 	}
