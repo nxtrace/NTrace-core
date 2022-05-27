@@ -13,6 +13,7 @@
 ### Automated Install
 
 ```bash
+#安装脚本仅支持macOS/Linux, OpenBSD/FreeBSD请到Release页面下载二进制文件使用，其他系统请自行编译
 #下载nt_install.sh
 curl -Ls https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh -O
 #执行nt_install.sh
@@ -159,7 +160,7 @@ Options:
 
 [Sam Sam](https://github.com/samleong123) (samsam123@samsam123.name.my)
 
-[waiting4new](https://github.com/waiting4new)、[FFEE_CO](https://github.com/fkx4-p)、[nsnnns](https://github.com/tsosunchia)
+[waiting4new](https://github.com/waiting4new)、[FFEE_CO](https://github.com/fkx4-p)、[tsosunchia](https://github.com/tsosunchia)
 
 ## IP Database Copyright
 

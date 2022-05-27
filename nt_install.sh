@@ -29,6 +29,12 @@ checkSystemArch() {
   'arm64' | 'aarch64')
     archParam="arm64"
     ;;
+  'armv7l')
+    archParam='armv7'
+    ;;
+  'i386')
+    archParam="386"
+    ;;
   *)
     red "未知的系统架构，请联系开发者."
     exit 1
@@ -47,7 +53,7 @@ checkSystemDistribution() {
     downPath="/var/tmp/nexttrace"
     ;;
   *)
-    red "unknown: $OSTYPE"
+    red "安装脚本暂不支持的操作系统: $OSTYPE"
     exit 1
     ;;
   esac
