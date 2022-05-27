@@ -16,42 +16,7 @@ function red() {
 checkRootPermit() {
     [[ $EUID -ne 0 ]] && red "请使用sudo/root权限运行本脚本" && exit 1
 }
-ask_if() {
-    local choice=""
-    while [ "$choice" != "y" ] && [ "$choice" != "n" ]; do
-        red $1
-        read choice
-    done
-    [ $choice == y ] && return 0
-    return 1
-}
-#检查脚本更新
-check_script_update() {
-    if [[ ${osDistribution} == "darwin" ]]; then
-        [ "$(cat "${BASH_SOURCE[0]}" | md5)" == "$(curl -sL "https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh" | md5)" ] && return 1 || return 0
-    else
-        [ "$(md5sum "${BASH_SOURCE[0]}" | awk '{print $1}')" == "$(md5sum <(curl -sL "https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh") | awk '{print $1}')" ] && return 1 || return 0
-    fi
-}
-#更新脚本
-update_script() {
-    if curl -sL -o "${BASH_SOURCE[0]}" "https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh" || curl -sL -o "${BASH_SOURCE[0]}" "https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh"; then
-        red "脚本更新完成，正在重启脚本..."
-        exec bash ${BASH_SOURCE[0]} --auto
-    else
-        red "更新脚本失败！"
-        exit 1
-    fi
-}
-ask_update_script() {
-    if check_script_update; then
-        red "脚本可升级"
-        [[ $auto == True ]] && update_script
-        ask_if "是否升级脚本？(n/y)：[n]" && update_script
-    else
-        red "脚本已经是最新版本"
-    fi
-}
+
 checkSystemArch() {
     arch=$(uname -m)
     case $arch in
@@ -86,6 +51,46 @@ checkSystemDistribution() {
         exit 1
         ;;
     esac
+}
+
+ask_if() {
+    local choice=""
+    while [ "$choice" != "y" ] && [ "$choice" != "n" ]; do
+        red $1
+        read choice
+    done
+    [ $choice == y ] && return 0
+    return 1
+}
+
+#检查脚本更新
+check_script_update() {
+    if [[ ${osDistribution} == "darwin" ]]; then
+        [ "$(cat "${BASH_SOURCE[0]}" | md5)" == "$(curl -sL "https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh" | md5)" ] && return 1 || return 0
+    else
+        [ "$(md5sum "${BASH_SOURCE[0]}" | awk '{print $1}')" == "$(md5sum <(curl -sL "https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh") | awk '{print $1}')" ] && return 1 || return 0
+    fi
+}
+
+#更新脚本
+update_script() {
+    if curl -sL -o "${BASH_SOURCE[0]}" "https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh" || curl -sL -o "${BASH_SOURCE[0]}" "https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh"; then
+        red "脚本更新完成，正在重启脚本..."
+        exec bash ${BASH_SOURCE[0]} --auto
+    else
+        red "更新脚本失败！"
+        exit 1
+    fi
+}
+
+ask_update_script() {
+    if check_script_update; then
+        red "脚本可升级"
+        [[ $auto == True ]] && update_script
+        ask_if "是否升级脚本？(n/y)：[n]" && update_script
+    else
+        red "脚本已经是最新版本"
+    fi
 }
 
 getLocation() {
