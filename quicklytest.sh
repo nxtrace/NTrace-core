@@ -19,12 +19,14 @@ ${Font_suffix}"
 check_root() {
     [[ "$(id -u)" != "0" ]] && echo -e "${Error} must be root user !" && exit 1
 }
+
 checkNexttrace() {
     echo -e "${Info} 正在检查Nexttrace..."
     if curl -sL -O "https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh" || curl -sL -O "https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh"; then
         bash nt_install.sh --auto >/dev/null
     fi
 }
+
 ask_if() {
     local choice=""
     echo -e "${Info} $1"
@@ -32,6 +34,24 @@ ask_if() {
     [[ $choice == y ]] && return 0
     return 1
 }
+
+checkSystemDistribution() {
+    case "$OSTYPE" in
+    darwin*)
+        osDistribution="darwin"
+        downPath="/var/tmp/nexttrace"
+        ;;
+    linux*)
+        osDistribution="linux"
+        downPath="/var/tmp/nexttrace"
+        ;;
+    *)
+        red "unknown: $OSTYPE"
+        exit 1
+        ;;
+    esac
+}
+
 #检查脚本更新
 check_script_update() {
     if [[ ${osDistribution} == "darwin" ]]; then
@@ -40,6 +60,7 @@ check_script_update() {
         [ "$(md5sum "${BASH_SOURCE[0]}" | awk '{print $1}')" == "$(md5sum <(curl -sL "https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh") | awk '{print $1}')" ] && return 1 || return 0
     fi
 }
+
 #更新脚本
 update_script() {
     if curl -sL -o "${BASH_SOURCE[0]}" "https://github.com/xgadget-lab/nexttrace/raw/main/quicklytest.sh" || curl -sL -o "${BASH_SOURCE[0]}" "https://github.com/xgadget-lab/nexttrace/raw/main/quicklytest.sh"; then
@@ -50,6 +71,7 @@ update_script() {
         exit 1
     fi
 }
+
 ask_update_script() {
     if check_script_update; then
         echo -e "${Info} 脚本可升级"
@@ -58,6 +80,7 @@ ask_update_script() {
         echo -e "${Info} 脚本已经是最新版本"
     fi
 }
+
 check_mode() {
     echo -e "${Info} Nexttrace目前支持以下三种协议发起Traceroute请求:\n1.ICMP\n2.TCP(速度最快,但部分节点不支持)\n3.UDP\n(IPv6暂只支持ICMP模式)" && read -p "输入数字以选择:" node
 
@@ -101,6 +124,7 @@ test_single() {
 
     repeat_test_single
 }
+
 repeat_test_single() {
     echo -e "${Info} 是否继续测试其他目标 ip ?"
     if ask_if "输入y/n以选择:"; then
@@ -115,6 +139,7 @@ test_alternative() {
     set_alternative
     result_alternative
 }
+
 select_alternative() {
     echo -e "${Info} 选择需要测速的目标网络: \n1.中国电信\n2.中国联通\n3.中国移动\n4.教育网"
     read -p "输入数字以选择:" ISP
@@ -124,12 +149,14 @@ select_alternative() {
         echo -e "${Info} 请重新选择" && read -p "输入数字以选择:" ISP
     done
 }
+
 set_alternative() {
     [[ "${ISP}" == "1" ]] && node_1
     [[ "${ISP}" == "2" ]] && node_2
     [[ "${ISP}" == "3" ]] && node_3
     [[ "${ISP}" == "4" ]] && node_4
 }
+
 node_1() {
     echo -e "1.上海电信(天翼云)\n2.厦门电信CN2\n3.北京电信\n4.江苏电信\n5.广东深圳电信\n6.广州电信(天翼云)\n7.浙江电信" && read -p "输入数字以选择:" node
 
@@ -146,6 +173,7 @@ node_1() {
     [[ "${node}" == "6" ]] && ISP_name="广州电信(天翼云)" && ip=14.215.116.1
     [[ "${node}" == "7" ]] && ISP_name="浙江电信" && ip=115.236.169.86
 }
+
 node_2() {
     echo -e "1.上海联通\n2.重庆联通\n3.北京联通\n4.安徽合肥联通\n5.江苏南京联通\n6.浙江杭州联通\n7.广东联通" && read -p "输入数字以选择:" node
 
@@ -162,6 +190,7 @@ node_2() {
     [[ "${node}" == "6" ]] && ISP_name="浙江联通" && ip=60.12.214.156
     [[ "${node}" == "7" ]] && ISP_name="广东联通" && ip=58.252.2.194
 }
+
 node_3() {
     echo -e "1.上海移动\n2.四川成都移动\n3.北京移动\n4.浙江杭州移动\n5.广东移动\n6.江苏移动\n7.浙江移动" && read -p "输入数字以选择:" node
 
@@ -178,9 +207,11 @@ node_3() {
     [[ "${node}" == "6" ]] && ISP_name="江苏移动" && ip=120.195.6.129
     [[ "${node}" == "7" ]] && ISP_name="浙江移动" && ip=183.246.69.139
 }
+
 node_4() {
     ISP_name="北京教育网" && ip=211.68.69.240
 }
+
 result_alternative() {
     echo -e "${Info} 测试路由 到 ${ISP_name} 中 ..."
     ${TRACECMD} ${ip} | grep -v -E 'NextTrace|XGadget-lab|Data\ Provider'
@@ -188,6 +219,7 @@ result_alternative() {
 
     repeat_test_alternative
 }
+
 repeat_test_alternative() {
     echo -e "${Info} 是否继续测试其他节点?"
     if ask_if "输入y/n以选择:"; then
@@ -210,6 +242,7 @@ test_all() {
 
     echo -e "${Info} 四网路由快速测试 已完成 ！"
 }
+
 result_all() {
     ISP_name=$2
     echo -e "${Info} 测试路由 到 ${ISP_name} 中 ..."
@@ -218,6 +251,7 @@ result_all() {
 }
 
 check_root
+checkSystemDistribution
 ask_update_script
 checkNexttrace
 check_mode
