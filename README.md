@@ -21,7 +21,7 @@ sudo bash nt_install.sh
 
 ### Alternative methods
 
-如果你的目的只是为了快速测试服务器的到中国内地的线路，没有手动使用NextTrace的需求，那么建议你直接使用本仓库的 `quicklytest.sh`
+如果你的目的只是为了快速测试服务器的到中国内地的线路，没有手动使用 NextTrace 的需求，那么建议你直接使用本仓库的 `quicklytest.sh`
 
 ```bash
 #下载quicklytest.sh
@@ -40,6 +40,8 @@ nexttrace 1.0.0.1
 
 # 表格打印（一次性输出全部跳数，需等待20-40秒）
 nexttrace -table 1.0.0.1
+# 实时打印 (-realtime与-table不能同时选择)
+nexttrace -realtime 1.0.0.1
 
 # IPv6 ICMP Trace
 nexttrace 2606:4700:4700::1111
@@ -63,14 +65,41 @@ nexttrace -U -p 53 1.0.0.1
 `NextTrace`也同样支持一些进阶功能，如 IP 反向解析、并发数控制、模式切换等
 
 ```bash
+# 每一跳发送2个探测包
+nexttrace -q 2 www.hkix.net
+
 # 无并发，每次只发送一个探测包
 nexttrace -r 1 www.hkix.net
 
 # 打开IP反向解析功能，在IPv6的骨干网定位辅助有较大帮助
 nexttrace -rdns www.bbix.net
 
-# 联合使用
-nexttrace -r 1 -q 1 -report www.time.com.my
+# 特色功能：打印Route-Path图
+# Route-Path图示例：
+# AS6453 塔塔通信「Singapore『Singapore』」
+#  ╭╯
+# ╰AS9299 Philippine Long Distance Telephone Co.「Philippines『Metro Manila』」
+# ╭╯
+# ╰AS36776 Five9 Inc.「Philippines『Metro Manila』」
+# ╭╯
+# ╰AS37963 阿里云「ALIDNS.COM『ALIDNS.COM』」
+nexttrace -report www.time.com.my
+```
+
+`NextTrace`支持用户自主选择 IP 数据库（目前支持：`LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`）
+
+```bash
+# 可以自行指定IP数据库[此处为IP.SB]，不指定则默认为LeoMoeAPI
+nexttrace -d IP.SB
+## 特别的：其中 ipinfo API 需要从ipinfo自行购买服务，如有需要可以clone本项目添加其提供的token自行编译
+```
+
+`NextTrace`目前不支持自定义参数位置，请按标准格式输入命令
+
+```bash
+Example:
+nexttrace -d IPInsight -m 20 -p 443 -q 5 -r 20 -rdns -table 1.1.1.1
+nexttrace -T -q 2 -r 1 -rdns -realtime -report 2001:4860:4860::8888
 ```
 
 ### IP 数据库
@@ -102,10 +131,11 @@ Usage of nexttrace:
         Set whether rDNS will be display
   -realtime
         Output trace results in runtime
-  -report
-        Route Path
   -table
         Output trace results as table
+  -report
+        Route Path
+
 ```
 
 ## 项目截图
@@ -118,9 +148,9 @@ Usage of nexttrace:
 
 或许可以在这里找到答案 -> [前往 Github Wiki](https://github.com/xgadget-lab/nexttrace/wiki/FAQ---%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98%E8%A7%A3%E7%AD%94)
 
-如果在搜索引擎，WiKi处还是没有解决，可以试试在本项目讨论区交流 -> [前往 Github Discussions](https://github.com/xgadget-lab/nexttrace/discussions)
+如果在搜索引擎，WiKi 处还是没有解决，可以试试在本项目讨论区交流 -> [前往 Github Discussions](https://github.com/xgadget-lab/nexttrace/discussions)
 
-最终如果你确认遇到的是BUG、上述方法都不能解决的话，请按照提供好的模版在Issues区提出问题 -> [前往 Github Issues](https://github.com/xgadget-lab/nexttrace/issues)
+最终如果你确认遇到的是 BUG、上述方法都不能解决的话，请按照提供好的模版在 Issues 区提出问题 -> [前往 Github Issues](https://github.com/xgadget-lab/nexttrace/issues)
 
 ## Thanks
 
