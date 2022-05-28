@@ -163,21 +163,32 @@ Options:
 
 ### IPv4 Database
 
-#### China MainLand
+#### China
 
-- 项目组自行维护 ~ 御三家骨干网数据 ~ 5%
-
-- 埃文科技 Paid Database ~ 95%
+|      ISP       |  类型  |      数据源      | 占比 |
+| :------------: | :----: | :--------------: | :--: |
+| 电信/联通/移动 | 骨干网 | NextTrace |  10%  |
+| 电信/联通/移动 | 城域网 |     埃文科技     | 90%  |
 
 #### WorldWide
 
-- 埃文科技 Paid Database ~ 15%
+|      ISP       |  类型  |      数据源      | 占比 |
+| :------------: | :----: | :--------------: | :--: |
+| Tier-01 | 骨干网 | IPInfo |  2%  |
+| Tier-01 | 骨干网 | 埃文科技 |  3%  |
+| Tier-01 | 骨干网 | IPInSight |  5%  |
+| Tier-01 | 城域网 | IPInSight |  90%  |
 
-- IpInfo Free ~ 15%
-
-- IPInSight Free ~ 70%
+|      ISP       |  类型  |      数据源      | 占比 |
+| :------------: | :----: | :--------------: | :--: |
+| Others | 骨干网 | IPInSight | 5%  |
+| Others | 城域网 |  IPInSight  | 95%  |
 
 ### IPv6 Database
+
+|      ISP       |  类型  |      数据源      | 占比 |
+| :------------: | :----: | :--------------: | :--: |
+| All | 全部 | IP2Location Lite | 100%  |
 
 This product includes IP2Location LITE data available from <a href="https://lite.ip2location.com">https://lite.ip2location.com</a>.
 
