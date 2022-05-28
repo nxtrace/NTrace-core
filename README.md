@@ -13,27 +13,24 @@
 ### Automated Install
 
 ```bash
-#安装脚本仅支持macOS/Linux, OpenBSD/FreeBSD请到Release页面下载二进制文件使用，其他系统请自行编译
-#下载nt_install.sh
-curl -Ls https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh -O
-#执行nt_install.sh
-sudo bash nt_install.sh
+# Note: This Script Only Supports Linux/macOS, Other Unix-Like Systems are UNAVAILABLE
+curl -Ls https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh -O && sudo bash nt_install.sh
 ```
 
-### Alternative methods
+* `Release`里面为很多系统以及不同架构提供了编译好的二进制可执行文件，如果没有可以自行编译。
+* 一些本项目的必要依赖在`Windows`上`Golang`底层实现不完全，所以目前`NextTrace`在`Windows`平台不可用。
 
-如果你的目的只是为了快速测试服务器的到中国内地的线路，没有手动使用 NextTrace 的需求，那么建议你直接使用本仓库的 `quicklytest.sh`
+### Fast Test
+
+此脚本旨在快速测试服务器的到中国内地的线路，建议新手或者没有自定义`NextTrace`功能需求的用户使用。
 
 ```bash
-#下载quicklytest.sh
-curl -Ls https://github.com/xgadget-lab/nexttrace/raw/main/quicklytest.sh -O
-#执行quicklytest.sh
-sudo bash quicklytest.sh
+curl -Ls https://github.com/xgadget-lab/nexttrace/raw/main/quicklytest.sh -O && sudo bash quicklytest.sh
 ```
 
 ### Get Started
 
-`NextTrace`默认使用`icmp`协议发起`TraceRoute`请求，该协议同时支持`IPv4`和`IPv6`
+`NextTrace`默认使用`ICMP`协议发起`TraceRoute`请求，该协议同时支持`IPv4`和`IPv6`
 
 ```bash
 # IPv4 ICMP Trace
@@ -171,14 +168,6 @@ Options:
 - 项目组自行维护 ~ 御三家骨干网数据 ~ 5%
 
 - 埃文科技 Paid Database ~ 95%
-
-**这里有朋友就要问了，为什么不全部使用埃文的付费库？**
-
-埃文的库一直都不是最优选择，IPIP.NET 才是，但是因为他们不对私，所以我们只能选择价格更便宜的埃文库。
-
-埃文家的数据库，在骨干网这块，准度可以说是非常糟糕，作为一款可视化的路由跟踪工具，骨干网的数据库准度非常重要。
-
-所以我们选择了尝试自行去校准一部分骨干网数据，但是由于我们缺乏检测节点以及志愿者，所以这项工作可能会进展的尤其缓慢。
 
 #### WorldWide
 
