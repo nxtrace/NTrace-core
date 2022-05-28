@@ -139,17 +139,17 @@ Options:
 
 ## 项目截图
 
-![NextTrace Screenshot](asset/screenshot.png)
+<img src=asset/screenshot.png alt="NextTrace Screenshot" width="683" height="688" />
 
 ## FAQ 常见问题
 
 如果你在安装或者使用的时候遇到了问题，我们建议你不要把新建一个 `issue` 作为首选项
 
-或许可以在这里找到答案 -> [前往 Github Wiki](https://github.com/xgadget-lab/nexttrace/wiki/FAQ---%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98%E8%A7%A3%E7%AD%94)
+以下是我们推荐的排错流程：
 
-如果在搜索引擎，WiKi 处还是没有解决，可以试试在本项目讨论区交流 -> [前往 Github Discussions](https://github.com/xgadget-lab/nexttrace/discussions)
-
-最终如果你确认遇到的是 BUG、上述方法都不能解决的话，请按照提供好的模版在 Issues 区提出问题 -> [前往 Github Issues](https://github.com/xgadget-lab/nexttrace/issues)
+1. 查看是否为常见问题 -> [前往 Github Wiki](https://github.com/xgadget-lab/nexttrace/wiki/FAQ---%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98%E8%A7%A3%E7%AD%94)
+2. 不会软件的参数使用 -> [前往 Github Discussions](https://github.com/xgadget-lab/nexttrace/discussions)
+3. 疑似BUG、或者功能建议 -> [前往 Github Issues](https://github.com/xgadget-lab/nexttrace/issues)
 
 ## Thanks
 
@@ -157,7 +157,11 @@ Options:
 
 [Sam Sam](https://github.com/samleong123) (samsam123@samsam123.name.my)
 
-[waiting4new](https://github.com/waiting4new)、[FFEE_CO](https://github.com/fkx4-p)、[tsosunchia](https://github.com/tsosunchia)
+[tsosunchia](https://github.com/tsosunchia)
+
+[waiting4new](https://github.com/waiting4new)
+
+[FFEE_CO](https://github.com/fkx4-p)
 
 ## IP Database Copyright
 
