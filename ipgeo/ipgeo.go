@@ -26,7 +26,9 @@ func GetSource(s string) Source {
 		return IPInSight
 	case "IPAPI.COM":
 		return IPApiCom
+	case "IPINFO":
+		return IPInfo
 	default:
-		return nil
+		return LeoIP
 	}
 }

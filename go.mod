@@ -11,6 +11,7 @@ require (
 require (
 	github.com/mattn/go-colorable v0.1.9 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
+	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 
 require (

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/xgadget-lab/nexttrace/config"
 	"github.com/xgadget-lab/nexttrace/ipgeo"
 	"github.com/xgadget-lab/nexttrace/printer"
 	"github.com/xgadget-lab/nexttrace/reporter"
@@ -18,7 +19,7 @@ import (
 var fSet = flag.NewFlagSet("", flag.ExitOnError)
 var tcpSYNFlag = fSet.Bool("T", false, "Use TCP SYN for tracerouting (default port is 80)")
 var udpPackageFlag = fSet.Bool("U", false, "Use UDP Package for tracerouting (default port is 53 in UDP)")
-var port = flag.Int("p", 80, "Set SYN Traceroute Port")
+var port = fSet.Int("p", 80, "Set SYN Traceroute Port")
 var numMeasurements = fSet.Int("q", 3, "Set the number of probes per each hop.")
 var parallelRequests = fSet.Int("r", 18, "Set ParallelRequests number. It should be 1 when there is a multi-routing.")
 var maxHops = fSet.Int("m", 30, "Set the max number of hops (max TTL to be reached).")
@@ -65,6 +66,16 @@ func main() {
 		log.Fatalln("Traceroute requires root/sudo privileges.")
 	}
 
+	configData, err := config.Read();
+
+	if err != nil {
+		if configData, err = config.Generate(); err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	ipgeo.SetToken(configData.Token)
+
 	ip := util.DomainLookUp(domain)
 	printer.PrintTraceRouteNav(ip, domain, *dataOrigin)
 
@@ -110,7 +121,9 @@ func main() {
 		printer.TraceroutePrinter(res)
 	}
 
-	if *routePath {
+	p := configData.Preference
+
+	if *routePath || p.AlwaysRoutePath {
 		r := reporter.New(res, ip.String())
 		r.Print()
 	}
