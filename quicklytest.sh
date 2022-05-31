@@ -21,8 +21,33 @@ check_root() {
 
 checkNexttrace() {
   echo -e "${Info} 正在检查Nexttrace...(若未安装NextTrace则开始安装)"
-  if curl -sL -O "https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh" || curl -sL -O "https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh"; then
+  if curl -sL -O ${URLprefix}"https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/nt_install.sh" || curl -sL -O ${URLprefix}"https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/nt_install.sh"; then
     bash nt_install.sh #--auto #>/dev/null
+  fi
+}
+
+getLocation() {
+  red "正在获取地理位置信息..."
+  countryCode=$(curl -s "http://ip-api.com/line/?fields=countryCode")
+  if [ "$countryCode" == "CN" ]; then
+    if [[ $auto == True ]]; then
+      URLprefix="https://ghproxy.com/"
+    else
+      read -r -p "检测到国内网络环境，是否使用镜像下载以加速(n/y)[y]" input
+      case $input in
+      [yY][eE][sS] | [yY])
+        URLprefix="https://ghproxy.com/"
+        ;;
+
+      [nN][oO] | [nN])
+        red "您选择了不使用镜像，下载可能会变得异常缓慢，或者失败"
+        ;;
+
+      *)
+        URLprefix="https://ghproxy.com/"
+        ;;
+      esac
+    fi
   fi
 }
 
@@ -52,15 +77,15 @@ checkSystemDistribution() {
 #检查脚本更新
 check_script_update() {
   if [[ ${osDistribution} == "darwin" ]]; then
-    [ "$(md5 <"${BASH_SOURCE[0]}")" == "$(curl -sL "https://github.com/xgadget-lab/nexttrace/raw/main/quicklytest.sh" | md5)" ] && return 1 || return 0
+    [ "$(md5 <"${BASH_SOURCE[0]}")" == "$(curl -sL ${URLprefix}"https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/quicklytest.sh" | md5)" ] && return 1 || return 0
   else
-    [ "$(md5sum "${BASH_SOURCE[0]}" | awk '{print $1}')" == "$(md5sum <(curl -sL "https://github.com/xgadget-lab/nexttrace/raw/main/quicklytest.sh") | awk '{print $1}')" ] && return 1 || return 0
+    [ "$(md5sum "${BASH_SOURCE[0]}" | awk '{print $1}')" == "$(md5sum <(curl -sL ${URLprefix}"https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/quicklytest.sh") | awk '{print $1}')" ] && return 1 || return 0
   fi
 }
 
 #更新脚本
 update_script() {
-  if curl -sL -o "${BASH_SOURCE[0]}" "https://github.com/xgadget-lab/nexttrace/raw/main/quicklytest.sh" || curl -sL -o "${BASH_SOURCE[0]}" "https://github.com/xgadget-lab/nexttrace/raw/main/quicklytest.sh"; then
+  if curl -sL -o "${BASH_SOURCE[0]}" ${URLprefix}"https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/quicklytest.sh" || curl -sL -o "${BASH_SOURCE[0]}" ${URLprefix}"https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/quicklytest.sh"; then
     echo -e "${Info} quickylytest.sh更新完成，正在重启脚本..."
     exec bash "${BASH_SOURCE[0]}"
   else
@@ -250,6 +275,7 @@ result_all() {
 
 check_root
 checkSystemDistribution
+getLocation
 ask_update_script
 checkNexttrace
 check_mode

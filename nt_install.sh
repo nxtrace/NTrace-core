@@ -59,6 +59,32 @@ checkSystemDistribution() {
   esac
 }
 
+getLocation() {
+  red "正在获取地理位置信息..."
+  countryCode=$(curl -s "http://ip-api.com/line/?fields=countryCode")
+  if [ "$countryCode" == "CN" ]; then
+    if [[ $auto == True ]]; then
+      URLprefix="https://ghproxy.com/"
+    else
+      read -r -p "检测到国内网络环境，是否使用镜像下载以加速(n/y)[y]" input
+      case $input in
+      [yY][eE][sS] | [yY])
+        URLprefix="https://ghproxy.com/"
+        ;;
+
+      [nN][oO] | [nN])
+        URLprefix=""
+        red "您选择了不使用镜像，下载可能会变得异常缓慢，或者失败"
+        ;;
+
+      *)
+        URLprefix="https://ghproxy.com/"
+        ;;
+      esac
+    fi
+  fi
+}
+
 ask_if() {
   local choice=""
   red "${1}"
@@ -93,31 +119,6 @@ ask_update_script() {
     ask_if "是否升级脚本？(n/y)：[n]" && update_script
   else
     red "nt_install.sh已经是最新版本"
-  fi
-}
-
-getLocation() {
-  red "正在获取地理位置信息..."
-  countryCode=$(curl -s "http://ip-api.com/line/?fields=countryCode")
-  if [ "$countryCode" == "CN" ]; then
-    if [[ $auto == True ]]; then
-      URLprefix="https://ghproxy.com/"
-    else
-      read -r -p "检测到国内网络环境，是否使用镜像下载以加速(n/y)[y]" input
-      case $input in
-      [yY][eE][sS] | [yY])
-        URLprefix="https://ghproxy.com/"
-        ;;
-
-      [nN][oO] | [nN])
-        red "您选择了不使用镜像，下载可能会变得异常缓慢，或者失败"
-        ;;
-
-      *)
-        URLprefix="https://ghproxy.com/"
-        ;;
-      esac
-    fi
   fi
 }
 
