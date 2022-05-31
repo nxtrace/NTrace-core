@@ -27,27 +27,24 @@ checkNexttrace() {
 }
 
 getLocation() {
-  red "正在获取地理位置信息..."
+  echo -e "${Info} 正在获取地理位置信息..."
   countryCode=$(curl -s "http://ip-api.com/line/?fields=countryCode")
   if [ "$countryCode" == "CN" ]; then
-    if [[ $auto == True ]]; then
+    read -r -p "检测到国内网络环境，是否使用镜像下载以加速(n/y)[y]" input
+    case $input in
+    [yY][eE][sS] | [yY])
       URLprefix="https://ghproxy.com/"
-    else
-      read -r -p "检测到国内网络环境，是否使用镜像下载以加速(n/y)[y]" input
-      case $input in
-      [yY][eE][sS] | [yY])
-        URLprefix="https://ghproxy.com/"
-        ;;
+      ;;
 
-      [nN][oO] | [nN])
-        red "您选择了不使用镜像，下载可能会变得异常缓慢，或者失败"
-        ;;
+    [nN][oO] | [nN])
+      URLprefix=""
+      echo -e "${Info} 您选择了不使用镜像，下载可能会变得异常缓慢，或者失败"
+      ;;
 
-      *)
-        URLprefix="https://ghproxy.com/"
-        ;;
-      esac
-    fi
+    *)
+      URLprefix="https://ghproxy.com/"
+      ;;
+    esac
   fi
 }
 
@@ -68,7 +65,7 @@ checkSystemDistribution() {
     osDistribution="linux"
     ;;
   *)
-    red "unknown: $OSTYPE"
+    echo -e "${Info} unknown: $OSTYPE"
     exit 1
     ;;
   esac
