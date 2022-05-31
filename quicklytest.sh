@@ -29,7 +29,7 @@ checkNexttrace() {
     fi
   else
     echo -e "${Info} 您未安装NextTrace，正在开始安装..."
-    mkdir ~/.nexttrace/
+    mkdir -p ~/.nexttrace/
     cat >~/.nexttrace/ntraceConfig.yml <<EOF
 Token:
   LeoMoeAPI: NextTraceDemo
