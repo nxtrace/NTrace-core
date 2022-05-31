@@ -20,7 +20,24 @@ check_root() {
 }
 
 checkNexttrace() {
-  echo -e "${Info} 正在检查Nexttrace...(若未安装NextTrace则开始安装)"
+  if $(which nexttrace >/dev/null 2>&1); then
+    echo -e "${Info} 您已安装NextTrace，是否检查更新？"
+    if ask_if "输入n/y以选择:[n]"; then
+      echo -e "${Info} 正在检查更新..."
+    else
+      return
+    fi
+  else
+    echo -e "${Info} 您未安装NextTrace，正在开始安装..."
+    mkdir ~/.nexttrace/
+    cat >~/.nexttrace/ntraceConfig.yml <<EOF
+Token:
+  LeoMoeAPI: NextTraceDemo
+  IPInfo: ""
+Preference:
+  AlwaysRoutePath: true
+EOF
+  fi
   if curl -sL -O ${URLprefix}"https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/nt_install.sh" || curl -sL -O ${URLprefix}"https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/nt_install.sh"; then
     bash nt_install.sh #--auto #>/dev/null
   fi
