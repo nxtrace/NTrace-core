@@ -119,7 +119,7 @@ check_mode() {
     #        [[ "${node}" == "2" ]] && TRACECMD=${TRACECMD}" -report"
     #        ##
   else
-    TRACECMD=${TRACECMD}" -rdns -realtime"
+    TRACECMD=${TRACECMD}" -rdns"
     #        ##Route-Path功能还未完善,临时替代:
     #        [[ "${node}" == "1" ]] && TRACECMD=${TRACECMD}" -report"
     #        [[ "${node}" == "2" ]] && TRACECMD=${TRACECMD}" -report"

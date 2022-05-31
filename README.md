@@ -15,12 +15,15 @@
 ```bash
 # Note: This Script Only Supports Linux/macOS, Other Unix-Like Systems are UNAVAILABLE
 curl -Ls https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/nt_install.sh -O && sudo bash nt_install.sh
+```
+
+```bash
 # GHPROXY镜像(在连接raw.githubusercontent.com网络不畅时使用)
 curl -Ls https://ghproxy.com/https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/nt_install.sh -O && sudo bash nt_install.sh
 ```
 
-* `Release`里面为很多系统以及不同架构提供了编译好的二进制可执行文件，如果没有可以自行编译。
-* 一些本项目的必要依赖在`Windows`上`Golang`底层实现不完全，所以目前`NextTrace`在`Windows`平台不可用。
+- `Release`里面为很多系统以及不同架构提供了编译好的二进制可执行文件，如果没有可以自行编译。
+- 一些本项目的必要依赖在`Windows`上`Golang`底层实现不完全，所以目前`NextTrace`在`Windows`平台不可用。
 
 ### Fast Test
 
@@ -28,6 +31,9 @@ curl -Ls https://ghproxy.com/https://raw.githubusercontent.com/xgadget-lab/nextt
 
 ```bash
 curl -Ls https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/quicklytest.sh -O && sudo bash quicklytest.sh
+```
+
+```bash
 # GHPROXY镜像(在连接raw.githubusercontent.com网络不畅时使用)
 curl -Ls https://ghproxy.com/https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/quicklytest.sh -O && sudo bash quicklytest.sh
 ```
@@ -153,7 +159,7 @@ Options:
 
 1. 查看是否为常见问题 -> [前往 Github Wiki](https://github.com/xgadget-lab/nexttrace/wiki/FAQ---%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98%E8%A7%A3%E7%AD%94)
 2. 不会软件的参数使用 -> [前往 Github Discussions](https://github.com/xgadget-lab/nexttrace/discussions)
-3. 疑似BUG、或者功能建议 -> [前往 Github Issues](https://github.com/xgadget-lab/nexttrace/issues)
+3. 疑似 BUG、或者功能建议 -> [前往 Github Issues](https://github.com/xgadget-lab/nexttrace/issues)
 
 ## Thanks
 
@@ -173,30 +179,30 @@ Options:
 
 #### China
 
-|      ISP       |  类型  |      数据源      | 占比 |
-| :------------: | :----: | :--------------: | :--: |
-| 电信/联通/移动 | 骨干网 | NextTrace |  10%  |
-| 电信/联通/移动 | 城域网 |     埃文科技     | 90%  |
+|      ISP       |  类型  |  数据源   | 占比 |
+| :------------: | :----: | :-------: | :--: |
+| 电信/联通/移动 | 骨干网 | NextTrace | 10%  |
+| 电信/联通/移动 | 城域网 | 埃文科技  | 90%  |
 
 #### WorldWide
 
-|      ISP       |  类型  |      数据源      | 占比 |
-| :------------: | :----: | :--------------: | :--: |
-| Tier-01 | 骨干网 | IPInfo |  2%  |
-| Tier-01 | 骨干网 | 埃文科技 |  3%  |
+|   ISP   |  类型  |  数据源   | 占比 |
+| :-----: | :----: | :-------: | :--: |
+| Tier-01 | 骨干网 |  IPInfo   |  2%  |
+| Tier-01 | 骨干网 | 埃文科技  |  3%  |
 | Tier-01 | 骨干网 | IPInSight |  5%  |
-| Tier-01 | 城域网 | IPInSight |  90%  |
+| Tier-01 | 城域网 | IPInSight | 90%  |
 
-|      ISP       |  类型  |      数据源      | 占比 |
-| :------------: | :----: | :--------------: | :--: |
-| Others | 骨干网 | IPInSight | 5%  |
-| Others | 城域网 |  IPInSight  | 95%  |
+|  ISP   |  类型  |  数据源   | 占比 |
+| :----: | :----: | :-------: | :--: |
+| Others | 骨干网 | IPInSight |  5%  |
+| Others | 城域网 | IPInSight | 95%  |
 
 ### IPv6 Database
 
-|      ISP       |  类型  |      数据源      | 占比 |
-| :------------: | :----: | :--------------: | :--: |
-| All | 全部 | IP2Location Lite | 100%  |
+| ISP | 类型 |      数据源      | 占比 |
+| :-: | :--: | :--------------: | :--: |
+| All | 全部 | IP2Location Lite | 100% |
 
 This product includes IP2Location LITE data available from <a href="https://lite.ip2location.com">https://lite.ip2location.com</a>.
 
