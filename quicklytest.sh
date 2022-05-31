@@ -126,8 +126,8 @@ check_mode() {
     #        ##
   fi
 
-  echo -e "${Info} 是否输出Route-Path?"
-  ask_if "输入n/y以选择模式:[n]" && TRACECMD=${TRACECMD}" -report"
+  # echo -e "${Info} 是否输出Route-Path?"
+  # ask_if "输入n/y以选择模式:[n]" && TRACECMD=${TRACECMD}" -report"
 
 }
 
