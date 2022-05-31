@@ -8,6 +8,8 @@
 
 一款开源的可视化路由跟踪工具，使用 Golang 开发。
 
+NextTrace 只是一个实验性项目，不推荐用于生产环境下。对于路由跟踪工具，我们依旧更加推荐 WorstTrace & Besttrace。
+
 ## How To Use
 
 ### Automated Install
