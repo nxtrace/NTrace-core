@@ -14,7 +14,9 @@
 
 ```bash
 # Note: This Script Only Supports Linux/macOS, Other Unix-Like Systems are UNAVAILABLE
-curl -Ls https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh -O && sudo bash nt_install.sh
+curl -Ls https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/nt_install.sh -O && sudo bash nt_install.sh
+# GHPROXY镜像(在连接raw.githubusercontent.com网络不畅时使用)
+curl -Ls https://ghproxy.com/https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/nt_install.sh -O && sudo bash nt_install.sh
 ```
 
 * `Release`里面为很多系统以及不同架构提供了编译好的二进制可执行文件，如果没有可以自行编译。
@@ -25,7 +27,9 @@ curl -Ls https://github.com/xgadget-lab/nexttrace/raw/main/nt_install.sh -O && s
 此脚本旨在快速测试服务器的到中国内地的线路，建议新手或者没有自定义`NextTrace`功能需求的用户使用。
 
 ```bash
-curl -Ls https://github.com/xgadget-lab/nexttrace/raw/main/quicklytest.sh -O && sudo bash quicklytest.sh
+curl -Ls https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/quicklytest.sh -O && sudo bash quicklytest.sh
+# GHPROXY镜像(在连接raw.githubusercontent.com网络不畅时使用)
+curl -Ls https://ghproxy.com/https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/quicklytest.sh -O && sudo bash quicklytest.sh
 ```
 
 ### Get Started
