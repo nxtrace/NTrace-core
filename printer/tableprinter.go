@@ -39,7 +39,7 @@ func TracerouteTablePrinter(res *trace.Result) {
 				if data.City != "" {
 					tbl.AddRow(data.Hop, data.IP, data.Latency, data.Asnumber, data.Country+", "+data.Prov+", "+data.City, data.Owner)
 				} else {
-					tbl.AddRow(data.Hop, data.IP, data.Latency, data.Asnumber, data.Country, data.Owner)
+					tbl.AddRow(data.Hop, data.IP, data.Latency, data.Asnumber, data.Country + ", " + data.Prov, data.Owner)
 				}
 
 			}
@@ -75,6 +75,7 @@ func tableDataGenerator(h trace.Hop) *rowData {
 				IP:      IP,
 				Latency: lantency,
 				Country: "LAN Address",
+				Prov:    "LAN Address",
 				Owner:   "",
 			}
 		} else if strings.HasPrefix(IP, "11.") {
@@ -83,6 +84,7 @@ func tableDataGenerator(h trace.Hop) *rowData {
 				IP:      IP,
 				Latency: lantency,
 				Country: "LAN Address",
+				Prov:    "LAN Address",
 				Owner:   "",
 			}
 		}
