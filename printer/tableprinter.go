@@ -2,8 +2,9 @@ package printer
 
 import (
 	"fmt"
-	"github.com/xgadget-lab/nexttrace/ipgeo"
 	"strings"
+
+	"github.com/xgadget-lab/nexttrace/ipgeo"
 
 	"github.com/xgadget-lab/nexttrace/trace"
 
@@ -73,16 +74,16 @@ func tableDataGenerator(h trace.Hop) *rowData {
 				Hop:     fmt.Sprint(h.TTL),
 				IP:      IP,
 				Latency: lantency,
-				Country: "局域网",
-				Owner:   "腾讯云",
+				Country: "LAN Address",
+				Owner:   "",
 			}
 		} else if strings.HasPrefix(IP, "11.") {
 			return &rowData{
 				Hop:     fmt.Sprint(h.TTL),
 				IP:      IP,
 				Latency: lantency,
-				Country: "局域网",
-				Owner:   "阿里云",
+				Country: "LAN Address",
+				Owner:   "",
 			}
 		}
 
