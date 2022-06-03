@@ -1,6 +1,7 @@
 package trace
 
 import (
+	"encoding/binary"
 	"log"
 	"net"
 	"os"
@@ -74,8 +75,14 @@ func (t *ICMPTracer) listenICMP() {
 			if msg.N == nil {
 				continue
 			}
-			// 抢在ICMP解析包之前先判断是否和目的地IP一致
-			// Leo 注释：我是伞兵，traceroute 居然忘了做包校验...
+
+			if binary.BigEndian.Uint16(msg.Msg[32:34]) != uint16(os.Getpid()&0xffff) {
+				// 如果类型为应答消息，且应答消息包的进程ID与主进程相同时不跳过
+				if msg.Msg[0] != 0 || binary.BigEndian.Uint16(msg.Msg[4:6]) != uint16(os.Getpid()&0xffff) {
+					continue
+				}
+			}
+
 			dstip := net.IP(msg.Msg[24:28])
 			if dstip.Equal(t.DestIP) || dstip.Equal(net.IPv4zero) {
 				// 匹配再继续解析包，否则直接丢弃
