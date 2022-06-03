@@ -230,9 +230,9 @@ downloadBinrayFile() {
 
   red "正在下载 NextTrace 二进制文件..."
   if wget -O ${downPath} "${latestURL}"; then
-    red "NextTrace 现在已经在您的系统中可用"
     changeMode
     mv ${downPath} ${usrPath}
+    red "NextTrace 现在已经在您的系统中可用"
   else
     red "NextTrace 下载失败，请检查您的网络是否正常"
     exit 1
