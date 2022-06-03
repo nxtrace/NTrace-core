@@ -74,19 +74,26 @@ func (t *ICMPTracer) listenICMP() {
 			if msg.N == nil {
 				continue
 			}
-			rm, err := icmp.ParseMessage(1, msg.Msg[:*msg.N])
-			if err != nil {
-				log.Println(err)
-				continue
+			// 抢在ICMP解析包之前先判断是否和目的地IP一致
+			// Leo 注释：我是伞兵，traceroute 居然忘了做包校验...
+			dstip := net.IP(msg.Msg[24:28])
+			if dstip.Equal(t.DestIP) || dstip.Equal(net.IPv4zero) {
+				// 匹配再继续解析包，否则直接丢弃
+				rm, err := icmp.ParseMessage(1, msg.Msg[:*msg.N])
+				if err != nil {
+					log.Println(err)
+					continue
+				}
+				switch rm.Type {
+				case ipv4.ICMPTypeTimeExceeded:
+					t.handleICMPMessage(msg, 0, rm.Body.(*icmp.TimeExceeded).Data)
+				case ipv4.ICMPTypeEchoReply:
+					t.handleICMPMessage(msg, 1, rm.Body.(*icmp.Echo).Data)
+				default:
+					// log.Println("received icmp message of unknown type", rm.Type)
+				}
 			}
-			switch rm.Type {
-			case ipv4.ICMPTypeTimeExceeded:
-				t.handleICMPMessage(msg, 0, rm.Body.(*icmp.TimeExceeded).Data)
-			case ipv4.ICMPTypeEchoReply:
-				t.handleICMPMessage(msg, 1, rm.Body.(*icmp.Echo).Data)
-			default:
-				// log.Println("received icmp message of unknown type", rm.Type)
-			}
+
 		}
 	}
 
