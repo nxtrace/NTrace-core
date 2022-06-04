@@ -25,7 +25,7 @@ func LocalIPPort(dstip net.IP) (net.IP, int) {
 	return nil, -1
 }
 
-func DomainLookUp(host string) net.IP {
+func DomainLookUp(host string, ipv4Only bool) net.IP {
 	ips, err := net.LookupIP(host)
 	if err != nil {
 		fmt.Println("Domain " + host + " Lookup Fail.")
@@ -36,17 +36,20 @@ func DomainLookUp(host string) net.IP {
 	var ipv6Flag = false
 
 	for _, ip := range ips {
-		ipSlice = append(ipSlice, ip)
-		// 仅返回ipv4的ip
-		// if ip.To4() != nil {
-		// 	ipSlice = append(ipSlice, ip)
-		// } else {
-		// 	ipv6Flag = true
-		// }
+		if ipv4Only {
+			// 仅返回ipv4的ip
+			if ip.To4() != nil {
+				ipSlice = append(ipSlice, ip)
+			} else {
+				ipv6Flag = true
+			}
+		} else {
+			ipSlice = append(ipSlice, ip)
+		}
 	}
 
 	if ipv6Flag {
-		fmt.Println("[Info] IPv6 Traceroute is not supported right now.")
+		fmt.Println("[Info] IPv6 TCP/UDP Traceroute is not supported right now.")
 		if len(ipSlice) == 0 {
 			os.Exit(0)
 		}

@@ -2,16 +2,17 @@ package printer
 
 import (
 	"errors"
-	"github.com/xgadget-lab/nexttrace/ipgeo"
-	"github.com/xgadget-lab/nexttrace/trace"
-	"github.com/xgadget-lab/nexttrace/util"
 	"net"
 	"testing"
 	"time"
+
+	"github.com/xgadget-lab/nexttrace/ipgeo"
+	"github.com/xgadget-lab/nexttrace/trace"
+	"github.com/xgadget-lab/nexttrace/util"
 )
 
 func TestPrintTraceRouteNav(t *testing.T) {
-	PrintTraceRouteNav(util.DomainLookUp("1.1.1.1"), "1.1.1.1", "dataOrigin")
+	PrintTraceRouteNav(util.DomainLookUp("1.1.1.1", false), "1.1.1.1", "dataOrigin")
 }
 
 var testGeo = &ipgeo.IPGeoData{

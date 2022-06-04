@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"strings"
 	"time"
@@ -95,7 +96,14 @@ func main() {
 		*dataOrigin = configData.DataOrigin
 	}
 
-	ip := util.DomainLookUp(domain)
+	var ip net.IP
+
+	if *tcpSYNFlag || *udpPackageFlag {
+		ip = util.DomainLookUp(domain, true)
+	} else {
+		ip = util.DomainLookUp(domain, false)
+	}
+
 	printer.PrintTraceRouteNav(ip, domain, *dataOrigin)
 
 	var m trace.Method = ""
