@@ -1,5 +1,12 @@
 #!/bin/bash
 
+expert=False
+#是否开启全部选项
+if [[ $1 == "--expert" ]]; then
+  expert=True
+  echo "已开启全部选项"
+fi
+
 Green_font="\033[32m" && Red_font="\033[31m" && Font_suffix="\033[0m"
 Info="${Green_font}[Info]${Font_suffix}"
 Error="${Red_font}[Error]${Font_suffix}"
@@ -118,6 +125,12 @@ ask_update_script() {
 }
 
 check_mode() {
+
+  if [[ $expert != True ]] ; then
+    TRACECMD="nexttrace"
+    return;
+  fi
+  
   echo -e "${Info} Nexttrace目前支持以下三种协议发起Traceroute请求:\n1.ICMP\n2.TCP(速度最快,但部分节点不支持)\n3.UDP\n(IPv6暂只支持ICMP模式)" && read -r -p "输入数字以选择:" node
 
   while [[ ! "${node}" =~ ^[1-3]$ ]]; do
