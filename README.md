@@ -29,7 +29,8 @@ curl -Ls https://ghproxy.com/https://raw.githubusercontent.com/xgadget-lab/nextt
 
 ### Fast Test
 
-此脚本旨在快速测试服务器的到中国内地的线路，建议新手或者没有自定义`NextTrace`功能需求的用户使用。
+此脚本旨在快速测试服务器的到中国内地的线路，建议新手或者没有自定义`NextTrace`功能需求的用户使用。<br>
+由于目前精力有限，该脚本还处于测试阶段，慎用！(如有问题，请反馈)
 
 ```bash
 curl -Ls https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/quicklytest.sh -O && sudo bash quicklytest.sh
@@ -39,6 +40,7 @@ curl -Ls https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/quicklytes
 # GHPROXY镜像(在连接raw.githubusercontent.com网络不畅时使用)
 curl -Ls https://ghproxy.com/https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/quicklytest.sh -O && sudo bash quicklytest.sh
 ```
+备注：脚本当接受到`--expert`参数时可以更改为高阶模式。
 
 ### Get Started
 
