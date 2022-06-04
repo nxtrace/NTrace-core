@@ -27,21 +27,6 @@ curl -Ls https://ghproxy.com/https://raw.githubusercontent.com/xgadget-lab/nextt
 - `Release`里面为很多系统以及不同架构提供了编译好的二进制可执行文件，如果没有可以自行编译。
 - 一些本项目的必要依赖在`Windows`上`Golang`底层实现不完全，所以目前`NextTrace`在`Windows`平台不可用。
 
-### Fast Test
-
-此脚本旨在快速测试服务器的到中国内地的线路，建议新手或者没有自定义`NextTrace`功能需求的用户使用。<br>
-由于目前精力有限，该脚本还处于测试阶段，慎用！(如有问题，请反馈)
-
-```bash
-curl -Ls https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/quicklytest.sh -O && sudo bash quicklytest.sh
-```
-
-```bash
-# GHPROXY镜像(在连接raw.githubusercontent.com网络不畅时使用)
-curl -Ls https://ghproxy.com/https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/quicklytest.sh -O && sudo bash quicklytest.sh
-```
-备注：脚本当接受到`--expert`参数时可以更改为高阶模式。
-
 ### Get Started
 
 `NextTrace`默认使用`ICMP`协议发起`TraceRoute`请求，该协议同时支持`IPv4`和`IPv6`
@@ -180,6 +165,21 @@ Options:
 [waiting4new](https://github.com/waiting4new)
 
 [FFEE_CO](https://github.com/fkx4-p)
+
+### Fast Test
+
+此脚本旨在快速测试服务器的到中国内地的线路，建议新手或者没有自定义`NextTrace`功能需求的用户使用。<br>
+由于目前精力有限，该脚本还处于测试阶段，慎用！(如有问题，请反馈)
+
+```bash
+curl -Ls https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/quicklytest.sh -O && sudo bash quicklytest.sh
+```
+
+```bash
+# GHPROXY镜像(在连接raw.githubusercontent.com网络不畅时使用)
+curl -Ls https://ghproxy.com/https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/quicklytest.sh -O && sudo bash quicklytest.sh
+```
+备注：脚本当接受到`--expert`参数时可以更改为高阶模式。
 
 ## IP Database Copyright
 
