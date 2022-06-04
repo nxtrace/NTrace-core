@@ -1,9 +1,10 @@
 package config
 
 import (
-	"os"
-	"io/ioutil"
 	"fmt"
+	"io/ioutil"
+	"os"
+
 	"gopkg.in/yaml.v2"
 )
 
@@ -36,18 +37,46 @@ func writeFile(content []byte) error {
 		}
 	}
 
-	if err = ioutil.WriteFile(path + "ntraceConfig.yml", []byte(content), 0644); err != nil{
+	if err = ioutil.WriteFile(path+"ntraceConfig.yml", []byte(content), 0644); err != nil {
 		return err
 	}
 
 	return nil
 }
 
+func AutoGenerate() (*tracerConfig, error) {
+	token := Token{
+		LeoMoeAPI: "NextTraceDemo",
+		IPInfo:    "",
+	}
+
+	preference := Preference{
+		AlwaysRoutePath: false,
+	}
+
+	finalConfig := tracerConfig{
+		Token:      token,
+		Preference: preference,
+	}
+
+	yamlData, err := yaml.Marshal(&finalConfig)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if err = writeFile(yamlData); err != nil {
+		return nil, err
+	} else {
+		return &finalConfig, nil
+	}
+}
+
 func Generate() (*tracerConfig, error) {
 	var leotoken string
 	var iPInfoToken string
 	var routePathEnable string
-	
+
 	fmt.Println("这是一个配置向导，我们会帮助您生成配置文件，它是一次性的，除非您主动要求重新生成，否则它将不会再出现")
 
 	fmt.Println("请输入您的LeoMoeAPI Token，如果您没有，请到 Telegram Bot @NextTraceBot 获取一个")
@@ -82,8 +111,8 @@ func Generate() (*tracerConfig, error) {
 	yamlData, err := yaml.Marshal(&finalConfig)
 
 	if err != nil {
-        return nil, err
-    }
+		return nil, err
+	}
 
 	if err = writeFile(yamlData); err != nil {
 		return nil, err
