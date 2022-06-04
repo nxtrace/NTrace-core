@@ -51,7 +51,9 @@ func AutoGenerate() (*tracerConfig, error) {
 	}
 
 	preference := Preference{
-		AlwaysRoutePath: false,
+		AlwaysRoutePath:   false,
+		TablePrintDefault: false,
+		DataOrigin:        "LEOMOEAPI",
 	}
 
 	finalConfig := tracerConfig{
@@ -75,14 +77,14 @@ func AutoGenerate() (*tracerConfig, error) {
 func Generate() (*tracerConfig, error) {
 	var leotoken string
 	var iPInfoToken string
-	var routePathEnable string
+	var tmpInput string
 
-	fmt.Println("这是一个配置向导，我们会帮助您生成配置文件，它是一次性的，除非您主动要求重新生成，否则它将不会再出现")
+	fmt.Println("欢迎使用高阶自定义功能，这是一个配置向导，我们会帮助您生成配置文件。您的配置文件会被放在 ~/.nexttrace/ntraceConfig.yml 中，您也可以通过编辑这个文件来自定义配置。")
 
-	fmt.Println("请输入您的LeoMoeAPI Token，如果您没有，请到 Telegram Bot @NextTraceBot 获取一个")
+	fmt.Println("请输入您的LeoMoeAPI Token，您可以回车，以便继续使用公共Token")
 	fmt.Scanln(&leotoken)
 	if leotoken == "" {
-		fmt.Println("检测到您的输入为空，您将使用公共Token。这意味着您将和所有使用此Token的客户端共用每分钟150次IP查询的额度")
+		fmt.Println("检测到您的输入为空，您将使用公共Token。")
 		leotoken = "NextTraceDemo"
 	}
 
@@ -95,12 +97,47 @@ func Generate() (*tracerConfig, error) {
 	}
 
 	var preference Preference
-	fmt.Print("您是否希望在每次Traceroute结束后显示Route-Path图? (y/n)")
-	fmt.Scanln(&routePathEnable)
-	if routePathEnable == "n" || routePathEnable == "N" || routePathEnable == "no" || routePathEnable == "No" || routePathEnable == "NO" {
-		preference = Preference{AlwaysRoutePath: false}
+	var AlwaysRoutePath bool
+	var tablePrintDefault bool
+	var dataOrigin string
+	fmt.Print("我希望默认在路由跟踪完毕后，不绘制Route-Path图 (y/n) [y]")
+	fmt.Scanln(&tmpInput)
+	if tmpInput == "n" || tmpInput == "N" || tmpInput == "no" || tmpInput == "No" || tmpInput == "NO" {
+		AlwaysRoutePath = true
 	} else {
-		preference = Preference{AlwaysRoutePath: true}
+		AlwaysRoutePath = false
+	}
+
+	fmt.Print("我希望路由跟踪默认实时显示，而不使用制表模式 (y/n) [y]")
+	fmt.Scanln(&tmpInput)
+	if tmpInput == "n" || tmpInput == "N" || tmpInput == "no" || tmpInput == "No" || tmpInput == "NO" {
+		tablePrintDefault = true
+	} else {
+		tablePrintDefault = false
+	}
+
+	fmt.Println("请选择默认的IP地理位置API数据源：\n1. LeoMoe\n2. IPInfo\n3. IPInsight\n4. IP.SB\n5. IP-API.COM")
+	fmt.Print("请输入您的选择：")
+	fmt.Scanln(&tmpInput)
+	switch tmpInput {
+	case "1":
+		dataOrigin = "LEOMOEAPI"
+	case "2":
+		dataOrigin = "IPINFO"
+	case "3":
+		dataOrigin = "IPINSIGHT"
+	case "4":
+		dataOrigin = "IP.SB"
+	case "5":
+		dataOrigin = "IPAPI.COM"
+	default:
+		dataOrigin = "LEOMOEAPI"
+	}
+
+	preference = Preference{
+		AlwaysRoutePath:   AlwaysRoutePath,
+		TablePrintDefault: tablePrintDefault,
+		DataOrigin:        dataOrigin,
 	}
 
 	finalConfig := tracerConfig{
@@ -117,7 +154,7 @@ func Generate() (*tracerConfig, error) {
 	if err = writeFile(yamlData); err != nil {
 		return nil, err
 	} else {
-		fmt.Println("配置文件创建成功")
+		fmt.Println("配置文件已经更新，在下次路由跟踪时，将会使用您的偏好。")
 		return &finalConfig, nil
 	}
 }

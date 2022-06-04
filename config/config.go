@@ -3,8 +3,8 @@ package config
 import "os"
 
 type tracerConfig struct {
-    Token `yaml:"Token"`
-    Preference `yaml:"Preference"`
+	Token      `yaml:"Token"`
+	Preference `yaml:"Preference"`
 }
 
 type Token struct {
@@ -13,19 +13,23 @@ type Token struct {
 }
 
 type Preference struct {
-    AlwaysRoutePath bool `yaml:"AlwaysRoutePath"`
+	NoRDNS            bool   `yaml:"NoRDNS"`
+	DataOrigin        string `yaml:"DataOrigin"`
+	AlwaysRoutePath   bool   `yaml:"AlwaysRoutePath"`
+	TablePrintDefault bool   `yaml:"TablePrintDefault"`
+	TraceMethod       string `yaml:"TraceMethod"`
 }
 
 type configPath func() (string, error)
 
 func configFromRunDir() (string, error) {
-    return "./", nil
+	return "./", nil
 }
 
 func configFromUserHomeDir() (string, error) {
-    dir, err := os.UserHomeDir()
-    if err != nil {
-        return "", err
-    }
-    return dir + "/.nexttrace/", nil
+	dir, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return dir + "/.nexttrace/", nil
 }

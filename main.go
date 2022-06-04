@@ -24,8 +24,8 @@ var manualConfig = fSet.Bool("c", false, "Manual Config [Advanced]")
 var numMeasurements = fSet.Int("q", 3, "Set the number of probes per each hop.")
 var parallelRequests = fSet.Int("r", 18, "Set ParallelRequests number. It should be 1 when there is a multi-routing.")
 var maxHops = fSet.Int("m", 30, "Set the max number of hops (max TTL to be reached).")
-var dataOrigin = fSet.String("d", "LeoMoeAPI", "Choose IP Geograph Data Provider [LeoMoeAPI, IP.SB, IPInfo, IPInsight, IPAPI.com]")
-var noRdns = fSet.Bool("n", false, "Do not try to map IP address to host")
+var dataOrigin = fSet.String("d", "", "Choose IP Geograph Data Provider [LeoMoeAPI, IP.SB, IPInfo, IPInsight, IPAPI.com]")
+var noRdns = fSet.Bool("n", false, "Disable IP Reverse DNS lookup")
 var routePath = fSet.Bool("report", false, "Route Path")
 var tablePrint = fSet.Bool("table", false, "Output trace results as table")
 var ver = fSet.Bool("V", false, "Check Version")
@@ -80,13 +80,20 @@ func main() {
 	configData, err := config.Read()
 
 	// Initialize Default Config
-	if err != nil {
+	if err != nil || configData.DataOrigin == "" {
 		if configData, err = config.AutoGenerate(); err != nil {
 			log.Fatal(err)
 		}
 	}
 
+	// Set Token from Config
 	ipgeo.SetToken(configData.Token)
+
+	// Check Whether User has specified IP Geograph Data Provider
+	if *dataOrigin == "" {
+		// Use Default Data Origin with Config
+		*dataOrigin = configData.DataOrigin
+	}
 
 	ip := util.DomainLookUp(domain)
 	printer.PrintTraceRouteNav(ip, domain, *dataOrigin)
@@ -127,15 +134,13 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	if (*tcpSYNFlag && *udpPackageFlag) || *tablePrint {
+	if (*tcpSYNFlag && *udpPackageFlag) || *tablePrint || configData.TablePrintDefault {
 		printer.TracerouteTablePrinter(res)
 	} else if *tcpSYNFlag || *udpPackageFlag {
 		printer.TraceroutePrinter(res)
 	}
 
-	p := configData.Preference
-
-	if *routePath || p.AlwaysRoutePath {
+	if *routePath || configData.AlwaysRoutePath {
 		r := reporter.New(res, ip.String())
 		r.Print()
 	}
