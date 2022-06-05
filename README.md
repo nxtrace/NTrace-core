@@ -8,20 +8,16 @@
 
 一款开源的可视化路由跟踪工具，使用 Golang 开发。
 
-NextTrace 只是一个实验性项目，不推荐用于生产环境下。对于路由跟踪工具，我们依旧更加推荐 WorstTrace & Besttrace。
-
 ## How To Use
 
 ### Automated Install
 
 ```bash
-# Note: This Script Only Supports Linux/macOS, Other Unix-Like Systems are UNAVAILABLE
-curl -Ls https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/nt_install.sh -O && sudo bash nt_install.sh
-```
+# Linux 一键安装脚本
+bash <(curl -Ls https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/nt_install.sh)
 
-```bash
-# GHPROXY镜像(在连接raw.githubusercontent.com网络不畅时使用)
-curl -Ls https://ghproxy.com/https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/nt_install.sh -O && sudo bash nt_install.sh
+# GHPROXY 镜像（国内使用）
+bash <(curl -Ls https://ghproxy.com/https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/nt_install.sh)
 ```
 
 - `Release`里面为很多系统以及不同架构提供了编译好的二进制可执行文件，如果没有可以自行编译。
@@ -165,21 +161,6 @@ Options:
 [waiting4new](https://github.com/waiting4new)
 
 [FFEE_CO](https://github.com/fkx4-p)
-
-### Fast Test
-
-此脚本旨在快速测试服务器的到中国内地的线路，建议新手或者没有自定义`NextTrace`功能需求的用户使用。<br>
-由于目前精力有限，该脚本还处于测试阶段，慎用！(如有问题，请反馈)
-
-```bash
-curl -Ls https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/quicklytest.sh -O && sudo bash quicklytest.sh
-```
-
-```bash
-# GHPROXY镜像(在连接raw.githubusercontent.com网络不畅时使用)
-curl -Ls https://ghproxy.com/https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/quicklytest.sh -O && sudo bash quicklytest.sh
-```
-备注：脚本当接受到`--expert`参数时可以更改为高阶模式。
 
 ## IP Database Copyright
 
