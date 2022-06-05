@@ -85,7 +85,7 @@ downloadBinrayFile() {
     latestURL=$(curl -s https://api.github.com/repos/xgadget-lab/nexttrace/releases/latest | grep -i "browser_download_url.*${osDistribution}.*${archParam}" | awk -F '"' '{print $4}')
     
     if [ "$countryCode" == "CN" ]; then
-        echo "${Info} 检测到国内环境，正在使用镜像下载"
+        echo -e "${Info} 检测到国内环境，正在使用镜像下载"
         latestURL="https://ghproxy.com/"$latestURL
     fi
     
