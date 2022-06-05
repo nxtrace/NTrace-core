@@ -41,44 +41,6 @@ getLocation() {
     countryCode=$(curl -s "http://ip-api.com/line/?fields=countryCode")
 }
 
-installWgetPackage() {
-    echo -e "${Info} wget 正在安装中..."
-    # try apt
-    apt -h &> /dev/null
-    if [ $? -eq 0 ]; then
-    # 先更新一下数据源，有些机器数据源比较老可能会404
-    apt update -y &> /dev/null
-    apt install wget -y &> /dev/null
-    fi
-
-    # try yum
-    yum -h &> /dev/null
-    if [ $? -eq 0 ]; then
-    yum install wget -y &> /dev/null
-    fi
-
-    # try dnf
-    dnf -h &> /dev/null
-    if [ $? -eq 0 ]; then
-    dnf install wget -y &> /dev/null
-    fi
-
-    # try pacman
-    pacman -h &> /dev/null
-    if [ $? -eq 0 ]; then
-    pacman -Sy
-    pacman -S wget
-    fi
-
-}
-
-checkWgetPackage() {
-    wget -h &> /dev/null
-    if [ $? -ne 0 ]; then
-		installWgetPackage
-    fi
-}
-
 downloadBinrayFile() {
     echo -e "${Info} 获取最新版的 NextTrace 发行版文件信息"
     # 简单说明一下，Github提供了一个API，可以获取最新发行版本的二进制文件下载地址（对应的是browser_download_url），根据刚刚测得的osDistribution、archParam，获取对应的下载地址
@@ -90,7 +52,7 @@ downloadBinrayFile() {
     fi
     
     echo -e "${Info} 正在下载 NextTrace 二进制文件..."
-    wget -O ${Temp_path} ${latestURL} &> /dev/null
+    curl -o ${Temp_path} ${latestURL} &> /dev/null
     if [ $? -eq 0 ];
     then
     changeMode
@@ -117,7 +79,6 @@ runBinrayFileHelp() {
 checkRootPermit
 checkSystemDistribution
 checkSystemArch
-checkWgetPackage
 
 # Download Procedure
 getLocation
