@@ -159,8 +159,7 @@ Options:
 以下是我们推荐的排错流程：
 
 1. 查看是否为常见问题 -> [前往 Github Wiki](https://github.com/xgadget-lab/nexttrace/wiki/FAQ---%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98%E8%A7%A3%E7%AD%94)
-2. 不会软件的参数使用 -> [前往 Github Discussions](https://github.com/xgadget-lab/nexttrace/discussions)
-3. 疑似 BUG、或者功能建议 -> [前往 Github Issues](https://github.com/xgadget-lab/nexttrace/issues)
+2. 疑似 BUG、或者功能建议 -> [前往 Github Issues](https://github.com/xgadget-lab/nexttrace/issues)
 
 ## Thanks
 
