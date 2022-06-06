@@ -18,6 +18,9 @@ bash <(curl -Ls https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/nt_
 
 # GHPROXY 镜像（国内使用）
 bash <(curl -Ls https://ghproxy.com/https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/nt_install.sh)
+
+# macOS brew 安装命令
+brew tap xgadget-lab/nexttrace && brew install nexttrace
 ```
 
 - `Release`里面为很多系统以及不同架构提供了编译好的二进制可执行文件，如果没有可以自行编译。
