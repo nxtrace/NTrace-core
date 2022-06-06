@@ -108,6 +108,7 @@ func (f *FastTracer) testEDU() {
 	f.tracert(TestIPsCollection.Hefei.Location, TestIPsCollection.Hefei.EDU)
 	// 科技网暂时算在EDU里面，等拿到了足够多的数据再分离出去，单独用于测试
 	f.tracert(TestIPsCollection.Hefei.Location, TestIPsCollection.Hefei.CST)
+	f.tracert(TestIPsCollection.Changsha.Location, TestIPsCollection.Changsha.EDU)
 }
 
 func FastTest(tm bool) {

@@ -6,6 +6,7 @@ type AllLocationCollection struct {
 	Guangzhou BackBoneCollection
 	Hangzhou  BackBoneCollection
 	Hefei     BackBoneCollection
+	Changsha  BackBoneCollection
 }
 
 type BackBoneCollection struct {
@@ -39,6 +40,7 @@ var TestIPsCollection = AllLocationCollection{
 	Guangzhou: Guangzhou,
 	Hangzhou:  Hangzhou,
 	Hefei:     Hefei,
+	Changsha:  Changsha,
 }
 
 var Beijing = BackBoneCollection{
@@ -147,5 +149,14 @@ var Hefei = BackBoneCollection{
 	CST: ISPCollection{
 		ISPName: "中国科学技术大学 科技网 AS7497",
 		IP:      "210.72.22.2",
+	},
+}
+
+var Changsha = BackBoneCollection{
+	Location: "长沙",
+	// 中南大学 教育网
+	EDU: ISPCollection{
+		ISPName: EDU,
+		IP:      "202.197.61.221",		
 	},
 }
