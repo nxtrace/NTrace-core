@@ -28,7 +28,7 @@ brew tap xgadget-lab/nexttrace && brew install nexttrace
 
 ### Get Started
 
-`NextTrace`默认使用`ICMP`协议发起`TraceRoute`请求，该协议同时支持`IPv4`和`IPv6`
+`NextTrace` 默认使用`ICMP`协议发起`TraceRoute`请求，该协议同时支持`IPv4`和`IPv6`
 
 ```bash
 # IPv4 ICMP Trace
@@ -41,7 +41,16 @@ nexttrace -table 1.0.0.1
 nexttrace 2606:4700:4700::1111
 ```
 
-`NextTrace`也可以使用`TCP`和`UDP`协议发起`Traceroute`请求，不过目前只支持`IPv4`
+`NextTrace` 现已经支持快速测试，有一次性测试回程路由需求的朋友可以使用
+```bash
+# 北上广（电信+联通+移动+教育网）IPv4 ICMP 快速测试
+nexttrace -f
+
+# 也可以使用 TCP SYN 而非 ICMP 进行测试
+nexttrace -f -T
+```
+
+`NextTrace` 也可以使用`TCP`和`UDP`协议发起`Traceroute`请求，不过目前只支持`IPv4`
 
 ```bash
 # TCP SYN Trace
