@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/xgadget-lab/nexttrace/config"
+	fastTrace "github.com/xgadget-lab/nexttrace/fast_trace"
 	"github.com/xgadget-lab/nexttrace/ipgeo"
 	"github.com/xgadget-lab/nexttrace/printer"
 	"github.com/xgadget-lab/nexttrace/reporter"
@@ -18,6 +19,7 @@ import (
 )
 
 var fSet = flag.NewFlagSet("", flag.ExitOnError)
+var fastTest = fSet.Bool("f", false, "One-Key Fast Traceroute")
 var tcpSYNFlag = fSet.Bool("T", false, "Use TCP SYN for tracerouting (default port is 80)")
 var udpPackageFlag = fSet.Bool("U", false, "Use UDP Package for tracerouting (default port is 53 in UDP)")
 var port = fSet.Int("p", 80, "Set SYN Traceroute Port")
@@ -44,6 +46,8 @@ func flagApply() string {
 	if len(os.Args) < 2 {
 		printArgHelp()
 	}
+
+	// flag parse
 	if !strings.HasPrefix(os.Args[1], "-") {
 		target = os.Args[1]
 		fSet.Parse(os.Args[2:])
@@ -52,6 +56,7 @@ func flagApply() string {
 		target = fSet.Arg(0)
 	}
 
+	// Print Version
 	if *ver {
 		os.Exit(0)
 	}
@@ -61,6 +66,12 @@ func flagApply() string {
 		if _, err := config.Generate(); err != nil {
 			log.Fatal(err)
 		}
+		os.Exit(0)
+	}
+
+	// -f Fast Test
+	if *fastTest {
+		fastTrace.FastTest(*tcpSYNFlag)
 		os.Exit(0)
 	}
 
