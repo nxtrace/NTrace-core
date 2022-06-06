@@ -82,6 +82,7 @@ func (f *FastTracer) testCT() {
 	f.tracert(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.CT163)
 	f.tracert(TestIPsCollection.Shanghai.Location, TestIPsCollection.Shanghai.CT163)
 	f.tracert(TestIPsCollection.Shanghai.Location, TestIPsCollection.Shanghai.CTCN2)
+	f.tracert(TestIPsCollection.Hangzhou.Location, TestIPsCollection.Hangzhou.CT163)
 	f.tracert(TestIPsCollection.Guangzhou.Location, TestIPsCollection.Guangzhou.CT163)
 }
 
@@ -89,18 +90,24 @@ func (f *FastTracer) testCU() {
 	f.tracert(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.CU169)
 	f.tracert(TestIPsCollection.Shanghai.Location, TestIPsCollection.Shanghai.CU169)
 	f.tracert(TestIPsCollection.Shanghai.Location, TestIPsCollection.Shanghai.CU9929)
+	f.tracert(TestIPsCollection.Hangzhou.Location, TestIPsCollection.Hangzhou.CU169)
 	f.tracert(TestIPsCollection.Guangzhou.Location, TestIPsCollection.Guangzhou.CU169)
 }
 
 func (f *FastTracer) testCM() {
 	f.tracert(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.CM)
 	f.tracert(TestIPsCollection.Shanghai.Location, TestIPsCollection.Shanghai.CM)
+	f.tracert(TestIPsCollection.Hangzhou.Location, TestIPsCollection.Hangzhou.CM)
 	f.tracert(TestIPsCollection.Guangzhou.Location, TestIPsCollection.Guangzhou.CM)
 }
 
 func (f *FastTracer) testEDU() {
 	f.tracert(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.EDU)
 	f.tracert(TestIPsCollection.Shanghai.Location, TestIPsCollection.Shanghai.EDU)
+	f.tracert(TestIPsCollection.Hangzhou.Location, TestIPsCollection.Hangzhou.EDU)
+	f.tracert(TestIPsCollection.Hefei.Location, TestIPsCollection.Hefei.EDU)
+	// 科技网暂时算在EDU里面，等拿到了足够多的数据再分离出去，单独用于测试
+	f.tracert(TestIPsCollection.Hefei.Location, TestIPsCollection.Hefei.CST)
 }
 
 func FastTest(tm bool) {
