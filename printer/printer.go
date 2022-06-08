@@ -62,9 +62,6 @@ func formatIpGeoData(ip string, data *ipgeo.IPGeoData) string {
 		if data.Owner == "" {
 			data.Owner = data.Isp
 		}
-		if data.District != "" {
-			data.City = data.City + ", " + data.District
-		}
 		if data.Prov == "" && data.City == "" {
 			// anyCast或是骨干网数据不应该有国家信息
 			data.Owner = data.Owner + ", " + data.Owner
