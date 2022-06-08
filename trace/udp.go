@@ -53,13 +53,26 @@ func (t *UDPTracer) Execute() (*Result, error) {
 
 	t.sem = semaphore.NewWeighted(int64(t.ParallelRequests))
 	for ttl := 1; ttl <= t.MaxHops; ttl++ {
+		// 如果到达最终跳，则退出
+		if t.final != -1 && ttl > t.final {
+			break
+		}
 		for i := 0; i < t.NumMeasurements; i++ {
 			t.wg.Add(1)
 			go t.send(ttl)
-		}
-	}
 
-	t.wg.Wait()
+		}
+		if t.RealtimePrinter != nil {
+			// 对于实时模式，应该按照TTL进行并发请求
+			t.wg.Wait()
+			t.RealtimePrinter(&t.res, ttl-1)
+		}
+		time.Sleep(1 * time.Millisecond)
+	}
+	// 如果是表格模式，则一次性并发请求
+	if t.RealtimePrinter == nil {
+		t.wg.Wait()
+	}
 	t.res.reduce(t.final)
 
 	return &t.res, nil
