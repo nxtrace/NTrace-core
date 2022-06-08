@@ -115,7 +115,7 @@ func main() {
 		Timeout:          1 * time.Second,
 	}
 
-	if m == trace.ICMPTrace && !*tablePrint {
+	if !*tablePrint {
 		conf.RealtimePrinter = printer.RealtimePrinter
 	}
 
@@ -125,10 +125,8 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	if (*tcpSYNFlag && *udpPackageFlag) || *tablePrint {
+	if *tablePrint {
 		printer.TracerouteTablePrinter(res)
-	} else if *tcpSYNFlag || *udpPackageFlag {
-		printer.TraceroutePrinter(res)
 	}
 
 	if *routePath {
