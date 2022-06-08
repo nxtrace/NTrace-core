@@ -40,7 +40,6 @@ var TestIPsCollection = AllLocationCollection{
 	Guangzhou: Guangzhou,
 	Hangzhou:  Hangzhou,
 	Hefei:     Hefei,
-	Changsha:  Changsha,
 }
 
 var Beijing = BackBoneCollection{
@@ -108,7 +107,7 @@ var Guangzhou = BackBoneCollection{
 
 	CU169: ISPCollection{
 		ISPName: CU169,
-		IP:      "123.125.96.156",
+		IP:      "157.18.0.22",
 	},
 
 	CM: ISPCollection{
@@ -149,14 +148,5 @@ var Hefei = BackBoneCollection{
 	CST: ISPCollection{
 		ISPName: "中国科学技术大学 科技网 AS7497",
 		IP:      "210.72.22.2",
-	},
-}
-
-var Changsha = BackBoneCollection{
-	Location: "长沙",
-	// 中南大学 教育网
-	EDU: ISPCollection{
-		ISPName: EDU,
-		IP:      "202.197.61.221",		
 	},
 }

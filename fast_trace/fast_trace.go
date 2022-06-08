@@ -6,15 +6,12 @@ import (
 	"net"
 	"time"
 
-	"github.com/xgadget-lab/nexttrace/config"
 	"github.com/xgadget-lab/nexttrace/ipgeo"
 	"github.com/xgadget-lab/nexttrace/printer"
-	"github.com/xgadget-lab/nexttrace/reporter"
 	"github.com/xgadget-lab/nexttrace/trace"
 )
 
 type FastTracer struct {
-	Preference       config.Preference
 	TracerouteMethod trace.Method
 }
 
@@ -28,8 +25,8 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 		MaxHops:          30,
 		NumMeasurements:  3,
 		ParallelRequests: 18,
-		RDns:             !f.Preference.NoRDNS,
-		IPGeoSource:      ipgeo.GetSource(f.Preference.DataOrigin),
+		RDns:             true,
+		IPGeoSource:      ipgeo.GetSource("LeoMoeAPI"),
 		Timeout:          1 * time.Second,
 	}
 
@@ -45,29 +42,6 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 
 	if f.TracerouteMethod == trace.TCPTrace {
 		printer.TracerouteTablePrinter(res)
-	}
-
-	if f.Preference.AlwaysRoutePath {
-		r := reporter.New(res, ip.String())
-		r.Print()
-	}
-}
-
-func initialize() *FastTracer {
-	configData, err := config.Read()
-
-	// Initialize Default Config
-	if err != nil || configData.DataOrigin == "" {
-		if configData, err = config.AutoGenerate(); err != nil {
-			log.Fatal(err)
-		}
-	}
-
-	// Set Token from Config
-	ipgeo.SetToken(configData.Token)
-
-	return &FastTracer{
-		Preference: configData.Preference,
 	}
 }
 
@@ -108,7 +82,6 @@ func (f *FastTracer) testEDU() {
 	f.tracert(TestIPsCollection.Hefei.Location, TestIPsCollection.Hefei.EDU)
 	// 科技网暂时算在EDU里面，等拿到了足够多的数据再分离出去，单独用于测试
 	f.tracert(TestIPsCollection.Hefei.Location, TestIPsCollection.Hefei.CST)
-	f.tracert(TestIPsCollection.Changsha.Location, TestIPsCollection.Changsha.EDU)
 }
 
 func FastTest(tm bool) {
@@ -118,7 +91,7 @@ func FastTest(tm bool) {
 	fmt.Print("请选择选项：")
 	fmt.Scanln(&c)
 
-	ft := initialize()
+	ft := FastTracer{}
 
 	if !tm {
 		ft.TracerouteMethod = trace.ICMPTrace
