@@ -20,9 +20,17 @@ func IPInfo(ip string) (*IPGeoData, error) {
 
 	res := gjson.ParseBytes(body)
 
+	var country string
+
+	if res.Get("country").String() == "HK" || res.Get("country").String() == "TW" {
+		country = "CN"
+	}
+
 	return &IPGeoData{
-		Country: res.Get("country").String(),
-		City:    res.Get("city").String(),
-		Prov:    res.Get("region").String(),
+		Asnumber: res.Get("asn").Get("asn").String(),
+		Country:  country,
+		City:     res.Get("city").String(),
+		Prov:     res.Get("region").String(),
+		Isp:      res.Get("asn").Get("domain").String(),
 	}, nil
 }
