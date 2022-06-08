@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/xgadget-lab/nexttrace/config"
 	fastTrace "github.com/xgadget-lab/nexttrace/fast_trace"
 	"github.com/xgadget-lab/nexttrace/ipgeo"
 	"github.com/xgadget-lab/nexttrace/printer"
@@ -23,7 +22,6 @@ var fastTest = fSet.Bool("f", false, "One-Key Fast Traceroute")
 var tcpSYNFlag = fSet.Bool("T", false, "Use TCP SYN for tracerouting (default port is 80)")
 var udpPackageFlag = fSet.Bool("U", false, "Use UDP Package for tracerouting (default port is 53 in UDP)")
 var port = fSet.Int("p", 80, "Set SYN Traceroute Port")
-var manualConfig = fSet.Bool("c", false, "Manual Config [Advanced]")
 var numMeasurements = fSet.Int("q", 3, "Set the number of probes per each hop.")
 var parallelRequests = fSet.Int("r", 18, "Set ParallelRequests number. It should be 1 when there is a multi-routing.")
 var maxHops = fSet.Int("m", 30, "Set the max number of hops (max TTL to be reached).")
@@ -31,7 +29,7 @@ var dataOrigin = fSet.String("d", "", "Choose IP Geograph Data Provider [LeoMoeA
 var noRdns = fSet.Bool("n", false, "Disable IP Reverse DNS lookup")
 var routePath = fSet.Bool("report", false, "Route Path")
 var tablePrint = fSet.Bool("table", false, "Output trace results as table")
-var ver = fSet.Bool("V", false, "Check Version")
+var ver = fSet.Bool("V", false, "Print Version")
 
 func printArgHelp() {
 	fmt.Println("\nArgs Error\nUsage : 'nexttrace [option...] HOSTNAME' or 'nexttrace HOSTNAME [option...]'\nOPTIONS: [-VTU] [-d DATAORIGIN.STR ] [ -m TTL ] [ -p PORT ] [ -q PROBES.COUNT ] [ -r PARALLELREQUESTS.COUNT ] [-rdns] [ -table ] -report")
@@ -61,14 +59,6 @@ func flagApply() string {
 		os.Exit(0)
 	}
 
-	// Advanced Config
-	if *manualConfig {
-		if _, err := config.Generate(); err != nil {
-			log.Fatal(err)
-		}
-		os.Exit(0)
-	}
-
 	// -f Fast Test
 	if *fastTest {
 		fastTrace.FastTest(*tcpSYNFlag)
@@ -87,24 +77,6 @@ func main() {
 
 	if os.Getuid() != 0 {
 		log.Fatalln("Traceroute requires root/sudo privileges.")
-	}
-
-	configData, err := config.Read()
-
-	// Initialize Default Config
-	if err != nil || configData.DataOrigin == "" {
-		if configData, err = config.AutoGenerate(); err != nil {
-			log.Fatal(err)
-		}
-	}
-
-	// Set Token from Config
-	ipgeo.SetToken(configData.Token)
-
-	// Check Whether User has specified IP Geograph Data Provider
-	if *dataOrigin == "" {
-		// Use Default Data Origin with Config
-		*dataOrigin = configData.DataOrigin
 	}
 
 	var ip net.IP
@@ -140,7 +112,7 @@ func main() {
 		ParallelRequests: *parallelRequests,
 		RDns:             !*noRdns,
 		IPGeoSource:      ipgeo.GetSource(*dataOrigin),
-		Timeout:          2 * time.Second,
+		Timeout:          1 * time.Second,
 	}
 
 	if m == trace.ICMPTrace && !*tablePrint {
@@ -153,13 +125,13 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	if (*tcpSYNFlag && *udpPackageFlag) || *tablePrint || configData.TablePrintDefault {
+	if (*tcpSYNFlag && *udpPackageFlag) || *tablePrint {
 		printer.TracerouteTablePrinter(res)
 	} else if *tcpSYNFlag || *udpPackageFlag {
 		printer.TraceroutePrinter(res)
 	}
 
-	if *routePath || configData.AlwaysRoutePath {
+	if *routePath {
 		r := reporter.New(res, ip.String())
 		r.Print()
 	}
