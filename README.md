@@ -195,6 +195,8 @@ https://github.com/OwO-Network/nexttrace-enhanced
 | 电信/联通/移动 | 骨干网 | NextTrace | 10%  |
 | 电信/联通/移动 | 城域网 | 埃文科技  | 90%  |
 
+另：。尽管我们多名志愿者通过自己的网络进行了大量的勘测，但是由于信息不足，依旧可能存在很多错误。如需更高精度，我们依旧认为IPIP.NET，以及Besttrace是目前最好的数据库/软件。
+
 #### WorldWide
 
 |   ISP   |  类型  |  数据源   | 占比 |
