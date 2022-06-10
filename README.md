@@ -4,9 +4,11 @@
 
 </div>
 
-# NextTrace
+# NextTrace Lite
 
-一款开源的可视化路由跟踪工具，使用 Golang 开发。
+一款追求轻量的开源可视化路由跟踪工具，使用 Golang 开发。
+
+NextTrace 一共有2个版本，专注于轻量的 Lite 版本以及更面向发烧友的 [Enhanced 版本](#nexttrace-enhanced)。
 
 ## How To Use
 
@@ -151,6 +153,15 @@ Options:
 <img src=asset/screenshot.png alt="NextTrace Screenshot" height="688" />
 
 </div>
+
+
+## NextTrace Enhanced
+
+`NextTrace Enhanced` 是面向发烧友的增强版，`Enhanced`提供Web API形式的路由跟踪调用，以及一个简单的自带可视化的Looking Glass网页。
+
+`Enhanced` 版本支持很多`lite`版本没有的功能，如能够自定义设置超时时间，也能指定TTL作为起点进行路由跟踪等，对于普通用户来说，通常`lite`版本已经足够完成大部分需要。
+
+https://github.com/OwO-Network/nexttrace-enhanced
 
 ## FAQ 常见问题
 
