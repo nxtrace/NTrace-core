@@ -17,8 +17,14 @@ func LeoIP(ip string) (*IPGeoData, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	res := gjson.ParseBytes(body)
+
+	if res.Get("Message").String() != "" {
+		return &IPGeoData{
+			Country: res.Get("Message").String(),
+		}, nil
+	}
+
 	return &IPGeoData{
 		Asnumber: res.Get("asnumber").String(),
 		Country:  res.Get("country").String(),
