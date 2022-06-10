@@ -21,7 +21,7 @@ func LeoIP(ip string) (*IPGeoData, error) {
 
 	if res.Get("Message").String() != "" {
 		return &IPGeoData{
-			Prov: res.Get("Message").String(),
+			Asnumber: res.Get("Message").String(),
 		}, nil
 	}
 
