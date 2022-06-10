@@ -16,6 +16,7 @@ var (
 )
 
 type Config struct {
+	BeginHop         int
 	MaxHops          int
 	NumMeasurements  int
 	ParallelRequests int

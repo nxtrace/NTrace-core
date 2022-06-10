@@ -20,6 +20,7 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 	fmt.Printf("traceroute to %s, 30 hops max, 32 byte packets\n", ispCollection.IP)
 	ip := net.ParseIP(ispCollection.IP)
 	var conf = trace.Config{
+		BeginHop:         1,
 		DestIP:           ip,
 		DestPort:         80,
 		MaxHops:          30,

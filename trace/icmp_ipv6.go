@@ -44,7 +44,7 @@ func (t *ICMPTracerv6) Execute() (*Result, error) {
 
 	go t.listenICMP()
 
-	for ttl := 1; ttl <= t.MaxHops; ttl++ {
+	for ttl := t.BeginHop; ttl <= t.MaxHops; ttl++ {
 		if t.final != -1 && ttl > t.final {
 			break
 		}

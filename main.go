@@ -29,6 +29,7 @@ var dataOrigin = fSet.String("d", "LeoMoeAPI", "Choose IP Geograph Data Provider
 var noRdns = fSet.Bool("n", false, "Disable IP Reverse DNS lookup")
 var routePath = fSet.Bool("report", false, "Route Path")
 var tablePrint = fSet.Bool("table", false, "Output trace results as table")
+var beginHop = fSet.Int("b", 1, "Set The Begin TTL")
 var ver = fSet.Bool("V", false, "Print Version")
 
 func printArgHelp() {
@@ -105,6 +106,7 @@ func main() {
 	}
 
 	var conf = trace.Config{
+		BeginHop:         *beginHop,
 		DestIP:           ip,
 		DestPort:         *port,
 		MaxHops:          *maxHops,
