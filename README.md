@@ -4,7 +4,7 @@
 
 </div>
 
-# NextTrace Lite
+## NextTrace Lite
 
 一款追求轻量的开源可视化路由跟踪工具，使用 Golang 开发。
 
