@@ -148,12 +148,7 @@ Options:
 
 ## 项目截图
 
-<div align="center">
-
-<img src="asset/screenshot.png" alt="NextTrace Screenshot" height="688" />
-
-</div>
-
+![NextTrace Screenshot](asset/screenshot.png)  
 
 ## NextTrace Enhanced
 
