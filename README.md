@@ -10,11 +10,11 @@ Document Language: English | [简体中文](README_zh_CN.md)
 
 An open source visual routing tool that pursues light weight, developed using Golang.
 
-NextTrace has a total of 2 versions, focusing on the lightweight Lite version and the more enthusiast-oriented [Enhanced version](#nexttrace-enhanced).
+NextTrace has a total of 2 versions, the Lite version focusing on lightweight and the [Enhanced version](#nexttrace-enhanced) which is more enthusiast-oriented.
 
 ## How To Use
 
-### Automated Install
+### Automated Installation
 
 ```bash
 # Linux one-click install script
@@ -24,12 +24,12 @@ bash <(curl -Ls https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/nt_
 brew tap xgadget-lab/nexttrace && brew install nexttrace
 ```
 
-- `Release` provides compiled binary executable files for many systems and different architectures, if not, you can compile it yourself.
+- `Release` provides compiled executables for many systems and architectures, if not, you can compile it yourself.
 - Some of the necessary dependencies of this project are not fully implemented in `Golang` on `Windows`, so currently `NextTrace` is not available on `Windows` platform.
 
 ### Get Started
 
-`NextTrace` uses the `ICMP` protocol to initiate TraceRoute requests by default, which supports both `IPv4` and `IPv6`
+`NextTrace` uses the `ICMP` protocol to perform TraceRoute requests by default, which supports both `IPv4` and `IPv6`
 
 ```bash
 # IPv4 ICMP Trace
@@ -42,7 +42,8 @@ nexttrace -table 1.0.0.1
 nexttrace 2606:4700:4700::1111
 ```
 
-`NextTrace` now supports quick testing (for Chinese Users), and friends who have a one-time test backhaul routing requirement can use it
+`NextTrace` now supports quick testing, and friends who have a one-time backhaul routing test requirement can use it
+
 ```bash
 # IPv4 ICMP Fast Test (Beijing + Shanghai + Guangzhou + Hangzhou) in China Telecom / Unicom / Mobile / Education Network
 nexttrace -f
@@ -51,7 +52,7 @@ nexttrace -f
 nexttrace -f -T
 ```
 
-`NextTrace` can also use `TCP` and `UDP` protocols to initiate `Traceroute` requests, but currently only supports `IPv4`
+`NextTrace` can also use `TCP` and `UDP` protocols to perform `Traceroute` requests, but these protocols only supports `IPv4` now
 
 ```bash
 # TCP SYN Trace
@@ -66,16 +67,16 @@ nexttrace -U 1.0.0.1
 nexttrace -U -p 53 1.0.0.1
 ```
 
-`NextTrace` also supports some advanced functions, such as IP reverse resolution, concurrency control, mode switching, etc.
+`NextTrace` also supports some advanced functions, such as IP reverse parsing, concurrent probe packet count control, mode switching, etc.
 
 ```bash
 # Send 2 probe packets per hop
 nexttrace -q 2 www.hkix.net
 
-# No concurrency, only one probe packet is sent at a time
+# No concurrent probe packets, only one probe packet is sent at a time
 nexttrace -r 1 www.hkix.net
 
-# Turn on the IP reverse resolution function, which is very helpful in positioning the IPv6 backbone network
+# Turn on the IP reverse parsing function, which is very helpful in positioning the IPv6 backbone network
 nexttrace -rdns www.bbix.net
 
 # Feature: print Route-Path diagram
@@ -90,18 +91,18 @@ nexttrace -rdns www.bbix.net
 nexttrace -report www.time.com.my
 ```
 
-`NextTrace` supports users to choose their own IP API (currently: `LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`)
+`NextTrace` supports users to select their own IP API (currently supports: `LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`)
 
 ```bash
-# You can specify the IP database by yourself [IP.SB here], if not specified, the default is LeoMoeAPI
+# You can specify the IP database by yourself [IP.SB here], if not specified, LeoMoeAPI will be used
 nexttrace -d IP.SB
-## Special: The ipinfo API needs to purchase services from ipinfo. If necessary, you can clone this project and add the token provided by it to compile it yourself
-## TOKEN fill in the path: ipgeo/tokens.go
-## In addition: Due to the serious abuse of IP.SB, there will often be problems that cannot be queried, please be aware.
-## IPAPI.com restricts calls more strictly, if you can't find it, please try again in a few minutes.
+## Note that the ipinfo API needs users to purchase services from ipinfo. If necessary, you can clone this project, add the token provided by ipinfo and compile it yourself
+## Fill the token to: ipgeo/tokens.go
+## Please be aware: Due to the serious abuse of IP.SB, you will often be not able to query IP data from this source
+## IPAPI.com has a stricter restiction on API calls, if you can't query IP data from this source, please try again in a few minutes.
 ```
 
-`NextTrace` supports parameter mixing
+`NextTrace` supports mixed parameters
 
 ```bash
 Example:
@@ -111,13 +112,13 @@ nexttrace -T -q 2 -r 1 -rdns -table -report 2001:4860:4860::8888
 
 ### IP Database
 
-The currently used IP database defaults to our own API service. If we encounter abuse later, we may choose to close it.
+The IP database is set to our own API service by default. If we encounter abuse, we may choose to close it.
 
-We will also open the source code of the server in the later stage, and you can also build your own API server according to the source code of the project.
+We will also open-source the source code of the server in the near future, therefore you can also build your own API server according to the source code of the project by then.
 
 All NextTrace IP geolocation `API DEMO` can refer to [here](https://github.com/xgadget-lab/nexttrace/blob/main/ipgeo/)
 
-### For full usage, please refer to the Usage menu
+### For full usage list, please refer to the usage menu
 
 ```shell
 Usage of nexttrace:
@@ -142,7 +143,6 @@ Options:
         Output trace results as table
   -report
         Route Path
-
 ```
 
 ## Project screenshot
@@ -151,22 +151,22 @@ Options:
 
 ## NextTrace Enhanced
 
-`NextTrace Enhanced` is an enhanced version for enthusiasts, `Enhanced` provides trace route calls in the form of Web API, and a simple Looking Glass webpage with built-in visualization.
+`NextTrace Enhanced` is an enhanced version for enthusiasts, `Enhanced` provides trace route calls in the form of Web API and a simple Looking Glass webpage with built-in visualization.
 
-The `Enhanced` version supports many functions that the `lite` version does not have, such as the ability to customize the timeout period, and the ability to specify TTL as the starting point for route tracking, etc. For ordinary users, the `lite` version is usually enough to complete most of the needs.
+The `Enhanced` version supports many functions that the `lite` version does not have, such as the ability to customize the timeout period, and the ability to specify TTL as the starting point for route tracking, etc. For ordinary users, the `lite` version is usually enough.
 
 https://github.com/OwO-Network/nexttrace-enhanced
 
 ## FAQ Frequently Asked Questions
 
-If you have problems installing or using it, we recommend that you do not create an `issue` as a preference
+If you encounter problems while installing or using it, we do not recommend you to choose creating an `issue` as a preference
 
 Here is our recommended troubleshooting process:
 
-1. Check if it is a FAQ -> [Go to Github Wiki](https://github.com/xgadget-lab/nexttrace/wiki/FAQ---%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98%E8%A7%A3%E7%AD%94)
-2. Suspected bug, or feature suggestion -> [Go to Github Issues](https://github.com/xgadget-lab/nexttrace/issues)
+1. Check if it is already in FAQ -> [Go to Github Wiki](https://github.com/xgadget-lab/nexttrace/wiki/FAQ---%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98%E8%A7%A3%E7%AD%94)
+2. Suspected bug or feature suggestion -> [Go to Github Issues](https://github.com/xgadget-lab/nexttrace/issues)
 
-## Thanks
+## Credits
 
 [Vincent Young](https://github.com/missuo) (i@yyt.moe)
 
@@ -184,34 +184,33 @@ Here is our recommended troubleshooting process:
 
 #### China
 
-| ISP | Type | Data Source | Proportion |
-| :------------: | :----: | :-------: | :--: |
-| China Telecom/Unicom/Mobile | Backbone | Internet Enthusiasts | 10% |
-| China Telecom/Unicom/Mobile | Local | Avon Technology | 90% |
+| ISP                         | Type     | Data Source          | Proportion |
+|:---------------------------:|:--------:|:--------------------:|:----------:|
+| China Telecom/Unicom/Mobile | Backbone | Internet Enthusiasts | 10%        |
+| China Telecom/Unicom/Mobile | Local    | Avon Technology      | 90%        |
 
 #### WorldWide
 
-| ISP | Type | Data Source | Proportion |
-| :-----: | :----: | :-------: | :--: |
-| Tier-01 | Backbone | IPInfo | 2% |
-| Tier-01 | Backbone | Avon Technology | 3% |
-| Tier-01 | Backbone | IPInSight | 5% |
-| Tier-01 | Local | IPInSight | 90% |
+| ISP     | Type     | Data Source     | Proportion |
+|:-------:|:--------:|:---------------:|:----------:|
+| Tier-01 | Backbone | IPInfo          | 2%         |
+| Tier-01 | Backbone | Avon Technology | 3%         |
+| Tier-01 | Backbone | IPInSight       | 5%         |
+| Tier-01 | Local    | IPInSight       | 90%        |
 
-
-| ISP | Type | Data Source | Proportion |
-| :----: | :----: | :-------: | :--: |
-| Others | Backbone | IPInSight | 5% |
-| Others | Local | IPInSight | 95% |
+| ISP    | Type     | Data Source | Proportion |
+|:------:|:--------:|:-----------:|:----------:|
+| Others | Backbone | IPInSight   | 5%         |
+| Others | Local    | IPInSight   | 95%        |
 
 ### IPv6 Database
 
-| ISP | Type | Data Source | Proportion |
-| :-: | :--: | :-------------: | :--: |
-| All | All | IP2Location Lite | 100% |
+| ISP | Type | Data Source      | Proportion |
+|:---:|:----:|:----------------:|:----------:|
+| All | All  | IP2Location Lite | 100%       |
 
 This product includes IP2Location LITE data available from <a href="https://lite.ip2location.com">https://lite.ip2location.com</a>.
 
 ### Others
 
-Although other third-party APIs are integrated in this project, please refer to the official website of the third-party API for the specific TOS and AUP. If you encounter IP data errors, please contact them directly to correct them.
+Although other third-party APIs are integrated in this project, please refer to the official website of the third-party APIs for specific TOS and AUP. If you encounter IP data errors, please contact them directly to correct them.
