@@ -14,7 +14,7 @@ jobs:
           go-version: "1.18"
 
       - name: Test
-        run: go test -v -coverprofile='coverage.out' -covermode=count ./...
+        run: sudo go test -v -coverprofile='coverage.out' -covermode=count ./...
 
   Build:
     needs: test
