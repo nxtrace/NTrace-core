@@ -2,8 +2,10 @@ package printer
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 
+	"github.com/xgadget-lab/nexttrace/ipgeo"
 	"github.com/xgadget-lab/nexttrace/trace"
 )
 
@@ -63,7 +65,8 @@ func makeHopsType(res *trace.Result, ttl int) map[int]HopInfo {
 	// 创建一个字典，存放所有当前TTL的跃点类型集合
 	hopProbesMap := make(map[int]HopInfo)
 	for i := range res.Hops[ttl] {
-		if res.Hops[ttl][i].Address != nil {
+		// 判断是否Hops以及Geo结构体已经初始化
+		if res.Hops[ttl][i].Address != nil && reflect.DeepEqual(res.Hops[ttl][i].Geo, ipgeo.IPGeoData{}) {
 			if availableTTL := findLatestAvailableHop(res, ttl, i); availableTTL != -1 {
 				switch {
 				case strings.Contains(res.Hops[ttl][i].Geo.District, "IXP") || strings.Contains(strings.ToLower(res.Hops[ttl][i].Hostname), "ix"):
