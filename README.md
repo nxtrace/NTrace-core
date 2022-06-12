@@ -191,17 +191,21 @@ Here is our recommended troubleshooting process:
 
 #### WorldWide
 
+##### Tier 1
+
 | ISP     | Type     | Data Source     | Proportion |
 |:-------:|:--------:|:---------------:|:----------:|
-| Tier-01 | Backbone | IPInfo          | 2%         |
-| Tier-01 | Backbone | Avon Technology | 3%         |
-| Tier-01 | Backbone | IPInSight       | 5%         |
-| Tier-01 | Local    | IPInSight       | 90%        |
+| Tier 1 | Backbone | IPInfo          | 2%         |
+| Tier 1 | Backbone | Avon Technology | 3%         |
+| Tier 1 | Backbone | IPInSight       | 5%         |
+| Tier 1 | Local    | IPInSight       | 90%        |
+
+##### General
 
 | ISP    | Type     | Data Source | Proportion |
 |:------:|:--------:|:-----------:|:----------:|
-| Others | Backbone | IPInSight   | 5%         |
-| Others | Local    | IPInSight   | 95%        |
+| General | Backbone | IPInSight   | 5%         |
+| General | Local    | IPInSight   | 95%        |
 
 ### IPv6 Database
 
