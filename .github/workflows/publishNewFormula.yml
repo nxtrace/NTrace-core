@@ -24,7 +24,7 @@ jobs:
           git clone https://github.com/xgadget-lab/homebrew-nexttrace.git
       - name: Exec scipt
         run: |
-          cd homebrew-nexttrace-enhanced
+          cd homebrew-nexttrace
           bash genFormula.sh
       # - name: setup SSH keys and known_hosts
       #   run: |
