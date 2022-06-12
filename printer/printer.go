@@ -9,18 +9,27 @@ import (
 	"github.com/xgadget-lab/nexttrace/ipgeo"
 )
 
-var dataOrigin string
+// var dataOrigin string
 
-func TraceroutePrinter(res *trace.Result) {
-	for i, hop := range res.Hops {
-		fmt.Print(i + 1)
-		for _, h := range hop {
-			HopPrinter(h)
-		}
-	}
-}
+// func TraceroutePrinter(res *trace.Result) {
+// 	for i, hop := range res.Hops {
+// 		fmt.Print(i + 1)
+// 		for _, h := range hop {
+// 			HopPrinter(h)
+// 		}
+// 	}
+// }
 
-func HopPrinter(h trace.Hop) {
+const (
+	RED_PREFIX    = "\033[1;31m"
+	GREEN_PREFIX  = "\033[1;32m"
+	YELLOW_PREFIX = "\033[1;33m"
+	BLUE_PREFIX   = "\033[1;34m"
+	CYAN_PREFIX   = "\033[1;36m"
+	RESET_PREFIX  = "\033[0m"
+)
+
+func HopPrinter(h trace.Hop, info HopInfo) {
 	if h.Address == nil {
 		fmt.Println("\t*")
 	} else {
@@ -35,8 +44,22 @@ func HopPrinter(h trace.Hop) {
 		if h.Geo != nil {
 			txt += " " + formatIpGeoData(h.Address.String(), h.Geo)
 		}
+		switch info {
+		case IXP:
+			fmt.Print(CYAN_PREFIX)
+		case PoP:
+			fmt.Print(CYAN_PREFIX)
+		case Peer:
+			fmt.Print(YELLOW_PREFIX)
+		case Aboard:
+			fmt.Print(GREEN_PREFIX)
+		}
 
 		fmt.Println(txt)
+
+		if info != General {
+			fmt.Print(RESET_PREFIX)
+		}
 	}
 }
 

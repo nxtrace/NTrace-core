@@ -90,9 +90,9 @@ var testResult = &trace.Result{
 	},
 }
 
-func TestTraceroutePrinter(t *testing.T) {
-	TraceroutePrinter(testResult)
-}
+// func TestTraceroutePrinter(t *testing.T) {
+// 	TraceroutePrinter(testResult)
+// }
 
 func TestTracerouteTablePrinter(t *testing.T) {
 	TracerouteTablePrinter(testResult)
