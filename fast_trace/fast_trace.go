@@ -16,7 +16,7 @@ type FastTracer struct {
 }
 
 func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
-	fmt.Printf("『%s %s 』\n", location, ispCollection.ISPName)
+	fmt.Printf("%s『%s %s 』%s\n", printer.YELLOW_PREFIX, location, ispCollection.ISPName, printer.RESET_PREFIX)
 	fmt.Printf("traceroute to %s, 30 hops max, 32 byte packets\n", ispCollection.IP)
 	ip := net.ParseIP(ispCollection.IP)
 	var conf = trace.Config{
@@ -43,13 +43,19 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 
 	if f.TracerouteMethod == trace.TCPTrace {
 		printer.TracerouteTablePrinter(res)
+		// 单次测试结束阻塞 3 秒，仅阻塞 TCP
+		<-time.After(time.Second * 3)
 	}
+	println()
 }
 
 func (f *FastTracer) testAll() {
 	f.testCT()
+	println()
 	f.testCU()
+	println()
 	f.testCM()
+	println()
 	f.testEDU()
 }
 
@@ -80,7 +86,6 @@ func (f *FastTracer) testEDU() {
 	f.tracert(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.EDU)
 	f.tracert(TestIPsCollection.Shanghai.Location, TestIPsCollection.Shanghai.EDU)
 	f.tracert(TestIPsCollection.Hangzhou.Location, TestIPsCollection.Hangzhou.EDU)
-	f.tracert(TestIPsCollection.Hefei.Location, TestIPsCollection.Hefei.EDU)
 	// 科技网暂时算在EDU里面，等拿到了足够多的数据再分离出去，单独用于测试
 	f.tracert(TestIPsCollection.Hefei.Location, TestIPsCollection.Hefei.CST)
 }
