@@ -67,7 +67,7 @@ nexttrace -U 1.0.0.1
 nexttrace -U -p 53 1.0.0.1
 ```
 
-`NextTrace`也同样支持一些进阶功能，如 IP 反向解析、并发数控制、模式切换等
+`NextTrace`也同样支持一些进阶功能，如 TTL 控制、并发数控制、模式切换等
 
 ```bash
 # 每一跳发送2个探测包
@@ -76,8 +76,11 @@ nexttrace -q 2 www.hkix.net
 # 无并发，每次只发送一个探测包
 nexttrace -r 1 www.hkix.net
 
-# 打开IP反向解析功能，在IPv6的骨干网定位辅助有较大帮助
-nexttrace -rdns www.bbix.net
+# 从TTL为5开始发送探测包，直到TTL为10结束
+nexttrace -b 5 -m 10 www.decix.net
+
+# 关闭IP反向解析功能
+nexttrace -n www.bbix.net
 
 # 特色功能：打印Route-Path图
 # Route-Path图示例：
@@ -107,7 +110,7 @@ nexttrace -d IP.SB
 ```bash
 Example:
 nexttrace -d IPInsight -m 20 -p 443 -q 5 -r 20 -rdns 1.1.1.1
-nexttrace -T -q 2 -r 1 -rdns -table -report 2001:4860:4860::8888
+nexttrace -T -q 2 -r 1 -table -report 2001:4860:4860::8888
 ```
 
 ### IP 数据库
@@ -126,23 +129,25 @@ Usage of nexttrace:
 Options:
   -T    Use TCP SYN for tracerouting (default port is 80)
   -U    Use UDP Package for tracerouting (default port is 53 in UDP)
-  -V    Check Version
+  -V    Print Version
+  -b int
+        Set The Begin TTL (default 1)
   -d string
         Choose IP Geograph Data Provider [LeoMoeAPI, IP.SB, IPInfo, IPInsight, IPAPI.com] (default "LeoMoeAPI")
+  -f    One-Key Fast Traceroute
   -m int
         Set the max number of hops (max TTL to be reached). (default 30)
+  -n    Disable IP Reverse DNS lookup
   -p int
         Set SYN Traceroute Port (default 80)
   -q int
         Set the number of probes per each hop. (default 3)
   -r int
         Set ParallelRequests number. It should be 1 when there is a multi-routing. (default 18)
-  -rdns
-        Set whether rDNS will be display
-  -table
-        Output trace results as table
   -report
         Route Path
+  -table
+        Output trace results as table
 
 ```
 

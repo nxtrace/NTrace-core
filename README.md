@@ -67,7 +67,7 @@ nexttrace -U 1.0.0.1
 nexttrace -U -p 53 1.0.0.1
 ```
 
-`NextTrace` also supports some advanced functions, such as IP reverse parsing, concurrent probe packet count control, mode switching, etc.
+`NextTrace` also supports some advanced functions, such as ttl control, concurrent probe packet count control, mode switching, etc.
 
 ```bash
 # Send 2 probe packets per hop
@@ -76,8 +76,11 @@ nexttrace -q 2 www.hkix.net
 # No concurrent probe packets, only one probe packet is sent at a time
 nexttrace -r 1 www.hkix.net
 
-# Turn on the IP reverse parsing function, which is very helpful in positioning the IPv6 backbone network
-nexttrace -rdns www.bbix.net
+# Start Trace with TTL of 5, end at TTL of 10
+nexttrace -b 5 -m 10 www.decix.net
+
+# Turn off the IP reverse parsing function
+nexttrace -n www.bbix.net
 
 # Feature: print Route-Path diagram
 # Route-Path diagram example:
@@ -107,7 +110,7 @@ nexttrace -d IP.SB
 ```bash
 Example:
 nexttrace -d IPInsight -m 20 -p 443 -q 5 -r 20 -rdns 1.1.1.1
-nexttrace -T -q 2 -r 1 -rdns -table -report 2001:4860:4860::8888
+nexttrace -T -q 2 -r 1 -table -report 2001:4860:4860::8888
 ```
 
 ### IP Database
@@ -126,23 +129,25 @@ Usage of nexttrace:
 Options:
   -T    Use TCP SYN for tracerouting (default port is 80)
   -U    Use UDP Package for tracerouting (default port is 53 in UDP)
-  -V    Check Version
+  -V    Print Version
+  -b int
+        Set The Begin TTL (default 1)
   -d string
         Choose IP Geograph Data Provider [LeoMoeAPI, IP.SB, IPInfo, IPInsight, IPAPI.com] (default "LeoMoeAPI")
+  -f    One-Key Fast Traceroute
   -m int
         Set the max number of hops (max TTL to be reached). (default 30)
+  -n    Disable IP Reverse DNS lookup
   -p int
         Set SYN Traceroute Port (default 80)
   -q int
         Set the number of probes per each hop. (default 3)
   -r int
         Set ParallelRequests number. It should be 1 when there is a multi-routing. (default 18)
-  -rdns
-        Set whether rDNS will be display
-  -table
-        Output trace results as table
   -report
         Route Path
+  -table
+        Output trace results as table
 ```
 
 ## Project screenshot
