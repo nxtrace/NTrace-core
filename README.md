@@ -166,6 +166,12 @@ Here is our recommended troubleshooting process:
 1. Check if it is already in FAQ -> [Go to Github Wiki](https://github.com/xgadget-lab/nexttrace/wiki/FAQ---%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98%E8%A7%A3%E7%AD%94)
 2. Suspected bug or feature suggestion -> [Go to Github Issues](https://github.com/xgadget-lab/nexttrace/issues)
 
+## JetBrain Support
+
+### This Project uses [JetBrain Open-Source Project License](https://jb.gg/OpenSourceSupport). We Proudly Develop By Goland.
+
+![GoLand logo](https://resources.jetbrains.com/storage/products/company/brand/logos/GoLand.png)
+
 ## Credits
 
 [Vincent Young](https://github.com/missuo) (i@yyt.moe)
