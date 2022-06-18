@@ -22,7 +22,7 @@ func findLatestAvailableHop(res *trace.Result, ttl int, probesIndex int) int {
 		// 查找上一个跃点是不是有效结果
 		ttl--
 		// 判断此TTL跃点是否有效并判断地理位置结构体是否已经初始化
-		if res.Hops[ttl][probesIndex].Success && res.Hops[ttl][probesIndex].Geo != nil {
+		if len(res.Hops[ttl]) != 0 && res.Hops[ttl][probesIndex].Success && res.Hops[ttl][probesIndex].Geo != nil {
 			// TTL虽有效，但地理位置API没有能够正确返回数据，依旧不能视为有效数据
 			if res.Hops[ttl][probesIndex].Geo.Country == "" {
 				// 跳过继续寻找上一个有效跃点
