@@ -46,13 +46,19 @@ func receiveParse() {
 		// json解析 -> data
 		res := gjson.Parse(data)
 		// 根据返回的IP信息，发送给对应等待回复的IP通道上
+		var domain string = res.Get("domain").String()
+
+		if res.Get("domain").String() == "" {
+			domain = res.Get("owner").String()
+		}
+
 		IPPools.pool[gjson.Parse(data).Get("ip").String()] <- IPGeoData{
 			Asnumber: res.Get("asnumber").String(),
 			Country:  res.Get("country").String(),
 			Prov:     res.Get("prov").String(),
 			City:     res.Get("city").String(),
 			District: res.Get("district").String(),
-			Owner:    res.Get("owner").String(),
+			Owner:    domain,
 			Isp:      res.Get("isp").String(),
 		}
 	}
