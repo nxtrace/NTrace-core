@@ -4,11 +4,14 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
+	"os/signal"
 	"time"
 
 	"github.com/xgadget-lab/nexttrace/ipgeo"
 	"github.com/xgadget-lab/nexttrace/printer"
 	"github.com/xgadget-lab/nexttrace/trace"
+	"github.com/xgadget-lab/nexttrace/wshandle"
 )
 
 type FastTracer struct {
@@ -98,6 +101,14 @@ func FastTest(tm bool) {
 	fmt.Scanln(&c)
 
 	ft := FastTracer{}
+
+	// 建立 WebSocket 连接
+	w := wshandle.New()
+	w.Interrupt = make(chan os.Signal, 1)
+	signal.Notify(w.Interrupt, os.Interrupt)
+	defer func() {
+		w.Conn.Close()
+	}()
 
 	if !tm {
 		ft.TracerouteMethod = trace.ICMPTrace
