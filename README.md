@@ -115,9 +115,9 @@ nexttrace -T -q 2 -r 1 -table -report 2001:4860:4860::8888
 
 ### IP Database
 
-The IP database is set to our own API service by default. If we encounter abuse, we may choose to close it.
+NextTrace BackEnd is now open-source.
 
-We will also open-source the source code of the server in the near future, therefore you can also build your own API server according to the source code of the project by then.
+https://github.com/sjlleo/nexttrace-backend
 
 All NextTrace IP geolocation `API DEMO` can refer to [here](https://github.com/xgadget-lab/nexttrace/blob/main/ipgeo/)
 
@@ -204,8 +204,8 @@ Here is our recommended troubleshooting process:
 
 ##### Tier 1
 
-| ISP     | Type     | Data Source     | Proportion |
-|:-------:|:--------:|:---------------:|:----------:|
+| ISP    | Type     | Data Source     | Proportion |
+|:------:|:--------:|:---------------:|:----------:|
 | Tier 1 | Backbone | IPInfo          | 2%         |
 | Tier 1 | Backbone | Avon Technology | 3%         |
 | Tier 1 | Backbone | IPInSight       | 5%         |
@@ -213,8 +213,8 @@ Here is our recommended troubleshooting process:
 
 ##### General
 
-| ISP    | Type     | Data Source | Proportion |
-|:------:|:--------:|:-----------:|:----------:|
+| ISP     | Type     | Data Source | Proportion |
+|:-------:|:--------:|:-----------:|:----------:|
 | General | Backbone | IPInSight   | 5%         |
 | General | Local    | IPInSight   | 95%        |
 
