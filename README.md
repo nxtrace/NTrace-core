@@ -12,6 +12,8 @@ An open source visual routing tool that pursues light weight, developed using Go
 
 NextTrace has a total of 2 versions, the Lite version focusing on lightweight and the [Enhanced version](#nexttrace-enhanced) which is more enthusiast-oriented.
 
+PS: Our Lite version does not provide OSM based geolocation visualization, we provide this parameter in the enhanced version if needed.
+
 ## How To Use
 
 ### Automated Installation
