@@ -90,11 +90,6 @@ func main() {
 		ip = util.DomainLookUp(domain, false)
 	}
 
-	if ip.To4() == nil && strings.ToUpper(*dataOrigin) == "LEOMOEAPI" {
-		// IPv6 不使用 LeoMoeAPI
-		*dataOrigin = "ipinsight"
-	}
-
 	if strings.ToUpper(*dataOrigin) == "LEOMOEAPI" {
 		w := wshandle.New()
 		w.Interrupt = make(chan os.Signal, 1)
