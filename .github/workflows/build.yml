@@ -47,38 +47,3 @@ jobs:
             dist/nexttrace_freebsd_arm64
         env:
           GITHUB_TOKEN: ${{ secrets.GT_Token }}
-  publish-new-formula:
-    # The type of runner that the job will run on
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
-    # Steps represent a sequence of tasks that will be executed as part of the job
-    steps:
-      # Runs a single command using the runners shell
-      - name: config git
-        run: |
-          git config --global user.email "${{ secrets.git_mail }}"
-          git config --global user.name "${{ secrets.git_name }}"
-      - name: Clone repo
-        run: |
-          git clone https://github.com/xgadget-lab/homebrew-nexttrace.git
-      - name: Exec scipt
-        run: |
-          cd homebrew-nexttrace
-          bash genFormula.sh
-      # - name: setup SSH keys and known_hosts
-      #   run: |
-      #     mkdir -p ~/.ssh
-      #     ssh-keyscan github.com >> ~/.ssh/known_hosts
-      #     ssh-agent -a $SSH_AUTH_SOCK > /dev/null
-      #     ssh-add - <<< "${{ secrets.ID_RSA }}"
-      #   env:
-      #     SSH_AUTH_SOCK: /tmp/ssh_agent.sock
-      - name: Git Push
-        run: |
-          cd homebrew-nexttrace
-          git commit -am 'Publish a new version with Formula'
-          git remote set-url origin https://${{ secrets.gt_token }}@github.com/xgadget-lab/homebrew-nexttrace.git
-          git push || 1
-        # env:
-        #   SSH_AUTH_SOCK: /tmp/ssh_agent.sock
-      - run: echo "🍏 This job's status is ${{ job.status }}."
