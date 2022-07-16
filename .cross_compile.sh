@@ -15,6 +15,7 @@ rm -rf ${TARGET_DIR}
 mkdir ${TARGET_DIR}
 
 for pl in ${PLATFORMS}; do
+    export CGO_ENABLED=0
     export GOOS=$(echo ${pl} | cut -d'/' -f1)
     export GOARCH=$(echo ${pl} | cut -d'/' -f2)
     export TARGET=${TARGET_DIR}/${DIST_PREFIX}_${GOOS}_${GOARCH}
@@ -37,7 +38,7 @@ for pl in ${PLATFORMS}; do
                         -w -s"
     fi
 done
-
+    export CGO_ENABLED=0
     export GOOS='linux'
     export GOARCH='arm'
     export GOARM='7'
