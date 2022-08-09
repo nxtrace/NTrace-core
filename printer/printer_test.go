@@ -100,6 +100,6 @@ func TestTracerouteTablePrinter(t *testing.T) {
 
 func TestRealtimePrinter(t *testing.T) {
 	RealtimePrinter(testResult, 0)
-	RealtimePrinter(testResult, 1)
-	RealtimePrinter(testResult, 2)
+	// RealtimePrinter(testResult, 1)
+	// RealtimePrinter(testResult, 2)
 }
