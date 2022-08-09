@@ -31,6 +31,7 @@ var dataOrigin = fSet.String("d", "LeoMoeAPI", "Choose IP Geograph Data Provider
 var noRdns = fSet.Bool("n", false, "Disable IP Reverse DNS lookup")
 var routePath = fSet.Bool("report", false, "Route Path")
 var tablePrint = fSet.Bool("table", false, "Output trace results as table")
+var classicPrint = fSet.Bool("classic", false, "Classic Output trace results like BestTrace")
 var beginHop = fSet.Int("b", 1, "Set The Begin TTL")
 var ver = fSet.Bool("V", false, "Print Version")
 
@@ -59,6 +60,7 @@ func flagApply() string {
 
 	// Print Version
 	if *ver {
+		printer.CopyRight()
 		os.Exit(0)
 	}
 
@@ -129,7 +131,11 @@ func main() {
 	}
 
 	if !*tablePrint {
-		conf.RealtimePrinter = printer.RealtimePrinter
+		if *classicPrint {
+			conf.RealtimePrinter = printer.ClassicPrinter
+		} else {
+			conf.RealtimePrinter = printer.RealtimePrinter
+		}
 	}
 
 	res, err := trace.Traceroute(m, conf)

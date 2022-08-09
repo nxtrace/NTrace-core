@@ -5,6 +5,8 @@ import (
 	"log"
 	"net"
 	"os"
+
+	"github.com/fatih/color"
 )
 
 // get the local ip and port based on our destination ip
@@ -60,7 +62,10 @@ func DomainLookUp(host string, ipv4Only bool) net.IP {
 	} else {
 		fmt.Println("Please Choose the IP You Want To TraceRoute")
 		for i, ip := range ipSlice {
-			fmt.Printf("%d. %s\n", i, ip)
+			fmt.Fprintf(color.Output, "%s %s\n",
+				color.New(color.FgHiYellow, color.Bold).Sprintf("%d.", i),
+				color.New(color.FgWhite, color.Bold).Sprintf("%s", ip),
+			)
 		}
 		var index int
 		fmt.Printf("Your Option: ")
