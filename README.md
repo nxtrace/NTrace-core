@@ -154,7 +154,7 @@ Options:
 
 ## Project screenshot
 
-![NextTrace Screenshot](asset/screenshot.png)  
+![NextTrace Screenshot](https://user-images.githubusercontent.com/13616352/185024251-e34b92e0-8a40-40ec-927a-d352c94e3f07.png)
 
 ## NextTrace Enhanced
 
