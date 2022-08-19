@@ -164,6 +164,14 @@ The `Enhanced` version supports many functions that the `lite` version does not 
 
 https://github.com/OwO-Network/nexttrace-enhanced
 
+## Donate
+
+In order to provide the most accurate IP geolocation as possible, the project team chose to build our own API (LeoMoeAPI) and purchased several IP geolocation data source APIs, and also fixed a lot of backbone IP geolocation errors, which cost a lot of time and money.
+
+You can choose to donate to us to support our continuous development, we would like to express our gratitude in advance.
+
+爱发电: https://afdian.net/@sjlleo
+
 ## FAQ Frequently Asked Questions
 
 If you encounter problems while installing or using it, we do not recommend you to choose creating an `issue` as a preference

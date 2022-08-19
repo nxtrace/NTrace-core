@@ -155,7 +155,7 @@ Options:
 
 ## 项目截图
 
-![NextTrace Screenshot](asset/screenshot.png)  
+![NextTrace Screenshot](https://user-images.githubusercontent.com/13616352/185024251-e34b92e0-8a40-40ec-927a-d352c94e3f07.png)
 
 ## NextTrace Enhanced
 
@@ -164,6 +164,14 @@ Options:
 `Enhanced` 版本支持很多`lite`版本没有的功能，如能够自定义设置超时时间，也能指定TTL作为起点进行路由跟踪等，对于普通用户来说，通常`lite`版本已经足够完成大部分需要。
 
 https://github.com/OwO-Network/nexttrace-enhanced
+
+## 捐助我们
+
+为了能够尽可能提供精准的 IP 地理位置，项目组选择了自建 API (LeoMoeAPI) 并购买了多家 IP 地理位置的数据源 API，同时也修正的大量的骨干网 IP 地理位置错误，这需要耗费大量的时间和金钱。
+
+您可以选择捐助我们，以支持我们的持续发展，在此先表示感谢了。
+
+爱发电：https://afdian.net/@sjlleo
 
 ## FAQ 常见问题
 
