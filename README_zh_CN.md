@@ -172,7 +172,7 @@ Options:
 
 ## 项目截图
 
-![NextTrace Screenshot](nexttrace021.png)
+![NextTrace Screenshot](asset/nexttrace021.png)
 
 ## NextTrace Enhanced
 
