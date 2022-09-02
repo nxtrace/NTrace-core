@@ -34,6 +34,8 @@ var tablePrint = fSet.Bool("table", false, "Output trace results as table")
 var classicPrint = fSet.Bool("classic", false, "Classic Output trace results like BestTrace")
 var beginHop = fSet.Int("b", 1, "Set The Begin TTL")
 var ver = fSet.Bool("V", false, "Print Version")
+var src_addr = fSet.String("S", "", "Use the following IP address as the source address in outgoing packets")
+var src_dev = fSet.String("D", "", "Use the following Network Devices as the source address in outgoing packets")
 
 func printArgHelp() {
 	fmt.Println("\nArgs Error\nUsage : 'nexttrace [option...] HOSTNAME' or 'nexttrace HOSTNAME [option...]'\nOPTIONS: [-VTU] [-d DATAORIGIN.STR ] [ -m TTL ] [ -p PORT ] [ -q PROBES.COUNT ] [ -r PARALLELREQUESTS.COUNT ] [-rdns] [ -table ] -report")
@@ -92,6 +94,18 @@ func main() {
 		ip = util.DomainLookUp(domain, false)
 	}
 
+	if *src_dev != "" {
+		dev, _ := net.InterfaceByName(*src_dev)
+
+		if addrs, err := dev.Addrs(); err == nil {
+			for _, addr := range addrs {
+				if (addr.(*net.IPNet).IP.To4() == nil) == (ip.To4() == nil) {
+					*src_addr = addr.(*net.IPNet).IP.String()
+				}
+			}
+		}
+	}
+
 	if strings.ToUpper(*dataOrigin) == "LEOMOEAPI" {
 		w := wshandle.New()
 		w.Interrupt = make(chan os.Signal, 1)
@@ -119,6 +133,7 @@ func main() {
 	}
 
 	var conf = trace.Config{
+		SrcAddr:          *src_addr,
 		BeginHop:         *beginHop,
 		DestIP:           ip,
 		DestPort:         *port,

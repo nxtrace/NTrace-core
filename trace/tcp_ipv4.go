@@ -42,11 +42,16 @@ func (t *TCPTracer) Execute() (*Result, error) {
 	t.SrcIP, _ = util.LocalIPPort(t.DestIP)
 
 	var err error
-	t.tcp, err = net.ListenPacket("ip4:tcp", t.SrcIP.String())
+	if t.SrcAddr != "" {
+		t.tcp, err = net.ListenPacket("ip4:tcp", t.SrcAddr)
+	} else {
+		t.tcp, err = net.ListenPacket("ip4:tcp", t.SrcIP.String())
+	}
+
 	if err != nil {
 		return nil, err
 	}
-	t.icmp, err = icmp.ListenPacket("ip4:icmp", "0.0.0.0")
+	t.icmp, err = icmp.ListenPacket("ip4:icmp", t.SrcAddr)
 	if err != nil {
 		return &t.res, err
 	}

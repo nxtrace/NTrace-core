@@ -16,6 +16,7 @@ var (
 )
 
 type Config struct {
+	SrcAddr          string
 	BeginHop         int
 	MaxHops          int
 	NumMeasurements  int

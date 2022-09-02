@@ -37,7 +37,7 @@ func (t *UDPTracer) Execute() (*Result, error) {
 	}
 
 	var err error
-	t.icmp, err = icmp.ListenPacket("ip4:icmp", "0.0.0.0")
+	t.icmp, err = icmp.ListenPacket("ip4:icmp", t.SrcAddr)
 	if err != nil {
 		return &t.res, err
 	}
