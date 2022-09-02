@@ -17,9 +17,8 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fatih/color v1.13.0
 	github.com/gorilla/websocket v1.5.0
-	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rodaine/table v1.0.1
-	github.com/stretchr/testify v1.7.1
+	github.com/stretchr/testify v1.7.1 // indirect
 	github.com/tidwall/gjson v1.14.2
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect
