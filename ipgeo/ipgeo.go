@@ -12,6 +12,7 @@ type IPGeoData struct {
 	District string
 	Owner    string
 	Isp      string
+	Whois    string
 }
 
 type Source = func(ip string) (*IPGeoData, error)

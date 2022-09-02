@@ -60,6 +60,7 @@ func receiveParse() {
 			District: res.Get("district").String(),
 			Owner:    domain,
 			Isp:      res.Get("isp").String(),
+			Whois:    res.Get("whois").String(),
 		}
 	}
 }
