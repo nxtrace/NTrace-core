@@ -172,7 +172,7 @@ Options:
 
 ## 项目截图
 
-![NextTrace Screenshot](https://user-images.githubusercontent.com/13616352/185024251-e34b92e0-8a40-40ec-927a-d352c94e3f07.png)
+![NextTrace Screenshot](nexttrace021.png)
 
 ## NextTrace Enhanced
 
