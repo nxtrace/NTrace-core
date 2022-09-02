@@ -55,6 +55,19 @@ nexttrace -f
 nexttrace -f -T
 ```
 
+`NextTrace` 已支持指定网卡进行路由跟踪
+
+```bash
+# 请注意 Lite 版本此参数不能和快速测试联用，如有需要请使用 enhanced 版本
+# 使用 eth0 网卡
+nexttrace -D eth0 2606:4700:4700::1111
+
+# 使用 eth0 网卡IP
+# 网卡 IP 可以使用 ip a 或者 ifconfig 获取
+# 使用网卡IP进行路由跟踪时需要注意跟踪的IP类型应该和网卡IP类型一致（如都为 IPv4）
+nexttrace -S 204.98.134.56 9.9.9.9
+```
+
 `NextTrace` 也可以使用`TCP`和`UDP`协议发起`Traceroute`请求，不过目前只支持`IPv4`
 
 ```bash
@@ -130,6 +143,10 @@ NextTrace 所有的的 IP 地理位置`API DEMO`可以参考[这里](https://git
 Usage of nexttrace:
       'nexttrace [options] <hostname>' or 'nexttrace <hostname> [option...]'
 Options:
+  -D string
+        Use the following Network Devices as the source address in outgoing packets
+  -S string
+        Use the following IP address as the source address in outgoing packets
   -T    Use TCP SYN for tracerouting (default port is 80)
   -U    Use UDP Package for tracerouting (default port is 53 in UDP)
   -V    Print Version

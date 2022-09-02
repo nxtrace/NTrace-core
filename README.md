@@ -54,6 +54,17 @@ nexttrace -f
 nexttrace -f -T
 ```
 
+`NextTrace` already supports route tracing for specified Network Devices
+
+```bash
+# Use eth0 network interface
+nexttrace -D eth0 2606:4700:4700::1111
+
+# Use eth0 network interface's IP
+# When using the network interface's IP for route tracing, note that the IP type to be traced should be the same as network interface's IP type (e.g. both IPv4)
+nexttrace -S 204.98.134.56 9.9.9.9
+```
+
 `NextTrace` can also use `TCP` and `UDP` protocols to perform `Traceroute` requests, but these protocols only supports `IPv4` now
 
 ```bash
