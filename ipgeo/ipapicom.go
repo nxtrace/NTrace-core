@@ -38,6 +38,6 @@ func IPApiCom(ip string) (*IPGeoData, error) {
 		Country:  res.Get("country").String(),
 		City:     res.Get("city").String(),
 		Prov:     res.Get("regionName").String(),
-		Isp:      res.Get("isp").String(),
+		Owner:    res.Get("isp").String(),
 	}, nil
 }

@@ -37,6 +37,6 @@ func IPSB(ip string) (*IPGeoData, error) {
 		Country:  res.Get("country").String(),
 		City:     res.Get("city").String(),
 		Prov:     res.Get("region").String(),
-		Isp:      res.Get("isp").String(),
+		Owner:    res.Get("isp").String(),
 	}, nil
 }
