@@ -101,7 +101,7 @@ func RealtimePrinter(res *trace.Result, ttl int) {
 				color.New(color.FgWhite, color.Bold).Sprintf("%s", res.Hops[ttl][i].Geo.City),
 				color.New(color.FgWhite, color.Bold).Sprintf("%s", res.Hops[ttl][i].Geo.District),
 				fmt.Sprintf("%-6s", res.Hops[ttl][i].Geo.Owner),
-				color.New(color.FgHiBlack, color.Bold).Sprintf("%-32s", res.Hops[ttl][0].Hostname),
+				color.New(color.FgHiBlack, color.Bold).Sprintf("%-32s", res.Hops[ttl][i].Hostname),
 			)
 		}
 
