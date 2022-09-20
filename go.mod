@@ -17,6 +17,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fatih/color v1.13.0
 	github.com/gorilla/websocket v1.5.0
+	github.com/lionsoul2014/ip2region v2.10.0+incompatible
 	github.com/rodaine/table v1.0.1
 	github.com/stretchr/testify v1.7.1 // indirect
 	github.com/tidwall/gjson v1.14.2

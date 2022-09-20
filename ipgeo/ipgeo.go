@@ -29,6 +29,8 @@ func GetSource(s string) Source {
 		return IPApiCom
 	case "IPINFO":
 		return IPInfo
+	case "IP2REGION":
+		return IP2Region
 	default:
 		return LeoIP
 	}
