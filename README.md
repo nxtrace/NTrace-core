@@ -175,13 +175,7 @@ The `Enhanced` version supports many functions that the `lite` version does not 
 
 https://github.com/OwO-Network/nexttrace-enhanced
 
-## Donate
-
-In order to provide the most accurate IP geolocation as possible, the project team chose to build our own API (LeoMoeAPI) and purchased several IP geolocation data source APIs, and also fixed a lot of backbone IP geolocation errors, which cost a lot of time and money.
-
-You can choose to donate to us to support our continuous development, we would like to express our gratitude in advance.
-
-爱发电: https://afdian.net/@sjlleo
+# 
 
 ## FAQ Frequently Asked Questions
 
@@ -194,7 +188,7 @@ Here is our recommended troubleshooting process:
 
 ## JetBrain Support
 
-##### This Project uses [JetBrain Open-Source Project License](https://jb.gg/OpenSourceSupport). We Proudly Develop By Goland.
+#### This Project uses [JetBrain Open-Source Project License](https://jb.gg/OpenSourceSupport). We Proudly Develop By Goland.
 
 <img src="https://resources.jetbrains.com/storage/products/company/brand/logos/GoLand.png" title="" alt="GoLand logo" width="331">
 
