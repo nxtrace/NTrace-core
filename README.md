@@ -194,9 +194,9 @@ Here is our recommended troubleshooting process:
 
 ## JetBrain Support
 
-### This Project uses [JetBrain Open-Source Project License](https://jb.gg/OpenSourceSupport). We Proudly Develop By Goland.
+##### This Project uses [JetBrain Open-Source Project License](https://jb.gg/OpenSourceSupport). We Proudly Develop By Goland.
 
-![GoLand logo](https://resources.jetbrains.com/storage/products/company/brand/logos/GoLand.png)
+<img src="https://resources.jetbrains.com/storage/products/company/brand/logos/GoLand.png" title="" alt="GoLand logo" width="331">
 
 ## Credits
 
@@ -208,44 +208,7 @@ Here is our recommended troubleshooting process:
 
 [waiting4new](https://github.com/waiting4new)
 
-[FFEE_CO](https://github.com/fkx4-p)
-
-## IP Database Copyright
-
-### IPv4 Database
-
-#### China
-
-| ISP                         | Type     | Data Source          | Proportion |
-|:---------------------------:|:--------:|:--------------------:|:----------:|
-| China Telecom/Unicom/Mobile | Backbone | Internet Enthusiasts | 10%        |
-| China Telecom/Unicom/Mobile | Local    | Avon Technology      | 90%        |
-
-#### WorldWide
-
-##### Tier 1
-
-| ISP    | Type     | Data Source     | Proportion |
-|:------:|:--------:|:---------------:|:----------:|
-| Tier 1 | Backbone | IPInfo          | 2%         |
-| Tier 1 | Backbone | Avon Technology | 3%         |
-| Tier 1 | Backbone | IPInSight       | 5%         |
-| Tier 1 | Local    | IPInSight       | 90%        |
-
-##### General
-
-| ISP     | Type     | Data Source | Proportion |
-|:-------:|:--------:|:-----------:|:----------:|
-| General | Backbone | IPInSight   | 5%         |
-| General | Local    | IPInSight   | 95%        |
-
-### IPv6 Database
-
-| ISP | Type | Data Source      | Proportion |
-|:---:|:----:|:----------------:|:----------:|
-| All | All  | IP2Location Lite | 100%       |
-
-This product includes IP2Location LITE data available from <a href="https://lite.ip2location.com">https://lite.ip2location.com</a>.
+[FFEE_CO](https://github.com/fkx4-p) 
 
 ### Others
 

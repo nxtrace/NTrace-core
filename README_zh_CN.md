@@ -182,23 +182,6 @@ Options:
 
 https://github.com/OwO-Network/nexttrace-enhanced
 
-## 捐助我们
-
-为了能够尽可能提供精准的 IP 地理位置，项目组选择了自建 API (LeoMoeAPI) 并购买了多家 IP 地理位置的数据源 API，同时也修正的大量的骨干网 IP 地理位置错误，这需要耗费大量的时间和金钱。
-
-您可以选择捐助我们，以支持我们的持续发展，在此先表示感谢了。
-
-爱发电：https://afdian.net/@sjlleo
-
-## FAQ 常见问题
-
-如果你在安装或者使用的时候遇到了问题，我们建议你不要把新建一个 `issue` 作为首选项
-
-以下是我们推荐的排错流程：
-
-1. 查看是否为常见问题 -> [前往 Github Wiki](https://github.com/xgadget-lab/nexttrace/wiki/FAQ---%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98%E8%A7%A3%E7%AD%94)
-2. 疑似 BUG、或者功能建议 -> [前往 Github Issues](https://github.com/xgadget-lab/nexttrace/issues)
-
 ## Thanks
 
 [Vincent Young](https://github.com/missuo) (i@yyt.moe)
@@ -210,46 +193,6 @@ https://github.com/OwO-Network/nexttrace-enhanced
 [waiting4new](https://github.com/waiting4new)
 
 [FFEE_CO](https://github.com/fkx4-p)
-
-## IP Database Copyright
-
-### IPv4 Database
-
-#### China
-
-| ISP      | 类型  | 数据源   | 占比  |
-|:--------:|:---:|:-----:|:---:|
-| 电信/联通/移动 | 骨干网 | 网络爱好者 | 10% |
-| 电信/联通/移动 | 城域网 | 埃文科技  | 90% |
-
-- 参与骨干网维护的朋友都是网络爱好者群体，尽管我们多名志愿者通过自己的网络进行了大量的勘测，但是由于信息不足，依旧存在很多错误。
-- 对于更高精度的朋友，我们依旧强烈推荐IPIP.NET，他们开发的Besttrace是目前质量最好的路由可视化软件，我们多数爱好者能有今天这样的骨干网初步认知都是归功于他们，在此特表感谢。
-
-#### WorldWide
-
-##### Tier 01
-
-| ISP     | 类型  | 数据源       | 占比  |
-|:-------:|:---:|:---------:|:---:|
-| Tier-01 | 骨干网 | IPInfo    | 2%  |
-| Tier-01 | 骨干网 | 埃文科技      | 3%  |
-| Tier-01 | 骨干网 | IPInSight | 5%  |
-| Tier-01 | 城域网 | IPInSight | 90% |
-
-##### Other ISP
-
-| ISP    | 类型  | 数据源       | 占比  |
-|:------:|:---:|:---------:|:---:|
-| Others | 骨干网 | IPInSight | 5%  |
-| Others | 城域网 | IPInSight | 95% |
-
-### IPv6 Database
-
-| ISP | 类型  | 数据源              | 占比   |
-|:---:|:---:|:----------------:|:----:|
-| All | 全部  | IP2Location Lite | 100% |
-
-This product includes IP2Location LITE data available from <a href="https://lite.ip2location.com">https://lite.ip2location.com</a>.
 
 ### Others
 
