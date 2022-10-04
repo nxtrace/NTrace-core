@@ -20,7 +20,7 @@ PS: Our Lite version does not provide OSM based geolocation visualization, we pr
 
 ```bash
 # Linux one-click install script
-bash <(curl -Ls https://raw.githubusercontent.com/xgadget-lab/nexttrace/main/nt_install.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/sjlleo/nexttrace/main/nt_install.sh)
 
 # macOS brew install command
 brew tap xgadget-lab/nexttrace && brew install nexttrace
