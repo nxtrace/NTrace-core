@@ -23,6 +23,7 @@ type BackBoneCollection struct {
 type ISPCollection struct {
 	ISPName string
 	IP      string
+	IPv6    string
 }
 
 const (
@@ -47,6 +48,7 @@ var Beijing = BackBoneCollection{
 	CT163: ISPCollection{
 		ISPName: CT163,
 		IP:      "106.37.67.1",
+		IPv6:    "240e:40:e002:1:a:3ee3:c00:0",
 	},
 
 	CU169: ISPCollection{
@@ -103,6 +105,7 @@ var Guangzhou = BackBoneCollection{
 	CT163: ISPCollection{
 		ISPName: CT163,
 		IP:      "106.37.67.1",
+		IPv6:    "240e:f9:8010::3:110:1",
 	},
 
 	CU169: ISPCollection{

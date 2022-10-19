@@ -11,6 +11,7 @@ import (
 	"github.com/xgadget-lab/nexttrace/ipgeo"
 	"github.com/xgadget-lab/nexttrace/printer"
 	"github.com/xgadget-lab/nexttrace/trace"
+	"github.com/xgadget-lab/nexttrace/tracelog"
 	"github.com/xgadget-lab/nexttrace/wshandle"
 )
 
@@ -18,9 +19,21 @@ type FastTracer struct {
 	TracerouteMethod trace.Method
 }
 
+var outEnable bool = false
+
 func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
+	fp, err := os.OpenFile("/tmp/trace.log", os.O_CREATE|os.O_APPEND|os.O_RDWR, os.ModePerm)
+	if err != nil {
+		return
+	}
+	defer fp.Close()
+
+	log.SetOutput(fp)
+	log.SetFlags(0)
 	fmt.Printf("%s『%s %s 』%s\n", printer.YELLOW_PREFIX, location, ispCollection.ISPName, printer.RESET_PREFIX)
+	log.Printf("『%s %s 』\n", location, ispCollection.ISPName)
 	fmt.Printf("traceroute to %s, 30 hops max, 32 byte packets\n", ispCollection.IP)
+	log.Printf("traceroute to %s, 30 hops max, 32 byte packets\n", ispCollection.IP)
 	ip := net.ParseIP(ispCollection.IP)
 	var conf = trace.Config{
 		BeginHop:         1,
@@ -35,7 +48,12 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 	}
 
 	if f.TracerouteMethod == trace.ICMPTrace {
-		conf.RealtimePrinter = printer.RealtimePrinter
+		if outEnable {
+			conf.RealtimePrinter = tracelog.RealtimePrinter
+		} else {
+			conf.RealtimePrinter = printer.RealtimePrinter
+		}
+		
 	}
 
 	res, err := trace.Traceroute(f.TracerouteMethod, conf)
@@ -93,7 +111,7 @@ func (f *FastTracer) testEDU() {
 	f.tracert(TestIPsCollection.Hefei.Location, TestIPsCollection.Hefei.CST)
 }
 
-func FastTest(tm bool) {
+func FastTest(tm bool, outEnable bool) {
 	var c string
 
 	fmt.Println("您想测试哪些ISP的路由？\n1. 国内四网\n2. 电信\n3. 联通\n4. 移动\n5. 教育网")

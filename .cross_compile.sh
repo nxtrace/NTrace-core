@@ -5,7 +5,7 @@ set -e
 DIST_PREFIX="nexttrace"
 DEBUG_MODE=${2}
 TARGET_DIR="dist"
-PLATFORMS="darwin/amd64 darwin/arm64 linux/386 linux/amd64 linux/arm64 linux/mips openbsd/amd64 openbsd/arm64 freebsd/amd64 freebsd/arm64"
+PLATFORMS="darwin/amd64 darwin/arm64 linux/386 linux/amd64 linux/arm64 linux/mips windows/amd64 windows/arm64 openbsd/amd64 openbsd/arm64 freebsd/amd64 freebsd/arm64"
 
 BUILD_VERSION="$(git describe --tags --always)"
 BUILD_DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"

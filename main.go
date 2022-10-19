@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"runtime"
 	"strings"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/xgadget-lab/nexttrace/printer"
 	"github.com/xgadget-lab/nexttrace/reporter"
 	"github.com/xgadget-lab/nexttrace/trace"
+	"github.com/xgadget-lab/nexttrace/tracelog"
 	"github.com/xgadget-lab/nexttrace/util"
 	"github.com/xgadget-lab/nexttrace/wshandle"
 )
@@ -30,6 +32,7 @@ var maxHops = fSet.Int("m", 30, "Set the max number of hops (max TTL to be reach
 var dataOrigin = fSet.String("d", "LeoMoeAPI", "Choose IP Geograph Data Provider [LeoMoeAPI, IP.SB, IPInfo, IPInsight, IPAPI.com]")
 var noRdns = fSet.Bool("n", false, "Disable IP Reverse DNS lookup")
 var routePath = fSet.Bool("report", false, "Route Path")
+var output = fSet.Bool("o", false, "Ouput trace result to file (RealTimePrinter ONLY")
 var tablePrint = fSet.Bool("table", false, "Output trace results as table")
 var classicPrint = fSet.Bool("classic", false, "Classic Output trace results like BestTrace")
 var beginHop = fSet.Int("b", 1, "Set The Begin TTL")
@@ -68,7 +71,11 @@ func flagApply() string {
 
 	// -f Fast Test
 	if *fastTest {
-		fastTrace.FastTest(*tcpSYNFlag)
+		fastTrace.FastTest(*tcpSYNFlag, *output)
+		if *output {
+			fmt.Println("您的追踪日志已经存放在 /tmp/trace.log 中")
+		}
+
 		os.Exit(0)
 	}
 
@@ -82,11 +89,15 @@ func main() {
 
 	domain := flagApply()
 
-	if os.Getuid() != 0 {
+	if os.Getuid() != 0 && runtime.GOOS != "windows" {
 		log.Fatalln("Traceroute requires root/sudo privileges.")
 	}
 
 	var ip net.IP
+
+	if runtime.GOOS == "windows" && (*tcpSYNFlag || *udpPackageFlag) {
+		fmt.Println("NextTrace 基于 Windows 的路由跟踪还在早期开发阶段，目前还存在诸多问题，TCP/UDP SYN 包请求可能不能正常运行")
+	}
 
 	if *tcpSYNFlag || *udpPackageFlag {
 		ip = util.DomainLookUp(domain, true)
@@ -149,7 +160,11 @@ func main() {
 		if *classicPrint {
 			conf.RealtimePrinter = printer.ClassicPrinter
 		} else {
-			conf.RealtimePrinter = printer.RealtimePrinter
+			if *output {
+				conf.RealtimePrinter = tracelog.RealtimePrinter
+			} else {
+				conf.RealtimePrinter = printer.RealtimePrinter
+			}
 		}
 	}
 
