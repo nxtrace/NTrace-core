@@ -26,8 +26,10 @@ bash <(curl -Ls https://raw.githubusercontent.com/sjlleo/nexttrace/main/nt_insta
 brew tap xgadget-lab/nexttrace && brew install nexttrace
 ```
 
+Windows users please go to [Release Page](https://github.com/sjlleo/nexttrace/releases/latest) directly and download exe file.
+
 - `Release` provides compiled executables for many systems and architectures, if not, you can compile it yourself.
-- Some of the necessary dependencies of this project are not fully implemented in `Golang` on `Windows`, so currently `NextTrace` is not available on `Windows` platform.
+- Some of the necessary dependencies of this project are not fully implemented in `Golang` on `Windows`, so currently `NextTrace` is experimental on `Windows` platform.
 
 ### Get Started
 

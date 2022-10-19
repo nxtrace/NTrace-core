@@ -27,8 +27,10 @@ bash <(curl -Ls https://ghproxy.com/https://raw.githubusercontent.com/sjlleo/nex
 brew tap xgadget-lab/nexttrace && brew install nexttrace
 ```
 
+Windows 用户请直接前往 [Release](https://github.com/sjlleo/nexttrace/releases/latest) 下载编译后的二进制 exe 文件。
+
 - `Release`里面为很多系统以及不同架构提供了编译好的二进制可执行文件，如果没有可以自行编译。
-- 一些本项目的必要依赖在`Windows`上`Golang`底层实现不完全，所以目前`NextTrace`在`Windows`平台不可用。
+- 一些本项目的必要依赖在`Windows`上`Golang`底层实现不完全，所以目前`NextTrace`在`Windows`平台出于实验性支持阶段。
 
 ### Get Started
 
