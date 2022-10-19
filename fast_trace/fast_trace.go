@@ -19,7 +19,7 @@ type FastTracer struct {
 	TracerouteMethod trace.Method
 }
 
-var outEnable bool = false
+var oe bool = false
 
 func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 	fp, err := os.OpenFile("/tmp/trace.log", os.O_CREATE|os.O_APPEND|os.O_RDWR, os.ModePerm)
@@ -48,7 +48,7 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 	}
 
 	if f.TracerouteMethod == trace.ICMPTrace {
-		if outEnable {
+		if oe {
 			conf.RealtimePrinter = tracelog.RealtimePrinter
 		} else {
 			conf.RealtimePrinter = printer.RealtimePrinter
@@ -113,6 +113,8 @@ func (f *FastTracer) testEDU() {
 
 func FastTest(tm bool, outEnable bool) {
 	var c string
+
+	oe = outEnable
 
 	fmt.Println("您想测试哪些ISP的路由？\n1. 国内四网\n2. 电信\n3. 联通\n4. 移动\n5. 教育网")
 	fmt.Print("请选择选项：")
