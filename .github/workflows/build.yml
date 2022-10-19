@@ -41,8 +41,8 @@ jobs:
             dist/nexttrace_linux_arm64
             dist/nexttrace_linux_armv7
             dist/nexttrace_linux_mips
-            dist/nexttrace_windows_amd64
-            dist/nexttrace_windows_arm64
+            dist/nexttrace_windows_amd64.exe
+            dist/nexttrace_windows_arm64.exe
             dist/nexttrace_openbsd_amd64
             dist/nexttrace_openbsd_arm64
             dist/nexttrace_freebsd_amd64
