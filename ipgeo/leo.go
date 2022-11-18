@@ -1,6 +1,7 @@
 package ipgeo
 
 import (
+	"encoding/json"
 	"errors"
 	"sync"
 	"time"
@@ -52,6 +53,9 @@ func receiveParse() {
 			domain = res.Get("owner").String()
 		}
 
+		m := make(map[string][]string)
+		json.Unmarshal([]byte(res.Get("router").String()), &m)
+
 		IPPools.pool[gjson.Parse(data).Get("ip").String()] <- IPGeoData{
 			Asnumber: res.Get("asnumber").String(),
 			Country:  res.Get("country").String(),
@@ -61,6 +65,8 @@ func receiveParse() {
 			Owner:    domain,
 			Isp:      res.Get("isp").String(),
 			Whois:    res.Get("whois").String(),
+			Prefix:   res.Get("prefix").String(),
+			Router:   m,
 		}
 	}
 }

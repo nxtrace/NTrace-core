@@ -104,7 +104,7 @@ var Guangzhou = BackBoneCollection{
 	Location: "广州",
 	CT163: ISPCollection{
 		ISPName: CT163,
-		IP:      "106.37.67.1",
+		IP:      "14.116.225.60",
 		IPv6:    "240e:f9:8010::3:110:1",
 	},
 

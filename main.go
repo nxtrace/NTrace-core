@@ -39,6 +39,7 @@ var beginHop = fSet.Int("b", 1, "Set The Begin TTL")
 var ver = fSet.Bool("V", false, "Print Version")
 var src_addr = fSet.String("S", "", "Use the following IP address as the source address in outgoing packets")
 var src_dev = fSet.String("D", "", "Use the following Network Devices as the source address in outgoing packets")
+var router = fSet.Bool("R", false, "Show Routing Table [Provided By BGP.Tools]")
 
 func printArgHelp() {
 	fmt.Println("\nArgs Error\nUsage : 'nexttrace [option...] HOSTNAME' or 'nexttrace HOSTNAME [option...]'\nOPTIONS: [-VTU] [-d DATAORIGIN.STR ] [ -m TTL ] [ -p PORT ] [ -q PROBES.COUNT ] [ -r PARALLELREQUESTS.COUNT ] [-rdns] [ -table ] -report")
@@ -162,6 +163,9 @@ func main() {
 		} else {
 			if *output {
 				conf.RealtimePrinter = tracelog.RealtimePrinter
+			} else if *router {
+				conf.RealtimePrinter = printer.RealtimePrinterWithRouter
+				fmt.Println("路由表数据源由 BGP.Tools 提供，在此特表感谢")
 			} else {
 				conf.RealtimePrinter = printer.RealtimePrinter
 			}

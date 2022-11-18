@@ -133,6 +133,8 @@ nexttrace -T -q 2 -r 1 -table -report 2001:4860:4860::8888
 
 ### IP 数据库
 
+我们使用[bgp.tools](https://bgp.tools)作为路由表功能的数据提供者。
+
 ✨NextTrace `LeoMoeAPI` 的后端也开源啦
 
 [GitHub - sjlleo/nexttrace-backend: NextTrace BackEnd](https://github.com/sjlleo/nexttrace-backend)
@@ -185,6 +187,8 @@ Options:
 https://github.com/OwO-Network/nexttrace-enhanced
 
 ## Thanks
+
+BGP.TOOLS 提供了本项目的一些数据支持，在此表示由衷地感谢。
 
 [Vincent Young](https://github.com/missuo) (i@yyt.moe)
 

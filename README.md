@@ -130,6 +130,8 @@ nexttrace -T -q 2 -r 1 -table -report 2001:4860:4860::8888
 
 ### IP Database
 
+#### We use [bgp.tools](https://bgp.tools) as a data provider for routing tables.
+
 NextTrace BackEnd is now open-source.
 
 https://github.com/sjlleo/nexttrace-backend
@@ -195,6 +197,8 @@ Here is our recommended troubleshooting process:
 <img src="https://resources.jetbrains.com/storage/products/company/brand/logos/GoLand.png" title="" alt="GoLand logo" width="331">
 
 ## Credits
+
+BGP.TOOLS provided some data support for this project and we would like to express our sincere gratitude.
 
 [Vincent Young](https://github.com/missuo) (i@yyt.moe)
 
