@@ -14,6 +14,16 @@ NextTrace has a total of 2 versions, the Lite version focusing on lightweight an
 
 PS: Our Lite version does not provide OSM based geolocation visualization, we provide this parameter in the enhanced version if needed.
 
+## IP Data Copyright
+
+NextTrace 重点在于研究 Go 语言 Traceroute 的实现，其 LeoMoeAPI 的地理位置信息并没有原始数据的支撑，故也不可能有商用版本。
+
+LeoMoeAPI 的数据受到多家数据源的版权限制，**仅供路由跟踪地理位置的展示参考使用**，我们不对数据提供准度做任何保证，如用于其他用途后果自负，特此告知。
+
+NextTrace focuses on Golang Traceroute implementations, and its LeoMoeAPI geolocation information is not supported by raw data, so a commercial version is not possible.
+
+The LeoMoeAPI data is subject to copyright restrictions from multiple data sources, and is only used for the purpose of displaying the geolocation of route tracing.
+
 ## How To Use
 
 ### Automated Installation
