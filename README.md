@@ -179,7 +179,7 @@ Options:
 
 ## Project screenshot
 
-![NextTrace Screenshot](asset/nexttrace021.png)
+![NextTrace Screenshot](https://user-images.githubusercontent.com/13616352/206829312-d82d7782-3aa1-4d21-8c35-78774d97d23f.png)
 
 ## NextTrace Enhanced
 
