@@ -88,14 +88,16 @@ func flagApply() string {
 }
 
 func capabilities_check() {
-	uid := os.Getuid()
-	if uid == 0 {
-		// Running as root, skip checking capabilities
+
+	// Windows 判断放在前面，防止遇到一些奇奇怪怪的问题
+	if runtime.GOOS == "windows" {
+		// Running on Windows, skip checking capabilities
 		return
 	}
 
-	if runtime.GOOS == "windows" {
-		// Running on Windows, skip checking capabilities
+	uid := os.Getuid()
+	if uid == 0 {
+		// Running as root, skip checking capabilities
 		return
 	}
 
