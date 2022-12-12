@@ -4,6 +4,7 @@ go 1.18
 
 require (
 	github.com/google/gopacket v1.1.19
+	github.com/syndtr/gocapability v0.0.0-20200815063812-42c35b437635
 	golang.org/x/net v0.0.0-20220809012201-f428fae20770
 	golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4
 )

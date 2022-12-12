@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/syndtr/gocapability/capability"
 	fastTrace "github.com/xgadget-lab/nexttrace/fast_trace"
 	"github.com/xgadget-lab/nexttrace/ipgeo"
 	"github.com/xgadget-lab/nexttrace/printer"
@@ -86,13 +87,59 @@ func flagApply() string {
 	return target
 }
 
+func capabilities_check() {
+	uid := os.Getuid()
+	if uid == 0 {
+		// Running as root, skip checking capabilities
+		return
+	}
+
+	if runtime.GOOS == "windows" {
+		// Running on Windows, skip checking capabilities
+		return
+	}
+
+	/***
+	* 检查当前进程是否有两个关键的权限
+	==== 看不到我 ====
+	* 没办法啦
+	* 自己之前承诺的坑补全篇
+	* 被迫填坑系列 qwq
+	==== 看不到我 ====
+	***/
+
+	// NewPid 已经被废弃了，这里改用 NewPid2 方法
+	caps, err := capability.NewPid2(0)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	// load 获取全部的 caps 信息
+	err = caps.Load()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	// 判断一下权限有木有
+	if caps.Get(capability.EFFECTIVE, capability.CAP_NET_RAW) && caps.Get(capability.EFFECTIVE, capability.CAP_NET_ADMIN) {
+		// 有权限啦
+		return
+	} else {
+		// 没权限啦
+		log.Println("您正在以普通用户权限运行 NextTrace，但 NextTrace 未被赋予监听网络套接字的ICMP消息包、修改IP头信息（TTL）等路由跟踪所需的权限")
+		log.Println("请使用管理员用户执行 `sudo setcap cap_net_raw,cap_net_admin+eip ${your_nexttrace_path}/nexttrace` 命令，赋予相关权限后再运行~")
+		log.Fatalln("什么？为什么 ping 普通用户执行不要 root 权限？因为这些工具在管理员安装时就已经被赋予了一些必要的权限，具体请使用 `getcap /usr/bin/ping` 查看")
+	}
+}
+
 func main() {
 
 	domain := flagApply()
 
-	if os.Getuid() != 0 && runtime.GOOS != "windows" {
-		log.Fatalln("Traceroute requires root/sudo privileges.")
-	}
+	capabilities_check()
+	// return
 
 	var ip net.IP
 
