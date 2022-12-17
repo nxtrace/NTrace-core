@@ -10,6 +10,8 @@
 
 NextTrace 一共有2个版本，专注于轻量的 Lite 版本以及更面向发烧友的 [Enhanced 版本](#nexttrace-enhanced)。
 
+如果您对 NextTrace 项目本身感兴趣，可以阅读 [有关 NextTrace 的一些碎碎念](https://leo.moe/annoucement/nexttrace.html) 或许可以帮您解决疑惑。
+
 PS: Lite 版本追求轻量化，并不提供基于高德地图 / OpenStreetMap 的路由可视化功能，如有需要，请使用 Enhanced 版本。
 
 ## How To Use
