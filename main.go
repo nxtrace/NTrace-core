@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -18,6 +19,7 @@ import (
 	"github.com/xgadget-lab/nexttrace/reporter"
 	"github.com/xgadget-lab/nexttrace/trace"
 	"github.com/xgadget-lab/nexttrace/tracelog"
+	"github.com/xgadget-lab/nexttrace/tracemap"
 	"github.com/xgadget-lab/nexttrace/util"
 	"github.com/xgadget-lab/nexttrace/wshandle"
 )
@@ -37,6 +39,7 @@ var output = fSet.Bool("o", false, "Ouput trace result to file (RealTimePrinter 
 var tablePrint = fSet.Bool("table", false, "Output trace results as table")
 var classicPrint = fSet.Bool("classic", false, "Classic Output trace results like BestTrace")
 var beginHop = fSet.Int("b", 1, "Set The Begin TTL")
+var maptrace = fSet.Bool("M", false, "Print Trace Map")
 var ver = fSet.Bool("V", false, "Print Version")
 var src_addr = fSet.String("S", "", "Use the following IP address as the source address in outgoing packets")
 var src_dev = fSet.String("D", "", "Use the following Network Devices as the source address in outgoing packets")
@@ -235,4 +238,10 @@ func main() {
 		r := reporter.New(res, ip.String())
 		r.Print()
 	}
+
+	if *maptrace {
+		r, _ := json.Marshal(res)
+		tracemap.GetMapUrl(string(r))
+	}
+
 }

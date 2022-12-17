@@ -15,6 +15,8 @@ type IPGeoData struct {
 	Isp      string              `json:"isp"`
 	Domain   string              `json:"domain"`
 	Whois    string              `json:"whois"`
+	Lat      float64             `json:"lat"`
+	Lng      float64             `json:"lng"`
 	Prefix   string              `json:"prefix"`
 	Router   map[string][]string `json:"router"`
 	Source   string              `json:"source"`
