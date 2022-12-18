@@ -180,7 +180,9 @@ Options:
 
 ## 项目截图
 
-![NextTrace Screenshot](asset/nexttrace021.png)
+![image](https://user-images.githubusercontent.com/13616352/208289553-7f633f9c-7356-40d1-bbc4-cc2687419cca.png)
+
+![image](https://user-images.githubusercontent.com/13616352/208289568-2a135c2d-ae4a-4a3e-8a43-f5a9a87ade4a.png)
 
 ## NextTrace Enhanced
 
