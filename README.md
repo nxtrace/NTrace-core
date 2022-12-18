@@ -56,8 +56,13 @@ nexttrace 2606:4700:4700::1111
 # Path Visualization With the -M parameter, a map URL is returned
 nexttrace -M koreacentral.blob.core.windows.net
 # MapTrace URL: https://api.leo.moe/tracemap/html/c14e439e-3250-5310-8965-42a1e3545266.html
-
 ```
+
+PS: The routing visualization drawing module was written by [@tsosunchia](https://github.com/tsosunchia), and the specific code can be viewed at [tsosunchia/traceMap](https://github.com/tsosunchia/traceMap).
+
+Note that in LeoMoeAPI 2.0, due to the addition of geographical location data, **we have deprecated the online query part of the OpenStreetMap API in the traceMap plugin and are using location information from our own database**.
+
+The routing visualization function requires the geographical coordinates of each Hop, but third-party APIs generally do not provide this information, so this function is currently only supported when used with LeoMoeAPI.
 
 `NextTrace` now supports quick testing, and friends who have a one-time backhaul routing test requirement can use it
 
