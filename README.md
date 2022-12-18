@@ -182,7 +182,10 @@ Options:
 
 ## Project screenshot
 
-![image](https://user-images.githubusercontent.com/13616352/206985990-9a64e173-13b9-47e4-82e2-89b856dce1cd.png)
+![image](https://user-images.githubusercontent.com/13616352/208289553-7f633f9c-7356-40d1-bbc4-cc2687419cca.png)
+
+![image](https://user-images.githubusercontent.com/13616352/208289568-2a135c2d-ae4a-4a3e-8a43-f5a9a87ade4a.png)
+
 
 ## NextTrace Enhanced
 
