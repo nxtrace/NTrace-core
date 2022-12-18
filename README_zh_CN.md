@@ -4,15 +4,13 @@
 
 </div>
 
-## NextTrace Lite
+## NextTrace
 
 一款追求轻量的开源可视化路由跟踪工具，使用 Golang 开发。
 
-NextTrace 一共有2个版本，专注于轻量的 Lite 版本以及更面向发烧友的 [Enhanced 版本](#nexttrace-enhanced)。
-
 如果您对 NextTrace 项目本身感兴趣，可以阅读 [有关 NextTrace 的一些碎碎念](https://leo.moe/annoucement/nexttrace.html) 或许可以帮您解决疑惑。
 
-PS: Lite 版本追求轻量化，并不提供基于高德地图 / OpenStreetMap 的路由可视化功能，如有需要，请使用 Enhanced 版本。
+2022/12/18: 由于时间精力的关系，同时维护2个分支变得愈发困难，近期我将逐步停止 NextTrace Enhanced 版本的支持，如有觉得 NextTrace Enhanced 一些不错的功能，可以在 issue 里面提出来。待我重新有富裕时间时重新恢复对 `Enhanced` 版本的更新。
 
 ## How To Use
 
@@ -47,6 +45,10 @@ nexttrace -table 1.0.0.1
 
 # IPv6 ICMP Trace
 nexttrace 2606:4700:4700::1111
+
+# 路径可视化 使用 -M 参数，将返回一个地图 URL
+nexttrace -M koreacentral.blob.core.windows.net
+# MapTrace URL: https://api.leo.moe/tracemap/html/c14e439e-3250-5310-8965-42a1e3545266.html
 ```
 
 `NextTrace` 现已经支持快速测试，有一次性测试回程路由需求的朋友可以使用
@@ -185,6 +187,8 @@ Options:
 `NextTrace Enhanced` 是面向发烧友的增强版，`Enhanced`提供Web API形式的路由跟踪调用，以及一个简单的自带可视化的Looking Glass网页。
 
 `Enhanced` 版本支持很多`lite`版本没有的功能，如能够自定义设置超时时间，也能指定TTL作为起点进行路由跟踪等，对于普通用户来说，通常`lite`版本已经足够完成大部分需要。
+
+**很遗憾，由于时间精力的关系，`Enhanced` 版本将在很长一段时间不会再收到新的更新补丁，我们将继续维护 `Standard` 版本。**
 
 https://github.com/OwO-Network/nexttrace-enhanced
 

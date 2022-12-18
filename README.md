@@ -4,15 +4,13 @@
 
 </div>
 
-## NextTrace Lite
+## NextTrace
 
 Document Language: English | [简体中文](README_zh_CN.md)
 
 An open source visual routing tool that pursues light weight, developed using Golang.
 
-NextTrace has a total of 2 versions, the Lite version focusing on lightweight and the [Enhanced version](#nexttrace-enhanced) which is more enthusiast-oriented.
-
-PS: Our Lite version does not provide OSM based geolocation visualization, we provide this parameter in the enhanced version if needed.
+2022/12/18: Due to time and effort, it is becoming more and more difficult to maintain 2 branches at the same time, so I will be phasing out support for the NextTrace Enhanced version in the near future. I will resume updating the `Enhanced` version when I have more time.
 
 ## IP Data Copyright
 
@@ -54,6 +52,11 @@ nexttrace -table 1.0.0.1
 
 # IPv6 ICMP Trace
 nexttrace 2606:4700:4700::1111
+
+# Path Visualization With the -M parameter, a map URL is returned
+nexttrace -M koreacentral.blob.core.windows.net
+# MapTrace URL: https://api.leo.moe/tracemap/html/c14e439e-3250-5310-8965-42a1e3545266.html
+
 ```
 
 `NextTrace` now supports quick testing, and friends who have a one-time backhaul routing test requirement can use it
