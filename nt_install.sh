@@ -17,10 +17,14 @@ checkSystemArch() {
     arch=$(uname -m)
     if [[ $arch == "x86_64" ]]; then
     archParam="amd64"
-    fi
-
-    if [[ $arch == "aarch64" ]]; then
+    elif [[ $arch == "i386" ]]; then
+    archParam="386"
+    elif [[ $arch == "aarch64" ]]; then
     archParam="arm64"
+    elif [[ $arch == "armv7l" ]] || [[ $arch == "armv7ml" ]]; then
+    archParam="armv7"
+    elif [[ $arch == "mips" ]]; then
+    archParam="mips"
     fi
 }
 
