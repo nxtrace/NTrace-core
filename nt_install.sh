@@ -17,10 +17,14 @@ checkSystemArch() {
     arch=$(uname -m)
     if [[ $arch == "x86_64" ]]; then
     archParam="amd64"
-    fi
-
-    if [[ $arch == "aarch64" ]]; then
+    elif [[ $arch == "i386" ]]; then
+    archParam="386"
+    elif [[ $arch == "aarch64" ]]; then
     archParam="arm64"
+    elif [[ $arch == "armv7l" ]] || [[ $arch == "armv7ml" ]]; then
+    archParam="armv7"
+    elif [[ $arch == "mips" ]]; then
+    archParam="mips"
     fi
 }
 
@@ -28,7 +32,14 @@ checkSystemDistribution() {
     case "$OSTYPE" in
     linux*)   
     osDistribution="linux"
+    
+    if [ ! -d "/usr/local" ]; 
+    then 
+    downPath="/usr/bin/nexttrace"
+    else 
     downPath="/usr/local/bin/nexttrace"
+    fi
+
     ;;
     *)
     echo "unknown: $OSTYPE"
@@ -109,7 +120,7 @@ changeMode() {
 runBinrayFileHelp() {
     if [ -e ${downPath} ]; then
     ${downPath} -V
-    echo -e "${Tips} 一切准备就绪！使用命令 nexttrace 1.1.1.1 开始您的第一次路由测试吧~ 更多进阶命令玩法可以用 nexttrace -h 查看哦\n       关于软件卸载，因为nexttrace是绿色版单文件，卸载只需输入命令 rm /usr/local/bin/nexttrace 即可"
+    echo -e "${Tips} 一切准备就绪！使用命令 nexttrace 1.1.1.1 开始您的第一次路由测试吧~ 更多进阶命令玩法可以用 nexttrace -h 查看哦\n       关于软件卸载，因为nexttrace是绿色版单文件，卸载只需输入命令 rm ${downPath} 即可"
     fi
 }
 
