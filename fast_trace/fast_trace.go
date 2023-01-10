@@ -53,7 +53,7 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 		} else {
 			conf.RealtimePrinter = printer.RealtimePrinter
 		}
-		
+
 	}
 
 	res, err := trace.Traceroute(f.TracerouteMethod, conf)
@@ -115,6 +115,14 @@ func FastTest(tm bool, outEnable bool) {
 	var c string
 
 	oe = outEnable
+
+	fmt.Println("请您选择要测试的 IP 类型\n1. IPv4\n2. IPv6")
+	fmt.Print("请选择选项：")
+	fmt.Scanln(&c)
+	if c == "2" {
+		FastTestv6(tm, outEnable)
+		return
+	}
 
 	fmt.Println("您想测试哪些ISP的路由？\n1. 国内四网\n2. 电信\n3. 联通\n4. 移动\n5. 教育网")
 	fmt.Print("请选择选项：")

@@ -54,16 +54,19 @@ var Beijing = BackBoneCollection{
 	CU169: ISPCollection{
 		ISPName: CU169,
 		IP:      "123.125.96.156",
+		IPv6:    "2408:8000:1010:2::10",
 	},
 
 	CM: ISPCollection{
 		ISPName: CM,
 		IP:      "211.136.25.153",
+		IPv6:    "2409:8000:3800:8::3",
 	},
 
 	EDU: ISPCollection{
 		ISPName: EDU,
 		IP:      "101.6.15.130",
+		IPv6:    "2001:da8::666",
 	},
 }
 
@@ -72,6 +75,7 @@ var Shanghai = BackBoneCollection{
 	CT163: ISPCollection{
 		ISPName: CT163,
 		IP:      "101.226.28.198",
+		IPv6:    "240e:18:2:153::89",
 	},
 
 	CTCN2: ISPCollection{
@@ -82,21 +86,25 @@ var Shanghai = BackBoneCollection{
 	CU169: ISPCollection{
 		ISPName: CU169,
 		IP:      "139.226.206.150",
+		IPv6:    "2408:8000:9000:0:4000::437",
 	},
 
 	CU9929: ISPCollection{
 		ISPName: CU9929,
 		IP:      "210.13.86.1",
+		IPv6:    "2408:8120:2::d6",
 	},
 
 	CM: ISPCollection{
 		ISPName: CM,
 		IP:      "120.204.34.85",
+		IPv6:    "2409:801e:f0:1::4e1",
 	},
 
 	EDU: ISPCollection{
 		ISPName: EDU,
 		IP:      "202.120.58.155",
+		IPv6:    "2001:da8:8000:1:202:120:2:100",
 	},
 }
 
@@ -111,11 +119,13 @@ var Guangzhou = BackBoneCollection{
 	CU169: ISPCollection{
 		ISPName: CU169,
 		IP:      "157.18.0.22",
+		IPv6:    "2408:8001:3161:4::1",
 	},
 
 	CM: ISPCollection{
 		ISPName: CM,
 		IP:      "120.198.26.254",
+		IPv6:    "2409:8055:3008:1116::150",
 	},
 }
 
@@ -124,19 +134,23 @@ var Hangzhou = BackBoneCollection{
 	CT163: ISPCollection{
 		ISPName: CT163,
 		IP:      "61.164.23.196",
+		IPv6:    "240e:f3:c000:201::10",
 	},
 	CU169: ISPCollection{
 		ISPName: CU169,
 		IP:      "60.12.244.1",
+		IPv6:    "",
 	},
 	CM: ISPCollection{
 		ISPName: CM,
 		IP:      "112.17.224.98",
+		IPv6:    "2409:8028:840:2::11",
 	},
 	// 浙江大学 教育网
 	EDU: ISPCollection{
 		ISPName: EDU,
 		IP:      "210.32.2.1",
+		IPv6:    "2001:da8:e000:1::1",
 	},
 }
 
@@ -146,6 +160,7 @@ var Hefei = BackBoneCollection{
 	EDU: ISPCollection{
 		ISPName: EDU,
 		IP:      "202.38.64.1",
+		IPv6:    "2001:da8:d805:ffff:2::1",
 	},
 	// 中国科学技术大学 科技网
 	CST: ISPCollection{
