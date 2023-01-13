@@ -47,25 +47,16 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 		Timeout:          1 * time.Second,
 	}
 
-	if f.TracerouteMethod == trace.ICMPTrace {
-		if oe {
-			conf.RealtimePrinter = tracelog.RealtimePrinter
-		} else {
-			conf.RealtimePrinter = printer.RealtimePrinter
-		}
-
+	if oe {
+		conf.RealtimePrinter = tracelog.RealtimePrinter
+	} else {
+		conf.RealtimePrinter = printer.RealtimePrinter
 	}
 
-	res, err := trace.Traceroute(f.TracerouteMethod, conf)
+	_, err = trace.Traceroute(f.TracerouteMethod, conf)
 
 	if err != nil {
 		log.Fatal(err)
-	}
-
-	if f.TracerouteMethod == trace.TCPTrace {
-		printer.TracerouteTablePrinter(res)
-		// 单次测试结束阻塞 3 秒，仅阻塞 TCP
-		<-time.After(time.Second * 3)
 	}
 	println()
 }
