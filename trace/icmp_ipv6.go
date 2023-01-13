@@ -6,7 +6,7 @@ import (
 	"os"
 	"sync"
 	"time"
-
+  "encoding/binary"
 	"golang.org/x/net/context"
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv6"
@@ -74,19 +74,36 @@ func (t *ICMPTracerv6) listenICMP() {
 			if msg.N == nil {
 				continue
 			}
-			rm, err := icmp.ParseMessage(58, msg.Msg[:*msg.N])
-			if err != nil {
-				log.Println(err)
-				continue
+			dstip := net.IP(msg.Msg[32:48])
+			if binary.BigEndian.Uint16(msg.Msg[52:54]) != uint16(os.Getpid()&0xffff) {
+				//	// 如果类型为应答消息，且应答消息包的进程ID与主进程相同时不跳过
+				if binary.BigEndian.Uint16(msg.Msg[52:54]) != 0 {
+					continue
+				} else {
+					if dstip.String() != "::" {
+						continue
+					}
+					if msg.Peer.String() != t.DestIP.String() {
+						continue
+					}
+				}
 			}
-			// log.Println(msg.Peer)
-			switch rm.Type {
-			case ipv6.ICMPTypeTimeExceeded:
-				t.handleICMPMessage(msg, 0, rm.Body.(*icmp.TimeExceeded).Data)
-			case ipv6.ICMPTypeEchoReply:
-				t.handleICMPMessage(msg, 1, rm.Body.(*icmp.Echo).Data)
-			default:
-				// log.Println("received icmp message of unknown type", rm.Type)
+
+			if dstip.Equal(t.DestIP) || dstip.Equal(net.IPv6zero) {
+				rm, err := icmp.ParseMessage(58, msg.Msg[:*msg.N])
+				if err != nil {
+					log.Println(err)
+					continue
+				}
+				// log.Println(msg.Peer)
+				switch rm.Type {
+				case ipv6.ICMPTypeTimeExceeded:
+					t.handleICMPMessage(msg, 0, rm.Body.(*icmp.TimeExceeded).Data)
+				case ipv6.ICMPTypeEchoReply:
+					t.handleICMPMessage(msg, 1, rm.Body.(*icmp.Echo).Data)
+				default:
+					// log.Println("received icmp message of unknown type", rm.Type)
+				}
 			}
 		}
 	}
