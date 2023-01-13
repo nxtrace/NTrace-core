@@ -87,10 +87,13 @@ func (t *TCPTracer) Execute() (*Result, error) {
 		time.Sleep(1 * time.Millisecond)
 	}
 	go func() {
-		for {
-			t.AsyncPrinter(&t.res)
-			time.Sleep(50 * time.Millisecond)
+		if t.AsyncPrinter != nil {
+			for {
+				t.AsyncPrinter(&t.res)
+				time.Sleep(50 * time.Millisecond)
+			}
 		}
+
 	}()
 
 	// 如果是表格模式，则一次性并发请求
