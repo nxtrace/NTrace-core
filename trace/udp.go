@@ -69,8 +69,14 @@ func (t *UDPTracer) Execute() (*Result, error) {
 		}
 		time.Sleep(1 * time.Millisecond)
 	}
+	go func() {
+		for {
+			t.AsyncPrinter(&t.res)
+			time.Sleep(50 * time.Millisecond)
+		}
+	}()
 	// 如果是表格模式，则一次性并发请求
-	if t.RealtimePrinter == nil {
+	if t.AsyncPrinter != nil {
 		t.wg.Wait()
 	}
 	t.res.reduce(t.final)
@@ -100,7 +106,7 @@ func (t *UDPTracer) listenICMP() {
 			case ipv4.ICMPTypeDestinationUnreachable:
 				t.handleICMPMessage(msg, rm.Body.(*icmp.DstUnreach).Data)
 			default:
-				log.Println("received icmp message of unknown type", rm.Type)
+				// log.Println("received icmp message of unknown type", rm.Type)
 			}
 		}
 	}

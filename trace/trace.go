@@ -28,6 +28,7 @@ type Config struct {
 	IPGeoSource      ipgeo.Source
 	RDns             bool
 	RealtimePrinter  func(res *Result, ttl int)
+	AsyncPrinter     func(res *Result)
 }
 
 type Method string

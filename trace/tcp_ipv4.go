@@ -83,8 +83,16 @@ func (t *TCPTracer) Execute() (*Result, error) {
 			t.wg.Wait()
 			t.RealtimePrinter(&t.res, ttl-1)
 		}
+
 		time.Sleep(1 * time.Millisecond)
 	}
+	go func() {
+		for {
+			t.AsyncPrinter(&t.res)
+			time.Sleep(50 * time.Millisecond)
+		}
+	}()
+
 	// 如果是表格模式，则一次性并发请求
 	if t.RealtimePrinter == nil {
 		t.wg.Wait()

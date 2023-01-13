@@ -58,6 +58,9 @@ func (t *ICMPTracer) Execute() (*Result, error) {
 		if t.RealtimePrinter != nil {
 			t.RealtimePrinter(&t.res, ttl-1)
 		}
+		if t.AsyncPrinter != nil {
+			t.AsyncPrinter(&t.res)
+		}
 	}
 	t.res.reduce(t.final)
 

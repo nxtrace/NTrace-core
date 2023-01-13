@@ -37,14 +37,17 @@ func TracerouteTablePrinter(res *trace.Result) {
 				tbl.AddRow(data.Hop, data.IP, data.Latency, data.Asnumber, "", data.Owner)
 			} else {
 				if data.City != "" {
-					tbl.AddRow(data.Hop, data.IP, data.Latency, data.Asnumber, data.Country+", "+data.Prov+", "+data.City, data.Owner)
+					tbl.AddRow(data.Hop, data.IP, data.Latency, data.Asnumber, data.City+", "+data.Prov+", "+data.Country, data.Owner)
+				} else if data.Prov != "" {
+					tbl.AddRow(data.Hop, data.IP, data.Latency, data.Asnumber, data.Prov+", "+data.Country, data.Owner)
 				} else {
-					tbl.AddRow(data.Hop, data.IP, data.Latency, data.Asnumber, data.Country + ", " + data.Prov, data.Owner)
+					tbl.AddRow(data.Hop, data.IP, data.Latency, data.Asnumber, data.Country, data.Owner)
 				}
 
 			}
 		}
 	}
+	fmt.Print("\033[H\033[2J")
 	// 打印表格
 	tbl.Print()
 }
@@ -75,7 +78,7 @@ func tableDataGenerator(h trace.Hop) *rowData {
 				IP:      IP,
 				Latency: lantency,
 				Country: "LAN Address",
-				Prov:    "LAN Address",
+				Prov:    "",
 				Owner:   "",
 			}
 		} else if strings.HasPrefix(IP, "11.") {
@@ -84,7 +87,7 @@ func tableDataGenerator(h trace.Hop) *rowData {
 				IP:      IP,
 				Latency: lantency,
 				Country: "LAN Address",
-				Prov:    "LAN Address",
+				Prov:    "",
 				Owner:   "",
 			}
 		}
@@ -102,9 +105,9 @@ func tableDataGenerator(h trace.Hop) *rowData {
 			IP:       IP,
 			Latency:  lantency,
 			Asnumber: h.Geo.Asnumber,
-			Country:  h.Geo.Country,
-			Prov:     h.Geo.Prov,
-			City:     h.Geo.City,
+			Country:  h.Geo.CountryEn,
+			Prov:     h.Geo.ProvEn,
+			City:     h.Geo.CityEn,
 			District: h.Geo.District,
 			Owner:    h.Geo.Owner,
 		}
@@ -117,9 +120,9 @@ func tableDataGenerator(h trace.Hop) *rowData {
 			h.Geo.Owner = h.Geo.Isp
 		}
 		r.Asnumber = h.Geo.Asnumber
-		r.Country = h.Geo.Country
-		r.Prov = h.Geo.Prov
-		r.City = h.Geo.City
+		r.Country = h.Geo.CountryEn
+		r.Prov = h.Geo.ProvEn
+		r.City = h.Geo.CityEn
 		r.District = h.Geo.District
 		r.Owner = h.Geo.Owner
 		return r

@@ -1,12 +1,13 @@
 package trace
 
 import (
+	"encoding/binary"
 	"log"
 	"net"
 	"os"
 	"sync"
 	"time"
-  "encoding/binary"
+
 	"golang.org/x/net/context"
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv6"
@@ -56,6 +57,10 @@ func (t *ICMPTracerv6) Execute() (*Result, error) {
 		t.wg.Wait()
 		if t.RealtimePrinter != nil {
 			t.RealtimePrinter(&t.res, ttl-1)
+		}
+
+		if t.AsyncPrinter != nil {
+			t.AsyncPrinter(&t.res)
 		}
 	}
 	t.res.reduce(t.final)

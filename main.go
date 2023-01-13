@@ -222,6 +222,8 @@ func main() {
 				conf.RealtimePrinter = printer.RealtimePrinter
 			}
 		}
+	} else {
+		conf.AsyncPrinter = printer.TracerouteTablePrinter
 	}
 
 	res, err := trace.Traceroute(m, conf)
