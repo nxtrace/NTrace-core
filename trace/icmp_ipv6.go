@@ -135,7 +135,7 @@ func (t *ICMPTracerv6) listenICMP() {
 			if msg.N == nil {
 				continue
 			}
-			if msg.Msg[129] == 0 {
+			if msg.Msg[0] == 129 {
 				rm, err := icmp.ParseMessage(58, msg.Msg[:*msg.N])
 				if err != nil {
 					log.Println(err)
@@ -161,7 +161,7 @@ func (t *ICMPTracerv6) listenICMP() {
 				if process_id == int64(os.Getpid()&0x7f) {
 					dstip := net.IP(msg.Msg[32:48])
 					// 无效包本地环回包
-					if dstip.String() != "::" {
+					if dstip.String() == "::" {
 						continue
 					}
 					if dstip.Equal(t.DestIP) || dstip.Equal(net.IPv6zero) {

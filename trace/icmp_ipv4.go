@@ -29,16 +29,20 @@ type ICMPTracer struct {
 }
 
 func (t *ICMPTracer) PrintFunc() {
-	// defer t.wg.Done()
+	defer t.wg.Done()
 	var ttl = 0
 	for {
+		if t.AsyncPrinter != nil {
+			t.AsyncPrinter(&t.res)
+		}
 		if t.RealtimePrinter != nil {
 			// 接收的时候检查一下是不是 3 跳都齐了
 			if len(t.res.Hops)-1 > ttl {
 				if len(t.res.Hops[ttl]) == t.NumMeasurements {
 					t.RealtimePrinter(&t.res, ttl)
 					ttl++
-					if ttl == t.final {
+
+					if ttl == t.final-1 || ttl >= t.MaxHops-1 {
 						return
 					}
 				}
@@ -50,6 +54,7 @@ func (t *ICMPTracer) PrintFunc() {
 
 func (t *ICMPTracer) Execute() (*Result, error) {
 	t.inflightRequest = make(map[int]chan Hop)
+
 	if len(t.res.Hops) > 0 {
 		return &t.res, ErrTracerouteExecuted
 	}
@@ -68,6 +73,7 @@ func (t *ICMPTracer) Execute() (*Result, error) {
 	t.final = -1
 
 	go t.listenICMP()
+	t.wg.Add(1)
 	go t.PrintFunc()
 	for ttl := t.BeginHop; ttl <= t.MaxHops; ttl++ {
 		t.inflightRequestLock.Lock()
@@ -81,15 +87,14 @@ func (t *ICMPTracer) Execute() (*Result, error) {
 			go t.send(ttl)
 		}
 		<-time.After(time.Millisecond * 100)
-		if t.AsyncPrinter != nil {
-			t.AsyncPrinter(&t.res)
-		}
 	}
 
 	t.wg.Wait()
 	t.res.reduce(t.final)
 	if t.final != -1 {
-		t.RealtimePrinter(&t.res, t.final-1)
+		if t.RealtimePrinter != nil {
+			t.RealtimePrinter(&t.res, t.final-1)
+		}
 	} else {
 		for i := 0; i < t.NumMeasurements; i++ {
 			t.res.add(Hop{
@@ -100,7 +105,9 @@ func (t *ICMPTracer) Execute() (*Result, error) {
 				Error:   ErrHopLimitTimeout,
 			})
 		}
-		t.RealtimePrinter(&t.res, t.MaxHops-1)
+		if t.RealtimePrinter != nil {
+			t.RealtimePrinter(&t.res, t.MaxHops-1)
+		}
 	}
 	return &t.res, nil
 }
@@ -293,7 +300,6 @@ func (t *ICMPTracer) send(ttl int) error {
 		h.fetchIPData(t.Config)
 
 		t.res.add(h)
-
 	case <-time.After(t.Timeout):
 		if t.final != -1 && ttl > t.final {
 			return nil
