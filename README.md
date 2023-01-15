@@ -12,7 +12,7 @@ An open source visual routing tool that pursues light weight, developed using Go
 
 ## 公告
 
-我今天看到了一些非常难过的事情，一些用户在 BestTrace 和 Worttrace 下面宣传 NextTrace 的完全可替代性。
+我今天看到了一些非常难过的事情，一些用户在 BestTrace 和 WorstTrace 下面宣传 NextTrace 的完全可替代性。
 
 这么做是不正确的，NextTrace 从来都不是一个从零开始的软件，NextTrace 之所以能够拥有某些功能特性，是因为吸取了 BestTrace 、WorstTrace 的一些想法。
 
