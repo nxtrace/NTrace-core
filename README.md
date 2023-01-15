@@ -10,6 +10,18 @@ An open source visual routing tool that pursues light weight, developed using Go
 
 2022/12/18: Due to time and effort, it is becoming more and more difficult to maintain 2 branches at the same time, so I will be phasing out support for the NextTrace Enhanced version in the near future. I will resume updating the `Enhanced` version when I have more time.
 
+## 公告
+
+我今天看到了一些非常难过的事情，一些用户在 BestTrace 和 Worttrace 下面宣传 NextTrace 的完全可替代性。
+
+这么做是不正确的，NextTrace 从来都不是一个从零开始的软件，NextTrace 之所以能够拥有某些功能特性，是因为吸取了 BestTrace 、WorstTrace 的一些想法。
+
+我们希望您在使用的时候知晓这一点，**我们是站在巨人的肩膀上，而尊重其他软件作者，向他们或者是我们提交 Bug 或贡献代码，才是推动整个 traceroute 工具的软件多样化发展的最好方式**。
+
+NextTrace 并不追求成为一个替代者，同类软件越多样化，才能满足更多人的需求，这才是我们希望看到的，而去诋毁其他软件，这违背了我们对于开发 NextTrace 的初衷。
+
+我们希望看到这条公告的朋友应该主动删除自己过激的言论，如果您有任何问题或建议，请随时在我们的社区中发表。
+
 ## LeoMoeAPI Credit
 
 NextTrace 重点在于研究 Go 语言 Traceroute 的实现，其 LeoMoeAPI 的地理位置信息并没有原始数据的支撑，故也不可能有商用版本。
