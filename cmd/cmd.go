@@ -56,7 +56,6 @@ func Excute() {
 		// In case of error print error and print usage
 		// This can also be done by passing -h or --help flags
 		fmt.Print(parser.Usage(err))
-		return
 	}
 
 	if *ver {
@@ -66,6 +65,11 @@ func Excute() {
 
 	domain := *str
 
+	if domain == "" {
+		fmt.Print(parser.Usage(err))
+		return
+	}
+
 	if *fast_trace {
 		fastTrace.FastTest(*tcp, *output)
 		if *output {
@@ -73,11 +77,6 @@ func Excute() {
 		}
 
 		os.Exit(0)
-	}
-
-	if domain == "" {
-		fmt.Print(parser.Usage(err))
-		return
 	}
 
 	capabilities_check()
