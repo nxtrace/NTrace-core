@@ -81,13 +81,13 @@ Windows users please go to [Release Page](https://github.com/sjlleo/nexttrace/re
 nexttrace 1.0.0.1
 
 # Form printing (output all hops at one time, wait 20-40 seconds)
-nexttrace -table 1.0.0.1
+nexttrace --table 1.0.0.1
 
 # IPv6 ICMP Trace
 nexttrace 2606:4700:4700::1111
 
 # Path Visualization With the -M parameter, a map URL is returned
-nexttrace -M koreacentral.blob.core.windows.net
+nexttrace --map koreacentral.blob.core.windows.net
 # MapTrace URL: https://api.leo.moe/tracemap/html/c14e439e-3250-5310-8965-42a1e3545266.html
 ```
 
@@ -101,21 +101,21 @@ The routing visualization function requires the geographical coordinates of each
 
 ```bash
 # IPv4 ICMP Fast Test (Beijing + Shanghai + Guangzhou + Hangzhou) in China Telecom / Unicom / Mobile / Education Network
-nexttrace -f
+nexttrace -F
 
 # You can also use TCP SYN for testing
-nexttrace -f -T
+nexttrace -F -T
 ```
 
 `NextTrace` already supports route tracing for specified Network Devices
 
 ```bash
 # Use eth0 network interface
-nexttrace -D eth0 2606:4700:4700::1111
+nexttrace --dev eth0 2606:4700:4700::1111
 
 # Use eth0 network interface's IP
 # When using the network interface's IP for route tracing, note that the IP type to be traced should be the same as network interface's IP type (e.g. both IPv4)
-nexttrace -S 204.98.134.56 9.9.9.9
+nexttrace --source 204.98.134.56 9.9.9.9
 ```
 
 `NextTrace` can also use `TCP` and `UDP` protocols to perform `Traceroute` requests, but these protocols only supports `IPv4` now
@@ -143,7 +143,7 @@ nexttrace -q 2 www.hkix.net
 nexttrace -r 1 www.hkix.net
 
 # Start Trace with TTL of 5, end at TTL of 10
-nexttrace -b 5 -m 10 www.decix.net
+nexttrace -f 5 -m 10 www.decix.net
 
 # Turn off the IP reverse parsing function
 nexttrace -n www.bbix.net
@@ -157,7 +157,7 @@ nexttrace -n www.bbix.net
 #  ╰AS36776 Five9 Inc.「Philippines『Metro Manila』」
 #  ╭╯
 #  ╰AS37963 Aliyun「ALIDNS.COM『ALIDNS.COM』」
-nexttrace -report www.time.com.my
+nexttrace --route-path www.time.com.my
 ```
 
 `NextTrace` supports users to select their own IP API (currently supports: `LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`)
@@ -175,8 +175,8 @@ nexttrace -d IP.SB
 
 ```bash
 Example:
-nexttrace -d IPInsight -m 20 -p 443 -q 5 -r 20 -rdns 1.1.1.1
-nexttrace -T -q 2 -r 1 -table -report 2001:4860:4860::8888
+nexttrace --data-provider LeoMoeAPI -m 20 -p 443 -q 5 -n 1.1.1.1
+nexttrace -T -q 2 -r 1 --table --route-path 2001:4860:4860::8888
 ```
 
 ### IP Database

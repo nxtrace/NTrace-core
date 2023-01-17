@@ -41,7 +41,7 @@ Windows 用户请直接前往 [Release](https://github.com/sjlleo/nexttrace/rele
 nexttrace 1.0.0.1
 
 # 表格打印（一次性输出全部跳数，需等待20-40秒）
-nexttrace -table 1.0.0.1
+nexttrace --table 1.0.0.1
 
 # IPv6 ICMP Trace
 nexttrace 2606:4700:4700::1111
@@ -61,10 +61,10 @@ PS: 路由可视化的绘制模块由 [@tsosunchia](https://github.com/tsosunchi
 
 ```bash
 # 北上广（电信+联通+移动+教育网）IPv4 ICMP 快速测试
-nexttrace -f
+nexttrace -F
 
 # 也可以使用 TCP SYN 而非 ICMP 进行测试
-nexttrace -f -T
+nexttrace -F -T
 ```
 
 `NextTrace` 已支持指定网卡进行路由跟踪
@@ -119,7 +119,7 @@ nexttrace -n www.bbix.net
 #  ╰AS36776 Five9 Inc.「Philippines『Metro Manila』」
 #  ╭╯
 #  ╰AS37963 阿里云「ALIDNS.COM『ALIDNS.COM』」
-nexttrace -report www.time.com.my
+nexttrace --route-path www.time.com.my
 ```
 
 `NextTrace`支持用户自主选择 IP 数据库（目前支持：`LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`）
@@ -137,8 +137,8 @@ nexttrace -d IP.SB
 
 ```bash
 Example:
-nexttrace -d IPInsight -m 20 -p 443 -q 5 -r 20 -rdns 1.1.1.1
-nexttrace -T -q 2 -r 1 -table -report 2001:4860:4860::8888
+nexttrace --data-provider LeoMoeAPI -m 20 -p 443 -q 5 --parallel-requests 20 -n 1.1.1.1
+nexttrace -T -q 2 --table --route-path 2001:4860:4860::8888
 ```
 
 ### IP 数据库
