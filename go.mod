@@ -3,6 +3,7 @@ module github.com/xgadget-lab/nexttrace
 go 1.19
 
 require (
+	github.com/akamensky/argparse v1.4.0
 	github.com/google/gopacket v1.1.19
 	github.com/syndtr/gocapability v0.0.0-20200815063812-42c35b437635
 	golang.org/x/net v0.5.0
