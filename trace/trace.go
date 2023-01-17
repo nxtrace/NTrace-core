@@ -116,10 +116,25 @@ type Hop struct {
 }
 
 func (h *Hop) fetchIPData(c Config) (err error) {
+	timeout := time.Millisecond * 800
 	if c.RDns && h.Hostname == "" {
-		ptr, err := net.LookupAddr(h.Address.String())
-		if err == nil && len(ptr) > 0 {
-			h.Hostname = ptr[0]
+		result := make(chan []string)
+		go func() {
+			r, err := net.LookupAddr(h.Address.String())
+			if err != nil {
+				result <- nil
+			} else {
+				result <- r
+			}
+		}()
+		select {
+		case ptr := <-result:
+			// process result
+			if err == nil && len(ptr) > 0 {
+				h.Hostname = ptr[0]
+			}
+		case <-time.After(timeout):
+			// handle timeout
 		}
 	}
 	if c.IPGeoSource != nil && h.Geo == nil {
