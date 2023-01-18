@@ -31,18 +31,23 @@ func (t *ICMPTracerv6) PrintFunc() {
 	// defer t.wg.Done()
 	var ttl = t.Config.BeginHop - 1
 	for {
-		if t.RealtimePrinter != nil {
-			// 接收的时候检查一下是不是 3 跳都齐了
-			if len(t.res.Hops)-1 > ttl {
-				if len(t.res.Hops[ttl]) == t.NumMeasurements {
+		if t.AsyncPrinter != nil {
+			t.AsyncPrinter(&t.res)
+		}
+
+		// 接收的时候检查一下是不是 3 跳都齐了
+		if len(t.res.Hops)-1 > ttl {
+			if len(t.res.Hops[ttl]) == t.NumMeasurements {
+				if t.RealtimePrinter != nil {
 					t.RealtimePrinter(&t.res, ttl)
-					ttl++
-					if ttl == t.final {
-						return
-					}
+				}
+				ttl++
+				if ttl == t.final {
+					return
 				}
 			}
 		}
+
 		<-time.After(100 * time.Millisecond)
 	}
 }
@@ -82,9 +87,6 @@ func (t *ICMPTracerv6) Execute() (*Result, error) {
 			go t.send(ttl)
 		}
 		<-time.After(time.Millisecond * 100)
-		if t.AsyncPrinter != nil {
-			t.AsyncPrinter(&t.res)
-		}
 	}
 	// for ttl := t.BeginHop; ttl <= t.MaxHops; ttl++ {
 	// 	if t.final != -1 && ttl > t.final {
