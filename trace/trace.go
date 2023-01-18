@@ -27,6 +27,8 @@ type Config struct {
 	Quic             bool
 	IPGeoSource      ipgeo.Source
 	RDns             bool
+	PacketInterval   int
+	TTLInterval      int
 	RealtimePrinter  func(res *Result, ttl int)
 	AsyncPrinter     func(res *Result)
 }

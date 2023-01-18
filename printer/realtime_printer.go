@@ -79,8 +79,7 @@ func RealtimePrinter(res *trace.Result, ttl int) {
 			}
 			fmt.Fprintf(color.Output, " %s", color.New(color.FgHiGreen, color.Bold).Sprintf("%-16s", whoisFormat[0]))
 		}
-
-		if res.Hops[ttl][i].Geo.Country == "" {
+		if len(res.Hops[ttl][i].Geo.Country) <= 1 {
 			res.Hops[ttl][i].Geo.Country = "LAN Address"
 		}
 

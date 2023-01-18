@@ -73,7 +73,7 @@ func (t *UDPTracer) Execute() (*Result, error) {
 		if t.AsyncPrinter != nil {
 			for {
 				t.AsyncPrinter(&t.res)
-				time.Sleep(50 * time.Millisecond)
+				time.Sleep(200 * time.Millisecond)
 			}
 		}
 	}()

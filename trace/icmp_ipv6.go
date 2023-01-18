@@ -48,7 +48,7 @@ func (t *ICMPTracerv6) PrintFunc() {
 			}
 		}
 
-		<-time.After(100 * time.Millisecond)
+		<-time.After(200 * time.Millisecond)
 	}
 }
 
@@ -85,8 +85,9 @@ func (t *ICMPTracerv6) Execute() (*Result, error) {
 		for i := 0; i < t.NumMeasurements; i++ {
 			t.wg.Add(1)
 			go t.send(ttl)
+			<-time.After(time.Millisecond * time.Duration(t.Config.PacketInterval))
 		}
-		<-time.After(time.Millisecond * 100)
+		<-time.After(time.Millisecond * time.Duration(t.Config.TTLInterval))
 	}
 	// for ttl := t.BeginHop; ttl <= t.MaxHops; ttl++ {
 	// 	if t.final != -1 && ttl > t.final {

@@ -34,7 +34,7 @@ func Excute() {
 		"method (incremented by each probe, default is 33434), or initial seq for \"icmp\" (incremented as well, default from 1), or some constant" +
 		"destination port for other methods (with default of 80 for \"tcp\", 53 for \"udp\", etc.)"})
 	numMeasurements := parser.Int("q", "queries", &argparse.Options{Default: 3, Help: "Set the number of probes per each hop"})
-	parallelRequests := parser.Int("", "parallel-requests", &argparse.Options{Default: 18, Help: "Set ParallelRequests number. It should be 1 when there is a multi-routing."})
+	parallelRequests := parser.Int("", "parallel-requests", &argparse.Options{Default: 18, Help: "Set ParallelRequests number. It should be 1 when there is a multi-routing"})
 	maxHops := parser.Int("m", "max-hops", &argparse.Options{Default: 30, Help: "Set the max number of hops (max TTL to be reached)"})
 	dataOrigin := parser.Selector("d", "data-provider", []string{"IP.SB", "IPInfo", "IPInsight", "IPAPI.com"}, &argparse.Options{Default: "LeoMoeAPI",
 		Help: "Choose IP Geograph Data Provider [LeoMoeAPI,IP.SB, IPInfo, IPInsight, IPAPI.com]"})
@@ -49,6 +49,8 @@ func Excute() {
 	src_addr := parser.String("s", "source", &argparse.Options{Help: "Use source src_addr for outgoing packets"})
 	src_dev := parser.String("D", "dev", &argparse.Options{Help: "Use the following Network Devices as the source address in outgoing packets"})
 	router := parser.Flag("R", "route", &argparse.Options{Help: "Show Routing Table [Provided By BGP.Tools]"})
+	packet_interval := parser.Int("z", "send-time", &argparse.Options{Default: 0, Help: "Set the time interval for sending every packet. Useful when some routers use rate-limit for ICMP messages."})
+	ttl_interval := parser.Int("i", "ttl-time", &argparse.Options{Default: 500, Help: "Set the time interval for sending packets groups by TTL. Useful when some routers use rate-limit for ICMP messages."})
 	str := parser.StringPositional(&argparse.Options{Help: "IP Address or domain name"})
 
 	err := parser.Parse(os.Args)
@@ -58,13 +60,17 @@ func Excute() {
 		fmt.Print(parser.Usage(err))
 		return
 	}
-
+	printer.Version()
 	if *ver {
 		printer.CopyRight()
 		os.Exit(0)
 	}
 
 	domain := *str
+
+	if *port == 0 {
+		*port = 80
+	}
 
 	if *fast_trace {
 		fastTrace.FastTest(*tcp, *output)
@@ -139,6 +145,8 @@ func Excute() {
 		DestIP:           ip,
 		DestPort:         *port,
 		MaxHops:          *maxHops,
+		PacketInterval:   *packet_interval,
+		TTLInterval:      *ttl_interval,
 		NumMeasurements:  *numMeasurements,
 		ParallelRequests: *parallelRequests,
 		RDns:             !*noRdns,
