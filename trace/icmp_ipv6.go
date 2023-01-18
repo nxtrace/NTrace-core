@@ -120,7 +120,9 @@ func (t *ICMPTracerv6) Execute() (*Result, error) {
 				Error:   ErrHopLimitTimeout,
 			})
 		}
-		t.RealtimePrinter(&t.res, t.MaxHops-1)
+		if t.RealtimePrinter != nil {
+			t.RealtimePrinter(&t.res, t.MaxHops-1)
+		}
 	}
 
 	return &t.res, nil
