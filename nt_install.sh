@@ -119,7 +119,7 @@ changeMode() {
 
 runBinrayFileHelp() {
     if [ -e ${downPath} ]; then
-    ${downPath} -V
+    ${downPath} --version
     echo -e "${Tips} 一切准备就绪！使用命令 nexttrace 1.1.1.1 开始您的第一次路由测试吧~ 更多进阶命令玩法可以用 nexttrace -h 查看哦\n       关于软件卸载，因为nexttrace是绿色版单文件，卸载只需输入命令 rm ${downPath} 即可"
     fi
 }
