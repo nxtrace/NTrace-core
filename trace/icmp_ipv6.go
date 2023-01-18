@@ -29,7 +29,7 @@ type ICMPTracerv6 struct {
 
 func (t *ICMPTracerv6) PrintFunc() {
 	// defer t.wg.Done()
-	var ttl = 0
+	var ttl = t.Config.BeginHop - 1
 	for {
 		if t.RealtimePrinter != nil {
 			// 接收的时候检查一下是不是 3 跳都齐了

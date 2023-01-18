@@ -30,7 +30,7 @@ type ICMPTracer struct {
 
 func (t *ICMPTracer) PrintFunc() {
 	defer t.wg.Done()
-	var ttl = 0
+	var ttl = t.Config.BeginHop - 1
 	for {
 		if t.AsyncPrinter != nil {
 			t.AsyncPrinter(&t.res)
