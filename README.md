@@ -63,6 +63,9 @@ Document Language: English | [简体中文](README_zh_CN.md)
 # Linux one-click install script
 bash <(curl -Ls https://raw.githubusercontent.com/sjlleo/nexttrace/main/nt_install.sh)
 
+# GHPROXY 镜像（国内使用）
+bash -c "$(curl -Ls https://ghproxy.com/https://raw.githubusercontent.com/sjlleo/nexttrace/main/nt_install.sh)"
+
 # macOS brew install command
 brew tap xgadget-lab/nexttrace && brew install nexttrace
 ```
@@ -101,10 +104,10 @@ The routing visualization function requires the geographical coordinates of each
 
 ```bash
 # IPv4 ICMP Fast Test (Beijing + Shanghai + Guangzhou + Hangzhou) in China Telecom / Unicom / Mobile / Education Network
-nexttrace -F
+nexttrace --fast-trace
 
 # You can also use TCP SYN for testing
-nexttrace -F -T
+nexttrace --fast-trace --tcp
 ```
 
 `NextTrace` already supports route tracing for specified Network Devices
@@ -122,31 +125,31 @@ nexttrace --source 204.98.134.56 9.9.9.9
 
 ```bash
 # TCP SYN Trace
-nexttrace -T www.bing.com
+nexttrace --tcp www.bing.com
 
 # You can specify the port by yourself [here is 443], the default port is 80
-nexttrace -T -p 443 1.0.0.1
+nexttrace --tcp --port 443 1.0.0.1
 
 # UDP Trace
-nexttrace -U 1.0.0.1
+nexttrace --udp 1.0.0.1
 
-nexttrace -U -p 53 1.0.0.1
+nexttrace --udp --port 53 1.0.0.1
 ```
 
 `NextTrace` also supports some advanced functions, such as ttl control, concurrent probe packet count control, mode switching, etc.
 
 ```bash
 # Send 2 probe packets per hop
-nexttrace -q 2 www.hkix.net
+nexttrace --queries 2 www.hkix.net
 
 # No concurrent probe packets, only one probe packet is sent at a time
-nexttrace -r 1 www.hkix.net
+nexttrace --parallel-requests 1 www.hkix.net
 
 # Start Trace with TTL of 5, end at TTL of 10
-nexttrace -f 5 -m 10 www.decix.net
+nexttrace --first 5 --max-hops 10 www.decix.net
 
 # Turn off the IP reverse parsing function
-nexttrace -n www.bbix.net
+nexttrace --no-rdns www.bbix.net
 
 # Feature: print Route-Path diagram
 # Route-Path diagram example:
@@ -164,19 +167,23 @@ nexttrace --route-path www.time.com.my
 
 ```bash
 # You can specify the IP database by yourself [IP.SB here], if not specified, LeoMoeAPI will be used
-nexttrace -d IP.SB
+nexttrace --data-provider IP.SB
 ## Note that the ipinfo API needs users to purchase services from ipinfo. If necessary, you can clone this project, add the token provided by ipinfo and compile it yourself
 ## Fill the token to: ipgeo/tokens.go
 ## Please be aware: Due to the serious abuse of IP.SB, you will often be not able to query IP data from this source
 ## IPAPI.com has a stricter restiction on API calls, if you can't query IP data from this source, please try again in a few minutes.
 ```
 
-`NextTrace` supports mixed parameters
+`NextTrace` supports mixed parameters and shortened parameters
 
 ```bash
 Example:
-nexttrace --data-provider LeoMoeAPI -m 20 -p 443 -q 5 -n 1.1.1.1
-nexttrace -T -q 2 -r 1 --table --route-path 2001:4860:4860::8888
+nexttrace --data-provider IPAPI.com --max-hops 20 --tcp --port 443 --queries 5 --no-rdns 1.1.1.1
+nexttrace -tcp --queries 2 --parallel-requests 1 --table --route-path 2001:4860:4860::8888
+
+Equivalent to:
+nexttrace -d IPAPI.com -m 20 -T -p 443 -q 5 -n 1.1.1.1
+nexttrace -T -q 2 --parallel-requests 1 -t -R 2001:4860:4860::8888
 ```
 
 ### IP Database
@@ -192,30 +199,66 @@ All NextTrace IP geolocation `API DEMO` can refer to [here](https://github.com/x
 ### For full usage list, please refer to the usage menu
 
 ```shell
-Usage of nexttrace:
-      'nexttrace [options] <hostname>' or 'nexttrace <hostname> [option...]'
-Options:
-  -T    Use TCP SYN for tracerouting (default port is 80)
-  -U    Use UDP Package for tracerouting (default port is 53 in UDP)
-  -V    Print Version
-  -b int
-        Set The Begin TTL (default 1)
-  -d string
-        Choose IP Geograph Data Provider [LeoMoeAPI, IP.SB, IPInfo, IPInsight, IPAPI.com] (default "LeoMoeAPI")
-  -f    One-Key Fast Traceroute
-  -m int
-        Set the max number of hops (max TTL to be reached). (default 30)
-  -n    Disable IP Reverse DNS lookup
-  -p int
-        Set SYN Traceroute Port (default 80)
-  -q int
-        Set the number of probes per each hop. (default 3)
-  -r int
-        Set ParallelRequests number. It should be 1 when there is a multi-routing. (default 18)
-  -report
-        Route Path
-  -table
-        Output trace results as table
+Usage: nexttrace [-h|--help] [-T|--tcp] [-U|--udp] [-F|--fast-trace] [-p|--port
+                 <integer>] [-q|--queries <integer>] [--parallel-requests
+                 <integer>] [-m|--max-hops <integer>] [-d|--data-provider
+                 (IP.SB|IPInfo|IPInsight|IPAPI.com)] [-n|--no-rdns]
+                 [-r|--route-path] [-o|--output] [-t|--table] [-c|--classic]
+                 [-f|--first <integer>] [-M|--map] [-v|--version] [-s|--source
+                 "<value>"] [-D|--dev "<value>"] [-R|--route] [-z|--send-time
+                 <integer>] [-i|--ttl-time <integer>]
+                 [IP Address or Domain name]
+Arguments:
+
+  -h  --help                         Print help information
+  -T  --tcp                          Use TCP SYN for tracerouting (default port
+                                     is 80)
+  -U  --udp                          Use UDP SYN for tracerouting (default port
+                                     is 53)
+  -F  --fast-trace                   One-Key Fast Trace to China ISPs
+  -p  --port                         Set the destination port to use. It is
+                                     either initial udp port value for
+                                     "default"method (incremented by each
+                                     probe, default is 33434), or initial seq
+                                     for "icmp" (incremented as well, default
+                                     from 1), or some constantdestination port
+                                     for other methods (with default of 80 for
+                                     "tcp", 53 for "udp", etc.)
+  -q  --queries                      Set the number of probes per each hop.
+                                     Default: 3
+      --parallel-requests            Set ParallelRequests number. It should be
+                                     1 when there is a multi-routing. Default:
+                                     18
+  -m  --max-hops                     Set the max number of hops (max TTL to be
+                                     reached). Default: 30
+  -d  --data-provider                Choose IP Geograph Data Provider
+                                     [LeoMoeAPI,IP.SB, IPInfo, IPInsight,
+                                     IPAPI.com]. Default: LeoMoeAPI
+  -n  --no-rdns                       Do not resolve IP addresses to their
+                                     domain names
+  -r  --route-path                   Print traceroute hop path by ASN and
+                                     location
+  -o  --output                       Write trace result to file
+                                     (RealTimePrinter ONLY)
+  -t  --table                        Output trace results as table
+  -c  --classic                      Classic Output trace results like
+                                     BestTrace
+  -f  --first                        Start from the first_ttl hop (instead from
+                                     1). Default: 1
+  -M  --map                          Print Trace Map. This will return a Trace
+                                     Map URL
+  -v  --version                      Print version info and exit
+  -s  --source                       Use source src_addr for outgoing packets
+  -D  --dev                          Use the following Network Devices as the
+                                     source address in outgoing packets
+  -R  --route                        Show Routing Table [Provided By BGP.Tools]
+  -z  --send-time                    Set the time interval for sending every
+                                     packet. Useful when some routers use
+                                     rate-limit for ICMP messages.. Default: 0
+  -i  --ttl-time                     Set the time interval for sending packets
+                                     groups by TTL. Useful when some routers
+                                     use rate-limit for ICMP messages..
+                                     Default: 500
 ```
 
 ## Project screenshot
