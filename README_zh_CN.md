@@ -18,7 +18,7 @@
   <a href="https://goreportcard.com/report/github.com/sjlleo/nexttrace">
     <img src="https://goreportcard.com/badge/github.com/sjlleo/nexttrace?style=flat-square">
   </a>
-  <a href="https://github.com/zu1k/nali/releases">
+  <a href="https://github.com/sjlleo/nexttrace/releases">
     <img src="https://img.shields.io/github/release/sjlleo/nexttrace/all.svg?style=flat-square">
   </a>
 </p>
@@ -52,13 +52,13 @@ Windows 用户请直接前往 [Release](https://github.com/sjlleo/nexttrace/rele
 # IPv4 ICMP Trace
 nexttrace 1.0.0.1
 
-# 表格打印（一次性输出全部跳数，需等待20-40秒）
+# 表格打印，使用 --table / -t 参数，将实时显示结果
 nexttrace --table 1.0.0.1
 
 # IPv6 ICMP Trace
 nexttrace 2606:4700:4700::1111
 
-# 路径可视化 使用 -M 参数，将返回一个地图 URL
+# 路径可视化 使用 --map / -M 参数，将返回一个地图 URL
 nexttrace --map koreacentral.blob.core.windows.net
 # MapTrace URL: https://api.leo.moe/tracemap/html/c14e439e-3250-5310-8965-42a1e3545266.html
 ```
@@ -72,10 +72,10 @@ PS: 路由可视化的绘制模块由 [@tsosunchia](https://github.com/tsosunchi
 `NextTrace` 现已经支持快速测试，有一次性测试回程路由需求的朋友可以使用
 
 ```bash
-# 北上广（电信+联通+移动+教育网）IPv4 ICMP 快速测试
+# 北上广（电信+联通+移动+教育网）IPv4 / IPv6 ICMP 快速测试
 nexttrace --fast-trace
 
-# 也可以使用 TCP SYN 而非 ICMP 进行测试
+# 也可以使用 TCP SYN 而非 ICMP 进行测试（不支持 IPv6）
 nexttrace --fast-trace --tcp
 ```
 
@@ -140,8 +140,9 @@ nexttrace --route-path www.time.com.my
 ```bash
 # 可以自行指定IP数据库[此处为IP.SB]，不指定则默认为LeoMoeAPI
 nexttrace --data-provider IP.SB
-## 特别的：其中 ipinfo API 需要从ipinfo自行购买服务，如有需要可以clone本项目添加其提供的token自行编译
+## 特别的：其中 ipinfo API 需要从 ipinfo 自行购买服务，如有需要可以 clone 本项目添加其提供的 token 自行编译
 ##        TOKEN填写路径：ipgeo/tokens.go
+
 ## 另外：由于IP.SB被滥用比较严重，会经常出现无法查询的问题，请知悉。
 ##      IPAPI.com限制调用较为严格，如有查询不到的情况，请几分钟后再试。
 ```
@@ -229,13 +230,15 @@ Arguments:
 
 ![image](https://user-images.githubusercontent.com/13616352/208289568-2a135c2d-ae4a-4a3e-8a43-f5a9a87ade4a.png)
 
-### 第三方 IP 数据库 API 开发
-
-✨NextTrace `LeoMoeAPI` 的后端也开源啦
-
-[GitHub - sjlleo/nexttrace-backend: NextTrace BackEnd](https://github.com/sjlleo/nexttrace-backend)
+### 第三方 IP 数据库 API 开发接口
 
 NextTrace 所有的的 IP 地理位置 `API DEMO` 可以参考[这里](https://github.com/sjlleo/nexttrace/blob/main/ipgeo/)
+
+你可以在这里添加你自己的 API 接口，为了 NextTrace 能够正确显示你接口中的内容，请参考 `leo.go` 中所需要的信息
+
+✨NextTrace `LeoMoeAPI` 的后端 Demo
+
+[GitHub - sjlleo/nexttrace-backend: NextTrace BackEnd](https://github.com/sjlleo/nexttrace-backend)
 
 ## NextTrace Enhanced
 
