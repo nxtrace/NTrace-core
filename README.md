@@ -8,51 +8,6 @@
 
 An open source visual routing tool that pursues light weight, developed using Golang.
 
-2022/12/18: Due to time and effort, it is becoming more and more difficult to maintain 2 branches at the same time, so I will be phasing out support for the NextTrace Enhanced version in the near future. I will resume updating the `Enhanced` version when I have more time.
-
-## 公告
-
-我今天看到了一些非常难过的事情，一些用户在 BestTrace 和 WorstTrace 下面宣传 NextTrace 的完全可替代性。
-
-这么做是不正确的，NextTrace 从来都不是一个从零开始的软件，NextTrace 之所以能够拥有某些功能特性，是因为吸取了 BestTrace 、WorstTrace 的一些想法。
-
-我们希望您在使用的时候知晓这一点，**我们是站在巨人的肩膀上，而尊重其他软件作者，向他们或者是我们提交 Bug 或贡献代码，才是推动整个 traceroute 工具的软件多样化发展的最好方式**。
-
-NextTrace 并不追求成为一个替代者，同类软件越多样化，才能满足更多人的需求，这才是我们希望看到的，而去诋毁其他软件，这违背了我们对于开发 NextTrace 的初衷。
-
-我们希望看到这条公告的朋友应该主动删除自己过激的言论，如果您有任何问题或建议，请随时在我们的社区中发表。
-
-## LeoMoeAPI Credit
-
-NextTrace 重点在于研究 Go 语言 Traceroute 的实现，其 LeoMoeAPI 的地理位置信息并没有原始数据的支撑，故也不可能有商用版本。
-
-LeoMoeAPI 存在部分社区贡献者校准的数据，也包含了部分其他第三方数据库的数据，这些数据的所有权归校准者、第三方数据库所有，**仅供路由跟踪地理位置的展示参考使用**，我们不对数据提供准度做任何保证，请尊重他们的成果，如用于其他用途后果自负，特此告知。
-
-1. 对于辛勤提供马来西亚地区节点的 samleong123、全球节点的 TOHUNET Looking Glass 以及来自 Misaka 的 Ping.sx 表示感谢，目前 80% 以上的可靠校准数据出自这些节点的 ping / mtr 报告。
-
-2. 同时感谢 isyekong 在基于 rDNS 校准上思路以及数据上做出的贡献，LeoMoeAPI 正在加快对 rDNS 的解析功能研发，目前已经做到部分骨干网的地理位置自动化解析，但存在一定误判。
-我们希望 NextTrace 在未来能成为对 One-Man ISP 友好的 Traceroute 工具，我们也在尽可能完善对这些 ASN 的微型骨干网的校准。
-
-3. 在开发上，我要由衷感谢 missuo 以及 zhshch 在 Go 交叉编译、设计理念以及 TCP/UDP Traceroute 重构上的帮助、tsosunchia 在 TraceMap 上的倾力支持。
-
-4. 我还要感谢 FFEE_CO、TheresaQWQ、stydxm 和其他朋友的帮助。LeoMoeAPI自首次发布以来得到了很多各方面的支持，所以我想把他们都归功于此。
-
-我们希望您能够在使用时尽可能多多反馈 IP 地理位置错误（详见 issue），这样它就能够在第一时间得到校准，他人也会因此而受益。
-
-NextTrace focuses on Golang Traceroute implementations, and its LeoMoeAPI geolocation information is not supported by raw data, so a commercial version is not possible.
-
-The LeoMoeAPI data is subject to copyright restrictions from multiple data sources, and is only used for the purpose of displaying the geolocation of route tracing.
-
-1. We would like to credit samleong123 for providing nodes in Malaysia, TOHUNET Looking Glass for global nodes, and Ping.sx from Misaka, where more than 80% of reliable calibration data comes from ping/mtr reports.
-
-2. At the same time, we would like to credit isyekong for their contribution on rDNS-based calibration ideas and data. LeoMoeAPI is accelerating the development of rDNS resolution function, and has already achieved automated geolocation resolution for some backbone networks, but there are some misjudgments. We hope that NextTrace will become a One-Man ISP-friendly traceroute tool in the future, and we are working on improving the calibration of these ASN micro-backbones as much as possible.
-
-3. In terms of development, I would like to credit missuo and zhshch for their help with Go cross-compilation, design concepts and TCP/UDP Traceroute refactoring, and tsosunchia for their support on TraceMap.
-
-4. I would also like to credit FFEE_CO, TheresaQWQ, stydxm and others for their help. leoMoeAPI has received a lot of support since its first release, so I would like to credit them all!
-
-We hope you can give us as much feedback as possible on IP geolocation errors (see issue) so that it can be calibrated in the first place and others can benefit from it.
-
 ## How To Use
 
 Document Language: English | [简体中文](README_zh_CN.md)
@@ -276,7 +231,48 @@ The `Enhanced` version supports many functions that the `lite` version does not 
 
 https://github.com/OwO-Network/nexttrace-enhanced
 
-# 
+## 公告
+
+我今天看到了一些非常难过的事情，一些用户在 BestTrace 和 WorstTrace 下面宣传 NextTrace 的完全可替代性。
+
+这么做是不正确的，NextTrace 从来都不是一个从零开始的软件，NextTrace 之所以能够拥有某些功能特性，是因为吸取了 BestTrace 、WorstTrace 的一些想法。
+
+我们希望您在使用的时候知晓这一点，**我们是站在巨人的肩膀上，而尊重其他软件作者，向他们或者是我们提交 Bug 或贡献代码，才是推动整个 traceroute 工具的软件多样化发展的最好方式**。
+
+NextTrace 并不追求成为一个替代者，同类软件越多样化，才能满足更多人的需求，这才是我们希望看到的，而去诋毁其他软件，这违背了我们对于开发 NextTrace 的初衷。
+
+我们希望看到这条公告的朋友应该主动删除自己过激的言论，如果您有任何问题或建议，请随时在我们的社区中发表。
+
+## LeoMoeAPI Credit
+
+NextTrace 重点在于研究 Go 语言 Traceroute 的实现，其 LeoMoeAPI 的地理位置信息并没有原始数据的支撑，故也不可能有商用版本。
+
+LeoMoeAPI 存在部分社区贡献者校准的数据，也包含了部分其他第三方数据库的数据，这些数据的所有权归校准者、第三方数据库所有，**仅供路由跟踪地理位置的展示参考使用**，我们不对数据提供准度做任何保证，请尊重他们的成果，如用于其他用途后果自负，特此告知。
+
+1. 对于辛勤提供马来西亚地区节点的 samleong123、全球节点的 TOHUNET Looking Glass 以及来自 Misaka 的 Ping.sx 表示感谢，目前 80% 以上的可靠校准数据出自这些节点的 ping / mtr 报告。
+
+2. 同时感谢 isyekong 在基于 rDNS 校准上思路以及数据上做出的贡献，LeoMoeAPI 正在加快对 rDNS 的解析功能研发，目前已经做到部分骨干网的地理位置自动化解析，但存在一定误判。
+我们希望 NextTrace 在未来能成为对 One-Man ISP 友好的 Traceroute 工具，我们也在尽可能完善对这些 ASN 的微型骨干网的校准。
+
+3. 在开发上，我要由衷感谢 missuo 以及 zhshch 在 Go 交叉编译、设计理念以及 TCP/UDP Traceroute 重构上的帮助、tsosunchia 在 TraceMap 上的倾力支持。
+
+4. 我还要感谢 FFEE_CO、TheresaQWQ、stydxm 和其他朋友的帮助。LeoMoeAPI自首次发布以来得到了很多各方面的支持，所以我想把他们都归功于此。
+
+我们希望您能够在使用时尽可能多多反馈 IP 地理位置错误（详见 issue），这样它就能够在第一时间得到校准，他人也会因此而受益。
+
+NextTrace focuses on Golang Traceroute implementations, and its LeoMoeAPI geolocation information is not supported by raw data, so a commercial version is not possible.
+
+The LeoMoeAPI data is subject to copyright restrictions from multiple data sources, and is only used for the purpose of displaying the geolocation of route tracing.
+
+1. We would like to credit samleong123 for providing nodes in Malaysia, TOHUNET Looking Glass for global nodes, and Ping.sx from Misaka, where more than 80% of reliable calibration data comes from ping/mtr reports.
+
+2. At the same time, we would like to credit isyekong for their contribution on rDNS-based calibration ideas and data. LeoMoeAPI is accelerating the development of rDNS resolution function, and has already achieved automated geolocation resolution for some backbone networks, but there are some misjudgments. We hope that NextTrace will become a One-Man ISP-friendly traceroute tool in the future, and we are working on improving the calibration of these ASN micro-backbones as much as possible.
+
+3. In terms of development, I would like to credit missuo and zhshch for their help with Go cross-compilation, design concepts and TCP/UDP Traceroute refactoring, and tsosunchia for their support on TraceMap.
+
+4. I would also like to credit FFEE_CO, TheresaQWQ, stydxm and others for their help. leoMoeAPI has received a lot of support since its first release, so I would like to credit them all!
+
+We hope you can give us as much feedback as possible on IP geolocation errors (see issue) so that it can be calibrated in the first place and others can benefit from it.
 
 ## FAQ Frequently Asked Questions
 
