@@ -4,9 +4,25 @@
 
 </div>
 
-## NextTrace
+<h1 align="center">
+  <br>NextTrace<br>
+</h1>
 
-一款追求轻量的开源可视化路由跟踪工具，使用 Golang 开发。
+
+<h4 align="center">一款追求轻量化的开源可视化路由跟踪工具。</h4>
+
+<p align="center">
+  <a href="https://github.com/zu1k/nali/actions">
+    <img src="https://img.shields.io/github/actions/workflow/status/sjlleo/nexttrace/build.yml?branch=main&style=flat-square" alt="Github Actions">
+  </a>
+  <a href="https://goreportcard.com/report/github.com/sjlleo/nexttrace">
+    <img src="https://goreportcard.com/badge/github.com/sjlleo/nexttrace?style=flat-square">
+  </a>
+  <a href="https://github.com/zu1k/nali/releases">
+    <img src="https://img.shields.io/github/release/sjlleo/nexttrace/all.svg?style=flat-square">
+  </a>
+</p>
+
 
 ## How To Use
 
@@ -142,16 +158,6 @@ nexttrace -d IPAPI.com -m 20 -T -p 443 -q 5 -n 1.1.1.1
 nexttrace -T -q 2 --parallel-requests 1 -t -R 2001:4860:4860::8888
 ```
 
-### IP 数据库
-
-我们使用[bgp.tools](https://bgp.tools)作为路由表功能的数据提供者。
-
-✨NextTrace `LeoMoeAPI` 的后端也开源啦
-
-[GitHub - sjlleo/nexttrace-backend: NextTrace BackEnd](https://github.com/sjlleo/nexttrace-backend)
-
-NextTrace 所有的的 IP 地理位置`API DEMO`可以参考[这里](https://github.com/xgadget-lab/nexttrace/blob/main/ipgeo/)
-
 ### 全部用法详见 Usage 菜单
 
 ```shell
@@ -223,13 +229,15 @@ Arguments:
 
 ![image](https://user-images.githubusercontent.com/13616352/208289568-2a135c2d-ae4a-4a3e-8a43-f5a9a87ade4a.png)
 
+### 第三方 IP 数据库 API 开发
+
+✨NextTrace `LeoMoeAPI` 的后端也开源啦
+
+[GitHub - sjlleo/nexttrace-backend: NextTrace BackEnd](https://github.com/sjlleo/nexttrace-backend)
+
+NextTrace 所有的的 IP 地理位置 `API DEMO` 可以参考[这里](https://github.com/sjlleo/nexttrace/blob/main/ipgeo/)
+
 ## NextTrace Enhanced
-
-`NextTrace Enhanced` 是面向发烧友的增强版，`Enhanced`提供Web API形式的路由跟踪调用，以及一个简单的自带可视化的Looking Glass网页。
-
-`Enhanced` 版本支持很多`lite`版本没有的功能，如能够自定义设置超时时间，也能指定TTL作为起点进行路由跟踪等，对于普通用户来说，通常`lite`版本已经足够完成大部分需要。
-
-**很遗憾，由于时间精力的关系，`Enhanced` 版本将在很长一段时间不会再收到新的更新补丁，我们将继续维护 `Standard` 版本。**
 
 https://github.com/OwO-Network/nexttrace-enhanced
 
