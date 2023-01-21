@@ -24,6 +24,7 @@ type WsConn struct {
 }
 
 var wsconn *WsConn
+var hostP = GetenvDefault("NEXTTRACE_HOSTPORT", "api.leo.moe")
 
 func (c *WsConn) keepAlive() {
 	go func() {
@@ -104,7 +105,7 @@ func (c *WsConn) messageSendHandler() {
 }
 
 func (c *WsConn) recreateWsConn() {
-	u := url.URL{Scheme: "wss", Host: "api.leo.moe", Path: "/v2/ipGeoWs"}
+	u := url.URL{Scheme: "wss", Host: hostP, Path: "/v2/ipGeoWs"}
 	// log.Printf("connecting to %s", u.String())
 
 	ws, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
@@ -129,7 +130,7 @@ func createWsConn() *WsConn {
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 
-	u := url.URL{Scheme: "wss", Host: "api.leo.moe", Path: "/v2/ipGeoWs"}
+	u := url.URL{Scheme: "wss", Host: hostP, Path: "/v2/ipGeoWs"}
 	// log.Printf("connecting to %s", u.String())
 
 	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
@@ -167,3 +168,10 @@ func New() *WsConn {
 func GetWsConn() *WsConn {
 	return wsconn
 }
+func GetenvDefault(key, defVal string) string {
+ 	val, ok := os.LookupEnv(key)
+ 	if ok {
+ 		return val
+ 	}
+ 	return defVal
+ }
