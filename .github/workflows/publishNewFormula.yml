@@ -38,9 +38,9 @@ jobs:
       - name: Git Push
         run: |
           cd homebrew-nexttrace
-          git commit -am 'Publish a new version with Formula'
+          git commit -am 'Publish a new version with Formula' || true
           git remote set-url origin https://${{ secrets.gt_token }}@github.com/xgadget-lab/homebrew-nexttrace.git
-          git push || 1
+          git push
         # env:
         #   SSH_AUTH_SOCK: /tmp/ssh_agent.sock
       - run: echo "🍏 This job's status is ${{ job.status }}."
