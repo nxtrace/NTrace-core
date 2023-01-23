@@ -61,9 +61,23 @@ func RealtimePrinter(res *trace.Result, ttl int) {
 		}
 
 		i, _ := strconv.Atoi(v[0])
-
 		if res.Hops[ttl][i].Geo.Asnumber != "" {
-			fmt.Fprintf(color.Output, " %s", color.New(color.FgHiGreen, color.Bold).Sprintf("AS%-6s", res.Hops[ttl][i].Geo.Asnumber))
+			// CMIN2, CUII, CN2, CUG 改为壕金色高亮
+			switch {
+			case res.Hops[ttl][i].Geo.Asnumber == "58807":
+				fallthrough
+			case res.Hops[ttl][i].Geo.Asnumber == "10099":
+				fallthrough
+			case res.Hops[ttl][i].Geo.Asnumber == "4809":
+				fallthrough
+			case res.Hops[ttl][i].Geo.Asnumber == "9929":
+				fallthrough
+			case strings.HasPrefix(res.Hops[ttl][i].Address.String(), "59.43."):
+				fmt.Fprintf(color.Output, " %s", color.New(color.FgHiYellow, color.Bold).Sprintf("AS%-6s", res.Hops[ttl][i].Geo.Asnumber))
+			default:
+				fmt.Fprintf(color.Output, " %s", color.New(color.FgHiGreen, color.Bold).Sprintf("AS%-6s", res.Hops[ttl][i].Geo.Asnumber))
+			}
+
 		} else {
 			fmt.Printf(" %-8s", "*")
 		}
@@ -77,7 +91,26 @@ func RealtimePrinter(res *trace.Result, ttl int) {
 			if whoisFormat[0] != "" {
 				whoisFormat[0] = "[" + whoisFormat[0] + "]"
 			}
-			fmt.Fprintf(color.Output, " %s", color.New(color.FgHiGreen, color.Bold).Sprintf("%-16s", whoisFormat[0]))
+
+			// CMIN2, CUII, CN2, CUG 改为壕金色高亮
+			switch {
+			case res.Hops[ttl][i].Geo.Asnumber == "58807":
+				fallthrough
+			case res.Hops[ttl][i].Geo.Asnumber == "10099":
+				fallthrough
+			case res.Hops[ttl][i].Geo.Asnumber == "4809":
+				fallthrough
+			case res.Hops[ttl][i].Geo.Asnumber == "9929":
+				fallthrough
+			case whoisFormat[0] == "[CNC-BACKBONE]":
+				fallthrough
+			case whoisFormat[0] == "[CUG-BACKBONE]":
+				fallthrough
+			case strings.HasPrefix(res.Hops[ttl][i].Address.String(), "59.43."):
+				fmt.Fprintf(color.Output, " %s", color.New(color.FgHiYellow, color.Bold).Sprintf("%-16s", whoisFormat[0]))
+			default:
+				fmt.Fprintf(color.Output, " %s", color.New(color.FgHiGreen, color.Bold).Sprintf("%-16s", whoisFormat[0]))
+			}
 		}
 		if len(res.Hops[ttl][i].Geo.Country) <= 1 {
 			res.Hops[ttl][i].Geo.Country = "LAN Address"
