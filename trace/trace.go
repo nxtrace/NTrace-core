@@ -140,7 +140,11 @@ func (h *Hop) fetchIPData(c Config) (err error) {
 		}
 	}
 	if c.IPGeoSource != nil && h.Geo == nil {
-		h.Geo, err = c.IPGeoSource(h.Address.String())
+		res := false
+		h.Geo, res = ipgeo.Filter(h.Address.String())
+		if !res {
+			h.Geo, err = c.IPGeoSource(h.Address.String())
+		}
 	}
 	return
 }

@@ -74,12 +74,13 @@ func formatIpGeoData(ip string, data *ipgeo.IPGeoData) string {
 
 	// TODO: 判断阿里云和腾讯云内网，数据不足，有待进一步完善
 	// TODO: 移动IDC判断到Hop.fetchIPData函数，减少API调用
-	if strings.HasPrefix(ip, "9.") {
-		res = append(res, "LAN Address")
-	} else if strings.HasPrefix(ip, "11.") {
-		res = append(res, "LAN Address")
-	} else if data.Country == "" {
-		res = append(res, "LAN Address")
+	//if strings.HasPrefix(ip, "9.") {
+	//	res = append(res, "LAN Address")
+	//} else if strings.HasPrefix(ip, "11.") {
+	//	res = append(res, "LAN Address")
+	//} else if data.Country == "" {
+	//	res = append(res, "LAN Address")
+	if false {
 	} else {
 		// 有些IP的归属信息为空，这个时候将ISP的信息填入
 		if data.Owner == "" {
