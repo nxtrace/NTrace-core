@@ -110,7 +110,9 @@ func (t *ICMPTracerv6) Execute() (*Result, error) {
 	t.wg.Wait()
 	t.res.reduce(t.final)
 	if t.final != -1 {
-		t.RealtimePrinter(&t.res, t.final-1)
+		if t.RealtimePrinter != nil {
+			t.RealtimePrinter(&t.res, t.final-1)
+		}
 	} else {
 		for i := 0; i < t.NumMeasurements; i++ {
 			t.res.add(Hop{
