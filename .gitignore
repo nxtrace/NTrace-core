@@ -161,3 +161,5 @@ Network Trash Folder
 Temporary Items
 .apdisk
 
+# compile target directory
+dist/
