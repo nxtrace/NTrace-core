@@ -72,6 +72,8 @@ func RealtimePrinter(res *trace.Result, ttl int) {
 				fallthrough
 			case res.Hops[ttl][i].Geo.Asnumber == "9929":
 				fallthrough
+			case res.Hops[ttl][i].Geo.Asnumber == "23764":
+				fallthrough
 			case strings.HasPrefix(res.Hops[ttl][i].Address.String(), "59.43."):
 				fmt.Fprintf(color.Output, " %s", color.New(color.FgHiYellow, color.Bold).Sprintf("AS%-6s", res.Hops[ttl][i].Geo.Asnumber))
 			default:
@@ -101,6 +103,8 @@ func RealtimePrinter(res *trace.Result, ttl int) {
 			case res.Hops[ttl][i].Geo.Asnumber == "4809":
 				fallthrough
 			case res.Hops[ttl][i].Geo.Asnumber == "9929":
+				fallthrough
+			case res.Hops[ttl][i].Geo.Asnumber == "23764":
 				fallthrough
 			case whoisFormat[0] == "[CNC-BACKBONE]":
 				fallthrough

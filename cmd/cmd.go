@@ -39,7 +39,8 @@ func Excute() {
 	dataOrigin := parser.Selector("d", "data-provider", []string{"IP.SB", "IPInfo", "IPInsight", "IPAPI.com"}, &argparse.Options{Default: "LeoMoeAPI",
 		Help: "Choose IP Geograph Data Provider [LeoMoeAPI,IP.SB, IPInfo, IPInsight, IPAPI.com]"})
 	noRdns := parser.Flag("n", "no-rdns", &argparse.Options{Help: " Do not resolve IP addresses to their domain names"})
-	routePath := parser.Flag("r", "route-path", &argparse.Options{Help: "Print traceroute hop path by ASN and location"})
+	routePath := parser.Flag("P", "route-path", &argparse.Options{Help: "Print traceroute hop path by ASN and location"})
+	report := parser.Flag("r", "report", &argparse.Options{Help: "output using report mode"})
 	output := parser.Flag("o", "output", &argparse.Options{Help: "Write trace result to file (RealTimePrinter ONLY)"})
 	tablePrint := parser.Flag("t", "table", &argparse.Options{Help: "Output trace results as table"})
 	classicPrint := parser.Flag("c", "classic", &argparse.Options{Help: "Classic Output trace results like BestTrace"})
@@ -168,7 +169,9 @@ func Excute() {
 			}
 		}
 	} else {
-		conf.AsyncPrinter = printer.TracerouteTablePrinter
+		if !*report {
+			conf.AsyncPrinter = printer.TracerouteTablePrinter
+		}
 	}
 
 	res, err := trace.Traceroute(m, conf)
