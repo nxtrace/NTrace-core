@@ -12,7 +12,7 @@
 <h4 align="center">一款追求轻量化的开源可视化路由跟踪工具。</h4>
 
 <p align="center">
-  <a href="https://github.com/zu1k/nali/actions">
+  <a href="https://github.com/sjlleo/nexttrace/actions">
     <img src="https://img.shields.io/github/actions/workflow/status/sjlleo/nexttrace/build.yml?branch=main&style=flat-square" alt="Github Actions">
   </a>
   <a href="https://goreportcard.com/report/github.com/sjlleo/nexttrace">
@@ -25,6 +25,10 @@
 
 
 ## How To Use
+
+### Before Using
+
+使用 NextTrace 之前，我们建议您先阅读 [#IP 数据以及精准度说明](https://github.com/sjlleo/nexttrace/blob/main/README_zh_CN.md#ip-%E6%95%B0%E6%8D%AE%E4%BB%A5%E5%8F%8A%E7%B2%BE%E5%87%86%E5%BA%A6%E8%AF%B4%E6%98%8E)，在了解您自己的对数据精准度需求以后再进行抉择。
 
 ### Automated Install
 
@@ -230,7 +234,7 @@ Arguments:
 
 ![image](https://user-images.githubusercontent.com/13616352/208289568-2a135c2d-ae4a-4a3e-8a43-f5a9a87ade4a.png)
 
-### 第三方 IP 数据库 API 开发接口
+## 第三方 IP 数据库 API 开发接口
 
 NextTrace 所有的的 IP 地理位置 `API DEMO` 可以参考[这里](https://github.com/sjlleo/nexttrace/blob/main/ipgeo/)
 
@@ -244,7 +248,7 @@ NextTrace 所有的的 IP 地理位置 `API DEMO` 可以参考[这里](https://g
 
 https://github.com/OwO-Network/nexttrace-enhanced
 
-## Thanks
+## Credits
 
 BGP.TOOLS 提供了本项目的一些数据支持，在此表示由衷地感谢。
 
@@ -258,6 +262,20 @@ BGP.TOOLS 提供了本项目的一些数据支持，在此表示由衷地感谢�
 
 [FFEE_CO](https://github.com/fkx4-p)
 
-### Others
+## Others
 
 其他第三方 API 尽管集成在本项目内，但是具体的 TOS 以及 AUP，请详见第三方 API 官网。如遇到 IP 数据错误，也请直接联系他们纠错。
+
+## IP 数据以及精准度说明
+
+NextTrace 有多个数据源可以选择，目前默认使用的 LeoMoeAPI 为我们项目维护的数据源。
+
+LeoMoeAPI 早期数据主要来自 IPInsight、IPInfo，随着项目发展，越来越多的志愿者参与进了这个项目。目前 LeoMoeAPI 有近一半的数据是社区提供的，而另外一半主要来自于包含 IPInfo、IPData、BigDataCloud、IPGeoLocation 在内的多个第三方数据。
+
+LeoMoeAPI 的骨干网数据有近 70% 是社区自发反馈又或者是项目组成员校准的，这给本项目的路由跟踪基础功能带来了一定的保证，但是全球骨干网的体量庞大，我们并无能力如 IPIP 等商业公司拥有海量监测节点，这使得 LeoMoeAPI 的数据精准度无法和形如 BestTrace（IPIP）相提并论。
+
+LeoMoeAPI 已经尽力校准了比较常见的骨干网路由，这部分在测试的时候经常会命中，但是如果遇到封闭型 ISP 的路由，大概率可以遇到错误，此类数据不仅是我们，哪怕 IPInsight、IPInfo 也无法正确定位，目前只有 IPIP 能够标记正确，如对此类数据的精确性有着非常高的要求，请务必使用 BestTrace 作为首选。
+
+我们不保证我们的数据一定会及时更新，也不保证数据的精确性，我们希望您在发现数据错误的时候可以前往 issue 页面提交错误报告，谢谢。
+
+当您使用 LeoMoeAPI 即视为您已经完全了解 NextTrace LeoMoeAPI 的数据精确性，并且同意如果您引用 LeoMoeAPI 其中的数据从而引发的一切问题，均由您自己承担。
