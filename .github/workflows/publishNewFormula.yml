@@ -3,7 +3,6 @@ name: Publish New Formula
 # Controls when the action will run. Workflow runs when manually triggered using the UI
 # or API.
 on:
-  push:
   workflow_dispatch:
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
@@ -22,7 +21,7 @@ jobs:
           git config --global user.name "${{ secrets.git_name }}"
       - name: Clone repo
         run: |
-          git clone https://github.com/xgadget-lab/homebrew-nexttrace.git
+          git clone https://github.com/sjlleo/homebrew-nexttrace.git
       - name: Exec scipt
         run: |
           cd homebrew-nexttrace
@@ -39,7 +38,7 @@ jobs:
         run: |
           cd homebrew-nexttrace
           git commit -am 'Publish a new version with Formula' || true
-          git remote set-url origin https://${{ secrets.gt_token }}@github.com/xgadget-lab/homebrew-nexttrace.git
+          git remote set-url origin https://${{ secrets.gt_token }}@github.com/sjlleo/homebrew-nexttrace.git
           git push
         # env:
         #   SSH_AUTH_SOCK: /tmp/ssh_agent.sock
