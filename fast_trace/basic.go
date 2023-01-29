@@ -74,7 +74,7 @@ var Shanghai = BackBoneCollection{
 	Location: "上海",
 	CT163: ISPCollection{
 		ISPName: CT163,
-		IP:      "101.226.28.198",
+		IP:      "202.101.21.178",
 		IPv6:    "240e:18:2:153::89",
 	},
 
