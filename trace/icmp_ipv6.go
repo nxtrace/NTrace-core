@@ -53,7 +53,9 @@ func (t *ICMPTracerv6) PrintFunc() {
 }
 
 func (t *ICMPTracerv6) Execute() (*Result, error) {
+	t.inflightRequestLock.Lock()
 	t.inflightRequest = make(map[int]chan Hop)
+	t.inflightRequestLock.Unlock()
 
 	if len(t.res.Hops) > 0 {
 		return &t.res, ErrTracerouteExecuted

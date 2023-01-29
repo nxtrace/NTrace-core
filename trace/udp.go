@@ -121,8 +121,8 @@ func (t *UDPTracer) handleICMPMessage(msg ReceivedMessage, data []byte) {
 		return
 	}
 	srcPort := util.GetUDPSrcPort(header)
-	//t.inflightRequestLock.Lock()
-	//defer t.inflightRequestLock.Unlock()
+	t.inflightRequestLock.Lock()
+	defer t.inflightRequestLock.Unlock()
 	ch, ok := t.inflightRequest[int(srcPort)]
 	if !ok {
 		return
