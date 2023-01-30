@@ -18,14 +18,14 @@ import (
 
 type ICMPTracer struct {
 	Config
-	wg                  sync.WaitGroup
-	res                 Result
-	ctx                 context.Context
-	inflightRequest     map[int]chan Hop
-	inflightRequestLock sync.Mutex
-	icmpListen          net.PacketConn
-	final               int
-	finalLock           sync.Mutex
+	wg                    sync.WaitGroup
+	res                   Result
+	ctx                   context.Context
+	inflightRequest       map[int]chan Hop
+	inflightRequestRWLock sync.RWMutex
+	icmpListen            net.PacketConn
+	final                 int
+	finalLock             sync.Mutex
 }
 
 func (t *ICMPTracer) PrintFunc() {
@@ -52,9 +52,9 @@ func (t *ICMPTracer) PrintFunc() {
 }
 
 func (t *ICMPTracer) Execute() (*Result, error) {
-	t.inflightRequestLock.Lock()
+	t.inflightRequestRWLock.Lock()
 	t.inflightRequest = make(map[int]chan Hop)
-	t.inflightRequestLock.Unlock()
+	t.inflightRequestRWLock.Unlock()
 
 	if len(t.res.Hops) > 0 {
 		return &t.res, ErrTracerouteExecuted
@@ -77,9 +77,9 @@ func (t *ICMPTracer) Execute() (*Result, error) {
 	t.wg.Add(1)
 	go t.PrintFunc()
 	for ttl := t.BeginHop; ttl <= t.MaxHops; ttl++ {
-		t.inflightRequestLock.Lock()
+		t.inflightRequestRWLock.Lock()
 		t.inflightRequest[ttl] = make(chan Hop, t.NumMeasurements)
-		t.inflightRequestLock.Unlock()
+		t.inflightRequestRWLock.Unlock()
 		if t.final != -1 && ttl > t.final {
 			break
 		}
@@ -171,8 +171,8 @@ func (t *ICMPTracer) listenICMP() {
 }
 
 func (t *ICMPTracer) handleICMPMessage(msg ReceivedMessage, icmpType int8, data []byte, ttl int) {
-	t.inflightRequestLock.Lock()
-	defer t.inflightRequestLock.Unlock()
+	t.inflightRequestRWLock.RLock()
+	defer t.inflightRequestRWLock.RUnlock()
 	if _, ok := t.inflightRequest[ttl]; ok {
 		t.inflightRequest[ttl] <- Hop{
 			Success: true,
@@ -272,7 +272,6 @@ func (t *ICMPTracer) send(ttl int) error {
 	if err := t.icmpListen.SetReadDeadline(time.Now().Add(3 * time.Second)); err != nil {
 		log.Fatal(err)
 	}
-
 	select {
 	case <-t.ctx.Done():
 		return nil
