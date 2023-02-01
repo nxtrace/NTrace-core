@@ -77,3 +77,11 @@ func DomainLookUp(host string, ipv4Only bool) net.IP {
 		return ipSlice[index]
 	}
 }
+
+func GetenvDefault(key, defVal string) string {
+	val, ok := os.LookupEnv(key)
+	if ok {
+		return val
+	}
+	return defVal
+}

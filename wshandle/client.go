@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/xgadget-lab/nexttrace/util"
 )
 
 type WsConn struct {
@@ -28,7 +29,7 @@ type WsConn struct {
 }
 
 var wsconn *WsConn
-var hostP = GetenvDefault("NEXTTRACE_HOSTPORT", "api.leo.moe")
+var hostP = util.GetenvDefault("NEXTTRACE_HOSTPORT", "api.leo.moe")
 var host, port, fast_ip string
 
 func (c *WsConn) keepAlive() {
@@ -219,11 +220,4 @@ func New() *WsConn {
 
 func GetWsConn() *WsConn {
 	return wsconn
-}
-func GetenvDefault(key, defVal string) string {
-	val, ok := os.LookupEnv(key)
-	if ok {
-		return val
-	}
-	return defVal
 }

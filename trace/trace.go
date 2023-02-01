@@ -2,7 +2,9 @@ package trace
 
 import (
 	"errors"
+	"github.com/xgadget-lab/nexttrace/util"
 	"net"
+	"os"
 	"sync"
 	"time"
 
@@ -118,7 +120,13 @@ type Hop struct {
 }
 
 func (h *Hop) fetchIPData(c Config) (err error) {
-	timeout := time.Millisecond * 800
+	if c.RDns {
+		var rdnsENV = util.GetenvDefault("NEXTTRACE_RDNS", "1")
+		if rdnsENV != "1" {
+			c.RDns = false
+		}
+	}
+	timeout := time.Millisecond * 2400
 	if c.RDns && h.Hostname == "" {
 		result := make(chan []string)
 		go func() {
@@ -137,6 +145,7 @@ func (h *Hop) fetchIPData(c Config) (err error) {
 			}
 		case <-time.After(timeout):
 			// handle timeout
+			_ = os.Setenv("NEXTTRACE_RDNS", "0")
 		}
 	}
 	if c.IPGeoSource != nil && h.Geo == nil {
