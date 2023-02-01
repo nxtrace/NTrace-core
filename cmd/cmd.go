@@ -38,7 +38,8 @@ func Excute() {
 	maxHops := parser.Int("m", "max-hops", &argparse.Options{Default: 30, Help: "Set the max number of hops (max TTL to be reached)"})
 	dataOrigin := parser.Selector("d", "data-provider", []string{"IP.SB", "IPInfo", "IPInsight", "IPAPI.com"}, &argparse.Options{Default: "LeoMoeAPI",
 		Help: "Choose IP Geograph Data Provider [LeoMoeAPI,IP.SB, IPInfo, IPInsight, IPAPI.com]"})
-	noRdns := parser.Flag("n", "no-rdns", &argparse.Options{Help: " Do not resolve IP addresses to their domain names"})
+	noRdns := parser.Flag("n", "no-rdns", &argparse.Options{Help: "Do not resolve IP addresses to their domain names"})
+	alwaysRdns := parser.Flag("a", "always-rdns", &argparse.Options{Help: "Always resolve IP addresses to their domain names"})
 	routePath := parser.Flag("P", "route-path", &argparse.Options{Help: "Print traceroute hop path by ASN and location"})
 	report := parser.Flag("r", "report", &argparse.Options{Help: "output using report mode"})
 	output := parser.Flag("o", "output", &argparse.Options{Help: "Write trace result to file (RealTimePrinter ONLY)"})
@@ -50,8 +51,8 @@ func Excute() {
 	src_addr := parser.String("s", "source", &argparse.Options{Help: "Use source src_addr for outgoing packets"})
 	src_dev := parser.String("D", "dev", &argparse.Options{Help: "Use the following Network Devices as the source address in outgoing packets"})
 	router := parser.Flag("R", "route", &argparse.Options{Help: "Show Routing Table [Provided By BGP.Tools]"})
-	packet_interval := parser.Int("z", "send-time", &argparse.Options{Default: 100, Help: "Set the time interval for sending every packet. Useful when some routers use rate-limit for ICMP messages."})
-	ttl_interval := parser.Int("i", "ttl-time", &argparse.Options{Default: 500, Help: "Set the time interval for sending packets groups by TTL. Useful when some routers use rate-limit for ICMP messages."})
+	packet_interval := parser.Int("z", "send-time", &argparse.Options{Default: 100, Help: "Set the time interval for sending every packet. Useful when some routers use rate-limit for ICMP messages"})
+	ttl_interval := parser.Int("i", "ttl-time", &argparse.Options{Default: 500, Help: "Set the time interval for sending packets groups by TTL. Useful when some routers use rate-limit for ICMP messages"})
 	str := parser.StringPositional(&argparse.Options{Help: "IP Address or domain name"})
 
 	err := parser.Parse(os.Args)
@@ -151,6 +152,7 @@ func Excute() {
 		NumMeasurements:  *numMeasurements,
 		ParallelRequests: *parallelRequests,
 		RDns:             !*noRdns,
+		AlwaysWaitRDNS:   *alwaysRdns,
 		IPGeoSource:      ipgeo.GetSource(*dataOrigin),
 		Timeout:          1 * time.Second,
 	}

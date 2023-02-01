@@ -2,9 +2,7 @@ package trace
 
 import (
 	"errors"
-	"github.com/xgadget-lab/nexttrace/util"
 	"net"
-	"os"
 	"sync"
 	"time"
 
@@ -29,6 +27,7 @@ type Config struct {
 	Quic             bool
 	IPGeoSource      ipgeo.Source
 	RDns             bool
+	AlwaysWaitRDNS   bool
 	PacketInterval   int
 	TTLInterval      int
 	RealtimePrinter  func(res *Result, ttl int)
@@ -120,40 +119,72 @@ type Hop struct {
 }
 
 func (h *Hop) fetchIPData(c Config) (err error) {
-	if c.RDns {
-		var rdnsENV = util.GetenvDefault("NEXTTRACE_RDNS", "1")
-		if rdnsENV != "1" {
-			c.RDns = false
-		}
-	}
-	timeout := time.Millisecond * 2400
+	// Debug Area
+	// c.AlwaysWaitRDNS = true
+
+	// Initialize a rDNS Channel
+	rDNSChan := make(chan []string)
+	fetchDoneChan := make(chan bool)
+
 	if c.RDns && h.Hostname == "" {
-		result := make(chan []string)
+		// Create a rDNS Query go-routine
 		go func() {
 			r, err := net.LookupAddr(h.Address.String())
 			if err != nil {
-				result <- nil
+				// No PTR Record
+				rDNSChan <- nil
 			} else {
-				result <- r
+				// One PTR Record is found
+				rDNSChan <- r
 			}
 		}()
+	}
+
+	// Create Data Fetcher go-routine
+	go func() {
+		// Start to fetch IP Geolocation data
+		if c.IPGeoSource != nil && h.Geo == nil {
+			res := false
+			h.Geo, res = ipgeo.Filter(h.Address.String())
+			if !res {
+				h.Geo, err = c.IPGeoSource(h.Address.String())
+			}
+		}
+		// Fetch Done
+		fetchDoneChan <- true
+	}()
+
+	// Select Close Flag
+	var selectClose bool
+	if !c.AlwaysWaitRDNS {
 		select {
-		case ptr := <-result:
+		case <-fetchDoneChan:
+			// When fetch done signal recieved, stop waiting PTR record
+		case ptr := <-rDNSChan:
+			// process result
+			if err == nil && len(ptr) > 0 {
+				h.Hostname = ptr[0][:len(ptr[0])-1]
+			}
+			selectClose = true
+		}
+	} else {
+		select {
+		case ptr := <-rDNSChan:
 			// process result
 			if err == nil && len(ptr) > 0 {
 				h.Hostname = ptr[0]
 			}
-		case <-time.After(timeout):
-			// handle timeout
-			_ = os.Setenv("NEXTTRACE_RDNS", "0")
+		// 1 second timeout
+		case <-time.After(time.Second * 1):
 		}
+		selectClose = true
 	}
-	if c.IPGeoSource != nil && h.Geo == nil {
-		res := false
-		h.Geo, res = ipgeo.Filter(h.Address.String())
-		if !res {
-			h.Geo, err = c.IPGeoSource(h.Address.String())
-		}
+
+	// When Select Close, fetchDoneChan Reciever will also be closed
+	if selectClose {
+		// New a reciever to prevent channel congestion
+		<-fetchDoneChan
 	}
+
 	return
 }
