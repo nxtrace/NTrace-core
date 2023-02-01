@@ -30,6 +30,7 @@ type Config struct {
 	AlwaysWaitRDNS   bool
 	PacketInterval   int
 	TTLInterval      int
+	Lang             string
 	RealtimePrinter  func(res *Result, ttl int)
 	AsyncPrinter     func(res *Result)
 }
@@ -116,6 +117,7 @@ type Hop struct {
 	RTT      time.Duration
 	Error    error
 	Geo      *ipgeo.IPGeoData
+	Lang     string
 }
 
 func (h *Hop) fetchIPData(c Config) (err error) {
@@ -145,6 +147,7 @@ func (h *Hop) fetchIPData(c Config) (err error) {
 		// Start to fetch IP Geolocation data
 		if c.IPGeoSource != nil && h.Geo == nil {
 			res := false
+			h.Lang = c.Lang
 			h.Geo, res = ipgeo.Filter(h.Address.String())
 			if !res {
 				h.Geo, err = c.IPGeoSource(h.Address.String())

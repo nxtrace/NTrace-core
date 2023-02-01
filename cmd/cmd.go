@@ -54,6 +54,8 @@ func Excute() {
 	packet_interval := parser.Int("z", "send-time", &argparse.Options{Default: 100, Help: "Set the time interval for sending every packet. Useful when some routers use rate-limit for ICMP messages"})
 	ttl_interval := parser.Int("i", "ttl-time", &argparse.Options{Default: 500, Help: "Set the time interval for sending packets groups by TTL. Useful when some routers use rate-limit for ICMP messages"})
 	str := parser.StringPositional(&argparse.Options{Help: "IP Address or domain name"})
+	lang := parser.Selector("g", "language", []string{"en", "cn"}, &argparse.Options{Default: "cn",
+		Help: "Choose the language for displaying [en, cn]"})
 
 	err := parser.Parse(os.Args)
 	if err != nil {
@@ -151,6 +153,7 @@ func Excute() {
 		TTLInterval:      *ttl_interval,
 		NumMeasurements:  *numMeasurements,
 		ParallelRequests: *parallelRequests,
+		Lang:             *lang,
 		RDns:             !*noRdns,
 		AlwaysWaitRDNS:   *alwaysRdns,
 		IPGeoSource:      ipgeo.GetSource(*dataOrigin),

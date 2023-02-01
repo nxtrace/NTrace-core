@@ -82,12 +82,12 @@ func (c *WsConn) messageSendHandler() {
 		// 循环监听发送
 		select {
 		case <-c.Done:
-			log.Println("发送协程已经退出")
+			log.Println("go-routine has been returned")
 			return
 		case t := <-c.MsgSendCh:
 			// log.Println(t)
 			if !c.Connected {
-				c.MsgReceiveCh <- `{"ip":"` + t + `", "asnumber":"API服务端异常"}`
+				c.MsgReceiveCh <- `{"ip":"` + t + `", "asnumber":"API Server Error"}`
 			} else {
 				err := c.Conn.WriteMessage(websocket.TextMessage, []byte(t))
 				if err != nil {

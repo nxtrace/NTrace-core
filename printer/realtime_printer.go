@@ -120,8 +120,30 @@ func RealtimePrinter(res *trace.Result, ttl int) {
 				fmt.Fprintf(color.Output, " %s", color.New(color.FgHiGreen, color.Bold).Sprintf("%-16s", whoisFormat[0]))
 			}
 		}
+
 		if len(res.Hops[ttl][i].Geo.Country) <= 1 {
-			res.Hops[ttl][i].Geo.Country = "LAN Address"
+			res.Hops[ttl][i].Geo.Country = "局域网"
+			res.Hops[ttl][i].Geo.CountryEn = "LAN Address"
+		}
+
+		if res.Hops[ttl][i].Lang == "en" {
+			if res.Hops[ttl][i].Geo.Country == "Anycast" {
+
+			} else if res.Hops[ttl][i].Geo.Prov == "骨干网" {
+				res.Hops[ttl][i].Geo.Prov = "BackBone"
+			} else if res.Hops[ttl][i].Geo.ProvEn == "" {
+				res.Hops[ttl][i].Geo.Country = res.Hops[ttl][i].Geo.CountryEn
+			} else {
+				if res.Hops[ttl][i].Geo.CityEn == "" {
+					res.Hops[ttl][i].Geo.Country = res.Hops[ttl][i].Geo.ProvEn
+					res.Hops[ttl][i].Geo.Prov = res.Hops[ttl][i].Geo.CountryEn
+					res.Hops[ttl][i].Geo.City = ""
+				} else {
+					res.Hops[ttl][i].Geo.Country = res.Hops[ttl][i].Geo.CityEn
+					res.Hops[ttl][i].Geo.Prov = res.Hops[ttl][i].Geo.ProvEn
+					res.Hops[ttl][i].Geo.City = res.Hops[ttl][i].Geo.CountryEn
+				}
+			}
 		}
 
 		if net.ParseIP(ip).To4() != nil {

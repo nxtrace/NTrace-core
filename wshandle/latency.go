@@ -19,7 +19,7 @@ func GetFastIP(domain string, port string) string {
 
 	ips, err := net.LookupIP(domain)
 	if err != nil {
-		log.Fatal("DNS 解析失败，请检查您的系统 DNS 设置")
+		log.Fatal("DNS resolution failed, please check your system DNS Settings")
 		return ""
 	}
 
@@ -33,12 +33,12 @@ func GetFastIP(domain string, port string) string {
 
 	}
 	if result == "" {
-		log.Fatal("IP 连接均超时，请检查您的网络")
+		log.Fatal("IP connection has been timeout, please check your network")
 	}
 	res := strings.Split(result, "-")
 
 	if len(ips) > 1 {
-		_, _ = fmt.Fprintf(color.Output, "%s 已为您优选最近的节点 %s - %s\n",
+		_, _ = fmt.Fprintf(color.Output, "%s prefered API IP - %s - %s\n",
 			color.New(color.FgWhite, color.Bold).Sprintf("[NextTrace API]"),
 			color.New(color.FgGreen, color.Bold).Sprintf("%s", res[0]),
 			color.New(color.FgCyan, color.Bold).Sprintf("%sms", res[1]),
