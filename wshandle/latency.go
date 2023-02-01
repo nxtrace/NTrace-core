@@ -38,7 +38,7 @@ func GetFastIP(domain string, port string) string {
 	res := strings.Split(result, "-")
 
 	if len(ips) > 1 {
-		fmt.Fprintf(color.Output, "%s 已为您优选最近的节点 %s - %s\n",
+		_, _ = fmt.Fprintf(color.Output, "%s 已为您优选最近的节点 %s - %s\n",
 			color.New(color.FgWhite, color.Bold).Sprintf("[NextTrace API]"),
 			color.New(color.FgGreen, color.Bold).Sprintf("%s", res[0]),
 			color.New(color.FgCyan, color.Bold).Sprintf("%sms", res[1]),
@@ -57,7 +57,12 @@ func checkLatency(ip string, port string) {
 	if err != nil {
 		return
 	}
-	defer conn.Close()
+	defer func(conn net.Conn) {
+		err := conn.Close()
+		if err != nil {
+			return
+		}
+	}(conn)
 	if result == "" {
 		result = fmt.Sprintf("%s-%.2f", ip, float64(time.Since(start))/float64(time.Millisecond))
 		results <- result

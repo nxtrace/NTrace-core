@@ -37,7 +37,12 @@ func (c *WsConn) keepAlive() {
 		for {
 			<-time.After(time.Second * 54)
 			if c.Connected {
-				c.Conn.WriteMessage(websocket.TextMessage, []byte("ping"))
+				err := c.Conn.WriteMessage(websocket.TextMessage, []byte("ping"))
+				if err != nil {
+					log.Println(err)
+					c.Connected = false
+					return
+				}
 			}
 		}
 	}()
