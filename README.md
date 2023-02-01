@@ -18,11 +18,11 @@ Document Language: English | [简体中文](README_zh_CN.md)
 # Linux one-click install script
 bash <(curl -Ls https://raw.githubusercontent.com/sjlleo/nexttrace/main/nt_install.sh)
 
-# GHPROXY 镜像（国内使用）
-bash -c "$(curl -Ls https://ghproxy.com/https://raw.githubusercontent.com/sjlleo/nexttrace/main/nt_install.sh)"
-
 # macOS brew install command
 brew tap xgadget-lab/nexttrace && brew install nexttrace
+
+# GHProxy Mirror (For China Mainland User)
+bash -c "$(curl -Ls https://ghproxy.com/https://raw.githubusercontent.com/sjlleo/nexttrace/main/nt_install.sh)"
 ```
 
 Windows users please go to [Release Page](https://github.com/sjlleo/nexttrace/releases/latest) directly and download exe file.
