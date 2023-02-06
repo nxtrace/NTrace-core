@@ -62,7 +62,7 @@ nexttrace --table 1.0.0.1
 # IPv6 ICMP Trace
 nexttrace 2606:4700:4700::1111
 
-# 路径可视化 使用 --map / -M 参数，将返回一个地图 URL
+# 禁用路径可视化 使用 --map / -M 参数
 nexttrace --map koreacentral.blob.core.windows.net
 # MapTrace URL: https://api.leo.moe/tracemap/html/c14e439e-3250-5310-8965-42a1e3545266.html
 ```
@@ -212,8 +212,7 @@ Arguments:
                                      BestTrace
   -f  --first                        Start from the first_ttl hop (instead from
                                      1). Default: 1
-  -M  --map                          Print Trace Map. This will return a Trace
-                                     Map URL
+  -M  --map                          No Print Trace Map.
   -v  --version                      Print version info and exit
   -s  --source                       Use source src_addr for outgoing packets
   -D  --dev                          Use the following Network Devices as the

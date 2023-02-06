@@ -44,7 +44,7 @@ nexttrace --table 1.0.0.1
 # IPv6 ICMP Trace
 nexttrace 2606:4700:4700::1111
 
-# Path Visualization With the -M parameter, a map URL is returned
+# No Path Visualization With the -M parameter
 nexttrace --map koreacentral.blob.core.windows.net
 # MapTrace URL: https://api.leo.moe/tracemap/html/c14e439e-3250-5310-8965-42a1e3545266.html
 ```
