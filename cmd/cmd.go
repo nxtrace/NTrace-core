@@ -226,7 +226,12 @@ func capabilities_check() {
 	// NewPid 已经被废弃了，这里改用 NewPid2 方法
 	caps, err := capability.NewPid2(0)
 	if err != nil {
-		fmt.Println(err)
+		// 判断是否为macOS
+		if runtime.GOOS == "darwin" {
+			// macOS下报错有问题
+		} else {
+			fmt.Println(err)
+		}
 		return
 	}
 
@@ -243,8 +248,8 @@ func capabilities_check() {
 		return
 	} else {
 		// 没权限啦
-		log.Println("您正在以普通用户权限运行 NextTrace，但 NextTrace 未被赋予监听网络套接字的ICMP消息包、修改IP头信息（TTL）等路由跟踪所需的权限")
-		log.Println("请使用管理员用户执行 `sudo setcap cap_net_raw,cap_net_admin+eip ${your_nexttrace_path}/nexttrace` 命令，赋予相关权限后再运行~")
-		log.Fatalln("什么？为什么 ping 普通用户执行不要 root 权限？因为这些工具在管理员安装时就已经被赋予了一些必要的权限，具体请使用 `getcap /usr/bin/ping` 查看")
+		fmt.Println("您正在以普通用户权限运行 NextTrace，但 NextTrace 未被赋予监听网络套接字的ICMP消息包、修改IP头信息（TTL）等路由跟踪所需的权限")
+		fmt.Println("请使用管理员用户执行 `sudo setcap cap_net_raw,cap_net_admin+eip ${your_nexttrace_path}/nexttrace` 命令，赋予相关权限后再运行~")
+		fmt.Println("什么？为什么 ping 普通用户执行不要 root 权限？因为这些工具在管理员安装时就已经被赋予了一些必要的权限，具体请使用 `getcap /usr/bin/ping` 查看")
 	}
 }
