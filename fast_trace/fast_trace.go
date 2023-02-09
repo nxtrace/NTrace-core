@@ -83,6 +83,7 @@ func (f *FastTracer) testCT() {
 
 func (f *FastTracer) testCU() {
 	f.tracert(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.CU169)
+	f.tracert(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.CU9929)
 	f.tracert(TestIPsCollection.Shanghai.Location, TestIPsCollection.Shanghai.CU169)
 	f.tracert(TestIPsCollection.Shanghai.Location, TestIPsCollection.Shanghai.CU9929)
 	f.tracert(TestIPsCollection.Hangzhou.Location, TestIPsCollection.Hangzhou.CU169)
@@ -91,7 +92,9 @@ func (f *FastTracer) testCU() {
 
 func (f *FastTracer) testCM() {
 	f.tracert(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.CM)
+	f.tracert(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.CMIN2)
 	f.tracert(TestIPsCollection.Shanghai.Location, TestIPsCollection.Shanghai.CM)
+	f.tracert(TestIPsCollection.Shanghai.Location, TestIPsCollection.Shanghai.CMIN2)
 	f.tracert(TestIPsCollection.Hangzhou.Location, TestIPsCollection.Hangzhou.CM)
 	f.tracert(TestIPsCollection.Guangzhou.Location, TestIPsCollection.Guangzhou.CM)
 }

@@ -16,6 +16,7 @@ type BackBoneCollection struct {
 	CU169    ISPCollection
 	CU9929   ISPCollection
 	CM       ISPCollection
+	CMIN2    ISPCollection
 	EDU      ISPCollection
 	CST      ISPCollection
 }
@@ -32,6 +33,7 @@ const (
 	CU169  string = "联通 169 AS4837"
 	CU9929 string = "联通 A网 AS9929"
 	CM     string = "移动 骨干网 AS9808"
+	CMIN2  string = "移动 CMIN2 AS58807"
 	EDU    string = "教育网 CERNET AS4538"
 )
 
@@ -57,10 +59,20 @@ var Beijing = BackBoneCollection{
 		IPv6:    "2408:8000:1010:2::10",
 	},
 
+	CU9929: ISPCollection{
+		ISPName: CU9929,
+		IP:      "218.105.131.125",
+	},
+
 	CM: ISPCollection{
 		ISPName: CM,
 		IP:      "211.136.25.153",
 		IPv6:    "2409:8000:3800:8::3",
+	},
+
+	CMIN2: ISPCollection{
+		ISPName: CMIN2,
+		IP:      "223.70.155.55",
 	},
 
 	EDU: ISPCollection{
@@ -99,6 +111,11 @@ var Shanghai = BackBoneCollection{
 		ISPName: CM,
 		IP:      "120.204.34.85",
 		IPv6:    "2409:801e:f0:1::4e1",
+	},
+
+	CMIN2: ISPCollection{
+		ISPName: CMIN2,
+		IP:      "183.194.134.1",
 	},
 
 	EDU: ISPCollection{

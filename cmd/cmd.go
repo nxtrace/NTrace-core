@@ -46,7 +46,7 @@ func Excute() {
 	tablePrint := parser.Flag("t", "table", &argparse.Options{Help: "Output trace results as table"})
 	classicPrint := parser.Flag("c", "classic", &argparse.Options{Help: "Classic Output trace results like BestTrace"})
 	beginHop := parser.Int("f", "first", &argparse.Options{Default: 1, Help: "Start from the first_ttl hop (instead from 1)"})
-	maptrace := parser.Flag("M", "map", &argparse.Options{Help: "No Print Trace Map"})
+	maptrace := parser.Flag("M", "map", &argparse.Options{Help: "Disable Print Trace Map"})
 	ver := parser.Flag("v", "version", &argparse.Options{Help: "Print version info and exit"})
 	src_addr := parser.String("s", "source", &argparse.Options{Help: "Use source src_addr for outgoing packets"})
 	src_dev := parser.String("D", "dev", &argparse.Options{Help: "Use the following Network Devices as the source address in outgoing packets"})

@@ -63,7 +63,7 @@ nexttrace --table 1.0.0.1
 nexttrace 2606:4700:4700::1111
 
 # 禁用路径可视化 使用 --map / -M 参数
-nexttrace --map koreacentral.blob.core.windows.net
+nexttrace koreacentral.blob.core.windows.net
 # MapTrace URL: https://api.leo.moe/tracemap/html/c14e439e-3250-5310-8965-42a1e3545266.html
 ```
 
@@ -212,7 +212,7 @@ Arguments:
                                      BestTrace
   -f  --first                        Start from the first_ttl hop (instead from
                                      1). Default: 1
-  -M  --map                          No Print Trace Map.
+  -M  --map                          Disable Print Trace Map Function
   -v  --version                      Print version info and exit
   -s  --source                       Use source src_addr for outgoing packets
   -D  --dev                          Use the following Network Devices as the
@@ -225,6 +225,8 @@ Arguments:
                                      groups by TTL. Useful when some routers
                                      use rate-limit for ICMP messages..
                                      Default: 500
+  -g  --language                     Choose the language for displaying [en,
+                                     cn]. Default: cn
 ```
 
 ## 项目截图
