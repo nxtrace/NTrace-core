@@ -97,7 +97,9 @@ func Excute() {
 	if strings.Contains(domain, "]") {
 		domain = strings.Split(strings.Split(domain, "]")[0], "[")[1]
 	} else if strings.Contains(domain, ":") {
-		domain = strings.Split(domain, ":")[0]
+		if strings.Count(domain, ":") == 1 {
+			domain = strings.Split(domain, ":")[0]
+		}
 	}
 
 	capabilities_check()
