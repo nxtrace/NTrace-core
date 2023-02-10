@@ -89,6 +89,16 @@ func Excute() {
 		fmt.Print(parser.Usage(err))
 		return
 	}
+	
+	if strings.Contains(domain, "/") {
+		domain = strings.Split(domain, "/")[2]
+	}
+	
+	if strings.Contains(domain, "]") {
+		domain = strings.Split(strings.Split(domain, "]")[0], "[")[1]
+	} else if strings.Contains(domain, ":") {
+		domain = strings.Split(domain, ":")[0]
+	}
 
 	capabilities_check()
 	// return
