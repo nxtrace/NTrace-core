@@ -228,7 +228,7 @@ Arguments:
 
 ![image](https://user-images.githubusercontent.com/13616352/216064486-5e0a4ad5-01d6-4b3c-85e9-2e6d2519dc5d.png)
 
-![image](https://user-images.githubusercontent.com/13616352/216064557-cd5adab7-e34b-4ee6-9042-8287025f22d3.png)
+![image](https://user-images.githubusercontent.com/59512455/218501311-1ceb9b79-79e6-4eb6-988a-9d38f626cdb8.png)
 
 ## NextTrace Enhanced
 
