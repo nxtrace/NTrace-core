@@ -55,6 +55,8 @@ Windows 用户请直接前往 [Release](https://github.com/sjlleo/nexttrace/rele
 ```bash
 # IPv4 ICMP Trace
 nexttrace 1.0.0.1
+# URL
+nexttrace http://example.com:8080/index.html?q=1
 
 # 表格打印，使用 --table / -t 参数，将实时显示结果
 nexttrace --table 1.0.0.1
@@ -79,7 +81,7 @@ PS: 路由可视化的绘制模块由 [@tsosunchia](https://github.com/tsosunchi
 # 北上广（电信+联通+移动+教育网）IPv4 / IPv6 ICMP 快速测试
 nexttrace --fast-trace
 
-# 也可以使用 TCP SYN 而非 ICMP 进行测试（不支持 IPv6）
+# 也可以使用 TCP SYN 而非 ICMP 进行测试
 nexttrace --fast-trace --tcp
 ```
 
@@ -96,14 +98,14 @@ nexttrace --dev eth0 2606:4700:4700::1111
 nexttrace --source 204.98.134.56 9.9.9.9
 ```
 
-`NextTrace` 也可以使用`TCP`和`UDP`协议发起`Traceroute`请求，不过目前只支持`IPv4`
+`NextTrace` 也可以使用`TCP`和`UDP`协议发起`Traceroute`请求，不过目前`UDP`只支持`IPv4`
 
 ```bash
 # TCP SYN Trace
 nexttrace --tcp www.bing.com
 
 # 可以自行指定端口[此处为443]，默认80端口
-nexttrace --tcp --port 443 1.0.0.1
+nexttrace --tcp --port 443 2001:4860:4860::8888
 
 # UDP Trace
 nexttrace --udp 1.0.0.1

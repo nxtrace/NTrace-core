@@ -37,6 +37,8 @@ Windows users please go to [Release Page](https://github.com/sjlleo/nexttrace/re
 ```bash
 # IPv4 ICMP Trace
 nexttrace 1.0.0.1
+# URL
+nexttrace http://example.com:8080/index.html?q=1
 
 # Form printing (output all hops at one time, wait 20-40 seconds)
 nexttrace --table 1.0.0.1
@@ -76,14 +78,14 @@ nexttrace --dev eth0 2606:4700:4700::1111
 nexttrace --source 204.98.134.56 9.9.9.9
 ```
 
-`NextTrace` can also use `TCP` and `UDP` protocols to perform `Traceroute` requests, but these protocols only supports `IPv4` now
+`NextTrace` can also use `TCP` and `UDP` protocols to perform `Traceroute` requests, but `UDP` protocols only supports `IPv4` now
 
 ```bash
 # TCP SYN Trace
 nexttrace --tcp www.bing.com
 
 # You can specify the port by yourself [here is 443], the default port is 80
-nexttrace --tcp --port 443 1.0.0.1
+nexttrace --tcp --port 443 2001:4860:4860::8888
 
 # UDP Trace
 nexttrace --udp 1.0.0.1
