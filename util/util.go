@@ -27,6 +27,23 @@ func LocalIPPort(dstip net.IP) (net.IP, int) {
 	return nil, -1
 }
 
+func LocalIPPortv6(dstip net.IP) (net.IP, int) {
+	serverAddr, err := net.ResolveUDPAddr("udp", "["+dstip.String()+"]:12345")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// We don't actually connect to anything, but we can determine
+	// based on our destination ip what source ip we should use.
+	if con, err := net.DialUDP("udp", nil, serverAddr); err == nil {
+		defer con.Close()
+		if udpaddr, ok := con.LocalAddr().(*net.UDPAddr); ok {
+			return udpaddr.IP, udpaddr.Port
+		}
+	}
+	return nil, -1
+}
+
 func DomainLookUp(host string, ipv4Only bool) net.IP {
 	ips, err := net.LookupIP(host)
 	if err != nil {
@@ -38,23 +55,23 @@ func DomainLookUp(host string, ipv4Only bool) net.IP {
 	var ipv6Flag = false
 
 	for _, ip := range ips {
-		if ipv4Only {
-			// 仅返回ipv4的ip
-			if ip.To4() != nil {
-				ipSlice = append(ipSlice, ip)
-			} else {
-				ipv6Flag = true
-			}
-		} else {
-			ipSlice = append(ipSlice, ip)
-		}
+		ipSlice = append(ipSlice, ip)
+		// if ipv4Only {
+		// 	// 仅返回ipv4的ip
+		// 	if ip.To4() != nil {
+		// 		ipSlice = append(ipSlice, ip)
+		// 	} else {
+		// 		ipv6Flag = true
+		// 	}
+		// } else {
+		// 	ipSlice = append(ipSlice, ip)
+		// }
 	}
-
 	if ipv6Flag {
 		fmt.Println("[Info] IPv6 TCP/UDP Traceroute is not supported right now.")
-		if len(ipSlice) == 0 {
-			os.Exit(0)
-		}
+		// if len(ipSlice) == 0 {
+		// 	os.Exit(0)
+		// }
 	}
 
 	if len(ipSlice) == 1 {

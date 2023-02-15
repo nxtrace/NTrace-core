@@ -1,7 +1,7 @@
 package trace
 
 import (
-	"log"
+	"encoding/binary"
 	"math"
 	"math/rand"
 	"net"
@@ -39,14 +39,14 @@ func (t *TCPTracerv6) Execute() (*Result, error) {
 		return &t.res, ErrTracerouteExecuted
 	}
 
-	t.SrcIP, _ = util.LocalIPPort(t.DestIP)
-	log.Println(util.LocalIPPort(t.DestIP))
+	t.SrcIP, _ = util.LocalIPPortv6(t.DestIP)
+	// log.Println(util.LocalIPPortv6(t.DestIP))
 	var err error
 	t.tcp, err = net.ListenPacket("ip6:tcp", t.SrcIP.String())
 	if err != nil {
 		return nil, err
 	}
-	t.icmp, err = icmp.ListenPacket("ip6:53", "::")
+	t.icmp, err = icmp.ListenPacket("ip6:58", "::")
 	if err != nil {
 		return &t.res, err
 	}
@@ -64,14 +64,36 @@ func (t *TCPTracerv6) Execute() (*Result, error) {
 	t.sem = semaphore.NewWeighted(int64(t.ParallelRequests))
 
 	for ttl := 1; ttl <= t.MaxHops; ttl++ {
+		// 如果到达最终跳，则退出
+		if t.final != -1 && ttl > t.final {
+			break
+		}
 		for i := 0; i < t.NumMeasurements; i++ {
 			t.wg.Add(1)
 			go t.send(ttl)
-
+		}
+		if t.RealtimePrinter != nil {
+			// 对于实时模式，应该按照TTL进行并发请求
+			t.wg.Wait()
+			t.RealtimePrinter(&t.res, ttl-1)
 		}
 		time.Sleep(1 * time.Millisecond)
+
 	}
-	t.wg.Wait()
+
+	go func() {
+		if t.AsyncPrinter != nil {
+			for {
+				t.AsyncPrinter(&t.res)
+				time.Sleep(200 * time.Millisecond)
+			}
+		}
+
+	}()
+
+	if t.RealtimePrinter == nil {
+		t.wg.Wait()
+	}
 	t.res.reduce(t.final)
 
 	return &t.res, nil
@@ -85,20 +107,21 @@ func (t *TCPTracerv6) listenICMP() {
 		case <-t.ctx.Done():
 			return
 		case msg := <-lc.Messages:
+			// log.Println(msg)
+
 			if msg.N == nil {
 				continue
 			}
-			rm, err := icmp.ParseMessage(53, msg.Msg[:*msg.N])
+			rm, err := icmp.ParseMessage(58, msg.Msg[:*msg.N])
 			if err != nil {
-				log.Println(err)
+				// log.Println(err)
 				continue
 			}
-			log.Println(msg.Peer)
 			switch rm.Type {
 			case ipv6.ICMPTypeTimeExceeded:
-				t.handleICMPMessage(msg, rm.Body.(*icmp.TimeExceeded).Data)
+				t.handleICMPMessage(msg)
 			case ipv6.ICMPTypeDestinationUnreachable:
-				t.handleICMPMessage(msg, rm.Body.(*icmp.DstUnreach).Data)
+				t.handleICMPMessage(msg)
 			default:
 				//log.Println("received icmp message of unknown type", rm.Type)
 			}
@@ -118,6 +141,8 @@ func (t *TCPTracerv6) listenTCP() {
 		case <-t.ctx.Done():
 			return
 		case msg := <-lc.Messages:
+			// log.Println(msg)
+			// return
 			if msg.N == nil {
 				continue
 			}
@@ -144,23 +169,21 @@ func (t *TCPTracerv6) listenTCP() {
 	}
 }
 
-func (t *TCPTracerv6) handleICMPMessage(msg ReceivedMessage, data []byte) {
-	header, err := util.GetICMPResponsePayload(data)
-	if err != nil {
-		return
-	}
-	sequenceNumber := util.GetTCPSeq(header)
+func (t *TCPTracerv6) handleICMPMessage(msg ReceivedMessage) {
+	var sequenceNumber = binary.BigEndian.Uint32(msg.Msg[52:56])
+
 	t.inflightRequestLock.Lock()
 	defer t.inflightRequestLock.Unlock()
 	ch, ok := t.inflightRequest[int(sequenceNumber)]
 	if !ok {
 		return
 	}
+	// log.Println("发送数据", sequenceNumber)
 	ch <- Hop{
 		Success: true,
 		Address: msg.Peer,
 	}
-
+	// log.Println("发送成功")
 }
 
 func (t *TCPTracerv6) send(ttl int) error {
@@ -176,7 +199,7 @@ func (t *TCPTracerv6) send(ttl int) error {
 	}
 	// 随机种子
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	_, srcPort := util.LocalIPPort(t.DestIP)
+	_, srcPort := util.LocalIPPortv6(t.DestIP)
 	ipHeader := &layers.IPv6{
 		SrcIP:      t.SrcIP,
 		DstIP:      t.DestIP,
@@ -185,6 +208,7 @@ func (t *TCPTracerv6) send(ttl int) error {
 	}
 	// 使用Uint16兼容32位系统，防止在rand的时候因使用int32而溢出
 	sequenceNumber := uint32(r.Intn(math.MaxUint16))
+
 	tcpHeader := &layers.TCP{
 		SrcPort: layers.TCPPort(srcPort),
 		DstPort: layers.TCPPort(t.DestPort),
@@ -212,6 +236,7 @@ func (t *TCPTracerv6) send(ttl int) error {
 	if _, err := t.tcp.WriteTo(buf.Bytes(), &net.IPAddr{IP: t.DestIP}); err != nil {
 		return err
 	}
+	// log.Println(ttl, sequenceNumber)
 	t.inflightRequestLock.Lock()
 	hopCh := make(chan Hop)
 	t.inflightRequest[int(sequenceNumber)] = hopCh
