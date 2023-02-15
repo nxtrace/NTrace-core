@@ -41,13 +41,10 @@ func (f *FastTracer) tracert_v6(location string, ispCollection ISPCollection) {
 		Timeout:          1 * time.Second,
 	}
 
-	if f.TracerouteMethod == trace.ICMPTrace {
-		if oe {
-			conf.RealtimePrinter = tracelog.RealtimePrinter
-		} else {
-			conf.RealtimePrinter = printer.RealtimePrinter
-		}
-
+	if oe {
+		conf.RealtimePrinter = tracelog.RealtimePrinter
+	} else {
+		conf.RealtimePrinter = printer.RealtimePrinter
 	}
 
 	_, err = trace.Traceroute(f.TracerouteMethod, conf)
