@@ -51,34 +51,20 @@ func DomainLookUp(host string, ipv4Only bool) net.IP {
 		os.Exit(1)
 	}
 
-	var ipSlice = []net.IP{}
 	var ipv6Flag = false
 
-	for _, ip := range ips {
-		ipSlice = append(ipSlice, ip)
-		// if ipv4Only {
-		// 	// 仅返回ipv4的ip
-		// 	if ip.To4() != nil {
-		// 		ipSlice = append(ipSlice, ip)
-		// 	} else {
-		// 		ipv6Flag = true
-		// 	}
-		// } else {
-		// 	ipSlice = append(ipSlice, ip)
-		// }
-	}
 	if ipv6Flag {
-		fmt.Println("[Info] IPv6 TCP/UDP Traceroute is not supported right now.")
-		// if len(ipSlice) == 0 {
-		// 	os.Exit(0)
-		// }
+		fmt.Println("[Info] IPv6 UDP Traceroute is not supported right now.")
+		if len(ips) == 0 {
+			os.Exit(0)
+		}
 	}
 
-	if len(ipSlice) == 1 {
-		return ipSlice[0]
+	if len(ips) == 1 {
+		return ips[0]
 	} else {
 		fmt.Println("Please Choose the IP You Want To TraceRoute")
-		for i, ip := range ipSlice {
+		for i, ip := range ips {
 			fmt.Fprintf(color.Output, "%s %s\n",
 				color.New(color.FgHiYellow, color.Bold).Sprintf("%d.", i),
 				color.New(color.FgWhite, color.Bold).Sprintf("%s", ip),
@@ -87,11 +73,11 @@ func DomainLookUp(host string, ipv4Only bool) net.IP {
 		var index int
 		fmt.Printf("Your Option: ")
 		fmt.Scanln(&index)
-		if index >= len(ipSlice) || index < 0 {
+		if index >= len(ips) || index < 0 {
 			fmt.Println("Your Option is invalid")
 			os.Exit(3)
 		}
-		return ipSlice[index]
+		return ips[index]
 	}
 }
 

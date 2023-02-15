@@ -89,11 +89,11 @@ func Excute() {
 		fmt.Print(parser.Usage(err))
 		return
 	}
-	
+
 	if strings.Contains(domain, "/") {
 		domain = strings.Split(domain, "/")[2]
 	}
-	
+
 	if strings.Contains(domain, "]") {
 		domain = strings.Split(strings.Split(domain, "]")[0], "[")[1]
 	} else if strings.Contains(domain, ":") {
@@ -111,7 +111,7 @@ func Excute() {
 		fmt.Println("NextTrace 基于 Windows 的路由跟踪还在早期开发阶段，目前还存在诸多问题，TCP/UDP SYN 包请求可能不能正常运行")
 	}
 
-	if *tcp || *udp {
+	if *udp {
 		ip = util.DomainLookUp(domain, true)
 	} else {
 		ip = util.DomainLookUp(domain, false)

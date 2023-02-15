@@ -115,7 +115,12 @@ func FastTestv6(tm bool, outEnable bool) {
 		w.Conn.Close()
 	}()
 
-	ft.TracerouteMethod = trace.ICMPTrace
+	if !tm {
+		ft.TracerouteMethod = trace.ICMPTrace
+		fmt.Println("您将默认使用ICMP协议进行路由跟踪，如果您想使用TCP SYN进行路由跟踪，可以加入 -T 参数")
+	} else {
+		ft.TracerouteMethod = trace.TCPTrace
+	}
 
 	switch c {
 	case "1":
