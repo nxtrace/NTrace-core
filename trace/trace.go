@@ -31,6 +31,7 @@ type Config struct {
 	PacketInterval   int
 	TTLInterval      int
 	Lang             string
+	DN42             bool
 	RealtimePrinter  func(res *Result, ttl int)
 	AsyncPrinter     func(res *Result)
 }
@@ -121,6 +122,19 @@ type Hop struct {
 }
 
 func (h *Hop) fetchIPData(c Config) (err error) {
+	// DN42
+	if c.DN42 {
+		var ip string
+		// 首先查找 PTR 记录
+		r, err := net.LookupAddr(h.Address.String())
+		if err == nil && len(r) > 0 {
+			h.Hostname = r[0][:len(r[0])-1]
+			ip = h.Address.String() + "," + h.Hostname
+		}
+		h.Geo, err = c.IPGeoSource(ip)
+		return nil
+	}
+
 	// Debug Area
 	// c.AlwaysWaitRDNS = true
 

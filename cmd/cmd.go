@@ -13,6 +13,7 @@ import (
 
 	"github.com/akamensky/argparse"
 	"github.com/syndtr/gocapability/capability"
+	"github.com/xgadget-lab/nexttrace/config"
 	fastTrace "github.com/xgadget-lab/nexttrace/fast_trace"
 	"github.com/xgadget-lab/nexttrace/ipgeo"
 	"github.com/xgadget-lab/nexttrace/printer"
@@ -42,6 +43,7 @@ func Excute() {
 	alwaysRdns := parser.Flag("a", "always-rdns", &argparse.Options{Help: "Always resolve IP addresses to their domain names"})
 	routePath := parser.Flag("P", "route-path", &argparse.Options{Help: "Print traceroute hop path by ASN and location"})
 	report := parser.Flag("r", "report", &argparse.Options{Help: "output using report mode"})
+	dn42 := parser.Flag("", "dn42", &argparse.Options{Help: "DN42 Mode"})
 	output := parser.Flag("o", "output", &argparse.Options{Help: "Write trace result to file (RealTimePrinter ONLY)"})
 	tablePrint := parser.Flag("t", "table", &argparse.Options{Help: "Output trace results as table"})
 	classicPrint := parser.Flag("c", "classic", &argparse.Options{Help: "Classic Output trace results like BestTrace"})
@@ -129,6 +131,13 @@ func Excute() {
 		}
 	}
 
+	if *dn42 {
+		// 初始化配置
+		config.InitConfig()
+		*dataOrigin = "DN42"
+		*maptrace = true
+	}
+
 	if strings.ToUpper(*dataOrigin) == "LEOMOEAPI" {
 		w := wshandle.New()
 		w.Interrupt = make(chan os.Signal, 1)
@@ -156,6 +165,7 @@ func Excute() {
 	}
 
 	var conf = trace.Config{
+		DN42:             *dn42,
 		SrcAddr:          *src_addr,
 		BeginHop:         *beginHop,
 		DestIP:           ip,
