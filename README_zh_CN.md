@@ -282,3 +282,43 @@ LeoMoeAPI 已经尽力校准了比较常见的骨干网路由，这部分在测�
 我们不保证我们的数据一定会及时更新，也不保证数据的精确性，我们希望您在发现数据错误的时候可以前往 issue 页面提交错误报告，谢谢。
 
 当您使用 LeoMoeAPI 即视为您已经完全了解 NextTrace LeoMoeAPI 的数据精确性，并且同意如果您引用 LeoMoeAPI 其中的数据从而引发的一切问题，均由您自己承担。
+
+## DN42 模式使用说明
+
+使用这个模式需要您配置 2 个文件，分别是 geofeed.csv 以及 ptr.csv
+
+当您初次运行 DN42 模式，NT 会为您生成 nt_config.yaml 文件，您可以自定义 2 个文件的存放位置
+
+### GeoFeed
+
+对于 geofeed.csv 来说，格式如下：
+```
+IP_CDIR,LtdCode,ISO3166-2,CityName,ASN,IPWhois
+```
+
+比如，您可以这么写：
+
+```
+58.215.96.0/20,CN,CN-JS,Wuxi,23650,CHINANET-JS
+```
+
+如果您有一个大段作为骨干网使用，您也可以不写地理位置信息，如下：
+
+```
+202.97.0.0/16,,,4134,CHINANET-BACKBONE
+```
+
+### PTR
+
+对于 ptr.csv 来说，格式如下：
+```
+IATA_CODE,LtdCode,RegionName,CityName
+```
+
+比如对于美国洛杉矶，您可以这么写
+
+```
+LAX,US,California,Los Anegles
+```
+
+需要注意的是，NextTrace 支持自动匹配 CSV 中的城市名，如果您的 PTR 记录中有 `losangeles`，您可以只添加上面一条记录就可以正常识别并读取。
