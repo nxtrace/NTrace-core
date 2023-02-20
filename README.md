@@ -8,6 +8,8 @@
 
 An open source visual routing tool that pursues light weight, developed using Golang.
 
+NextTrace is part of the [OwO Network](https://github.com/OwO-Network) project. The project is a joint initiative of Leo and Vincent.
+
 ## How To Use
 
 Document Language: English | [简体中文](README_zh_CN.md)
