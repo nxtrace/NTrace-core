@@ -56,6 +56,8 @@ func Excute() {
 	packet_interval := parser.Int("z", "send-time", &argparse.Options{Default: 100, Help: "Set the time interval for sending every packet. Useful when some routers use rate-limit for ICMP messages"})
 	ttl_interval := parser.Int("i", "ttl-time", &argparse.Options{Default: 500, Help: "Set the time interval for sending packets groups by TTL. Useful when some routers use rate-limit for ICMP messages"})
 	str := parser.StringPositional(&argparse.Options{Help: "IP Address or domain name"})
+	dot := parser.Selector("", "dot-server", []string{"dnssb", "aliyun", "dnspod", "google", "cloudflare"}, &argparse.Options{Default: "dnssb",
+		Help: "Use DoT Server for DNS Parse [dnssb, aliyun, dnspod, google, cloudflare]"})
 	lang := parser.Selector("g", "language", []string{"en", "cn"}, &argparse.Options{Default: "cn",
 		Help: "Choose the language for displaying [en, cn]"})
 
@@ -114,9 +116,9 @@ func Excute() {
 	}
 
 	if *udp {
-		ip = util.DomainLookUp(domain, true)
+		ip = util.DomainLookUp(domain, true, *dot)
 	} else {
-		ip = util.DomainLookUp(domain, false)
+		ip = util.DomainLookUp(domain, false, *dot)
 	}
 
 	if *src_dev != "" {

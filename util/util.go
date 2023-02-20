@@ -1,6 +1,7 @@
 package util
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
@@ -44,8 +45,30 @@ func LocalIPPortv6(dstip net.IP) (net.IP, int) {
 	return nil, -1
 }
 
-func DomainLookUp(host string, ipv4Only bool) net.IP {
-	ips, err := net.LookupIP(host)
+func DomainLookUp(host string, ipv4Only bool, dotServer string) net.IP {
+	var (
+		r   *net.Resolver
+		ips []net.IP
+	)
+
+	switch dotServer {
+	case "dnssb":
+		r = DNSSB()
+	case "aliyun":
+		r = Aliyun()
+	case "dnspod":
+		r = Dnspod()
+	case "google":
+		r = Google()
+	case "cloudflare":
+		r = Cloudflare()
+	default:
+		r = newUDPResolver()
+	}
+	ips_str, err := r.LookupHost(context.Background(), host)
+	for _, v := range ips_str {
+		ips = append(ips, net.ParseIP(v))
+	}
 	if err != nil {
 		fmt.Println("Domain " + host + " Lookup Fail.")
 		os.Exit(1)
