@@ -1,6 +1,7 @@
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 name: Test & Build Release
 jobs:
@@ -11,24 +12,35 @@ jobs:
 
       - uses: actions/setup-go@v2
         with:
-          go-version: "1.18"
+          go-version: "1.20"
 
       - name: Test
         run: sudo go test -v -coverprofile='coverage.out' -covermode=count ./...
 
   Build:
-    needs: test
-    if: startsWith(github.ref, 'refs/tags/v')
+    needs: Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
 
       - uses: actions/setup-go@v2
         with:
-          go-version: "1.18"
+          go-version: "1.20"
 
-      - run: bash .cross_compile.sh
-
+      - name: compile
+        run: bash .cross_compile.sh
+        
+      - name: Upload files to Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          path: |
+            dist/*
+        
+  Release:
+    needs: Build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
       - name: Release
         uses: softprops/action-gh-release@v1
         with: # 将下述可执行文件 release 上去
@@ -39,7 +51,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GT_Token }}
 
   publish-new-formula:
-    needs: build
+    needs: Release
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
 
