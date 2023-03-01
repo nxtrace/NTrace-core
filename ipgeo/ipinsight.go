@@ -8,7 +8,7 @@ import (
 )
 
 func IPInSight(ip string) (*IPGeoData, error) {
-	resp, err := http.Get("https://api.ipinsight.io/query?ip=" + ip + "?token=" + token.ipinsight)
+	resp, err := http.Get("https://api.ipinsight.io/ip/" + ip + "?token=" + token.ipinsight)
 	if err != nil {
 		return nil, err
 	}
