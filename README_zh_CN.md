@@ -144,25 +144,25 @@ nexttrace --route-path www.time.com.my
 `NextTrace`支持用户自主选择 IP 数据库（目前支持：`LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`, `Ip2region`, `IPInfoLocal`)
 
 ```bash
-# 可以自行指定IP数据库[此处为IP.SB]，不指定则默认为LeoMoeAPI
-nexttrace --data-provider IP.SB
-## 特别的：其中 ipinfo API 需要从 ipinfo 自行购买服务，如有需要可以 clone 本项目添加其提供的 token 自行编译
+# 可以自行指定IP数据库[此处为IP-API.com]，不指定则默认为LeoMoeAPI
+nexttrace --data-provider ip-api.com
+## 特别的：其中 `ipinfo` 和 `IPInsight` API 需要从这些服务商自行购买服务，如有需要可以 clone 本项目添加其提供的 token 自行编译
 ##        TOKEN填写路径：ipgeo/tokens.go
 ## 特别的：对于 `Ip2region`, `IPInfoLocal`
 
 ## 另外：由于IP.SB被滥用比较严重，会经常出现无法查询的问题，请知悉。
-##      IPAPI.com限制调用较为严格，如有查询不到的情况，请几分钟后再试。
+##      IP-API.com限制调用较为严格，如有查询不到的情况，请几分钟后再试。
 ```
 
 `NextTrace`支持使用混合参数和简略参数
 
 ```bash
 Example:
-nexttrace --data-provider IPAPI.com --max-hops 20 --tcp --port 443 --queries 5 --no-rdns 1.1.1.1
+nexttrace --data-provider ip-api.com --max-hops 20 --tcp --port 443 --queries 5 --no-rdns 1.1.1.1
 nexttrace -tcp --queries 2 --parallel-requests 1 --table --route-path 2001:4860:4860::8888
 
 Equivalent to:
-nexttrace -d IPAPI.com -m 20 -T -p 443 -q 5 -n 1.1.1.1
+nexttrace -d ip-api.com -m 20 -T -p 443 -q 5 -n 1.1.1.1
 nexttrace -T -q 2 --parallel-requests 1 -t -R 2001:4860:4860::8888
 ```
 

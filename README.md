@@ -125,12 +125,12 @@ nexttrace --route-path www.time.com.my
 `NextTrace` supports users to select their own IP API (currently supports: `LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`, `Ip2region`, `IPInfoLocal`)
 
 ```bash
-# You can specify the IP database by yourself [IP.SB here], if not specified, LeoMoeAPI will be used
-nexttrace --data-provider IP.SB
-## Note that the ipinfo API needs users to purchase services from ipinfo. If necessary, you can clone this project, add the token provided by ipinfo and compile it yourself
+# You can specify the IP database by yourself [IP-API.com here], if not specified, LeoMoeAPI will be used
+nexttrace --data-provider ip-api.com
+## Note that the `ipinfo` and `IPInsight` API needs users to purchase services from them. If necessary, you can clone this project, add the token provided by `ipinfo` or `IPInsight` and compile it yourself
 ## Fill the token to: ipgeo/tokens.go
 ## Please be aware: Due to the serious abuse of IP.SB, you will often be not able to query IP data from this source
-## IPAPI.com has a stricter restiction on API calls, if you can't query IP data from this source, please try again in a few minutes.
+## IP-API.com has a stricter restiction on API calls, if you can't query IP data from this source, please try again in a few minutes.
 ```
 
 `NextTrace` supports mixed parameters and shortened parameters
