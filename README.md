@@ -127,7 +127,10 @@ nexttrace --route-path www.time.com.my
 ```bash
 # You can specify the IP database by yourself [IP-API.com here], if not specified, LeoMoeAPI will be used
 nexttrace --data-provider ip-api.com
-## Note that the `ipinfo` and `IPInsight` API needs users to purchase services from them. If necessary, you can clone this project, add the token provided by `ipinfo` or `IPInsight` and compile it yourself
+## Note that the `ipinfo` and `IPInsight` API needs users to purchase services from them. 
+##      If necessary, you can clone this project, add the token provided by `ipinfo` or `IPInsight` and compile it yourself
+## Note For the offline database IPInfoLocal, please download it yourself to the same directory as NextTrace and rename it to ipinfoLocal.mmdb.
+##      For the offline database Ip2region, you can download it manually to the same directory as NextTrace and rename it to ip2region.db, or let NextTrace download it automatically.
 ## Fill the token to: ipgeo/tokens.go
 ## Please be aware: Due to the serious abuse of IP.SB, you will often be not able to query IP data from this source
 ## IP-API.com has a stricter restiction on API calls, if you can't query IP data from this source, please try again in a few minutes.
