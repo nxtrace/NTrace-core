@@ -121,7 +121,7 @@ func FastTest(tm bool, outEnable bool) {
 	fmt.Print("请选择选项：")
 	_, err := fmt.Scanln(&c)
 	if err != nil {
-		return
+		c = "1"
 	}
 	if c == "2" {
 		FastTestv6(tm, outEnable)
@@ -132,7 +132,7 @@ func FastTest(tm bool, outEnable bool) {
 	fmt.Print("请选择选项：")
 	_, err = fmt.Scanln(&c)
 	if err != nil {
-		return
+		c = "1"
 	}
 
 	ft := FastTracer{}

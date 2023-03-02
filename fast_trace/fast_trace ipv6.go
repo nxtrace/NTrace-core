@@ -107,7 +107,7 @@ func FastTestv6(tm bool, outEnable bool) {
 	fmt.Print("请选择选项：")
 	_, err := fmt.Scanln(&c)
 	if err != nil {
-		return
+		c = "1"
 	}
 
 	ft := FastTracer{}

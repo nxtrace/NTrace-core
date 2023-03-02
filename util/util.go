@@ -110,7 +110,7 @@ func DomainLookUp(host string, ipv4Only bool, dotServer string) net.IP {
 		fmt.Printf("Your Option: ")
 		_, err := fmt.Scanln(&index)
 		if err != nil {
-			return nil
+			index = 0
 		}
 		if index >= len(ips) || index < 0 {
 			fmt.Println("Your Option is invalid")
