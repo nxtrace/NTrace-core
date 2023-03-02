@@ -129,7 +129,7 @@ nexttrace --route-path www.time.com.my
 nexttrace --data-provider ip-api.com
 ## Note that the `ipinfo` and `IPInsight` API needs users to purchase services from them. 
 ##      If necessary, you can clone this project, add the token provided by `ipinfo` or `IPInsight` and compile it yourself
-## Note For the offline database IPInfoLocal, please download it yourself to the same directory as NextTrace and rename it to ipinfoLocal.mmdb.
+## Note For the offline database IPInfoLocal, please download it yourself to the same directory as NextTrace and rename it to ipinfoLocal.mmdb. (You can download it from here: https://ipinfo.io/signup?ref=free-database-downloads)
 ##      For the offline database Ip2region, you can download it manually to the same directory as NextTrace and rename it to ip2region.db, or let NextTrace download it automatically.
 ## Fill the token to: ipgeo/tokens.go
 ## Please be aware: Due to the serious abuse of IP.SB, you will often be not able to query IP data from this source

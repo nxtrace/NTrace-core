@@ -148,7 +148,7 @@ nexttrace --route-path www.time.com.my
 nexttrace --data-provider ip-api.com
 ## 特别的: 其中 `ipinfo` 和 `IPInsight` API 需要从这些服务商自行购买服务，如有需要可以 clone 本项目添加其提供的 token 自行编译
 ##        TOKEN填写路径：ipgeo/tokens.go
-## 特别的: 对于离线库`IPInfoLocal`，请自行下载到与NextTrace同目录下，并命名为`ipinfoLocal.mmdb`
+## 特别的: 对于离线库`IPInfoLocal`，请自行下载到与NextTrace同目录下，并命名为`ipinfoLocal.mmdb` (可以从这里下载：https://ipinfo.io/signup?ref=free-database-downloads)
 ##        对于离线库`Ip2region`可NextTrace自动下载，也可自行下载到与NextTrace同目录下，并命名为`ip2region.db`
 
 ## 另外：由于IP.SB被滥用比较严重，会经常出现无法查询的问题，请知悉。
