@@ -36,7 +36,12 @@ func FindPtrRecord(ptr string) (PtrRow, error) {
 	if err != nil {
 		return PtrRow{}, err
 	}
-	defer f.Close()
+	defer func(f *os.File) {
+		err := f.Close()
+		if err != nil {
+			panic(err)
+		}
+	}(f)
 
 	r := csv.NewReader(f)
 	rows, err := r.ReadAll()

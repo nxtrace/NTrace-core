@@ -45,7 +45,7 @@ func experimentTag() {
 
 func (r *reporter) generateRouteReportNode(ip string, ipGeoData ipgeo.IPGeoData, ttl uint16) {
 
-	var success bool = true
+	var success = true
 
 	defer r.wg.Done()
 

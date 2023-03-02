@@ -19,7 +19,7 @@ import (
  * 运作模型可以理解为一个 Node 一直在等待数据，当获得一个新的任务后，转交给下一个协程，不再关注这个 Node 的下一步处理过程，并且回到空闲状态继续等待新的任务
 ***/
 
-// IP 查询池 map - ip - ip channel
+// IPPool IP 查询池 map - ip - ip channel
 type IPPool struct {
 	pool    map[string]chan IPGeoData
 	poolMux sync.Mutex
@@ -48,14 +48,17 @@ func receiveParse() {
 		// json解析 -> data
 		res := gjson.Parse(data)
 		// 根据返回的IP信息，发送给对应等待回复的IP通道上
-		var domain string = res.Get("domain").String()
+		var domain = res.Get("domain").String()
 
 		if res.Get("domain").String() == "" {
 			domain = res.Get("owner").String()
 		}
 
 		m := make(map[string][]string)
-		json.Unmarshal([]byte(res.Get("router").String()), &m)
+		err := json.Unmarshal([]byte(res.Get("router").String()), &m)
+		if err != nil {
+			return
+		}
 
 		lat, _ := strconv.ParseFloat(res.Get("lat").String(), 32)
 		lng, _ := strconv.ParseFloat(res.Get("lng").String(), 32)

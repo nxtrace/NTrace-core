@@ -145,7 +145,10 @@ func Excute() {
 		w.Interrupt = make(chan os.Signal, 1)
 		signal.Notify(w.Interrupt, os.Interrupt)
 		defer func() {
-			w.Conn.Close()
+			err := w.Conn.Close()
+			if err != nil {
+				return
+			}
 		}()
 	}
 

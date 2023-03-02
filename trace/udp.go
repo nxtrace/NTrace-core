@@ -41,7 +41,12 @@ func (t *UDPTracer) Execute() (*Result, error) {
 	if err != nil {
 		return &t.res, err
 	}
-	defer t.icmp.Close()
+	defer func(icmp net.PacketConn) {
+		err := icmp.Close()
+		if err != nil {
+			log.Println(err)
+		}
+	}(t.icmp)
 
 	var cancel context.CancelFunc
 	t.ctx, cancel = context.WithCancel(context.Background())
@@ -59,7 +64,12 @@ func (t *UDPTracer) Execute() (*Result, error) {
 		}
 		for i := 0; i < t.NumMeasurements; i++ {
 			t.wg.Add(1)
-			go t.send(ttl)
+			go func() {
+				err := t.send(ttl)
+				if err != nil {
+					log.Println(err)
+				}
+			}()
 
 		}
 		if t.RealtimePrinter != nil {
@@ -256,7 +266,10 @@ func (t *UDPTracer) send(ttl int) error {
 		h.TTL = ttl
 		h.RTT = rtt
 
-		h.fetchIPData(t.Config)
+		err := h.fetchIPData(t.Config)
+		if err != nil {
+			return err
+		}
 
 		t.res.add(h)
 

@@ -39,9 +39,12 @@ func RealtimePrinter(res *trace.Result, ttl int) {
 	}
 
 	if latestIP == "" {
-		fmt.Fprintf(color.Output, "%s\n",
+		_, err := fmt.Fprintf(color.Output, "%s\n",
 			color.New(color.FgWhite, color.Bold).Sprintf("*"),
 		)
+		if err != nil {
+			return
+		}
 		return
 	}
 
@@ -51,13 +54,19 @@ func RealtimePrinter(res *trace.Result, ttl int) {
 			fmt.Printf("%4s", "")
 		}
 		if net.ParseIP(ip).To4() == nil {
-			fmt.Fprintf(color.Output, "%s",
+			_, err := fmt.Fprintf(color.Output, "%s",
 				color.New(color.FgWhite, color.Bold).Sprintf("%-25s", ip),
 			)
+			if err != nil {
+				return
+			}
 		} else {
-			fmt.Fprintf(color.Output, "%s",
+			_, err := fmt.Fprintf(color.Output, "%s",
 				color.New(color.FgWhite, color.Bold).Sprintf("%-15s", ip),
 			)
+			if err != nil {
+				return
+			}
 		}
 
 		i, _ := strconv.Atoi(v[0])
@@ -77,9 +86,15 @@ func RealtimePrinter(res *trace.Result, ttl int) {
 			case res.Hops[ttl][i].Geo.Whois == "CMIN2-NET":
 				fallthrough
 			case strings.HasPrefix(res.Hops[ttl][i].Address.String(), "59.43."):
-				fmt.Fprintf(color.Output, " %s", color.New(color.FgHiYellow, color.Bold).Sprintf("AS%-6s", res.Hops[ttl][i].Geo.Asnumber))
+				_, err := fmt.Fprintf(color.Output, " %s", color.New(color.FgHiYellow, color.Bold).Sprintf("AS%-6s", res.Hops[ttl][i].Geo.Asnumber))
+				if err != nil {
+					return
+				}
 			default:
-				fmt.Fprintf(color.Output, " %s", color.New(color.FgHiGreen, color.Bold).Sprintf("AS%-6s", res.Hops[ttl][i].Geo.Asnumber))
+				_, err := fmt.Fprintf(color.Output, " %s", color.New(color.FgHiGreen, color.Bold).Sprintf("AS%-6s", res.Hops[ttl][i].Geo.Asnumber))
+				if err != nil {
+					return
+				}
 			}
 
 		} else {
@@ -115,9 +130,15 @@ func RealtimePrinter(res *trace.Result, ttl int) {
 			case whoisFormat[0] == "[CMIN2-NET]":
 				fallthrough
 			case strings.HasPrefix(res.Hops[ttl][i].Address.String(), "59.43."):
-				fmt.Fprintf(color.Output, " %s", color.New(color.FgHiYellow, color.Bold).Sprintf("%-16s", whoisFormat[0]))
+				_, err := fmt.Fprintf(color.Output, " %s", color.New(color.FgHiYellow, color.Bold).Sprintf("%-16s", whoisFormat[0]))
+				if err != nil {
+					return
+				}
 			default:
-				fmt.Fprintf(color.Output, " %s", color.New(color.FgHiGreen, color.Bold).Sprintf("%-16s", whoisFormat[0]))
+				_, err := fmt.Fprintf(color.Output, " %s", color.New(color.FgHiGreen, color.Bold).Sprintf("%-16s", whoisFormat[0]))
+				if err != nil {
+					return
+				}
 			}
 		}
 
@@ -147,8 +168,7 @@ func RealtimePrinter(res *trace.Result, ttl int) {
 		}
 
 		if net.ParseIP(ip).To4() != nil {
-
-			fmt.Fprintf(color.Output, " %s %s %s %s %s\n    %s   ",
+			_, err := fmt.Fprintf(color.Output, " %s %s %s %s %s\n    %s   ",
 				color.New(color.FgWhite, color.Bold).Sprintf("%s", res.Hops[ttl][i].Geo.Country),
 				color.New(color.FgWhite, color.Bold).Sprintf("%s", res.Hops[ttl][i].Geo.Prov),
 				color.New(color.FgWhite, color.Bold).Sprintf("%s", res.Hops[ttl][i].Geo.City),
@@ -156,8 +176,11 @@ func RealtimePrinter(res *trace.Result, ttl int) {
 				fmt.Sprintf("%-6s", res.Hops[ttl][i].Geo.Owner),
 				color.New(color.FgHiBlack, color.Bold).Sprintf("%-39s", res.Hops[ttl][i].Hostname),
 			)
+			if err != nil {
+				return
+			}
 		} else {
-			fmt.Fprintf(color.Output, " %s %s %s %s %s\n    %s   ",
+			_, err := fmt.Fprintf(color.Output, " %s %s %s %s %s\n    %s   ",
 				color.New(color.FgWhite, color.Bold).Sprintf("%s", res.Hops[ttl][i].Geo.Country),
 				color.New(color.FgWhite, color.Bold).Sprintf("%s", res.Hops[ttl][i].Geo.Prov),
 				color.New(color.FgWhite, color.Bold).Sprintf("%s", res.Hops[ttl][i].Geo.City),
@@ -165,17 +188,26 @@ func RealtimePrinter(res *trace.Result, ttl int) {
 				fmt.Sprintf("%-6s", res.Hops[ttl][i].Geo.Owner),
 				color.New(color.FgHiBlack, color.Bold).Sprintf("%-32s", res.Hops[ttl][i].Hostname),
 			)
+			if err != nil {
+				return
+			}
 		}
 
 		for j := 1; j < len(v); j++ {
 			if len(v) == 2 || j == 1 {
-				fmt.Fprintf(color.Output, "%s",
+				_, err := fmt.Fprintf(color.Output, "%s",
 					color.New(color.FgHiCyan, color.Bold).Sprintf("%s", v[j]),
 				)
+				if err != nil {
+					return
+				}
 			} else {
-				fmt.Fprintf(color.Output, " / %s",
+				_, err := fmt.Fprintf(color.Output, " / %s",
 					color.New(color.FgHiCyan, color.Bold).Sprintf("%s", v[j]),
 				)
+				if err != nil {
+					return
+				}
 			}
 		}
 		fmt.Println()

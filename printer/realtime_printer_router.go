@@ -39,9 +39,12 @@ func RealtimePrinterWithRouter(res *trace.Result, ttl int) {
 	}
 
 	if latestIP == "" {
-		fmt.Fprintf(color.Output, "%s\n",
+		_, err := fmt.Fprintf(color.Output, "%s\n",
 			color.New(color.FgWhite, color.Bold).Sprintf("*"),
 		)
+		if err != nil {
+			return
+		}
 		return
 	}
 
@@ -51,19 +54,28 @@ func RealtimePrinterWithRouter(res *trace.Result, ttl int) {
 			fmt.Printf("%4s", "")
 		}
 		if net.ParseIP(ip).To4() == nil {
-			fmt.Fprintf(color.Output, "%s",
+			_, err := fmt.Fprintf(color.Output, "%s",
 				color.New(color.FgWhite, color.Bold).Sprintf("%-25s", ip),
 			)
+			if err != nil {
+				return
+			}
 		} else {
-			fmt.Fprintf(color.Output, "%s",
+			_, err := fmt.Fprintf(color.Output, "%s",
 				color.New(color.FgWhite, color.Bold).Sprintf("%-15s", ip),
 			)
+			if err != nil {
+				return
+			}
 		}
 
 		i, _ := strconv.Atoi(v[0])
 
 		if res.Hops[ttl][i].Geo.Asnumber != "" {
-			fmt.Fprintf(color.Output, " %s", color.New(color.FgHiGreen, color.Bold).Sprintf("AS%-6s", res.Hops[ttl][i].Geo.Asnumber))
+			_, err := fmt.Fprintf(color.Output, " %s", color.New(color.FgHiGreen, color.Bold).Sprintf("AS%-6s", res.Hops[ttl][i].Geo.Asnumber))
+			if err != nil {
+				return
+			}
 		} else {
 			fmt.Printf(" %-8s", "*")
 		}
@@ -77,7 +89,10 @@ func RealtimePrinterWithRouter(res *trace.Result, ttl int) {
 			if whoisFormat[0] != "" {
 				whoisFormat[0] = "[" + whoisFormat[0] + "]"
 			}
-			fmt.Fprintf(color.Output, " %s", color.New(color.FgHiGreen, color.Bold).Sprintf("%-16s", whoisFormat[0]))
+			_, err := fmt.Fprintf(color.Output, " %s", color.New(color.FgHiGreen, color.Bold).Sprintf("%-16s", whoisFormat[0]))
+			if err != nil {
+				return
+			}
 		}
 
 		if res.Hops[ttl][i].Geo.Country == "" {
@@ -86,7 +101,7 @@ func RealtimePrinterWithRouter(res *trace.Result, ttl int) {
 
 		if net.ParseIP(ip).To4() != nil {
 
-			fmt.Fprintf(color.Output, " %s %s %s %s %s\n    %s   ",
+			_, err := fmt.Fprintf(color.Output, " %s %s %s %s %s\n    %s   ",
 				color.New(color.FgWhite, color.Bold).Sprintf("%s", res.Hops[ttl][i].Geo.Country),
 				color.New(color.FgWhite, color.Bold).Sprintf("%s", res.Hops[ttl][i].Geo.Prov),
 				color.New(color.FgWhite, color.Bold).Sprintf("%s", res.Hops[ttl][i].Geo.City),
@@ -94,8 +109,11 @@ func RealtimePrinterWithRouter(res *trace.Result, ttl int) {
 				fmt.Sprintf("%-6s", res.Hops[ttl][i].Geo.Owner),
 				color.New(color.FgHiBlack, color.Bold).Sprintf("%-39s", res.Hops[ttl][i].Hostname),
 			)
+			if err != nil {
+				return
+			}
 		} else {
-			fmt.Fprintf(color.Output, " %s %s %s %s %s\n    %s   ",
+			_, err := fmt.Fprintf(color.Output, " %s %s %s %s %s\n    %s   ",
 				color.New(color.FgWhite, color.Bold).Sprintf("%s", res.Hops[ttl][i].Geo.Country),
 				color.New(color.FgWhite, color.Bold).Sprintf("%s", res.Hops[ttl][i].Geo.Prov),
 				color.New(color.FgWhite, color.Bold).Sprintf("%s", res.Hops[ttl][i].Geo.City),
@@ -103,29 +121,41 @@ func RealtimePrinterWithRouter(res *trace.Result, ttl int) {
 				fmt.Sprintf("%-6s", res.Hops[ttl][i].Geo.Owner),
 				color.New(color.FgHiBlack, color.Bold).Sprintf("%-32s", res.Hops[ttl][i].Hostname),
 			)
+			if err != nil {
+				return
+			}
 		}
 
 		for j := 1; j < len(v); j++ {
 			if len(v) == 2 || j == 1 {
-				fmt.Fprintf(color.Output, "%s",
+				_, err := fmt.Fprintf(color.Output, "%s",
 					color.New(color.FgHiCyan, color.Bold).Sprintf("%s", v[j]),
 				)
+				if err != nil {
+					return
+				}
 			} else {
-				fmt.Fprintf(color.Output, " / %s",
+				_, err := fmt.Fprintf(color.Output, " / %s",
 					color.New(color.FgHiCyan, color.Bold).Sprintf("%s", v[j]),
 				)
+				if err != nil {
+					return
+				}
 			}
 		}
 		i = 0
 		fmt.Println()
 		if res.Hops[ttl][i].Geo != nil && !blockDisplay {
-			fmt.Fprintf(color.Output, "%s   %s %s %s   %s\n",
+			_, err := fmt.Fprintf(color.Output, "%s   %s %s %s   %s\n",
 				color.New(color.FgWhite, color.Bold).Sprintf("-"),
 				color.New(color.FgHiYellow, color.Bold).Sprintf("%s", res.Hops[ttl][i].Geo.Prefix),
 				color.New(color.FgWhite, color.Bold).Sprintf("路由表"),
 				color.New(color.FgHiCyan, color.Bold).Sprintf("Beta"),
 				color.New(color.FgWhite, color.Bold).Sprintf("-"),
 			)
+			if err != nil {
+				return
+			}
 			GetRouter(&res.Hops[ttl][i].Geo.Router, "AS"+res.Hops[ttl][i].Geo.Asnumber)
 		}
 		blockDisplay = true
@@ -136,16 +166,22 @@ func GetRouter(r *map[string][]string, node string) {
 	routeMap := *r
 	for _, v := range routeMap[node] {
 		if len(routeMap[v]) != 0 {
-			fmt.Fprintf(color.Output, "    %s %s %s\n",
+			_, err := fmt.Fprintf(color.Output, "    %s %s %s\n",
 				color.New(color.FgWhite, color.Bold).Sprintf("%s", routeMap[v][0]),
 				color.New(color.FgWhite, color.Bold).Sprintf("%s", v),
 				color.New(color.FgHiBlue, color.Bold).Sprintf("%s", node),
 			)
+			if err != nil {
+				return
+			}
 		} else {
-			fmt.Fprintf(color.Output, "    %s %s\n",
+			_, err := fmt.Fprintf(color.Output, "    %s %s\n",
 				color.New(color.FgWhite, color.Bold).Sprintf("%s", v),
 				color.New(color.FgHiBlue, color.Bold).Sprintf("%s", node),
 			)
+			if err != nil {
+				return
+			}
 		}
 
 	}

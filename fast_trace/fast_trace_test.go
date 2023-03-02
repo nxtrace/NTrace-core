@@ -17,7 +17,10 @@ func TestTCPTrace(t *testing.T) {
 	w.Interrupt = make(chan os.Signal, 1)
 	signal.Notify(w.Interrupt, os.Interrupt)
 	defer func() {
-		w.Conn.Close()
+		err := w.Conn.Close()
+		if err != nil {
+			return
+		}
 	}()
 	ft.TracerouteMethod = trace.TCPTrace
 	ft.testCM()

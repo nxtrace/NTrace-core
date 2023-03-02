@@ -2,6 +2,7 @@ package trace
 
 import (
 	"encoding/binary"
+	"log"
 	"math"
 	"math/rand"
 	"net"
@@ -50,7 +51,12 @@ func (t *TCPTracerv6) Execute() (*Result, error) {
 	if err != nil {
 		return &t.res, err
 	}
-	defer t.icmp.Close()
+	defer func(icmp net.PacketConn) {
+		err := icmp.Close()
+		if err != nil {
+			log.Println(err)
+		}
+	}(t.icmp)
 
 	var cancel context.CancelFunc
 	t.ctx, cancel = context.WithCancel(context.Background())
@@ -70,7 +76,12 @@ func (t *TCPTracerv6) Execute() (*Result, error) {
 		}
 		for i := 0; i < t.NumMeasurements; i++ {
 			t.wg.Add(1)
-			go t.send(ttl)
+			go func() {
+				err := t.send(ttl)
+				if err != nil {
+					log.Println(err)
+				}
+			}()
 		}
 		if t.RealtimePrinter != nil {
 			// 对于实时模式，应该按照TTL进行并发请求
@@ -227,7 +238,10 @@ func (t *TCPTracerv6) send(ttl int) error {
 		return err
 	}
 
-	ipv6.NewPacketConn(t.tcp).SetHopLimit(ttl)
+	err = ipv6.NewPacketConn(t.tcp).SetHopLimit(ttl)
+	if err != nil {
+		return err
+	}
 	if err != nil {
 		return err
 	}
@@ -268,7 +282,10 @@ func (t *TCPTracerv6) send(ttl int) error {
 		h.TTL = ttl
 		h.RTT = rtt
 
-		h.fetchIPData(t.Config)
+		err := h.fetchIPData(t.Config)
+		if err != nil {
+			return err
+		}
 
 		t.res.add(h)
 

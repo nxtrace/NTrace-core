@@ -1,7 +1,7 @@
 package ipgeo
 
 import (
-	"io/ioutil"
+	"io"
 	"net/http"
 
 	"github.com/tidwall/gjson"
@@ -12,7 +12,7 @@ func IPInSight(ip string) (*IPGeoData, error) {
 	if err != nil {
 		return nil, err
 	}
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}

@@ -20,7 +20,12 @@ func (f *FastTracer) tracert_v6(location string, ispCollection ISPCollection) {
 	if err != nil {
 		return
 	}
-	defer fp.Close()
+	defer func(fp *os.File) {
+		err := fp.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}(fp)
 
 	log.SetOutput(fp)
 	log.SetFlags(0)
@@ -100,7 +105,10 @@ func FastTestv6(tm bool, outEnable bool) {
 
 	fmt.Println("您想测试哪些ISP的路由？\n1. 国内四网\n2. 电信\n3. 联通\n4. 移动\n5. 教育网")
 	fmt.Print("请选择选项：")
-	fmt.Scanln(&c)
+	_, err := fmt.Scanln(&c)
+	if err != nil {
+		return
+	}
 
 	ft := FastTracer{}
 
@@ -109,7 +117,10 @@ func FastTestv6(tm bool, outEnable bool) {
 	w.Interrupt = make(chan os.Signal, 1)
 	signal.Notify(w.Interrupt, os.Interrupt)
 	defer func() {
-		w.Conn.Close()
+		err := w.Conn.Close()
+		if err != nil {
+			return
+		}
 	}()
 
 	if !tm {
