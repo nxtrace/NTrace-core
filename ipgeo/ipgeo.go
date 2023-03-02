@@ -45,6 +45,8 @@ func GetSource(s string) Source {
 		return IPInfo
 	case "IP2REGION":
 		return IP2Region
+	case "IPINFOLOCAL":
+		return IPInfoLocal
 	default:
 		return LeoIP
 	}

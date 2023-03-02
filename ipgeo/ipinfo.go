@@ -3,6 +3,7 @@ package ipgeo
 import (
 	"io/ioutil"
 	"net/http"
+	"strings"
 
 	"github.com/tidwall/gjson"
 )
@@ -21,13 +22,13 @@ func IPInfo(ip string) (*IPGeoData, error) {
 	res := gjson.ParseBytes(body)
 
 	var country string
-
+	country = res.Get("country").String()
 	if res.Get("country").String() == "HK" || res.Get("country").String() == "TW" {
 		country = "CN"
 	}
 
 	return &IPGeoData{
-		Asnumber: res.Get("asn").Get("asn").String(),
+		Asnumber: strings.Fields(strings.TrimPrefix(res.Get("org").String(), "AS"))[0],
 		Country:  country,
 		City:     res.Get("city").String(),
 		Prov:     res.Get("region").String(),
