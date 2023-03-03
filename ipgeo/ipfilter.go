@@ -13,7 +13,7 @@ func cidrRangeContains(cidrRange string, checkIP string) bool {
 	return ipNet.Contains(secondIP)
 }
 
-// Filter 被选到的返回 geodata, true  否则返回 nil, false
+// 被选到的返回 geodata, true  否则返回 nil, false
 func Filter(ip string) (*IPGeoData, bool) {
 	//geodata := &IPGeoData{}
 	asn := ""

@@ -10,7 +10,7 @@ import (
 	"github.com/fatih/color"
 )
 
-// LocalIPPort get the local ip and port based on our destination ip
+// get the local ip and port based on our destination ip
 func LocalIPPort(dstip net.IP) (net.IP, int) {
 	serverAddr, err := net.ResolveUDPAddr("udp", dstip.String()+":12345")
 	if err != nil {
@@ -20,12 +20,7 @@ func LocalIPPort(dstip net.IP) (net.IP, int) {
 	// We don't actually connect to anything, but we can determine
 	// based on our destination ip what source ip we should use.
 	if con, err := net.DialUDP("udp", nil, serverAddr); err == nil {
-		defer func(con *net.UDPConn) {
-			err := con.Close()
-			if err != nil {
-				log.Fatal(err)
-			}
-		}(con)
+		defer con.Close()
 		if udpaddr, ok := con.LocalAddr().(*net.UDPAddr); ok {
 			return udpaddr.IP, udpaddr.Port
 		}
@@ -42,12 +37,7 @@ func LocalIPPortv6(dstip net.IP) (net.IP, int) {
 	// We don't actually connect to anything, but we can determine
 	// based on our destination ip what source ip we should use.
 	if con, err := net.DialUDP("udp", nil, serverAddr); err == nil {
-		defer func(con *net.UDPConn) {
-			err := con.Close()
-			if err != nil {
-				log.Fatal(err)
-			}
-		}(con)
+		defer con.Close()
 		if udpaddr, ok := con.LocalAddr().(*net.UDPAddr); ok {
 			return udpaddr.IP, udpaddr.Port
 		}
@@ -98,13 +88,10 @@ func DomainLookUp(host string, ipv4Only bool, dotServer string) net.IP {
 	} else {
 		fmt.Println("Please Choose the IP You Want To TraceRoute")
 		for i, ip := range ips {
-			_, err := fmt.Fprintf(color.Output, "%s %s\n",
+			fmt.Fprintf(color.Output, "%s %s\n",
 				color.New(color.FgHiYellow, color.Bold).Sprintf("%d.", i),
 				color.New(color.FgWhite, color.Bold).Sprintf("%s", ip),
 			)
-			if err != nil {
-				return nil
-			}
 		}
 		var index int
 		fmt.Printf("Your Option: ")

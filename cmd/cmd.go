@@ -141,15 +141,17 @@ func Excute() {
 	}
 
 	if strings.ToUpper(*dataOrigin) == "LEOMOEAPI" {
-		w := wshandle.New()
-		w.Interrupt = make(chan os.Signal, 1)
-		signal.Notify(w.Interrupt, os.Interrupt)
-		defer func() {
-			err := w.Conn.Close()
-			if err != nil {
-				return
-			}
-		}()
+		val, ok := os.LookupEnv("NEXTTRACE_DATAPROVIDER")
+		if ok {
+			*dataOrigin = val
+		} else {
+			w := wshandle.New()
+			w.Interrupt = make(chan os.Signal, 1)
+			signal.Notify(w.Interrupt, os.Interrupt)
+			defer func() {
+				w.Conn.Close()
+			}()
+		}
 	}
 
 	printer.PrintTraceRouteNav(ip, domain, *dataOrigin)

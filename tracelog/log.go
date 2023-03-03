@@ -17,12 +17,7 @@ func RealtimePrinter(res *trace.Result, ttl int) {
 	if err != nil {
 		return
 	}
-	defer func(f *os.File) {
-		err := f.Close()
-		if err != nil {
-			log.Fatal(err)
-		}
-	}(f)
+	defer f.Close()
 
 	multiWriter := io.MultiWriter(os.Stdout, f)
 	log.SetOutput(multiWriter)

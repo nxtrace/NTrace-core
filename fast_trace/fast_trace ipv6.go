@@ -20,12 +20,7 @@ func (f *FastTracer) tracert_v6(location string, ispCollection ISPCollection) {
 	if err != nil {
 		return
 	}
-	defer func(fp *os.File) {
-		err := fp.Close()
-		if err != nil {
-			log.Fatal(err)
-		}
-	}(fp)
+	defer fp.Close()
 
 	log.SetOutput(fp)
 	log.SetFlags(0)
@@ -117,10 +112,7 @@ func FastTestv6(tm bool, outEnable bool) {
 	w.Interrupt = make(chan os.Signal, 1)
 	signal.Notify(w.Interrupt, os.Interrupt)
 	defer func() {
-		err := w.Conn.Close()
-		if err != nil {
-			return
-		}
+		w.Conn.Close()
 	}()
 
 	if !tm {

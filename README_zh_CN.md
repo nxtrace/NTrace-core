@@ -146,13 +146,15 @@ nexttrace --route-path www.time.com.my
 ```bash
 # 可以自行指定IP数据库[此处为IP-API.com]，不指定则默认为LeoMoeAPI
 nexttrace --data-provider ip-api.com
-## 特别的: 其中 `ipinfo` 和 `IPInsight` API 需要从这些服务商自行购买服务，如有需要可以 clone 本项目添加其提供的 token 自行编译
+## 特别的: 其中 ipinfo 和 IPInsight API 对于免费版查询有频率限制，可从这些服务商自行购买服务以解除限制，如有需要可以 clone 本项目添加其提供的 token 自行编译
 ##        TOKEN填写路径：ipgeo/tokens.go
-## 特别的: 对于离线库`IPInfoLocal`，请自行下载到与NextTrace同目录下，并命名为`ipinfoLocal.mmdb` (可以从这里下载：https://ipinfo.io/signup?ref=free-database-downloads)
-##        对于离线库`Ip2region`可NextTrace自动下载，也可自行下载到与NextTrace同目录下，并命名为`ip2region.db`
-
+## 特别的: 对于离线库 IPInfoLocal，请自行下载并命名为 ipinfoLocal.mmdb (可以从这里下载：https://ipinfo.io/signup?ref=free-database-downloads)
+##        对于离线库 Ip2region 可NextTrace自动下载，也可自行下载并命名为 ip2region.db
 ## 另外：由于IP.SB被滥用比较严重，会经常出现无法查询的问题，请知悉。
 ##      IP-API.com限制调用较为严格，如有查询不到的情况，请几分钟后再试。
+
+# 也可以通过设置环境变量来指定默认IP数据库
+export NEXTTRACE_DATAPROVIDER=ipinfo
 ```
 
 `NextTrace`支持使用混合参数和简略参数

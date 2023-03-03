@@ -55,12 +55,7 @@ func (t *TCPTracer) Execute() (*Result, error) {
 	if err != nil {
 		return &t.res, err
 	}
-	defer func(icmp net.PacketConn) {
-		err := icmp.Close()
-		if err != nil {
-			panic(err)
-		}
-	}(t.icmp)
+	defer t.icmp.Close()
 
 	var cancel context.CancelFunc
 	t.ctx, cancel = context.WithCancel(context.Background())
@@ -83,12 +78,7 @@ func (t *TCPTracer) Execute() (*Result, error) {
 		}
 		for i := 0; i < t.NumMeasurements; i++ {
 			t.wg.Add(1)
-			go func() {
-				err := t.send(ttl)
-				if err != nil {
-					log.Println(err)
-				}
-			}()
+			go t.send(ttl)
 
 		}
 		if t.RealtimePrinter != nil {
@@ -295,10 +285,7 @@ func (t *TCPTracer) send(ttl int) error {
 		h.TTL = ttl
 		h.RTT = rtt
 
-		err := h.fetchIPData(t.Config)
-		if err != nil {
-			return err
-		}
+		h.fetchIPData(t.Config)
 
 		t.res.add(h)
 

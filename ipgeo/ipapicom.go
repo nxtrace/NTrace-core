@@ -2,7 +2,7 @@ package ipgeo
 
 import (
 	"errors"
-	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"regexp"
@@ -24,7 +24,7 @@ func IPApiCom(ip string) (*IPGeoData, error) {
 		log.Println("ip-api.com 请求超时(2s)，请切换其他API使用")
 		return nil, err
 	}
-	body, _ := io.ReadAll(content.Body)
+	body, _ := ioutil.ReadAll(content.Body)
 	res := gjson.ParseBytes(body)
 
 	if res.Get("status").String() != "success" {

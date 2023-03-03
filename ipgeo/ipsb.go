@@ -1,7 +1,7 @@
 package ipgeo
 
 import (
-	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -24,7 +24,7 @@ func IPSB(ip string) (*IPGeoData, error) {
 		log.Println("api.ip.sb 请求超时(2s)，请切换其他API使用")
 		return nil, err
 	}
-	body, _ := io.ReadAll(content.Body)
+	body, _ := ioutil.ReadAll(content.Body)
 	res := gjson.ParseBytes(body)
 
 	if res.Get("country").String() == "" {

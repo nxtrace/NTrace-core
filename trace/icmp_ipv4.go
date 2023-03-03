@@ -66,12 +66,7 @@ func (t *ICMPTracer) Execute() (*Result, error) {
 	if err != nil {
 		return &t.res, err
 	}
-	defer func(icmpListen net.PacketConn) {
-		err := icmpListen.Close()
-		if err != nil {
-			log.Println(err)
-		}
-	}(t.icmpListen)
+	defer t.icmpListen.Close()
 
 	var cancel context.CancelFunc
 	t.ctx, cancel = context.WithCancel(context.Background())
@@ -90,12 +85,7 @@ func (t *ICMPTracer) Execute() (*Result, error) {
 		}
 		for i := 0; i < t.NumMeasurements; i++ {
 			t.wg.Add(1)
-			go func() {
-				err := t.send(ttl)
-				if err != nil {
-					log.Println(err)
-				}
-			}()
+			go t.send(ttl)
 			<-time.After(time.Millisecond * time.Duration(t.Config.PacketInterval))
 		}
 		<-time.After(time.Millisecond * time.Duration(t.Config.TTLInterval))
@@ -268,10 +258,7 @@ func (t *ICMPTracer) send(ttl int) error {
 		},
 	}
 
-	err := ipv4.NewPacketConn(t.icmpListen).SetTTL(ttl)
-	if err != nil {
-		return err
-	}
+	ipv4.NewPacketConn(t.icmpListen).SetTTL(ttl)
 
 	wb, err := icmpHeader.Marshal(nil)
 	if err != nil {
@@ -311,10 +298,7 @@ func (t *ICMPTracer) send(ttl int) error {
 		h.TTL = ttl
 		h.RTT = rtt
 
-		err := h.fetchIPData(t.Config)
-		if err != nil {
-			return err
-		}
+		h.fetchIPData(t.Config)
 
 		t.res.add(h)
 	case <-time.After(t.Timeout):

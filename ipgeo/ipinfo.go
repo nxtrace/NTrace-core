@@ -1,7 +1,7 @@
 package ipgeo
 
 import (
-	"io"
+	"io/ioutil"
 	"net/http"
 	"strings"
 
@@ -13,13 +13,8 @@ func IPInfo(ip string) (*IPGeoData, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			panic(err)
-		}
-	}(resp.Body)
-	body, err := io.ReadAll(resp.Body)
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -284,12 +279,19 @@ func IPInfo(ip string) (*IPGeoData, error) {
 		"ZW": "Zimbabwe",
 	}
 	country = countryMap[country]
+	i := strings.Index(res.Get("org").String(), " ")
+	var owner string
+	if i == -1 {
+		owner = ""
+	} else {
+		owner = res.Get("org").String()[i:]
+	}
 
 	return &IPGeoData{
 		Asnumber: strings.Fields(strings.TrimPrefix(res.Get("org").String(), "AS"))[0],
 		Country:  country,
 		City:     res.Get("city").String(),
 		Prov:     res.Get("region").String(),
-		Owner:    res.Get("asn").Get("domain").String(),
+		Owner:    owner,
 	}, nil
 }
