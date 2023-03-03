@@ -142,10 +142,7 @@ func FastTest(tm bool, outEnable bool) {
 	w.Interrupt = make(chan os.Signal, 1)
 	signal.Notify(w.Interrupt, os.Interrupt)
 	defer func() {
-		err := w.Conn.Close()
-		if err != nil {
-			return
-		}
+		w.Conn.Close()
 	}()
 
 	if !tm {

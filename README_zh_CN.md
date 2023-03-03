@@ -141,7 +141,7 @@ nexttrace --no-rdns www.bbix.net
 nexttrace --route-path www.time.com.my
 ```
 
-`NextTrace`支持用户自主选择 IP 数据库（目前支持：`LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`, `Ip2region`, `IPInfoLocal`)
+`NextTrace`支持用户自主选择 IP 数据库（目前支持：`LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`, `Ip2region`, `IPInfoLocal`, `CHUNZHEN`)
 
 ```bash
 # 可以自行指定IP数据库[此处为IP-API.com]，不指定则默认为LeoMoeAPI
@@ -152,6 +152,10 @@ nexttrace --data-provider ip-api.com
 ##        对于离线库 Ip2region 可NextTrace自动下载，也可自行下载并命名为 ip2region.db
 ## 另外：由于IP.SB被滥用比较严重，会经常出现无法查询的问题，请知悉。
 ##      IP-API.com限制调用较为严格，如有查询不到的情况，请几分钟后再试。
+
+# 纯真IP数据库默认使用 http://127.0.0.1:2060 作为查询接口，如需自定义请使用环境变量
+export NEXTTRACE_CHUNZHENURL=http://127.0.0.1:2060
+## 可使用 https://github.com/freshcn/qqwry 自行搭建纯真IP数据库服务
 
 # 也可以通过设置环境变量来指定默认IP数据库
 export NEXTTRACE_DATAPROVIDER=ipinfo
@@ -175,7 +179,7 @@ nexttrace -T -q 2 --parallel-requests 1 -t -R 2001:4860:4860::8888
 Usage: nexttrace [-h|--help] [-T|--tcp] [-U|--udp] [-F|--fast-trace] [-p|--port
                  <integer>] [-q|--queries <integer>] [--parallel-requests
                  <integer>] [-m|--max-hops <integer>] [-d|--data-provider
-                 (Ip2region|ip2region|IP.SB|ip.sb|IPInfo|ipinfo|IPInsight|ipinsight|IPAPI.com|ip-api.com|IPInfoLocal|ipinfolocal)]
+                 (Ip2region|ip2region|IP.SB|ip.sb|IPInfo|ipinfo|IPInsight|ipinsight|IPAPI.com|ip-api.com|IPInfoLocal|ipinfolocal|chunzhen)]
                  [-n|--no-rdns] [-a|--always-rdns] [-P|--route-path]
                  [-r|--report] [--dn42] [-o|--output] [-t|--table]
                  [-c|--classic] [-f|--first <integer>] [-M|--map]
@@ -210,7 +214,7 @@ Arguments:
                                      reached). Default: 30
   -d  --data-provider                Choose IP Geograph Data Provider [IP.SB,
                                      IPInfo, IPInsight, IP-API.com, Ip2region,
-                                     IPInfoLocal]. Default: LeoMoeAPI
+                                     IPInfoLocal, CHUNZHEN]. Default: LeoMoeAPI
   -n  --no-rdns                      Do not resolve IP addresses to their
                                      domain names
   -a  --always-rdns                  Always resolve IP addresses to their

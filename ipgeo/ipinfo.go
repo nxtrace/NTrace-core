@@ -279,12 +279,19 @@ func IPInfo(ip string) (*IPGeoData, error) {
 		"ZW": "Zimbabwe",
 	}
 	country = countryMap[country]
+	i := strings.Index(res.Get("org").String(), " ")
+	var owner string
+	if i == -1 {
+		owner = ""
+	} else {
+		owner = res.Get("org").String()[i:]
+	}
 
 	return &IPGeoData{
 		Asnumber: strings.Fields(strings.TrimPrefix(res.Get("org").String(), "AS"))[0],
 		Country:  country,
 		City:     res.Get("city").String(),
 		Prov:     res.Get("region").String(),
-		Owner:    res.Get("asn").Get("domain").String(),
+		Owner:    owner,
 	}, nil
 }
