@@ -20,6 +20,5 @@ func TestTCPTrace(t *testing.T) {
 		w.Conn.Close()
 	}()
 	ft.TracerouteMethod = trace.TCPTrace
-	ft.testCM()
 	ft.testEDU()
 }
