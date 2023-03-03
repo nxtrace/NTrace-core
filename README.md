@@ -122,7 +122,7 @@ nexttrace --no-rdns www.bbix.net
 nexttrace --route-path www.time.com.my
 ```
 
-`NextTrace` supports users to select their own IP API (currently supports: `LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`, `Ip2region`, `IPInfoLocal`)
+`NextTrace` supports users to select their own IP API (currently supports: `LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`, `Ip2region`, `IPInfoLocal`, `CHUNZHEN`)
 
 ```bash
 # You can specify the IP database by yourself [IP-API.com here], if not specified, LeoMoeAPI will be used
