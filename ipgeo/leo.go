@@ -55,10 +55,7 @@ func receiveParse() {
 		}
 
 		m := make(map[string][]string)
-		err := json.Unmarshal([]byte(res.Get("router").String()), &m)
-		if err != nil {
-			return
-		}
+		json.Unmarshal([]byte(res.Get("router").String()), &m)
 
 		lat, _ := strconv.ParseFloat(res.Get("lat").String(), 32)
 		lng, _ := strconv.ParseFloat(res.Get("lng").String(), 32)

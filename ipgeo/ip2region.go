@@ -22,24 +22,14 @@ func downloadDataBase() error {
 	if err != nil {
 		return err
 	}
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			panic(err)
-		}
-	}(resp.Body)
+	defer resp.Body.Close()
 
 	// Create the file
 	out, err := os.Create(ipDataBasePath)
 	if err != nil {
 		return err
 	}
-	defer func(out *os.File) {
-		err := out.Close()
-		if err != nil {
-			panic(err)
-		}
-	}(out)
+	defer out.Close()
 
 	// Write the body to file
 	_, err = io.Copy(out, resp.Body)

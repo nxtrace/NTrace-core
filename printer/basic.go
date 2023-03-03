@@ -12,19 +12,16 @@ var buildDate = ""
 var commitID = ""
 
 func Version() {
-	_, err := fmt.Fprintf(color.Output, "%s %s %s %s\n",
+	fmt.Fprintf(color.Output, "%s %s %s %s\n",
 		color.New(color.FgWhite, color.Bold).Sprintf("%s", "NextTrace"),
 		color.New(color.FgHiBlack, color.Bold).Sprintf("%s", version),
 		color.New(color.FgHiBlack, color.Bold).Sprintf("%s", buildDate),
 		color.New(color.FgHiBlack, color.Bold).Sprintf("%s", commitID),
 	)
-	if err != nil {
-		panic(err)
-	}
 }
 
 func CopyRight() {
-	_, err := fmt.Fprintf(color.Output, "\n%s\n%s\n%s %s\n\n%s\n%s %s\n%s %s\n%s %s\n\n%s\n%s\n%s %s\n\n",
+	fmt.Fprintf(color.Output, "\n%s\n%s\n%s %s\n\n%s\n%s %s\n%s %s\n%s %s\n\n%s\n%s\n%s %s\n\n",
 		color.New(color.FgCyan, color.Bold).Sprintf("%s", "NextTrace CopyRight"),
 		color.New(color.FgGreen, color.Bold).Sprintf("%s", "NextTrace Project Creator"),
 		color.New(color.FgWhite, color.Bold).Sprintf("%s", "Leo"),
@@ -41,36 +38,27 @@ func CopyRight() {
 		color.New(color.FgWhite, color.Bold).Sprintf("%s", "zhshch"),
 		color.New(color.FgHiBlack, color.Bold).Sprintf("%s", "zhshch@athorx.com"),
 	)
-	if err != nil {
-		return
-	}
 
 	MoeQingOrgCopyRight()
 	PluginCopyRight()
 }
 
 func MoeQingOrgCopyRight() {
-	_, err := fmt.Fprintf(color.Output, "%s\n%s %s\n%s %s\n\n",
+	fmt.Fprintf(color.Output, "%s\n%s %s\n%s %s\n\n",
 		color.New(color.FgHiYellow, color.Bold).Sprintf("%s", "MoeQing Network"),
 		color.New(color.FgWhite, color.Bold).Sprintf("%s", "YekongTAT"),
 		color.New(color.FgHiBlack, color.Bold).Sprintf("%s", "yekongtat@gmail.com"),
 		color.New(color.FgWhite, color.Bold).Sprintf("%s", "Haima"),
 		color.New(color.FgHiBlack, color.Bold).Sprintf("%s", "haima@peers.cloud"),
 	)
-	if err != nil {
-		return
-	}
 }
 
 func PluginCopyRight() {
-	_, err := fmt.Fprintf(color.Output, "%s\n%s %s\n\n",
+	fmt.Fprintf(color.Output, "%s\n%s %s\n\n",
 		color.New(color.FgGreen, color.Bold).Sprintf("%s", "NextTrace Map Plugin Author"),
 		color.New(color.FgWhite, color.Bold).Sprintf("%s", "Tso"),
 		color.New(color.FgHiBlack, color.Bold).Sprintf("%s", "tsosunchia@gmail.com"),
 	)
-	if err != nil {
-		return
-	}
 }
 
 func PrintTraceRouteNav(ip net.IP, domain string, dataOrigin string) {
