@@ -11,7 +11,7 @@ import (
 
 func GetMapUrl(r string) {
 	url := "https://api.leo.moe/tracemap/api"
-	resp, _ := http.Post(url, "application/json", strings.NewReader(string(r)))
+	resp, _ := http.Post(url, "application/json", strings.NewReader(r))
 	body, _ := io.ReadAll(resp.Body)
 	fmt.Fprintf(color.Output, "%s %s\n",
 		color.New(color.FgWhite, color.Bold).Sprintf("%s", "MapTrace URL:"),

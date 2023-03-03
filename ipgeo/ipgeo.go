@@ -39,10 +39,16 @@ func GetSource(s string) Source {
 		return IPInSight
 	case "IPAPI.COM":
 		return IPApiCom
+	case "IP-API.COM":
+		return IPApiCom
 	case "IPINFO":
 		return IPInfo
 	case "IP2REGION":
 		return IP2Region
+	case "IPINFOLOCAL":
+		return IPInfoLocal
+	case "CHUNZHEN":
+		return Chunzhen
 	default:
 		return LeoIP
 	}

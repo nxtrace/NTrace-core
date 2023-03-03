@@ -141,27 +141,35 @@ nexttrace --no-rdns www.bbix.net
 nexttrace --route-path www.time.com.my
 ```
 
-`NextTrace`支持用户自主选择 IP 数据库（目前支持：`LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`）
+`NextTrace`支持用户自主选择 IP 数据库（目前支持：`LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`, `Ip2region`, `IPInfoLocal`, `CHUNZHEN`)
 
 ```bash
-# 可以自行指定IP数据库[此处为IP.SB]，不指定则默认为LeoMoeAPI
-nexttrace --data-provider IP.SB
-## 特别的：其中 ipinfo API 需要从 ipinfo 自行购买服务，如有需要可以 clone 本项目添加其提供的 token 自行编译
+# 可以自行指定IP数据库[此处为IP-API.com]，不指定则默认为LeoMoeAPI
+nexttrace --data-provider ip-api.com
+## 特别的: 其中 ipinfo 和 IPInsight API 对于免费版查询有频率限制，可从这些服务商自行购买服务以解除限制，如有需要可以 clone 本项目添加其提供的 token 自行编译
 ##        TOKEN填写路径：ipgeo/tokens.go
-
+## 特别的: 对于离线库 IPInfoLocal，请自行下载并命名为 ipinfoLocal.mmdb (可以从这里下载：https://ipinfo.io/signup?ref=free-database-downloads)
+##        对于离线库 Ip2region 可NextTrace自动下载，也可自行下载并命名为 ip2region.db
 ## 另外：由于IP.SB被滥用比较严重，会经常出现无法查询的问题，请知悉。
-##      IPAPI.com限制调用较为严格，如有查询不到的情况，请几分钟后再试。
+##      IP-API.com限制调用较为严格，如有查询不到的情况，请几分钟后再试。
+
+# 纯真IP数据库默认使用 http://127.0.0.1:2060 作为查询接口，如需自定义请使用环境变量
+export NEXTTRACE_CHUNZHENURL=http://127.0.0.1:2060
+## 可使用 https://github.com/freshcn/qqwry 自行搭建纯真IP数据库服务
+
+# 也可以通过设置环境变量来指定默认IP数据库
+export NEXTTRACE_DATAPROVIDER=ipinfo
 ```
 
 `NextTrace`支持使用混合参数和简略参数
 
 ```bash
 Example:
-nexttrace --data-provider IPAPI.com --max-hops 20 --tcp --port 443 --queries 5 --no-rdns 1.1.1.1
+nexttrace --data-provider ip-api.com --max-hops 20 --tcp --port 443 --queries 5 --no-rdns 1.1.1.1
 nexttrace -tcp --queries 2 --parallel-requests 1 --table --route-path 2001:4860:4860::8888
 
 Equivalent to:
-nexttrace -d IPAPI.com -m 20 -T -p 443 -q 5 -n 1.1.1.1
+nexttrace -d ip-api.com -m 20 -T -p 443 -q 5 -n 1.1.1.1
 nexttrace -T -q 2 --parallel-requests 1 -t -R 2001:4860:4860::8888
 ```
 
@@ -171,12 +179,16 @@ nexttrace -T -q 2 --parallel-requests 1 -t -R 2001:4860:4860::8888
 Usage: nexttrace [-h|--help] [-T|--tcp] [-U|--udp] [-F|--fast-trace] [-p|--port
                  <integer>] [-q|--queries <integer>] [--parallel-requests
                  <integer>] [-m|--max-hops <integer>] [-d|--data-provider
-                 (IP.SB|IPInfo|IPInsight|IPAPI.com)] [-n|--no-rdns]
-                 [-r|--route-path] [-o|--output] [-t|--table] [-c|--classic]
-                 [-f|--first <integer>] [-M|--map] [-v|--version] [-s|--source
-                 "<value>"] [-D|--dev "<value>"] [-R|--route] [-z|--send-time
-                 <integer>] [-i|--ttl-time <integer>]
-                 [IP Address or Domain name]
+                 (Ip2region|ip2region|IP.SB|ip.sb|IPInfo|ipinfo|IPInsight|ipinsight|IPAPI.com|ip-api.com|IPInfoLocal|ipinfolocal|chunzhen)]
+                 [-n|--no-rdns] [-a|--always-rdns] [-P|--route-path]
+                 [-r|--report] [--dn42] [-o|--output] [-t|--table]
+                 [-c|--classic] [-f|--first <integer>] [-M|--map]
+                 [-v|--version] [-s|--source "<value>"] [-D|--dev "<value>"]
+                 [-R|--route] [-z|--send-time <integer>] [-i|--ttl-time
+                 <integer>] [_positionalArg_nexttrace_25 "<value>"]
+                 [--dot-server (dnssb|aliyun|dnspod|google|cloudflare)]
+                 [-g|--language (en|cn)]
+
 Arguments:
 
   -h  --help                         Print help information
@@ -200,13 +212,17 @@ Arguments:
                                      18
   -m  --max-hops                     Set the max number of hops (max TTL to be
                                      reached). Default: 30
-  -d  --data-provider                Choose IP Geograph Data Provider
-                                     [LeoMoeAPI,IP.SB, IPInfo, IPInsight,
-                                     IPAPI.com]. Default: LeoMoeAPI
-  -n  --no-rdns                       Do not resolve IP addresses to their
+  -d  --data-provider                Choose IP Geograph Data Provider [IP.SB,
+                                     IPInfo, IPInsight, IP-API.com, Ip2region,
+                                     IPInfoLocal, CHUNZHEN]. Default: LeoMoeAPI
+  -n  --no-rdns                      Do not resolve IP addresses to their
                                      domain names
-  -r  --route-path                   Print traceroute hop path by ASN and
+  -a  --always-rdns                  Always resolve IP addresses to their
+                                     domain names
+  -P  --route-path                   Print traceroute hop path by ASN and
                                      location
+  -r  --report                       output using report mode
+      --dn42                         DN42 Mode
   -o  --output                       Write trace result to file
                                      (RealTimePrinter ONLY)
   -t  --table                        Output trace results as table
@@ -214,7 +230,7 @@ Arguments:
                                      BestTrace
   -f  --first                        Start from the first_ttl hop (instead from
                                      1). Default: 1
-  -M  --map                          Disable Print Trace Map Function
+  -M  --map                          Disable Print Trace Map
   -v  --version                      Print version info and exit
   -s  --source                       Use source src_addr for outgoing packets
   -D  --dev                          Use the following Network Devices as the
@@ -222,11 +238,14 @@ Arguments:
   -R  --route                        Show Routing Table [Provided By BGP.Tools]
   -z  --send-time                    Set the time interval for sending every
                                      packet. Useful when some routers use
-                                     rate-limit for ICMP messages.. Default: 0
+                                     rate-limit for ICMP messages. Default: 100
   -i  --ttl-time                     Set the time interval for sending packets
                                      groups by TTL. Useful when some routers
-                                     use rate-limit for ICMP messages..
-                                     Default: 500
+                                     use rate-limit for ICMP messages. Default:
+                                     500
+      --_positionalArg_nexttrace_25  IP Address or domain name
+      --dot-server                   Use DoT Server for DNS Parse [dnssb,
+                                     aliyun, dnspod, google, cloudflare]
   -g  --language                     Choose the language for displaying [en,
                                      cn]. Default: cn
 ```

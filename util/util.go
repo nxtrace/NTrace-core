@@ -10,7 +10,7 @@ import (
 	"github.com/fatih/color"
 )
 
-// get the local ip and port based on our destination ip
+// LocalIPPort get the local ip and port based on our destination ip
 func LocalIPPort(dstip net.IP) (net.IP, int) {
 	serverAddr, err := net.ResolveUDPAddr("udp", dstip.String()+":12345")
 	if err != nil {
@@ -95,7 +95,10 @@ func DomainLookUp(host string, ipv4Only bool, dotServer string) net.IP {
 		}
 		var index int
 		fmt.Printf("Your Option: ")
-		fmt.Scanln(&index)
+		_, err := fmt.Scanln(&index)
+		if err != nil {
+			index = 0
+		}
 		if index >= len(ips) || index < 0 {
 			fmt.Println("Your Option is invalid")
 			os.Exit(3)

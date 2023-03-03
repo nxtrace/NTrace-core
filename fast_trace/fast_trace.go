@@ -19,14 +19,19 @@ type FastTracer struct {
 	TracerouteMethod trace.Method
 }
 
-var oe bool = false
+var oe = false
 
 func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 	fp, err := os.OpenFile("/tmp/trace.log", os.O_CREATE|os.O_APPEND|os.O_RDWR, os.ModePerm)
 	if err != nil {
 		return
 	}
-	defer fp.Close()
+	defer func(fp *os.File) {
+		err := fp.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}(fp)
 
 	log.SetOutput(fp)
 	log.SetFlags(0)
@@ -114,7 +119,10 @@ func FastTest(tm bool, outEnable bool) {
 	fmt.Println("Hi，欢迎使用 Fast Trace 功能，请注意 Fast Trace 功能只适合新手使用\n因为国内网络复杂，我们设置的测试目标有限，建议普通用户自测以获得更加精准的路由情况")
 	fmt.Println("请您选择要测试的 IP 类型\n1. IPv4\n2. IPv6")
 	fmt.Print("请选择选项：")
-	fmt.Scanln(&c)
+	_, err := fmt.Scanln(&c)
+	if err != nil {
+		c = "1"
+	}
 	if c == "2" {
 		FastTestv6(tm, outEnable)
 		return
@@ -122,7 +130,10 @@ func FastTest(tm bool, outEnable bool) {
 
 	fmt.Println("您想测试哪些ISP的路由？\n1. 国内四网\n2. 电信\n3. 联通\n4. 移动\n5. 教育网")
 	fmt.Print("请选择选项：")
-	fmt.Scanln(&c)
+	_, err = fmt.Scanln(&c)
+	if err != nil {
+		c = "1"
+	}
 
 	ft := FastTracer{}
 

@@ -122,15 +122,25 @@ nexttrace --no-rdns www.bbix.net
 nexttrace --route-path www.time.com.my
 ```
 
-`NextTrace` supports users to select their own IP API (currently supports: `LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`)
+`NextTrace` supports users to select their own IP API (currently supports: `LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`, `Ip2region`, `IPInfoLocal`)
 
 ```bash
-# You can specify the IP database by yourself [IP.SB here], if not specified, LeoMoeAPI will be used
-nexttrace --data-provider IP.SB
-## Note that the ipinfo API needs users to purchase services from ipinfo. If necessary, you can clone this project, add the token provided by ipinfo and compile it yourself
+# You can specify the IP database by yourself [IP-API.com here], if not specified, LeoMoeAPI will be used
+nexttrace --data-provider ip-api.com
+## Note There are frequency limits for free queries of the ipinfo and IPInsight APIs. You can purchase services from these providers to remove the limits
+##      If necessary, you can clone this project, add the token provided by ipinfo or IPInsight and compile it yourself
+## Note For the offline database IPInfoLocal, please download it manually and rename it to ipinfoLocal.mmdb. (You can download it from here: https://ipinfo.io/signup?ref=free-database-downloads)
+##      For the offline database Ip2region, you can download it manually and rename it to ip2region.db, or let NextTrace download it automatically
 ## Fill the token to: ipgeo/tokens.go
 ## Please be aware: Due to the serious abuse of IP.SB, you will often be not able to query IP data from this source
-## IPAPI.com has a stricter restiction on API calls, if you can't query IP data from this source, please try again in a few minutes.
+## IP-API.com has a stricter restiction on API calls, if you can't query IP data from this source, please try again in a few minutes
+
+# The Pure-FTPd IP database defaults to using http://127.0.0.1:2060 as the query interface. To customize it, please use environment variables
+export NEXTTRACE_CHUNZHENURL=http://127.0.0.1:2060
+## You can use https://github.com/freshcn/qqwry to build your own Pure-FTPd IP database service
+
+# You can also specify the default IP database by setting an environment variable
+export NEXTTRACE_DATAPROVIDER=ipinfo
 ```
 
 `NextTrace` supports mixed parameters and shortened parameters
@@ -158,18 +168,18 @@ All NextTrace IP geolocation `API DEMO` can refer to [here](https://github.com/x
 ### For full usage list, please refer to the usage menu
 
 ```shell
-usage: nexttrace [-h|--help] [-T|--tcp] [-U|--udp] [-F|--fast-trace] [-p|--port
+Usage: nexttrace [-h|--help] [-T|--tcp] [-U|--udp] [-F|--fast-trace] [-p|--port
                  <integer>] [-q|--queries <integer>] [--parallel-requests
                  <integer>] [-m|--max-hops <integer>] [-d|--data-provider
-                 (IP.SB|IPInfo|IPInsight|IPAPI.com)] [-n|--no-rdns]
-                 [-a|--always-rdns] [-P|--route-path] [-r|--report]
-                 [-o|--output] [-t|--table] [-c|--classic] [-f|--first
-                 <integer>] [-M|--map] [-v|--version] [-s|--source "<value>"]
-                 [-D|--dev "<value>"] [-R|--route] [-z|--send-time <integer>]
-                 [-i|--ttl-time <integer>] [-g|--language (en|cn)] [IP Address
-                 or Domain]
-
-                 An open source visual route tracking CLI tool
+                 (Ip2region|ip2region|IP.SB|ip.sb|IPInfo|ipinfo|IPInsight|ipinsight|IPAPI.com|ip-api.com|IPInfoLocal|ipinfolocal|chunzhen)]
+                 [-n|--no-rdns] [-a|--always-rdns] [-P|--route-path]
+                 [-r|--report] [--dn42] [-o|--output] [-t|--table]
+                 [-c|--classic] [-f|--first <integer>] [-M|--map]
+                 [-v|--version] [-s|--source "<value>"] [-D|--dev "<value>"]
+                 [-R|--route] [-z|--send-time <integer>] [-i|--ttl-time
+                 <integer>] [_positionalArg_nexttrace_25 "<value>"]
+                 [--dot-server (dnssb|aliyun|dnspod|google|cloudflare)]
+                 [-g|--language (en|cn)]
 
 Arguments:
 
@@ -194,9 +204,9 @@ Arguments:
                                      18
   -m  --max-hops                     Set the max number of hops (max TTL to be
                                      reached). Default: 30
-  -d  --data-provider                Choose IP Geograph Data Provider
-                                     [LeoMoeAPI,IP.SB, IPInfo, IPInsight,
-                                     IPAPI.com]. Default: LeoMoeAPI
+  -d  --data-provider                Choose IP Geograph Data Provider [IP.SB,
+                                     IPInfo, IPInsight, IP-API.com, Ip2region,
+                                     IPInfoLocal, CHUNZHEN]. Default: LeoMoeAPI
   -n  --no-rdns                      Do not resolve IP addresses to their
                                      domain names
   -a  --always-rdns                  Always resolve IP addresses to their
@@ -204,6 +214,7 @@ Arguments:
   -P  --route-path                   Print traceroute hop path by ASN and
                                      location
   -r  --report                       output using report mode
+      --dn42                         DN42 Mode
   -o  --output                       Write trace result to file
                                      (RealTimePrinter ONLY)
   -t  --table                        Output trace results as table
@@ -211,7 +222,7 @@ Arguments:
                                      BestTrace
   -f  --first                        Start from the first_ttl hop (instead from
                                      1). Default: 1
-  -M  --map                          Disable Print Trace Map Function
+  -M  --map                          Disable Print Trace Map
   -v  --version                      Print version info and exit
   -s  --source                       Use source src_addr for outgoing packets
   -D  --dev                          Use the following Network Devices as the
@@ -224,6 +235,9 @@ Arguments:
                                      groups by TTL. Useful when some routers
                                      use rate-limit for ICMP messages. Default:
                                      500
+      --_positionalArg_nexttrace_25  IP Address or domain name
+      --dot-server                   Use DoT Server for DNS Parse [dnssb,
+                                     aliyun, dnspod, google, cloudflare]
   -g  --language                     Choose the language for displaying [en,
                                      cn]. Default: cn
 ```
