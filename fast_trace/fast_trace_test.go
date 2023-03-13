@@ -1,6 +1,7 @@
 package fastTrace
 
 import (
+	"fmt"
 	"os"
 	"os/signal"
 	"testing"
@@ -9,8 +10,7 @@ import (
 	"github.com/xgadget-lab/nexttrace/wshandle"
 )
 
-// ICMP Use Too Many Time to Wait So we don't test it.
-func TestTCPTrace(t *testing.T) {
+func TestTrace(t *testing.T) {
 	ft := FastTracer{}
 	// 建立 WebSocket 连接
 	w := wshandle.New()
@@ -19,6 +19,14 @@ func TestTCPTrace(t *testing.T) {
 	defer func() {
 		w.Conn.Close()
 	}()
+	fmt.Println("TCP v4")
 	ft.TracerouteMethod = trace.TCPTrace
-	ft.testEDU()
+	ft.tracert(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.EDU)
+	//fmt.Println("TCP v6")
+	//ft.tracert_v6(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.EDU)
+	//fmt.Println("ICMP v4")
+	//ft.TracerouteMethod = trace.ICMPTrace
+	//ft.tracert(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.EDU)
+	//fmt.Println("ICMP v6")
+	//ft.tracert_v6(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.EDU)
 }

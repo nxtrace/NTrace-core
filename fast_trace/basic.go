@@ -78,7 +78,7 @@ var Beijing = BackBoneCollection{
 	EDU: ISPCollection{
 		ISPName: EDU,
 		IP:      "101.6.15.130",
-		IPv6:    "2001:da8::666",
+		IPv6:    "2001:da8:215:4078:250:56ff:fe97:654d",
 	},
 }
 
