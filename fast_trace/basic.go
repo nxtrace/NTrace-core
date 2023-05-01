@@ -61,7 +61,7 @@ var Beijing = BackBoneCollection{
 
 	CU9929: ISPCollection{
 		ISPName: CU9929,
-		IP:      "218.105.131.125",
+		IP:      "221.220.51.1",
 	},
 
 	CM: ISPCollection{
