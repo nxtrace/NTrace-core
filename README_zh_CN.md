@@ -23,9 +23,7 @@
   </a>
 </p>
 
-该项目由 OwO Network 的 [Missuo](https://github.com/missuo) && [Leo](https://github.com/sjlleo) 发起，由 [Zhshch](https://github.com/zhshch2002/) 完成最早期架构的编写和指导，后由 Leo 完成了大部分开发工作，现主要交由 [tsosunchia](https://github.com/tsosunchia) 以及 MoeQing Network 完成后续的二开和维护工作。
-
-LeoMoeAPI 是 [Leo](https://github.com/sjlleo) 的作品，归属于 Leo Network，由 [Leo](https://github.com/sjlleo) 完成整套后端 API 编写，该接口未经允许不可用于任何第三方用途。
+如果您喜欢这个项目，可以通过[爱发电支持](https://afdian.net/a/sjlleo/plan)我们项目的持续发展，您的捐助将用于服务器和 API 开支，非常感谢！
 
 ## How To Use
 
@@ -294,6 +292,10 @@ BGP.TOOLS 提供了本项目的一些数据支持，在此表示由衷地感谢�
 ## IP 数据以及精准度说明
 
 NextTrace 有多个数据源可以选择，目前默认使用的 LeoMoeAPI 为我们项目维护的数据源。
+
+该项目由 OwO Network 的 [Missuo](https://github.com/missuo) && [Leo](https://github.com/sjlleo) 发起，由 [Zhshch](https://github.com/zhshch2002/) 完成最早期架构的编写和指导，后由 Leo 完成了大部分开发工作，现主要交由 [tsosunchia](https://github.com/tsosunchia) 以及 MoeQing Network 完成后续的二开和维护工作。
+
+LeoMoeAPI 是 [Leo](https://github.com/sjlleo) 的作品，归属于 Leo Network，由 [Leo](https://github.com/sjlleo) 完成整套后端 API 编写，该接口未经允许不可用于任何第三方用途。
 
 LeoMoeAPI 早期数据主要来自 IPInsight、IPInfo，随着项目发展，越来越多的志愿者参与进了这个项目。目前 LeoMoeAPI 有近一半的数据是社区提供的，而另外一半主要来自于包含 IPInfo、IPData、BigDataCloud、IPGeoLocation 在内的多个第三方数据。
 
