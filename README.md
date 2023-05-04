@@ -8,7 +8,9 @@
 
 An open source visual routing tool that pursues light weight, developed using Golang.
 
-NextTrace is part of the [OwO Network](https://github.com/OwO-Network) project. The project is a joint initiative of Leo and Vincent.
+NextTrace is part of the [OwO Network](https://github.com/OwO-Network) project. The project is a joint initiative of Leo and Vincent. 
+
+If you like this project, [Donate us](https://afdian.net/a/sjlleo/plan) to help us to provide long-lasting API cost expenses.
 
 ## How To Use
 
