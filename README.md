@@ -20,7 +20,7 @@ Document Language: English | [简体中文](README_zh_CN.md)
 
 ```bash
 # Linux one-click install script
-bash <(curl -Ls https://raw.githubusercontent.com/sjlleo/nexttrace/main/nt_install.sh)
+bash -c "$(curl -Ls https://raw.githubusercontent.com/sjlleo/nexttrace/main/nt_install.sh)"
 
 # macOS brew install command
 brew tap xgadget-lab/nexttrace && brew install nexttrace
