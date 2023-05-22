@@ -35,13 +35,13 @@
 
 ```bash
 # Linux 一键安装脚本
-bash <(curl -Ls https://raw.githubusercontent.com/sjlleo/nexttrace/main/nt_install.sh)
-
-# GHPROXY 镜像（国内使用）
-bash <(curl -Ls https://ghproxy.com/https://raw.githubusercontent.com/sjlleo/nexttrace/main/nt_install.sh)
+bash -c "$(curl -Ls https://raw.githubusercontent.com/sjlleo/nexttrace/main/nt_install.sh)"
 
 # macOS brew 安装命令
 brew tap xgadget-lab/nexttrace && brew install nexttrace
+
+# GHPROXY 镜像（国内使用）
+bash -c "$(curl -Ls https://ghproxy.com/https://raw.githubusercontent.com/sjlleo/nexttrace/main/nt_install.sh)"
 ```
 
 Windows 用户请直接前往 [Release](https://github.com/sjlleo/nexttrace/releases/latest) 下载编译后的二进制 exe 文件。
