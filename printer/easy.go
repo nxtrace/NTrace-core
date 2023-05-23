@@ -12,6 +12,6 @@ func EasyPrinter(res *trace.Result, ttl int) {
 			fmt.Printf("%d|*||||||\n", ttl+1)
 			continue
 		}
-		fmt.Printf("%d|%s|%s|%s|%s|%s|%s|%s|%s|%.4f|%.4f\n", ttl+1, res.Hops[ttl][i].Address.String(), res.Hops[ttl][i].Hostname, res.Hops[ttl][i].Geo.Asnumber, res.Hops[ttl][i].Geo.Country, res.Hops[ttl][i].Geo.Prov, res.Hops[ttl][i].Geo.City, res.Hops[ttl][i].Geo.District, res.Hops[ttl][i].Geo.Owner, res.Hops[ttl][i].Geo.Lat, res.Hops[ttl][i].Geo.Lng)
+		fmt.Printf("%d|%s|%s|%.2f|%s|%s|%s|%s|%s|%s|%.4f|%.4f\n", ttl+1, res.Hops[ttl][i].Address.String(), res.Hops[ttl][i].Hostname, float64(res.Hops[ttl][i].RTT.Microseconds())/1000, res.Hops[ttl][i].Geo.Asnumber, res.Hops[ttl][i].Geo.Country, res.Hops[ttl][i].Geo.Prov, res.Hops[ttl][i].Geo.City, res.Hops[ttl][i].Geo.District, res.Hops[ttl][i].Geo.Owner, res.Hops[ttl][i].Geo.Lat, res.Hops[ttl][i].Geo.Lng)
 	}
 }
