@@ -46,7 +46,8 @@ func Excute() {
 	dn42 := parser.Flag("", "dn42", &argparse.Options{Help: "DN42 Mode"})
 	output := parser.Flag("o", "output", &argparse.Options{Help: "Write trace result to file (RealTimePrinter ONLY)"})
 	tablePrint := parser.Flag("t", "table", &argparse.Options{Help: "Output trace results as table"})
-	classicPrint := parser.Flag("c", "classic", &argparse.Options{Help: "An Output Easy to Parse"})
+	rawPrint := parser.Flag("", "raw", &argparse.Options{Help: "An Output Easy to Parse"})
+	classicPrint := parser.Flag("c", "classic", &argparse.Options{Help: "Classic Output trace results like BestTrace"})
 	beginHop := parser.Int("f", "first", &argparse.Options{Default: 1, Help: "Start from the first_ttl hop (instead from 1)"})
 	maptrace := parser.Flag("M", "map", &argparse.Options{Help: "Disable Print Trace Map"})
 	ver := parser.Flag("v", "version", &argparse.Options{Help: "Print version info and exit"})
@@ -191,6 +192,8 @@ func Excute() {
 
 	if !*tablePrint {
 		if *classicPrint {
+			conf.RealtimePrinter = printer.ClassicPrinter
+		} else if *rawPrint {
 			conf.RealtimePrinter = printer.EasyPrinter
 		} else {
 			if *output {
