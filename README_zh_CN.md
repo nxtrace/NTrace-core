@@ -62,6 +62,9 @@ nexttrace http://example.com:8080/index.html?q=1
 # 表格打印，使用 --table / -t 参数，将实时显示结果
 nexttrace --table 1.0.0.1
 
+# 一个方便供机器读取转化的模式
+nexttrace --raw 1.0.0.1
+
 # IPv6 ICMP Trace
 nexttrace 2606:4700:4700::1111
 
@@ -227,6 +230,7 @@ Arguments:
   -o  --output                       Write trace result to file
                                      (RealTimePrinter ONLY)
   -t  --table                        Output trace results as table
+  --raw                              An Output Easy to Parse
   -c  --classic                      Classic Output trace results like
                                      BestTrace
   -f  --first                        Start from the first_ttl hop (instead from
