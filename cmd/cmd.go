@@ -155,7 +155,7 @@ func Excute() {
 		}
 	}
 
-	printer.PrintTraceRouteNav(ip, domain, *dataOrigin)
+	printer.PrintTraceRouteNav(ip, domain, *dataOrigin, *maxHops)
 
 	var m trace.Method = ""
 
