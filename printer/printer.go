@@ -35,7 +35,7 @@ func HopPrinter(h trace.Hop, info HopInfo) {
 	if h.Address == nil {
 		fmt.Println("\t*")
 	} else {
-		applyLangSetting(&h)
+		applyLangSetting(&h) // 应用语言设置
 		txt := "\t"
 
 		if h.Hostname == "" {

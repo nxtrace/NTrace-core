@@ -304,8 +304,11 @@ BGP.TOOLS provided some data support for this project and we would like to expre
 Although other third-party APIs are integrated in this project, please refer to the official website of the third-party APIs for specific TOS and AUP. If you encounter IP data errors, please contact them directly to correct them.
 
 For feedback related to corrections about IP information, we currently have two channels available:
-- [IP 错误报告汇总帖](https://github.com/sjlleo/nexttrace/issues/41) in the GITHUB ISSUES section of this project (Recommended)
-- This project's dedicated correction email: `correction@moeqing.com` (Please note that this email is only for correcting IP-related information. For other feedback, please submit an ISSUE)
+>- [IP 错误报告汇总帖](https://github.com/sjlleo/nexttrace/issues/41) in the GITHUB ISSUES section of this project (Recommended)
+>- This project's dedicated correction email: `correction@moeqing.com` (Please note that this email is only for correcting IP-related information. For other feedback, please submit an ISSUE)
+
+How to obtain the freshly baked binary executable of the latest commit?
+> Please go to the most recent [Build & Release](https://github.com/sjlleo/nexttrace/actions/workflows/build.yml) workflow in GitHub Actions.
 
 ## Star History
 

@@ -293,11 +293,14 @@ BGP.TOOLS 提供了本项目的一些数据支持，在此表示由衷地感谢�
 
 其他第三方 API 尽管集成在本项目内，但是具体的 TOS 以及 AUP，请详见第三方 API 官网。如遇到 IP 数据错误，也请直接联系他们纠错。
 
+如何获取最新commit的新鲜出炉的二进制可执行文件？
+>请前往GitHub Actions中最新一次 [Build & Release](https://github.com/sjlleo/nexttrace/actions/workflows/build.yml) workflow.
+
 ## IP 数据以及精准度说明
 
 对于IP相关信息的纠错反馈，我们目前开放了两个渠道：
-- 本项目的GITHUB ISSUES区中的[IP 错误报告汇总帖](https://github.com/sjlleo/nexttrace/issues/41)
-- 本项目的纠错专用邮箱: `correction@moeqing.com` （请注意此邮箱仅供IP相关信息纠错专用，其他反馈请发送ISSUE）
+>- 本项目的GITHUB ISSUES区中的[IP 错误报告汇总帖](https://github.com/sjlleo/nexttrace/issues/41)
+>- 本项目的纠错专用邮箱: `correction@moeqing.com` （请注意此邮箱仅供IP相关信息纠错专用，其他反馈请发送ISSUE）
 
 NextTrace 有多个数据源可以选择，目前默认使用的 LeoMoeAPI 为我们项目维护的数据源。
 

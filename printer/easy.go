@@ -12,7 +12,7 @@ func EasyPrinter(res *trace.Result, ttl int) {
 			fmt.Printf("%d|*||||||\n", ttl+1)
 			continue
 		}
-		applyLangSetting(&res.Hops[ttl][i])
+		applyLangSetting(&res.Hops[ttl][i]) // 应用语言设置
 		fmt.Printf(
 			"%d|%s|%s|%.2f|%s|%s|%s|%s|%s|%s|%.4f|%.4f\n",
 			ttl+1,

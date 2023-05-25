@@ -121,7 +121,7 @@ func RealtimePrinter(res *trace.Result, ttl int) {
 			}
 		}
 
-		applyLangSetting(&res.Hops[ttl][i])
+		applyLangSetting(&res.Hops[ttl][i]) // 应用语言设置
 
 		if net.ParseIP(ip).To4() != nil {
 
