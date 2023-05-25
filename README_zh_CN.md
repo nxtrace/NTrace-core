@@ -295,6 +295,10 @@ BGP.TOOLS 提供了本项目的一些数据支持，在此表示由衷地感谢�
 
 ## IP 数据以及精准度说明
 
+对于IP相关信息的纠错反馈，我们目前开放了两个渠道：
+- 本项目的GITHUB ISSUES区中的[IP 错误报告汇总帖](https://github.com/sjlleo/nexttrace/issues/41)
+- 本项目的纠错专用邮箱: `correction@moeqing.com` （请注意此邮箱仅供IP相关信息纠错专用，其他反馈请发送ISSUE）
+
 NextTrace 有多个数据源可以选择，目前默认使用的 LeoMoeAPI 为我们项目维护的数据源。
 
 该项目由 OwO Network 的 [Missuo](https://github.com/missuo) && [Leo](https://github.com/sjlleo) 发起，由 [Zhshch](https://github.com/zhshch2002/) 完成最早期架构的编写和指导，后由 Leo 完成了大部分开发工作，现主要交由 [tsosunchia](https://github.com/tsosunchia) 以及 MoeQing Network 完成后续的二开和维护工作。
