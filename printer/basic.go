@@ -2,6 +2,7 @@ package printer
 
 import (
 	"fmt"
+	"github.com/xgadget-lab/nexttrace/trace"
 	"net"
 
 	"github.com/fatih/color"
@@ -68,5 +69,32 @@ func PrintTraceRouteNav(ip net.IP, domain string, dataOrigin string, maxHops int
 		fmt.Printf("traceroute to %s, %d hops max, 32 byte packets\n", ip.String(), maxHops)
 	} else {
 		fmt.Printf("traceroute to %s (%s), %d hops max, 32 byte packets\n", ip.String(), domain, maxHops)
+	}
+}
+
+func applyLangSetting(h *trace.Hop) {
+	if len(h.Geo.Country) <= 1 {
+		h.Geo.Country = "局域网"
+		h.Geo.CountryEn = "LAN Address"
+	}
+
+	if h.Lang == "en" {
+		if h.Geo.Country == "Anycast" {
+
+		} else if h.Geo.Prov == "骨干网" {
+			h.Geo.Prov = "BackBone"
+		} else if h.Geo.ProvEn == "" {
+			h.Geo.Country = h.Geo.CountryEn
+		} else {
+			if h.Geo.CityEn == "" {
+				h.Geo.Country = h.Geo.ProvEn
+				h.Geo.Prov = h.Geo.CountryEn
+				h.Geo.City = ""
+			} else {
+				h.Geo.Country = h.Geo.CityEn
+				h.Geo.Prov = h.Geo.ProvEn
+				h.Geo.City = h.Geo.CountryEn
+			}
+		}
 	}
 }

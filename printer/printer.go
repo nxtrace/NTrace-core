@@ -20,6 +20,8 @@ import (
 // 	}
 // }
 
+//此文件目前仅供classic_printer使用
+
 const (
 	RED_PREFIX    = "\033[1;31m"
 	GREEN_PREFIX  = "\033[1;32m"
@@ -33,6 +35,7 @@ func HopPrinter(h trace.Hop, info HopInfo) {
 	if h.Address == nil {
 		fmt.Println("\t*")
 	} else {
+		applyLangSetting(&h)
 		txt := "\t"
 
 		if h.Hostname == "" {
