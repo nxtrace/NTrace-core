@@ -89,8 +89,9 @@ func Traceroute(method Method, config Config) (*Result, error) {
 }
 
 type Result struct {
-	Hops [][]Hop
-	lock sync.Mutex
+	Hops        [][]Hop
+	lock        sync.Mutex
+	TraceMapUrl string
 }
 
 func (s *Result) add(hop Hop) {

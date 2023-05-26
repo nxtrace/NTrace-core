@@ -62,7 +62,12 @@ func RealtimePrinter(res *trace.Result, ttl int) {
 
 		i, _ := strconv.Atoi(v[0])
 		if res.Hops[ttl][i].Geo.Asnumber != "" {
-			// CMIN2, CUII, CN2, CUG 改为壕金色高亮
+			/*** CMIN2, CUG, CN2, CUII, CTG 改为壕金色高亮
+			/* 小孩子不懂事加着玩的
+			/* 此处的高亮不代表任何线路质量
+			/* 仅代表走了这部分的ASN
+			/* 如果使用这些ASN的IP同样会被高亮
+			***/
 			switch {
 			case res.Hops[ttl][i].Geo.Asnumber == "58807":
 				fallthrough

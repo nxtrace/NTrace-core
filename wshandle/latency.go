@@ -20,7 +20,6 @@ func GetFastIP(domain string, port string) string {
 	ips, err := net.LookupIP(domain)
 	if err != nil {
 		log.Fatal("DNS resolution failed, please check your system DNS Settings")
-		return ""
 	}
 
 	for _, ip := range ips {

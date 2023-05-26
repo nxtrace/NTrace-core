@@ -45,7 +45,7 @@ func LocalIPPortv6(dstip net.IP) (net.IP, int) {
 	return nil, -1
 }
 
-func DomainLookUp(host string, ipv4Only bool, dotServer string) net.IP {
+func DomainLookUp(host string, ipv4Only bool, dotServer string, disableOutput bool) net.IP {
 	var (
 		r   *net.Resolver
 		ips []net.IP
@@ -88,10 +88,12 @@ func DomainLookUp(host string, ipv4Only bool, dotServer string) net.IP {
 	} else {
 		fmt.Println("Please Choose the IP You Want To TraceRoute")
 		for i, ip := range ips {
-			fmt.Fprintf(color.Output, "%s %s\n",
-				color.New(color.FgHiYellow, color.Bold).Sprintf("%d.", i),
-				color.New(color.FgWhite, color.Bold).Sprintf("%s", ip),
-			)
+			if !disableOutput {
+				fmt.Fprintf(color.Output, "%s %s\n",
+					color.New(color.FgHiYellow, color.Bold).Sprintf("%d.", i),
+					color.New(color.FgWhite, color.Bold).Sprintf("%s", ip),
+				)
+			}
 		}
 		var index int
 		fmt.Printf("Your Option: ")

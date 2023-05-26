@@ -47,6 +47,7 @@ func Excute() {
 	output := parser.Flag("o", "output", &argparse.Options{Help: "Write trace result to file (RealTimePrinter ONLY)"})
 	tablePrint := parser.Flag("t", "table", &argparse.Options{Help: "Output trace results as table"})
 	rawPrint := parser.Flag("", "raw", &argparse.Options{Help: "An Output Easy to Parse"})
+	jsonPrint := parser.Flag("j", "json", &argparse.Options{Help: "Output trace results as JSON"})
 	classicPrint := parser.Flag("c", "classic", &argparse.Options{Help: "Classic Output trace results like BestTrace"})
 	beginHop := parser.Int("f", "first", &argparse.Options{Default: 1, Help: "Start from the first_ttl hop (instead from 1)"})
 	maptrace := parser.Flag("M", "map", &argparse.Options{Help: "Disable Print Trace Map"})
@@ -69,7 +70,9 @@ func Excute() {
 		fmt.Print(parser.Usage(err))
 		return
 	}
-	printer.Version()
+	if !*jsonPrint {
+		printer.Version()
+	}
 	if *ver {
 		printer.CopyRight()
 		os.Exit(0)
@@ -117,9 +120,9 @@ func Excute() {
 	}
 
 	if *udp {
-		ip = util.DomainLookUp(domain, true, *dot)
+		ip = util.DomainLookUp(domain, true, *dot, *jsonPrint)
 	} else {
-		ip = util.DomainLookUp(domain, false, *dot)
+		ip = util.DomainLookUp(domain, false, *dot, *jsonPrint)
 	}
 
 	if *src_dev != "" {
@@ -155,7 +158,9 @@ func Excute() {
 		}
 	}
 
-	printer.PrintTraceRouteNav(ip, domain, *dataOrigin, *maxHops)
+	if !*jsonPrint {
+		printer.PrintTraceRouteNav(ip, domain, *dataOrigin, *maxHops)
+	}
 
 	var m trace.Method = ""
 
@@ -211,6 +216,11 @@ func Excute() {
 		}
 	}
 
+	if *jsonPrint {
+		conf.RealtimePrinter = nil
+		conf.AsyncPrinter = nil
+	}
+
 	res, err := trace.Traceroute(m, conf)
 
 	if err != nil {
@@ -226,9 +236,28 @@ func Excute() {
 		r.Print()
 	}
 
+	r, err := json.Marshal(res)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 	if !*maptrace {
-		r, _ := json.Marshal(res)
-		tracemap.GetMapUrl(string(r))
+		url, err := tracemap.GetMapUrl(string(r))
+		if err != nil {
+			log.Fatalln(err)
+		}
+		res.TraceMapUrl = url
+		if !*jsonPrint {
+			tracemap.PrintMapUrl(url)
+		}
+	}
+	r, err = json.Marshal(res)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	if *jsonPrint {
+		fmt.Println(string(r))
 	}
 }
 

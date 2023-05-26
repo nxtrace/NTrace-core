@@ -287,8 +287,14 @@ func IPInfo(ip string) (*IPGeoData, error) {
 		owner = res.Get("org").String()[i:]
 	}
 
+	var asnumber = ""
+	// 有时候不返回asn或其本身没有asn
+	if strings.HasPrefix(res.Get("org").String(), "AS") {
+		asnumber = strings.Fields(strings.TrimPrefix(res.Get("org").String(), "AS"))[0]
+	}
+
 	return &IPGeoData{
-		Asnumber: strings.Fields(strings.TrimPrefix(res.Get("org").String(), "AS"))[0],
+		Asnumber: asnumber,
 		Country:  country,
 		City:     res.Get("city").String(),
 		Prov:     res.Get("region").String(),
