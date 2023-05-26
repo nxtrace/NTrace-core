@@ -49,7 +49,13 @@ func GetSource(s string) Source {
 		return IPInfoLocal
 	case "CHUNZHEN":
 		return Chunzhen
+	case "DISABLE-GEOIP":
+		return disableGeoIP
 	default:
 		return LeoIP
 	}
+}
+
+func disableGeoIP(ip string) (*IPGeoData, error) {
+	return &IPGeoData{}, nil
 }

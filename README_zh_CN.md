@@ -183,7 +183,7 @@ nexttrace -T -q 2 --parallel-requests 1 -t -R 2001:4860:4860::8888
 Usage: nexttrace [-h|--help] [-T|--tcp] [-U|--udp] [-F|--fast-trace] [-p|--port
                  <integer>] [-q|--queries <integer>] [--parallel-requests
                  <integer>] [-m|--max-hops <integer>] [-d|--data-provider
-                 (Ip2region|ip2region|IP.SB|ip.sb|IPInfo|ipinfo|IPInsight|ipinsight|IPAPI.com|ip-api.com|IPInfoLocal|ipinfolocal|chunzhen)]
+                 (Ip2region|ip2region|IP.SB|ip.sb|IPInfo|ipinfo|IPInsight|ipinsight|IPAPI.com|ip-api.com|IPInfoLocal|ipinfolocal|chunzhen|LeoMoeAPI|leomoeapi|disable-geoip)]
                  [-n|--no-rdns] [-a|--always-rdns] [-P|--route-path]
                  [-r|--report] [--dn42] [-o|--output] [-t|--table]
                  [-c|--classic] [-f|--first <integer>] [-M|--map]
@@ -218,7 +218,8 @@ Arguments:
                                      reached). Default: 30
   -d  --data-provider                Choose IP Geograph Data Provider [IP.SB,
                                      IPInfo, IPInsight, IP-API.com, Ip2region,
-                                     IPInfoLocal, CHUNZHEN]. Default: LeoMoeAPI
+                                     IPInfoLocal, CHUNZHEN, disable-geoip]. 
+                                     Default: LeoMoeAPI
   -n  --no-rdns                      Do not resolve IP addresses to their
                                      domain names
   -a  --always-rdns                  Always resolve IP addresses to their
