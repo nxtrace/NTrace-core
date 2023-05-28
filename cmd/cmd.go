@@ -50,7 +50,7 @@ func Excute() {
 	jsonPrint := parser.Flag("j", "json", &argparse.Options{Help: "Output trace results as JSON"})
 	classicPrint := parser.Flag("c", "classic", &argparse.Options{Help: "Classic Output trace results like BestTrace"})
 	beginHop := parser.Int("f", "first", &argparse.Options{Default: 1, Help: "Start from the first_ttl hop (instead from 1)"})
-	maptrace := parser.Flag("M", "map", &argparse.Options{Help: "Disable Print Trace Map"})
+	disableMaptrace := parser.Flag("M", "map", &argparse.Options{Help: "Disable Print Trace Map"})
 	ver := parser.Flag("v", "version", &argparse.Options{Help: "Print version info and exit"})
 	src_addr := parser.String("s", "source", &argparse.Options{Help: "Use source src_addr for outgoing packets"})
 	src_dev := parser.String("D", "dev", &argparse.Options{Help: "Use the following Network Devices as the source address in outgoing packets"})
@@ -141,7 +141,7 @@ func Excute() {
 		// 初始化配置
 		config.InitConfig()
 		*dataOrigin = "DN42"
-		*maptrace = true
+		*disableMaptrace = true
 	}
 
 	if strings.ToUpper(*dataOrigin) == "LEOMOEAPI" {
@@ -241,7 +241,7 @@ func Excute() {
 		fmt.Println(err)
 		return
 	}
-	if !*maptrace {
+	if !*disableMaptrace && strings.ToUpper(*dataOrigin) == "LEOMOEAPI" {
 		url, err := tracemap.GetMapUrl(string(r))
 		if err != nil {
 			log.Fatalln(err)
