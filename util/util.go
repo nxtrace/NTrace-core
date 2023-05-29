@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strings"
 
 	"github.com/fatih/color"
 )
@@ -45,8 +46,8 @@ func LocalIPPortv6(dstip net.IP) (net.IP, int) {
 	return nil, -1
 }
 
-func DomainLookUp(host string, ipv4Only bool, dotServer string, disableOutput bool) net.IP {
-	// TODO: IPv4Only功能
+func DomainLookUp(host string, ipVersion string, dotServer string, disableOutput bool) net.IP {
+	// ipVersion: 4, 6, all
 	var (
 		r   *net.Resolver
 		ips []net.IP
@@ -83,6 +84,19 @@ func DomainLookUp(host string, ipv4Only bool, dotServer string, disableOutput bo
 	//		os.Exit(0)
 	//	}
 	//}
+
+	// Filter by IPv4/IPv6
+	if ipVersion != "all" {
+		var filteredIPs []net.IP
+		for _, ip := range ips {
+			if ipVersion == "4" && ip.To4() != nil {
+				filteredIPs = append(filteredIPs, ip)
+			} else if ipVersion == "6" && strings.Contains(ip.String(), ":") {
+				filteredIPs = append(filteredIPs, ip)
+			}
+		}
+		ips = filteredIPs
+	}
 
 	if (len(ips) == 1) || (disableOutput) {
 		return ips[0]
