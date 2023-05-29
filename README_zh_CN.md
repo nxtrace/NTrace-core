@@ -138,6 +138,9 @@ nexttrace --first 5 --max-hops 10 www.decix.net
 # 关闭IP反向解析功能
 nexttrace --no-rdns www.bbix.net
 
+# 设置载荷大小为1024字节
+nexttrace --psize 1024 example.com
+
 # 特色功能：打印Route-Path图
 # Route-Path图示例：
 # AS6453 塔塔通信「Singapore『Singapore』」
@@ -250,14 +253,18 @@ Arguments:
   -D  --dev                          Use the following Network Devices as the
                                      source address in outgoing packets
   -R  --route                        Show Routing Table [Provided By BGP.Tools]
-  -z  --send-time                    Set the time interval for sending every
+      --send-time                    Set the time interval for sending every
                                      packet. Useful when some routers use
                                      rate-limit for ICMP messages. Default: 100
   -i  --ttl-time                     Set the time interval for sending packets
                                      groups by TTL. Useful when some routers
                                      use rate-limit for ICMP messages. Default:
                                      500
-      --_positionalArg_nexttrace_25  IP Address or domain name
+  -z  --timeout                      The number of seconds to keep probe
+                                     sockets open before giving up on the
+                                     connection.. Default: 1
+      --psize                        Set the packet size (payload size).
+                                     Default: 52
       --dot-server                   Use DoT Server for DNS Parse [dnssb,
                                      aliyun, dnspod, google, cloudflare]
   -g  --language                     Choose the language for displaying [en,

@@ -223,6 +223,11 @@ func (t *TCPTracerv6) send(ttl int) error {
 		ComputeChecksums: true,
 		FixLengths:       true,
 	}
+
+	desiredPayloadSize := t.Config.PktSize
+	payload := make([]byte, desiredPayloadSize)
+	copy(buf.Bytes(), payload)
+
 	if err := gopacket.SerializeLayers(buf, opts, tcpHeader); err != nil {
 		return err
 	}
