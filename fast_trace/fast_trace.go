@@ -2,8 +2,8 @@ package fastTrace
 
 import (
 	"fmt"
+	"github.com/xgadget-lab/nexttrace/util"
 	"log"
-	"net"
 	"os"
 	"os/signal"
 	"time"
@@ -39,7 +39,7 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 	log.Printf("『%s %s 』\n", location, ispCollection.ISPName)
 	fmt.Printf("traceroute to %s, 30 hops max, 32 byte packets\n", ispCollection.IP)
 	log.Printf("traceroute to %s, 30 hops max, 32 byte packets\n", ispCollection.IP)
-	ip := net.ParseIP(ispCollection.IP)
+	ip := util.DomainLookUp(ispCollection.IP, true, "", true)
 	var conf = trace.Config{
 		BeginHop:         1,
 		DestIP:           ip,

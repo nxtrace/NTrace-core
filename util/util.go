@@ -46,6 +46,7 @@ func LocalIPPortv6(dstip net.IP) (net.IP, int) {
 }
 
 func DomainLookUp(host string, ipv4Only bool, dotServer string, disableOutput bool) net.IP {
+	// TODO: IPv4Only功能
 	var (
 		r   *net.Resolver
 		ips []net.IP
@@ -74,26 +75,24 @@ func DomainLookUp(host string, ipv4Only bool, dotServer string, disableOutput bo
 		os.Exit(1)
 	}
 
-	var ipv6Flag = false
+	//var ipv6Flag = false
+	//TODO: 此处代码暂无意义
+	//if ipv6Flag {
+	//	fmt.Println("[Info] IPv6 UDP Traceroute is not supported right now.")
+	//	if len(ips) == 0 {
+	//		os.Exit(0)
+	//	}
+	//}
 
-	if ipv6Flag {
-		fmt.Println("[Info] IPv6 UDP Traceroute is not supported right now.")
-		if len(ips) == 0 {
-			os.Exit(0)
-		}
-	}
-
-	if len(ips) == 1 {
+	if (len(ips) == 1) || (disableOutput) {
 		return ips[0]
 	} else {
 		fmt.Println("Please Choose the IP You Want To TraceRoute")
 		for i, ip := range ips {
-			if !disableOutput {
-				fmt.Fprintf(color.Output, "%s %s\n",
-					color.New(color.FgHiYellow, color.Bold).Sprintf("%d.", i),
-					color.New(color.FgWhite, color.Bold).Sprintf("%s", ip),
-				)
-			}
+			fmt.Fprintf(color.Output, "%s %s\n",
+				color.New(color.FgHiYellow, color.Bold).Sprintf("%d.", i),
+				color.New(color.FgWhite, color.Bold).Sprintf("%s", ip),
+			)
 		}
 		var index int
 		fmt.Printf("Your Option: ")
