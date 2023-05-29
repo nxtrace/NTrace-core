@@ -33,7 +33,7 @@ func (f *FastTracer) tracert_v6(location string, ispCollection ISPCollection) {
 	log.Printf("『%s %s 』\n", location, ispCollection.ISPName)
 	fmt.Printf("traceroute to %s, 30 hops max, 32 byte packets\n", ispCollection.IPv6)
 	log.Printf("traceroute to %s, 30 hops max, 32 byte packets\n", ispCollection.IPv6)
-	ip := util.DomainLookUp(ispCollection.IP, false, "", true)
+	ip := util.DomainLookUp(ispCollection.IP, "6", "", true)
 	var conf = trace.Config{
 		BeginHop:         1,
 		DestIP:           ip,

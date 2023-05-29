@@ -28,6 +28,8 @@ import (
 func Excute() {
 	parser := argparse.NewParser("nexttrace", "An open source visual route tracking CLI tool")
 	// Create string flag
+	ipv4Only := parser.Flag("4", "ipv4", &argparse.Options{Help: "Use IPv4 only"})
+	ipv6Only := parser.Flag("6", "ipv6", &argparse.Options{Help: "Use IPv6 only"})
 	tcp := parser.Flag("T", "tcp", &argparse.Options{Help: "Use TCP SYN for tracerouting (default port is 80)"})
 	udp := parser.Flag("U", "udp", &argparse.Options{Help: "Use UDP SYN for tracerouting (default port is 53)"})
 	fast_trace := parser.Flag("F", "fast-trace", &argparse.Options{Help: "One-Key Fast Trace to China ISPs"})
@@ -120,9 +122,19 @@ func Excute() {
 	}
 
 	if *udp {
-		ip = util.DomainLookUp(domain, true, *dot, *jsonPrint)
+		if *ipv6Only {
+			fmt.Println("[Info] IPv6 UDP Traceroute is not supported right now.")
+			os.Exit(0)
+		}
+		ip = util.DomainLookUp(domain, "4", *dot, *jsonPrint)
 	} else {
-		ip = util.DomainLookUp(domain, false, *dot, *jsonPrint)
+		if *ipv6Only {
+			ip = util.DomainLookUp(domain, "6", *dot, *jsonPrint)
+		} else if *ipv4Only {
+			ip = util.DomainLookUp(domain, "4", *dot, *jsonPrint)
+		} else {
+			ip = util.DomainLookUp(domain, "all", *dot, *jsonPrint)
+		}
 	}
 
 	if *src_dev != "" {

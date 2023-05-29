@@ -66,6 +66,10 @@ nexttrace --table 1.0.0.1
 nexttrace --raw 1.0.0.1
 nexttrace --json 1.0.0.1
 
+# 只进行IPv4/IPv6解析
+nexttrace --ipv4 g.co
+nexttrace --ipv6 g.co
+
 # IPv6 ICMP Trace
 nexttrace 2606:4700:4700::1111
 
@@ -197,6 +201,8 @@ Usage: nexttrace [-h|--help] [-T|--tcp] [-U|--udp] [-F|--fast-trace] [-p|--port
 Arguments:
 
   -h  --help                         Print help information
+  -4  --ipv4                         Use IPv4 only
+  -6  --ipv6                         Use IPv6 only
   -T  --tcp                          Use TCP SYN for tracerouting (default port
                                      is 80)
   -U  --udp                          Use UDP SYN for tracerouting (default port
