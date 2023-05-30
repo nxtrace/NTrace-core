@@ -81,8 +81,8 @@ func receiveParse() {
 }
 
 func LeoIP(ip string, timeout time.Duration, lang string, maptrace bool) (*IPGeoData, error) {
-	//TODO: 根据lang的值请求中文/英文API
-	//TODO: 根据maptrace的值决定是否请求经纬度信息
+	// TODO: 根据lang的值请求中文/英文API
+	// TODO: 根据maptrace的值决定是否请求经纬度信息
 	if timeout < 5*time.Second {
 		timeout = 5 * time.Second
 	}
