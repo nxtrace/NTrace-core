@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/lionsoul2014/ip2region/v1.0/binding/golang/ip2region"
 )
@@ -36,7 +37,7 @@ func downloadDataBase() error {
 	return err
 }
 
-func IP2Region(ip string) (*IPGeoData, error) {
+func IP2Region(ip string, _ time.Duration, _ string, _ bool) (*IPGeoData, error) {
 	if _, err := os.Stat(ipDataBasePath); os.IsNotExist(err) {
 		if err = downloadDataBase(); err != nil {
 			panic("Download Failed!")

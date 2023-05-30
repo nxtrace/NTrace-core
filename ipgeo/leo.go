@@ -80,7 +80,12 @@ func receiveParse() {
 	}
 }
 
-func LeoIP(ip string) (*IPGeoData, error) {
+func LeoIP(ip string, timeout time.Duration, lang string, maptrace bool) (*IPGeoData, error) {
+	//TODO: 根据lang的值请求中文/英文API
+	//TODO: 根据maptrace的值决定是否请求经纬度信息
+	if timeout < 5*time.Second {
+		timeout = 5 * time.Second
+	}
 	// 初始化通道 - 向池子里添加IP的Channel，返回IP数据是通过字典中对应键为IP的Channel来获取的
 	IPPools.poolMux.Lock()
 	defer IPPools.poolMux.Unlock()
@@ -99,7 +104,7 @@ func LeoIP(ip string) (*IPGeoData, error) {
 	case res := <-IPPools.pool[ip]:
 		return &res, nil
 	// 5秒后依旧没有接收到返回的IP数据，不再等待，超时异常处理
-	case <-time.After(5 * time.Second):
+	case <-time.After(timeout):
 		// default:
 		// 这里不可以返回一个 nil，否则在访问对象内部的键值的时候会报空指针的 Fatal Error
 		return &IPGeoData{}, errors.New("TimeOut")

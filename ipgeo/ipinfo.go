@@ -4,12 +4,19 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/tidwall/gjson"
 )
 
-func IPInfo(ip string) (*IPGeoData, error) {
-	resp, err := http.Get("https://ipinfo.io/" + ip + "?token=" + token.ipinfo)
+func IPInfo(ip string, timeout time.Duration, _ string, _ bool) (*IPGeoData, error) {
+	url := "https://ipinfo.io/" + ip + "?token=" + token.ipinfo
+	client := &http.Client{
+		// 2 秒超时
+		Timeout: timeout,
+	}
+	resp, err := client.Get(url)
+	//resp, err := http.Get("https://ipinfo.io/" + ip + "?token=" + token.ipinfo)
 	if err != nil {
 		return nil, err
 	}

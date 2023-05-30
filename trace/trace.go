@@ -35,6 +35,7 @@ type Config struct {
 	RealtimePrinter  func(res *Result, ttl int)
 	AsyncPrinter     func(res *Result)
 	PktSize          int
+	Maptrace         bool
 }
 
 type Method string
@@ -133,7 +134,7 @@ func (h *Hop) fetchIPData(c Config) (err error) {
 			h.Hostname = r[0][:len(r[0])-1]
 			ip = h.Address.String() + "," + h.Hostname
 		}
-		h.Geo, err = c.IPGeoSource(ip)
+		h.Geo, err = c.IPGeoSource(ip, c.Timeout, c.Lang, c.Maptrace)
 		return nil
 	}
 
@@ -166,7 +167,11 @@ func (h *Hop) fetchIPData(c Config) (err error) {
 			h.Lang = c.Lang
 			h.Geo, res = ipgeo.Filter(h.Address.String())
 			if !res {
-				h.Geo, err = c.IPGeoSource(h.Address.String())
+				timeout := c.Timeout
+				if c.Timeout < 2*time.Second {
+					timeout = 2 * time.Second
+				}
+				h.Geo, err = c.IPGeoSource(h.Address.String(), timeout, c.Lang, c.Maptrace)
 			}
 		}
 		// Fetch Done

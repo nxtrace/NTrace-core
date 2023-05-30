@@ -11,11 +11,11 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-func IPApiCom(ip string) (*IPGeoData, error) {
+func IPApiCom(ip string, timeout time.Duration, _ string, _ bool) (*IPGeoData, error) {
 	url := "http://ip-api.com/json/" + ip + "?fields=status,message,country,regionName,city,isp,as"
 	client := &http.Client{
 		// 2 秒超时
-		Timeout: 2 * time.Second,
+		Timeout: timeout,
 	}
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:100.0) Gecko/20100101 Firefox/100.0")

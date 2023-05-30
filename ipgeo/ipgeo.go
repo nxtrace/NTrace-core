@@ -2,6 +2,7 @@ package ipgeo
 
 import (
 	"strings"
+	"time"
 )
 
 type IPGeoData struct {
@@ -25,7 +26,7 @@ type IPGeoData struct {
 	Source    string              `json:"source"`
 }
 
-type Source = func(ip string) (*IPGeoData, error)
+type Source = func(ip string, timeout time.Duration, lang string, maptrace bool) (*IPGeoData, error)
 
 func GetSource(s string) Source {
 	switch strings.ToUpper(s) {
@@ -56,6 +57,6 @@ func GetSource(s string) Source {
 	}
 }
 
-func disableGeoIP(ip string) (*IPGeoData, error) {
+func disableGeoIP(string, time.Duration, string, bool) (*IPGeoData, error) {
 	return &IPGeoData{}, nil
 }

@@ -2,12 +2,15 @@ package wshandle
 
 import (
 	"crypto/tls"
+	"fmt"
+	"github.com/xgadget-lab/nexttrace/printer"
 	"log"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -119,7 +122,8 @@ func (c *WsConn) recreateWsConn() {
 	u := url.URL{Scheme: "wss", Host: fast_ip + ":" + port, Path: "/v2/ipGeoWs"}
 	// log.Printf("connecting to %s", u.String())
 	requestHeader := http.Header{
-		"Host": []string{host},
+		"Host":       []string{host},
+		"User-Agent": []string{fmt.Sprintf("NextTrace %s/%s/%s", printer.GetVersion(), runtime.GOOS, runtime.GOARCH)},
 	}
 	dialer := websocket.DefaultDialer
 	dialer.TLSClientConfig = &tls.Config{
@@ -177,7 +181,8 @@ func createWsConn() *WsConn {
 	}
 	// 判断是否是一个 IP
 	requestHeader := http.Header{
-		"Host": []string{host},
+		"Host":       []string{host},
+		"User-Agent": []string{fmt.Sprintf("NextTrace %s/%s/%s", printer.GetVersion(), runtime.GOOS, runtime.GOARCH)},
 	}
 	dialer := websocket.DefaultDialer
 	dialer.TLSClientConfig = &tls.Config{

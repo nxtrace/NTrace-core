@@ -10,11 +10,11 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-func IPSB(ip string) (*IPGeoData, error) {
+func IPSB(ip string, timeout time.Duration, _ string, _ bool) (*IPGeoData, error) {
 	url := "https://api.ip.sb/geoip/" + ip
 	client := &http.Client{
 		// 2 秒超时
-		Timeout: 2 * time.Second,
+		Timeout: timeout,
 	}
 	req, _ := http.NewRequest("GET", url, nil)
 	// 设置 UA，ip.sb 默认禁止 go-client User-Agent 的 api 请求

@@ -12,6 +12,10 @@ var version = "v0.0.0.alpha"
 var buildDate = ""
 var commitID = ""
 
+func GetVersion() string {
+	return version
+}
+
 func Version() {
 	fmt.Fprintf(color.Output, "%s %s %s %s\n",
 		color.New(color.FgWhite, color.Bold).Sprintf("%s", "NextTrace"),

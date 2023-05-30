@@ -2,6 +2,7 @@ package ipgeo
 
 import (
 	"strings"
+	"time"
 
 	"github.com/xgadget-lab/nexttrace/dn42"
 )
@@ -18,7 +19,7 @@ func LtdCodeToCountryOrAreaName(Code string) string {
 	return Code
 }
 
-func DN42(ip string) (*IPGeoData, error) {
+func DN42(ip string, _ time.Duration, _ string, _ bool) (*IPGeoData, error) {
 	data := &IPGeoData{}
 	// 先解析传入过来的数据
 	ipTmp := strings.Split(ip, ",")

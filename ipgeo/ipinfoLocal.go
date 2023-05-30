@@ -6,13 +6,14 @@ import (
 	"net"
 	"os"
 	"strings"
+	"time"
 )
 
 const (
 	ipinfoDataBasePath = "./ipinfoLocal.mmdb"
 )
 
-func IPInfoLocal(ip string) (*IPGeoData, error) {
+func IPInfoLocal(ip string, _ time.Duration, _ string, _ bool) (*IPGeoData, error) {
 	if _, err := os.Stat(ipinfoDataBasePath); os.IsNotExist(err) {
 		panic("Cannot find ipinfoLocal.mmdb")
 	}
