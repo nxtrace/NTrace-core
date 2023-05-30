@@ -188,7 +188,12 @@ func (t *UDPTracer) send(ttl int) error {
 			ComputeChecksums: true,
 			FixLengths:       true,
 		}
-		if err := gopacket.SerializeLayers(buf, opts, udpHeader, gopacket.Payload("HAJSFJHKAJSHFKJHAJKFHKASHKFHHKAFKHFAHSJK")); err != nil {
+
+		desiredPayloadSize := t.Config.PktSize
+		payload := make([]byte, desiredPayloadSize)
+		copy(buf.Bytes(), payload)
+
+		if err := gopacket.SerializeLayers(buf, opts, udpHeader); err != nil {
 			return err
 		}
 

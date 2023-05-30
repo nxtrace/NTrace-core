@@ -1,6 +1,7 @@
 package trace
 
 import (
+	"bytes"
 	"encoding/binary"
 	"log"
 	"net"
@@ -249,8 +250,9 @@ func (t *ICMPTracerv6) send(ttl int) error {
 	icmpHeader := icmp.Message{
 		Type: ipv6.ICMPTypeEchoRequest, Code: 0,
 		Body: &icmp.Echo{
-			ID:   id,
-			Data: []byte("HELLO-R-U-THERE"),
+			ID: id,
+			//Data: []byte("HELLO-R-U-THERE"),
+			Data: bytes.Repeat([]byte{1}, t.Config.PktSize),
 			Seq:  ttl,
 		},
 	}

@@ -120,6 +120,9 @@ nexttrace --first 5 --max-hops 10 www.decix.net
 # Turn off the IP reverse parsing function
 nexttrace --no-rdns www.bbix.net
 
+# Set the payload size to 1024 bytes
+nexttrace --psize 1024 example.com
+
 # Feature: print Route-Path diagram
 # Route-Path diagram example:
 # AS6453 Tata Communication「Singapore『Singapore』」
@@ -243,14 +246,18 @@ Arguments:
   -D  --dev                          Use the following Network Devices as the
                                      source address in outgoing packets
   -R  --route                        Show Routing Table [Provided By BGP.Tools]
-  -z  --send-time                    Set the time interval for sending every
+      --send-time                    Set the time interval for sending every
                                      packet. Useful when some routers use
                                      rate-limit for ICMP messages. Default: 100
   -i  --ttl-time                     Set the time interval for sending packets
                                      groups by TTL. Useful when some routers
                                      use rate-limit for ICMP messages. Default:
                                      500
-      --_positionalArg_nexttrace_25  IP Address or domain name
+  -z  --timeout                      The number of seconds to keep probe
+                                     sockets open before giving up on the
+                                     connection.. Default: 1
+      --psize                        Set the packet size (payload size).
+                                     Default: 52
       --dot-server                   Use DoT Server for DNS Parse [dnssb,
                                      aliyun, dnspod, google, cloudflare]
   -g  --language                     Choose the language for displaying [en,

@@ -34,6 +34,7 @@ type Config struct {
 	DN42             bool
 	RealtimePrinter  func(res *Result, ttl int)
 	AsyncPrinter     func(res *Result)
+	PktSize          int
 }
 
 type Method string
