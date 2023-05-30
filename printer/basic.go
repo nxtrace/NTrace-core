@@ -2,19 +2,16 @@ package printer
 
 import (
 	"fmt"
+	"github.com/xgadget-lab/nexttrace/config"
 	"github.com/xgadget-lab/nexttrace/trace"
 	"net"
 
 	"github.com/fatih/color"
 )
 
-var version = "v0.0.0.alpha"
-var buildDate = ""
-var commitID = ""
-
-func GetVersion() string {
-	return version
-}
+var version = config.Version
+var buildDate = config.BuildDate
+var commitID = config.CommitID
 
 func Version() {
 	fmt.Fprintf(color.Output, "%s %s %s %s\n",

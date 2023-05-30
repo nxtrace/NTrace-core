@@ -3,7 +3,8 @@ package wshandle
 import (
 	"crypto/tls"
 	"fmt"
-	"github.com/xgadget-lab/nexttrace/printer"
+	"github.com/xgadget-lab/nexttrace/config"
+	"github.com/xgadget-lab/nexttrace/util"
 	"log"
 	"net"
 	"net/http"
@@ -16,7 +17,6 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/xgadget-lab/nexttrace/util"
 )
 
 type WsConn struct {
@@ -123,7 +123,7 @@ func (c *WsConn) recreateWsConn() {
 	// log.Printf("connecting to %s", u.String())
 	requestHeader := http.Header{
 		"Host":       []string{host},
-		"User-Agent": []string{fmt.Sprintf("NextTrace %s/%s/%s", printer.GetVersion(), runtime.GOOS, runtime.GOARCH)},
+		"User-Agent": []string{fmt.Sprintf("NextTrace %s/%s/%s", config.Version, runtime.GOOS, runtime.GOARCH)},
 	}
 	dialer := websocket.DefaultDialer
 	dialer.TLSClientConfig = &tls.Config{
@@ -182,7 +182,7 @@ func createWsConn() *WsConn {
 	// 判断是否是一个 IP
 	requestHeader := http.Header{
 		"Host":       []string{host},
-		"User-Agent": []string{fmt.Sprintf("NextTrace %s/%s/%s", printer.GetVersion(), runtime.GOOS, runtime.GOARCH)},
+		"User-Agent": []string{fmt.Sprintf("NextTrace %s/%s/%s", config.Version, runtime.GOOS, runtime.GOARCH)},
 	}
 	dialer := websocket.DefaultDialer
 	dialer.TLSClientConfig = &tls.Config{
