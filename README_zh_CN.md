@@ -33,21 +33,79 @@
 
 ### Automated Install
 
-```bash
-# Linux 一键安装脚本
-bash -c "$(curl -Ls https://raw.githubusercontent.com/sjlleo/nexttrace/main/nt_install.sh)"
+* Linux 
+  * 一键安装脚本
+     * Github下载 
 
-# macOS brew 安装命令
-brew tap xgadget-lab/nexttrace && brew install nexttrace
+          ```shell
+          bash -c "$(curl -Ls https://github.com/sjlleo/nexttrace/raw/main/nt_install.sh)"
+          ```
+     * GHPROXY镜像（中国大陆使用）
 
-# GHPROXY 镜像（国内使用）
-bash -c "$(curl -Ls https://ghproxy.com/https://raw.githubusercontent.com/sjlleo/nexttrace/main/nt_install.sh)"
-```
+          ```shell
+          bash -c "$(curl -Ls https://ghproxy.com/https://github.com/sjlleo/nexttrace/raw/main/nt_install.sh)"
+          ```
+  * Arch Linux AUR 安装命令
+     * 由源码构建，感谢 @huyz 提供
 
-Windows 用户请直接前往 [Release](https://github.com/sjlleo/nexttrace/releases/latest) 下载编译后的二进制 exe 文件。
+          ```shell
+          yay -S nexttrace
+          ```
+     * 直接下载bin包(仅支持amd64)，感谢 @ouuan 提供
 
-- `Release`里面为很多系统以及不同架构提供了编译好的二进制可执行文件，如果没有可以自行编译。
-- 一些本项目的必要依赖在`Windows`上`Golang`底层实现不完全，所以目前`NextTrace`在`Windows`平台出于实验性支持阶段。
+          ```shell
+          yay -S nexttrace-bin`
+          ```
+  * Linuxbrew 安装命令
+     * homebrew-core版(仅支持amd64)，感谢 @chenrui333 提供
+
+          ```shell
+          brew install nexttrace
+          ```
+     * 本仓库ACTIONS自动构建版(更新更快)
+
+          ```shell
+          brew tap xgadget-lab/nexttrace && brew install nexttrace
+          ```
+
+* macOS
+  * macOS brew 安装命令
+     * homebrew-core版，感谢 @chenrui333 提供
+
+          ```shell
+          brew install nexttrace
+          ```
+     * 本仓库ACTIONS自动构建版(更新更快)
+
+          ```shell
+          brew tap xgadget-lab/nexttrace && brew install nexttrace
+          ```
+
+* Windows
+  * Windows Scoop 安装命令
+     * scoop-extras版，感谢 @soenggam 提供
+
+          ```powershell
+          scoop bucket add extras && scoop install extras/nexttrace
+          ```
+
+### Manual Install
+- 下载预编译的可执行程序
+    
+  对于以上方法没有涵盖的用户，请直接前往 [Release](https://github.com/sjlleo/nexttrace/releases/latest) 下载编译后的二进制可执行文件。
+
+  - `Release`里面为很多系统以及不同架构提供了编译好的二进制可执行文件，如果没有可以自行编译。
+  - 一些本项目的必要依赖在`Windows`上`Golang`底层实现不完全，所以目前`NextTrace`在`Windows`平台出于实验性支持阶段。
+
+- 从源码安装
+
+  您可在自行安装Go >= 1.20后，使用以下命令安装
+
+  ```shell
+  go install github.com/xgadget-lab/nexttrace@latest
+  ```
+  安装后可执行文件在`$GOPATH/bin`目录下，如果您没有设置`GOPATH`，则在`$HOME/go/bin`目录下。
+
 
 ### Get Started
 

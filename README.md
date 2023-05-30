@@ -16,23 +16,86 @@ If you like this project, [Donate us](https://afdian.net/a/sjlleo/plan) to help 
 
 Document Language: English | [简体中文](README_zh_CN.md)
 
-### Automated Installation
+### Automated Install
 
-```bash
-# Linux one-click install script
-bash -c "$(curl -Ls https://raw.githubusercontent.com/sjlleo/nexttrace/main/nt_install.sh)"
+* Linux
+    * One-click install script
+        * Github download
 
-# macOS brew install command
-brew tap xgadget-lab/nexttrace && brew install nexttrace
+          ```shell
+          bash -c "$(curl -Ls https://github.com/sjlleo/nexttrace/raw/main/nt_install.sh)"
+          ```
+        * GHPROXY mirror (for mainland China usage)
 
-# GHProxy Mirror (For China Mainland User)
-bash -c "$(curl -Ls https://ghproxy.com/https://raw.githubusercontent.com/sjlleo/nexttrace/main/nt_install.sh)"
-```
+          ```shell
+          bash -c "$(curl -Ls https://ghproxy.com/https://github.com/sjlleo/nexttrace/raw/main/nt_install.sh)"
+          ```
 
-Windows users please go to [Release Page](https://github.com/sjlleo/nexttrace/releases/latest) directly and download exe file.
+    * Arch Linux AUR installation command
+        * Built from source, thanks to @huyz for providing
 
-- `Release` provides compiled executables for many systems and architectures, if not, you can compile it yourself.
-- Some of the necessary dependencies of this project are not fully implemented in `Golang` on `Windows`, so currently `NextTrace` is experimental on `Windows` platform.
+          ```shell
+          yay -S nexttrace
+          ```
+        * Direct download of the bin package (only supports amd64), thanks to @ouuan for providing
+
+          ```shell
+          yay -S nexttrace-bin
+          ```
+    * Linuxbrew installation command
+        * Homebrew-core version (only supports amd64), thanks to @chenrui333 for providing
+
+          ```shell
+          brew install nexttrace
+          ```
+        * This repository's ACTIONS automatically built version (updates faster)
+
+          ```shell
+          brew tap xgadget-lab/nexttrace && brew install nexttrace
+          ```
+
+* macOS
+    * macOS brew installation command
+        * Homebrew-core version, thanks to @chenrui333 for providing
+
+          ```shell
+          brew install nexttrace
+          ```
+        * This repository's ACTIONS automatically built version (updates faster)
+
+          ```shell
+          brew tap xgadget-lab/nexttrace && brew install nexttrace
+          ```
+
+* Windows
+    * Windows Scoop installation command
+        * Scoop-extras version, thanks to @soenggam for providing
+
+          ```powershell
+          scoop bucket add extras && scoop install extras/nexttrace
+          ```
+
+### Manual Install
+
+- Download precompiled executable
+
+  For users not covered by the above methods, please go directly
+  to [Release](https://github.com/sjlleo/nexttrace/releases/latest) to download the compiled binary executable.
+
+    - The `Release` provides compiled binary executables for many systems and different architectures, if not, you can
+      compile it yourself.
+    - Some necessary dependencies of this project are not fully implemented at the Golang underlying level on `Windows`,
+      so currently `NextTrace` is in the experimental support stage on the `Windows` platform.
+
+- Install from source
+
+  After manually installing Go >= 1.20, you can use the following command to install:
+
+    ```shell
+    go install github.com/xgadget-lab/nexttrace@latest
+    ```
+  The executable after installation is in the `$GOPATH/bin` directory. If you did not set `GOPATH`, it is in
+  the `$HOME/go/bin` directory.
 
 ### Get Started
 
