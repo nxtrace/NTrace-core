@@ -8,7 +8,7 @@
 
 An open source visual routing tool that pursues light weight, developed using Golang.
 
-NextTrace is part of the [OwO Network](https://github.com/OwO-Network) project. The project is a joint initiative of Leo and Vincent. 
+NextTrace is part of the [OwO Network](https://github.com/OwO-Network) project. The project is a joint initiative of Leo and Vincent.
 
 If you like this project, [Donate us](https://afdian.net/a/sjlleo/plan) to help us to provide long-lasting API cost expenses.
 
@@ -284,7 +284,7 @@ Arguments:
                                      reached). Default: 30
   -d  --data-provider                Choose IP Geograph Data Provider [IP.SB,
                                      IPInfo, IPInsight, IP-API.com, Ip2region,
-                                     IPInfoLocal, CHUNZHEN, disable-geoip]. 
+                                     IPInfoLocal, CHUNZHEN, disable-geoip].
                                      Default: LeoMoeAPI
   -n  --no-rdns                      Do not resolve IP addresses to their
                                      domain names
@@ -298,7 +298,7 @@ Arguments:
                                      (RealTimePrinter ONLY)
   -t  --table                        Output trace results as table
       --raw                          An Output Easy to Parse
-  -j  --json                         Output trace results as JSON  
+  -j  --json                         Output trace results as JSON
   -c  --classic                      Classic Output trace results like
                                      BestTrace
   -f  --first                        Start from the first_ttl hop (instead from
@@ -366,7 +366,7 @@ We hope you can give us as much feedback as possible on IP geolocation errors (s
 
 ## Credits
 
-BGP.TOOLS provided some data support for this project and we would like to express our sincere gratitude.
+[BGP.TOOLS](https://bgp.tools) provided some data support for this project and we would like to express our sincere gratitude.
 
 [Vincent Young](https://github.com/missuo) (i@yyt.moe)
 
@@ -376,7 +376,7 @@ BGP.TOOLS provided some data support for this project and we would like to expre
 
 [waiting4new](https://github.com/waiting4new)
 
-[FFEE_CO](https://github.com/fkx4-p) 
+[FFEE_CO](https://github.com/fkx4-p)
 
 ### Others
 

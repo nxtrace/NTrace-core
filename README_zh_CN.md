@@ -286,7 +286,7 @@ Arguments:
                                      reached). Default: 30
   -d  --data-provider                Choose IP Geograph Data Provider [IP.SB,
                                      IPInfo, IPInsight, IP-API.com, Ip2region,
-                                     IPInfoLocal, CHUNZHEN, disable-geoip]. 
+                                     IPInfoLocal, CHUNZHEN, disable-geoip].
                                      Default: LeoMoeAPI
   -n  --no-rdns                      Do not resolve IP addresses to their
                                      domain names
@@ -351,7 +351,7 @@ https://github.com/OwO-Network/nexttrace-enhanced
 
 ## Credits
 
-BGP.TOOLS 提供了本项目的一些数据支持，在此表示由衷地感谢。
+[BGP.TOOLS](https://bgp.tools) 提供了本项目的一些数据支持，在此表示由衷地感谢。
 
 [Vincent Young](https://github.com/missuo) (i@yyt.moe)
 
