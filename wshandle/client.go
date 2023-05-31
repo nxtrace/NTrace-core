@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"github.com/xgadget-lab/nexttrace/config"
+	"github.com/xgadget-lab/nexttrace/pow"
 	"github.com/xgadget-lab/nexttrace/util"
 	"log"
 	"net"
@@ -119,11 +120,18 @@ func (c *WsConn) messageSendHandler() {
 }
 
 func (c *WsConn) recreateWsConn() {
-	u := url.URL{Scheme: "wss", Host: fast_ip + ":" + port, Path: "/v2/ipGeoWs"}
+	u := url.URL{Scheme: "wss", Host: fast_ip + ":" + port, Path: "/v3/ipGeoWs"}
 	// log.Printf("connecting to %s", u.String())
+	jwtToken, err := pow.GetToken()
+	if err != nil {
+		log.Println(err)
+		os.Exit(1)
+	}
+	jwtToken = "Bearer " + jwtToken
 	requestHeader := http.Header{
-		"Host":       []string{host},
-		"User-Agent": []string{fmt.Sprintf("NextTrace %s/%s/%s", config.Version, runtime.GOOS, runtime.GOARCH)},
+		"Host":          []string{host},
+		"User-Agent":    []string{fmt.Sprintf("NextTrace %s/%s/%s", config.Version, runtime.GOOS, runtime.GOARCH)},
+		"Authorization": []string{jwtToken},
 	}
 	dialer := websocket.DefaultDialer
 	dialer.TLSClientConfig = &tls.Config{
@@ -179,16 +187,24 @@ func createWsConn() *WsConn {
 	if valid := net.ParseIP(host); valid != nil {
 		host = "api.leo.moe"
 	}
-	// 判断是否是一个 IP
+
+	jwtToken, err := pow.GetToken()
+	if err != nil {
+		log.Println(err)
+		os.Exit(1)
+	}
+	jwtToken = "Bearer " + jwtToken
+
 	requestHeader := http.Header{
-		"Host":       []string{host},
-		"User-Agent": []string{fmt.Sprintf("NextTrace %s/%s/%s", config.Version, runtime.GOOS, runtime.GOARCH)},
+		"Host":          []string{host},
+		"User-Agent":    []string{fmt.Sprintf("NextTrace %s/%s/%s", config.Version, runtime.GOOS, runtime.GOARCH)},
+		"Authorization": []string{jwtToken},
 	}
 	dialer := websocket.DefaultDialer
 	dialer.TLSClientConfig = &tls.Config{
 		ServerName: host,
 	}
-	u := url.URL{Scheme: "wss", Host: fast_ip + ":" + port, Path: "/v2/ipGeoWs"}
+	u := url.URL{Scheme: "wss", Host: fast_ip + ":" + port, Path: "/v3/ipGeoWs"}
 	// log.Printf("connecting to %s", u.String())
 
 	c, _, err := websocket.DefaultDialer.Dial(u.String(), requestHeader)
