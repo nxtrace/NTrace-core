@@ -44,7 +44,7 @@ type SubmitResponse struct {
 
 func GetToken() (string, error) {
 	client := &http.Client{
-		Timeout: 1 * time.Second,
+		Timeout: 5 * time.Second,
 	}
 
 	// Get challenge
@@ -52,7 +52,7 @@ func GetToken() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	fmt.Println(challengeResponse.Challenge.Challenge)
+	//fmt.Println(challengeResponse.Challenge.Challenge)
 
 	// Solve challenge and submit answer
 	token, err := submitAnswer(client, challengeResponse)
