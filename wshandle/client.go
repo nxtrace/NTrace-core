@@ -35,6 +35,7 @@ type WsConn struct {
 var wsconn *WsConn
 var hostP = util.GetenvDefault("NEXTTRACE_HOSTPORT", "api.leo.moe")
 var host, port, fast_ip string
+var envToken = util.GetenvDefault("NEXTTRACE_TOKEN", "")
 
 func (c *WsConn) keepAlive() {
 	go func() {
@@ -122,15 +123,20 @@ func (c *WsConn) messageSendHandler() {
 func (c *WsConn) recreateWsConn() {
 	u := url.URL{Scheme: "wss", Host: fast_ip + ":" + port, Path: "/v3/ipGeoWs"}
 	// log.Printf("connecting to %s", u.String())
-	jwtToken, err := pow.GetToken()
-	if err != nil {
-		log.Println(err)
-		os.Exit(1)
+	jwtToken, ua := envToken, []string{"Privileged Client"}
+	err := error(nil)
+	if envToken == "" {
+		jwtToken, err = pow.GetToken()
+		if err != nil {
+			log.Println(err)
+			os.Exit(1)
+		}
+		ua = []string{fmt.Sprintf("NextTrace %s/%s/%s", config.Version, runtime.GOOS, runtime.GOARCH)}
 	}
 	jwtToken = "Bearer " + jwtToken
 	requestHeader := http.Header{
 		"Host":          []string{host},
-		"User-Agent":    []string{fmt.Sprintf("NextTrace %s/%s/%s", config.Version, runtime.GOOS, runtime.GOARCH)},
+		"User-Agent":    ua,
 		"Authorization": []string{jwtToken},
 	}
 	dialer := websocket.DefaultDialer
@@ -188,16 +194,20 @@ func createWsConn() *WsConn {
 		host = "api.leo.moe"
 	}
 
-	jwtToken, err := pow.GetToken()
-	if err != nil {
-		log.Println(err)
-		os.Exit(1)
+	jwtToken, ua := envToken, []string{"Privileged Client"}
+	err := error(nil)
+	if envToken == "" {
+		jwtToken, err = pow.GetToken()
+		if err != nil {
+			log.Println(err)
+			os.Exit(1)
+		}
+		ua = []string{fmt.Sprintf("NextTrace %s/%s/%s", config.Version, runtime.GOOS, runtime.GOARCH)}
 	}
 	jwtToken = "Bearer " + jwtToken
-
 	requestHeader := http.Header{
 		"Host":          []string{host},
-		"User-Agent":    []string{fmt.Sprintf("NextTrace %s/%s/%s", config.Version, runtime.GOOS, runtime.GOARCH)},
+		"User-Agent":    ua,
 		"Authorization": []string{jwtToken},
 	}
 	dialer := websocket.DefaultDialer
