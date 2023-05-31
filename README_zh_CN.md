@@ -46,18 +46,19 @@
           bash -c "$(curl -Ls https://ghproxy.com/https://github.com/sjlleo/nexttrace/raw/main/nt_install.sh)"
           ```
   * Arch Linux AUR 安装命令
-     * 由源码构建，感谢 @huyz 提供
+     * 由源码构建
 
           ```shell
           yay -S nexttrace
           ```
-     * 直接下载bin包(仅支持amd64)，感谢 @ouuan 提供
+     * 直接下载bin包(仅支持amd64)
 
           ```shell
           yay -S nexttrace-bin`
           ```
+     * AUR 的2种构建分别由 huyz 和 ouuan 维护
   * Linuxbrew 安装命令
-     * homebrew-core版(仅支持amd64)，感谢 @chenrui333 提供
+     * homebrew-core版(仅支持amd64)
 
           ```shell
           brew install nexttrace
@@ -67,10 +68,10 @@
           ```shell
           brew tap xgadget-lab/nexttrace && brew install nexttrace
           ```
-
+     * homebrew-core 构建由 chenrui333 维护，请注意该版本更新可能会落后仓库Action版本
 * macOS
   * macOS brew 安装命令
-     * homebrew-core版，感谢 @chenrui333 提供
+     * homebrew-core版
 
           ```shell
           brew install nexttrace
@@ -83,11 +84,15 @@
 
 * Windows
   * Windows Scoop 安装命令
-     * scoop-extras版，感谢 @soenggam 提供
+     * scoop-extras版
 
           ```powershell
           scoop bucket add extras && scoop install extras/nexttrace
           ```
+
+     * scoop-extra 由 soenggam 维护
+
+  请注意，以上多种安装方式的仓库均由开源爱好者自行维护，不保证可用性和及时更新，如遇到问题请联系仓库维护者解决，或使用本项目官方编译提供的二进制包。
 
 ### Manual Install
 - 下载预编译的可执行程序
