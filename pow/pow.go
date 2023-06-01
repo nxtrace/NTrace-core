@@ -3,10 +3,9 @@ package pow
 import (
 	"fmt"
 	"github.com/tsosunchia/powclient"
-	"github.com/xgadget-lab/nexttrace/config"
+	"github.com/xgadget-lab/nexttrace/util"
 	"net/url"
 	"os"
-	"runtime"
 )
 
 const (
@@ -19,7 +18,7 @@ func GetToken(fastIp string, host string, port string) (string, error) {
 	getTokenParams.BaseUrl = u.String()
 	getTokenParams.SNI = host
 	getTokenParams.Host = host
-	getTokenParams.UserAgent = fmt.Sprintf("NextTrace %s/%s/%s", config.Version, runtime.GOOS, runtime.GOARCH)
+	getTokenParams.UserAgent = util.UserAgent
 	var err error
 	// 尝试三次RetToken，如果都失败了，异常退出
 	for i := 0; i < 3; i++ {

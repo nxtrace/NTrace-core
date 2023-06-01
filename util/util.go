@@ -3,15 +3,18 @@ package util
 import (
 	"context"
 	"fmt"
+	"github.com/xgadget-lab/nexttrace/config"
 	"log"
 	"net"
 	"os"
+	"runtime"
 	"strings"
 
 	"github.com/fatih/color"
 )
 
 var EnvToken = GetenvDefault("NEXTTRACE_TOKEN", "")
+var UserAgent = fmt.Sprintf("NextTrace %s/%s/%s", config.Version, runtime.GOOS, runtime.GOARCH)
 
 // LocalIPPort get the local ip and port based on our destination ip
 func LocalIPPort(dstip net.IP) (net.IP, int) {

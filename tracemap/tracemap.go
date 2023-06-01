@@ -5,13 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"github.com/fatih/color"
-	"github.com/xgadget-lab/nexttrace/config"
 	"github.com/xgadget-lab/nexttrace/util"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
-	"runtime"
 	"strings"
 	"time"
 )
@@ -42,7 +40,7 @@ func GetMapUrl(r string) (string, error) {
 	if err != nil {
 		return "", errors.New("an issue occurred while connecting to the tracemap API")
 	}
-	req.Header.Add("User-Agent", fmt.Sprintf("NextTrace %s/%s/%s", config.Version, runtime.GOOS, runtime.GOARCH))
+	req.Header.Add("User-Agent", util.UserAgent)
 	req.Host = host
 	req.Header.Add("Content-Type", "application/json")
 	resp, err := client.Do(req)

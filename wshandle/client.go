@@ -2,8 +2,6 @@ package wshandle
 
 import (
 	"crypto/tls"
-	"fmt"
-	"github.com/xgadget-lab/nexttrace/config"
 	"github.com/xgadget-lab/nexttrace/pow"
 	"github.com/xgadget-lab/nexttrace/util"
 	"log"
@@ -12,7 +10,6 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
-	"runtime"
 	"sync"
 	"time"
 
@@ -129,7 +126,7 @@ func (c *WsConn) recreateWsConn() {
 			log.Println(err)
 			os.Exit(1)
 		}
-		ua = []string{fmt.Sprintf("NextTrace %s/%s/%s", config.Version, runtime.GOOS, runtime.GOARCH)}
+		ua = []string{util.UserAgent}
 	}
 	jwtToken = "Bearer " + jwtToken
 	requestHeader := http.Header{
@@ -178,7 +175,7 @@ func createWsConn() *WsConn {
 			log.Println(err)
 			os.Exit(1)
 		}
-		ua = []string{fmt.Sprintf("NextTrace %s/%s/%s", config.Version, runtime.GOOS, runtime.GOARCH)}
+		ua = []string{util.UserAgent}
 	}
 	jwtToken = "Bearer " + jwtToken
 	requestHeader := http.Header{
