@@ -2,6 +2,7 @@ package pow
 
 import (
 	"fmt"
+	"github.com/tsosunchia/powclient"
 	"github.com/xgadget-lab/nexttrace/config"
 	"net/url"
 	"os"
@@ -13,7 +14,7 @@ const (
 )
 
 func GetToken(fastIp string, host string, port string) (string, error) {
-	getTokenParams := NewGetTokenParams()
+	getTokenParams := powclient.NewGetTokenParams()
 	u := url.URL{Scheme: "https", Host: fastIp + ":" + port, Path: baseURL}
 	getTokenParams.BaseUrl = u.String()
 	getTokenParams.SNI = host
@@ -22,7 +23,7 @@ func GetToken(fastIp string, host string, port string) (string, error) {
 	var err error
 	// 尝试三次RetToken，如果都失败了，异常退出
 	for i := 0; i < 3; i++ {
-		token, err := RetToken(getTokenParams)
+		token, err := powclient.RetToken(getTokenParams)
 		if err != nil {
 			continue
 		}

@@ -7,8 +7,9 @@ require (
 	github.com/google/gopacket v1.1.19
 	github.com/oschwald/maxminddb-golang v1.10.0
 	github.com/spf13/viper v1.15.0
-	github.com/stretchr/testify v1.8.1
+	github.com/stretchr/testify v1.8.4
 	github.com/syndtr/gocapability v0.0.0-20200815063812-42c35b437635
+	github.com/tsosunchia/powclient v0.1.0
 	golang.org/x/net v0.10.0
 	golang.org/x/sync v0.2.0
 )
