@@ -28,6 +28,7 @@ type IPPool struct {
 var IPPools = IPPool{
 	pool: make(map[string]chan IPGeoData),
 }
+var queryCache = sync.Map{}
 
 func sendIPRequest(ip string) {
 	wsConn := wshandle.GetWsConn()
@@ -55,7 +56,10 @@ func receiveParse() {
 		}
 
 		m := make(map[string][]string)
-		json.Unmarshal([]byte(res.Get("router").String()), &m)
+		err := json.Unmarshal([]byte(res.Get("router").String()), &m)
+		if err != nil {
+			return
+		}
 
 		lat, _ := strconv.ParseFloat(res.Get("lat").String(), 32)
 		lng, _ := strconv.ParseFloat(res.Get("lng").String(), 32)
@@ -86,14 +90,18 @@ func LeoIP(ip string, timeout time.Duration, lang string, maptrace bool) (*IPGeo
 	if timeout < 5*time.Second {
 		timeout = 5 * time.Second
 	}
-	// 初始化通道 - 向池子里添加IP的Channel，返回IP数据是通过字典中对应键为IP的Channel来获取的
+	if value, ok := queryCache.Load(ip); ok {
+		// 从缓存中成功获取到IP信息
+		return value.(*IPGeoData), nil
+	}
+
+	// 缓存中没有找到IP信息，需要请求API获取
 	IPPools.poolMux.Lock()
-	defer IPPools.poolMux.Unlock()
 	// 如果之前已经被别的协程初始化过了就不用初始化了
 	if IPPools.pool[ip] == nil {
 		IPPools.pool[ip] = make(chan IPGeoData)
 	}
-
+	IPPools.poolMux.Unlock()
 	// 发送请求
 	sendIPRequest(ip)
 	// 同步开启监听
@@ -102,12 +110,12 @@ func LeoIP(ip string, timeout time.Duration, lang string, maptrace bool) (*IPGeo
 	// 拥塞，等待数据返回
 	select {
 	case res := <-IPPools.pool[ip]:
+		// 将API请求到的IP信息存入缓存
+		queryCache.Store(ip, &res)
 		return &res, nil
 	// 5秒后依旧没有接收到返回的IP数据，不再等待，超时异常处理
 	case <-time.After(timeout):
-		// default:
 		// 这里不可以返回一个 nil，否则在访问对象内部的键值的时候会报空指针的 Fatal Error
 		return &IPGeoData{}, errors.New("TimeOut")
 	}
-
 }
