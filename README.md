@@ -332,7 +332,15 @@ Arguments:
 
 Please Notice that `NextTrace Enhanced` is currently not supported in English.
 
-https://github.com/OwO-Network/nexttrace-enhanced
+[https://github.com/OwO-Network/nexttrace-enhanced](https://github.com/OwO-Network/nexttrace-enhanced)
+
+## OpenTrace
+
+`OpenTrace` is the cross-platform `GUI` version of `NextTrace` developed by @Archeb, bringing a familiar but more powerful user experience.
+
+This software is still in the early stages of development and may have many flaws and errors. We value your feedback.
+
+[https://github.com/Archeb/opentrace](https://github.com/Archeb/opentrace)
 
 ## LeoMoeAPI Credit
 

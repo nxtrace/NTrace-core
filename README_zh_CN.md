@@ -345,7 +345,15 @@ NextTrace 所有的的 IP 地理位置 `API DEMO` 可以参考[这里](https://g
 
 ## NextTrace Enhanced
 
-https://github.com/OwO-Network/nexttrace-enhanced
+[https://github.com/OwO-Network/nexttrace-enhanced](https://github.com/OwO-Network/nexttrace-enhanced)
+
+## OpenTrace
+
+`OpenTrace`是 @Archeb 开发的`NextTrace`的跨平台`GUI`版本，带来您熟悉但更强大的用户体验。
+
+该软件仍然处于早期开发阶段，可能存在许多缺陷和错误，需要您宝贵的使用反馈。
+
+[https://github.com/Archeb/opentrace](https://github.com/Archeb/opentrace)
 
 ## Credits
 
