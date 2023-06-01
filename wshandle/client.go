@@ -163,14 +163,13 @@ func createWsConn() *WsConn {
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 	host, port = util.GetHostAndPort()
-	// 默认配置完成，开始寻找最优 IP
-	fastIp = util.GetFastIP(host, port, true)
-
 	// 如果 host 是一个 IP 使用默认域名
 	if valid := net.ParseIP(host); valid != nil {
 		host = "api.leo.moe"
+	} else {
+		// 默认配置完成，开始寻找最优 IP
+		fastIp = util.GetFastIP(host, port, true)
 	}
-
 	jwtToken, ua := envToken, []string{"Privileged Client"}
 	err := error(nil)
 	if envToken == "" {

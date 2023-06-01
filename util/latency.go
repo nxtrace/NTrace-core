@@ -29,7 +29,6 @@ func GetFastIP(domain string, port string, enableOutput bool) string {
 	select {
 	case result = <-results:
 	case <-time.After(1 * time.Second):
-
 	}
 	if result == "" {
 		log.Fatal("IP connection has been timeout, please check your network")
