@@ -26,6 +26,7 @@ func GetToken(fastIp string, host string, port string) (string, error) {
 		if err != nil {
 			continue
 		}
+		//fmt.Println("GetToken success", token, getTokenParams.UserAgent)
 		return token, nil
 	}
 	if err != nil {

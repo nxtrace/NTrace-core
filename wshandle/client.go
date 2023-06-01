@@ -31,6 +31,8 @@ type WsConn struct {
 var wsconn *WsConn
 var host, port, fastIp string
 var envToken = util.EnvToken
+var cacheToken string
+var cacheTokenFailedTimes int
 
 func (c *WsConn) keepAlive() {
 	go func() {
@@ -116,23 +118,31 @@ func (c *WsConn) messageSendHandler() {
 }
 
 func (c *WsConn) recreateWsConn() {
+	// 尝试重新连线
 	u := url.URL{Scheme: "wss", Host: fastIp + ":" + port, Path: "/v3/ipGeoWs"}
 	// log.Printf("connecting to %s", u.String())
 	jwtToken, ua := envToken, []string{"Privileged Client"}
 	err := error(nil)
 	if envToken == "" {
-		jwtToken, err = pow.GetToken(fastIp, host, port)
-		if err != nil {
-			log.Println(err)
-			os.Exit(1)
+		// 无环境变量 token
+		if cacheToken == "" {
+			// 无cacheToken, 重新获取 token
+			jwtToken, err = pow.GetToken(fastIp, host, port)
+			if err != nil {
+				log.Println(err)
+				os.Exit(1)
+			}
+		} else {
+			// 使用 cacheToken
+			jwtToken = cacheToken
 		}
 		ua = []string{util.UserAgent}
 	}
-	jwtToken = "Bearer " + jwtToken
+	cacheToken = jwtToken
 	requestHeader := http.Header{
 		"Host":          []string{host},
 		"User-Agent":    ua,
-		"Authorization": []string{jwtToken},
+		"Authorization": []string{"Bearer " + jwtToken},
 	}
 	dialer := websocket.DefaultDialer
 	dialer.TLSClientConfig = &tls.Config{
@@ -145,6 +155,11 @@ func (c *WsConn) recreateWsConn() {
 		// <-time.After(time.Second * 1)
 		c.Connected = false
 		c.Connecting = false
+		if cacheTokenFailedTimes > 3 {
+			cacheToken = ""
+		}
+		cacheTokenFailedTimes += 1
+		//fmt.Println("重连失败", cacheTokenFailedTimes, "次")
 		return
 	} else {
 		c.Connected = true
@@ -156,6 +171,7 @@ func (c *WsConn) recreateWsConn() {
 }
 
 func createWsConn() *WsConn {
+	//fmt.Println("正在连接 WS")
 	// 设置终端中断通道
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
@@ -177,11 +193,12 @@ func createWsConn() *WsConn {
 		}
 		ua = []string{util.UserAgent}
 	}
-	jwtToken = "Bearer " + jwtToken
+	cacheToken = jwtToken
+	cacheTokenFailedTimes = 0
 	requestHeader := http.Header{
 		"Host":          []string{host},
 		"User-Agent":    ua,
-		"Authorization": []string{jwtToken},
+		"Authorization": []string{"Bearer " + jwtToken},
 	}
 	dialer := websocket.DefaultDialer
 	dialer.TLSClientConfig = &tls.Config{
