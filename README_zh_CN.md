@@ -95,21 +95,21 @@
   请注意，以上多种安装方式的仓库均由开源爱好者自行维护，不保证可用性和及时更新，如遇到问题请联系仓库维护者解决，或使用本项目官方编译提供的二进制包。
 
 ### Manual Install
-- 下载预编译的可执行程序
+* 下载预编译的可执行程序
     
-  对于以上方法没有涵盖的用户，请直接前往 [Release](https://github.com/sjlleo/nexttrace/releases/latest) 下载编译后的二进制可执行文件。
+    对于以上方法没有涵盖的用户，请直接前往 [Release](https://github.com/sjlleo/nexttrace/releases/latest) 下载编译后的二进制可执行文件。
 
-  - `Release`里面为很多系统以及不同架构提供了编译好的二进制可执行文件，如果没有可以自行编译。
-  - 一些本项目的必要依赖在`Windows`上`Golang`底层实现不完全，所以目前`NextTrace`在`Windows`平台出于实验性支持阶段。
+    * `Release`里面为很多系统以及不同架构提供了编译好的二进制可执行文件，如果没有可以自行编译。
+    * 一些本项目的必要依赖在`Windows`上`Golang`底层实现不完全，所以目前`NextTrace`在`Windows`平台出于实验性支持阶段。
 
-- 从源码安装
+* 从源码安装
 
-  您可在自行安装Go >= 1.20后，使用以下命令安装
+    您可在自行安装Go >= 1.20后，使用以下命令安装
 
-  ```shell
-  go install github.com/xgadget-lab/nexttrace@latest
-  ```
-  安装后可执行文件在`$GOPATH/bin`目录下，如果您没有设置`GOPATH`，则在`$HOME/go/bin`目录下。
+    ```shell
+    go install github.com/xgadget-lab/nexttrace@latest
+    ```
+    安装后可执行文件在`$GOPATH/bin`目录下，如果您没有设置`GOPATH`，则在`$HOME/go/bin`目录下。
 
 
 ### Get Started
