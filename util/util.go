@@ -11,6 +11,8 @@ import (
 	"github.com/fatih/color"
 )
 
+var EnvToken = GetenvDefault("NEXTTRACE_TOKEN", "")
+
 // LocalIPPort get the local ip and port based on our destination ip
 func LocalIPPort(dstip net.IP) (net.IP, int) {
 	serverAddr, err := net.ResolveUDPAddr("udp", dstip.String()+":12345")
@@ -128,4 +130,31 @@ func GetenvDefault(key, defVal string) string {
 		return val
 	}
 	return defVal
+}
+
+func GetHostAndPort() (host string, port string) {
+	var hostP = GetenvDefault("NEXTTRACE_HOSTPORT", "api.leo.moe")
+	// 解析域名
+	hostArr := strings.Split(hostP, ":")
+	// 判断是否有指定端口
+	if len(hostArr) > 1 {
+		// 判断是否为 IPv6
+		if strings.HasPrefix(hostP, "[") {
+			tmp := strings.Split(hostP, "]")
+			host = tmp[0]
+			host = host[1:]
+			if port = tmp[1]; port != "" {
+				port = port[1:]
+			}
+		} else {
+			host, port = hostArr[0], hostArr[1]
+		}
+	} else {
+		host = hostP
+	}
+	if port == "" {
+		// 默认端口
+		port = "443"
+	}
+	return
 }

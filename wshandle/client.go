@@ -13,7 +13,6 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 
@@ -33,9 +32,8 @@ type WsConn struct {
 }
 
 var wsconn *WsConn
-var hostP = util.GetenvDefault("NEXTTRACE_HOSTPORT", "api.leo.moe")
-var host, port, fast_ip string
-var envToken = util.GetenvDefault("NEXTTRACE_TOKEN", "")
+var host, port, fastIp string
+var envToken = util.EnvToken
 
 func (c *WsConn) keepAlive() {
 	go func() {
@@ -121,12 +119,12 @@ func (c *WsConn) messageSendHandler() {
 }
 
 func (c *WsConn) recreateWsConn() {
-	u := url.URL{Scheme: "wss", Host: fast_ip + ":" + port, Path: "/v3/ipGeoWs"}
+	u := url.URL{Scheme: "wss", Host: fastIp + ":" + port, Path: "/v3/ipGeoWs"}
 	// log.Printf("connecting to %s", u.String())
 	jwtToken, ua := envToken, []string{"Privileged Client"}
 	err := error(nil)
 	if envToken == "" {
-		jwtToken, err = pow.GetToken()
+		jwtToken, err = pow.GetToken(fastIp, host, port)
 		if err != nil {
 			log.Println(err)
 			os.Exit(1)
@@ -164,30 +162,9 @@ func createWsConn() *WsConn {
 	// 设置终端中断通道
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
-	// 解析域名
-	hostArr := strings.Split(hostP, ":")
-	// 判断是否有指定端口
-	if len(hostArr) > 1 {
-		// 判断是否为 IPv6
-		if strings.HasPrefix(hostP, "[") {
-			tmp := strings.Split(hostP, "]")
-			host = tmp[0]
-			host = host[1:]
-			if port = tmp[1]; port != "" {
-				port = port[1:]
-			}
-		} else {
-			host, port = hostArr[0], hostArr[1]
-		}
-	} else {
-		host = hostP
-	}
-	if port == "" {
-		// 默认端口
-		port = "443"
-	}
+	host, port = util.GetHostAndPort()
 	// 默认配置完成，开始寻找最优 IP
-	fast_ip = GetFastIP(host, port)
+	fastIp = util.GetFastIP(host, port, true)
 
 	// 如果 host 是一个 IP 使用默认域名
 	if valid := net.ParseIP(host); valid != nil {
@@ -197,7 +174,7 @@ func createWsConn() *WsConn {
 	jwtToken, ua := envToken, []string{"Privileged Client"}
 	err := error(nil)
 	if envToken == "" {
-		jwtToken, err = pow.GetToken()
+		jwtToken, err = pow.GetToken(fastIp, host, port)
 		if err != nil {
 			log.Println(err)
 			os.Exit(1)
@@ -214,7 +191,7 @@ func createWsConn() *WsConn {
 	dialer.TLSClientConfig = &tls.Config{
 		ServerName: host,
 	}
-	u := url.URL{Scheme: "wss", Host: fast_ip + ":" + port, Path: "/v3/ipGeoWs"}
+	u := url.URL{Scheme: "wss", Host: fastIp + ":" + port, Path: "/v3/ipGeoWs"}
 	// log.Printf("connecting to %s", u.String())
 
 	c, _, err := websocket.DefaultDialer.Dial(u.String(), requestHeader)

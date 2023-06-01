@@ -2,6 +2,7 @@ package pow
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,12 +12,6 @@ import (
 	"net/http"
 	"time"
 )
-
-//const (
-//	baseURL     = "https://api.leo.moe/v3/challenge" // replace with your server url
-//	requestPath = "/request_challenge"
-//	submitPath  = "/submit_answer"
-//)
 
 //TODO: 在这里要实现优选IP
 
@@ -46,6 +41,8 @@ type GetTokenParams struct {
 	RequestPath string
 	SubmitPath  string
 	UserAgent   string
+	SNI         string
+	Host        string
 }
 
 func NewGetTokenParams() *GetTokenParams {
@@ -55,6 +52,8 @@ func NewGetTokenParams() *GetTokenParams {
 		RequestPath: "/request_challenge",
 		SubmitPath:  "/submit_answer",
 		UserAgent:   "POW client",
+		SNI:         "",
+		Host:        "",
 	}
 }
 
@@ -79,12 +78,22 @@ func requestChallenge(getTokenParams *GetTokenParams) (*RequestResponse, error) 
 	client := &http.Client{
 		Timeout: getTokenParams.TimeoutSec,
 	}
+	if getTokenParams.SNI != "" {
+		client = &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{
+					ServerName: getTokenParams.SNI,
+				},
+			},
+		}
+	}
 	req, err := http.NewRequest("GET", getTokenParams.BaseUrl+getTokenParams.RequestPath, nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Add("User-Agent", fmt.Sprintf("%s", getTokenParams.UserAgent))
-
+	req.Header.Add("User-Agent", getTokenParams.UserAgent)
+	//req.Header.Add("Host", getTokenParams.Host)
+	req.Host = getTokenParams.Host
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
@@ -95,7 +104,6 @@ func requestChallenge(getTokenParams *GetTokenParams) (*RequestResponse, error) 
 			fmt.Println(err)
 		}
 	}(resp.Body)
-
 	var challengeResponse RequestResponse
 	err = json.NewDecoder(resp.Body).Decode(&challengeResponse)
 	if err != nil {
@@ -108,6 +116,15 @@ func requestChallenge(getTokenParams *GetTokenParams) (*RequestResponse, error) 
 func submitAnswer(getTokenParams *GetTokenParams, challengeResponse *RequestResponse) (string, error) {
 	client := &http.Client{
 		Timeout: getTokenParams.TimeoutSec,
+	}
+	if getTokenParams.SNI != "" {
+		client = &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{
+					ServerName: getTokenParams.SNI,
+				},
+			},
+		}
 	}
 	requestTime := challengeResponse.RequestTime
 	challenge := challengeResponse.Challenge.Challenge
@@ -138,7 +155,9 @@ func submitAnswer(getTokenParams *GetTokenParams, challengeResponse *RequestResp
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Add("User-Agent", fmt.Sprintf("%s", getTokenParams.UserAgent))
+	req.Header.Add("User-Agent", getTokenParams.UserAgent)
+	//req.Header.Add("Host", getTokenParams.Host)
+	req.Host = getTokenParams.Host
 
 	resp, err := client.Do(req)
 	if err != nil {

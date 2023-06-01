@@ -1,4 +1,4 @@
-package wshandle
+package util
 
 import (
 	"fmt"
@@ -15,7 +15,7 @@ var (
 	results = make(chan string)
 )
 
-func GetFastIP(domain string, port string) string {
+func GetFastIP(domain string, port string, enableOutput bool) string {
 
 	ips, err := net.LookupIP(domain)
 	if err != nil {
@@ -37,11 +37,13 @@ func GetFastIP(domain string, port string) string {
 	res := strings.Split(result, "-")
 
 	if len(ips) > 1 {
-		_, _ = fmt.Fprintf(color.Output, "%s prefered API IP - %s - %s\n",
-			color.New(color.FgWhite, color.Bold).Sprintf("[NextTrace API]"),
-			color.New(color.FgGreen, color.Bold).Sprintf("%s", res[0]),
-			color.New(color.FgCyan, color.Bold).Sprintf("%sms", res[1]),
-		)
+		if enableOutput {
+			_, _ = fmt.Fprintf(color.Output, "%s prefered API IP - %s - %s\n",
+				color.New(color.FgWhite, color.Bold).Sprintf("[NextTrace API]"),
+				color.New(color.FgGreen, color.Bold).Sprintf("%s", res[0]),
+				color.New(color.FgCyan, color.Bold).Sprintf("%sms", res[1]),
+			)
+		}
 	}
 
 	return res[0]
