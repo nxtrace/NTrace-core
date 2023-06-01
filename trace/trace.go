@@ -2,6 +2,7 @@ package trace
 
 import (
 	"errors"
+	"github.com/xgadget-lab/nexttrace/util"
 	"net"
 	"sync"
 	"time"
@@ -125,11 +126,12 @@ type Hop struct {
 }
 
 func (h *Hop) fetchIPData(c Config) (err error) {
+
 	// DN42
 	if c.DN42 {
 		var ip string
 		// 首先查找 PTR 记录
-		r, err := net.LookupAddr(h.Address.String())
+		r, err := util.LookupAddr(h.Address.String())
 		if err == nil && len(r) > 0 {
 			h.Hostname = r[0][:len(r[0])-1]
 			ip = h.Address.String() + "," + h.Hostname
@@ -148,7 +150,7 @@ func (h *Hop) fetchIPData(c Config) (err error) {
 	if c.RDns && h.Hostname == "" {
 		// Create a rDNS Query go-routine
 		go func() {
-			r, err := net.LookupAddr(h.Address.String())
+			r, err := util.LookupAddr(h.Address.String())
 			if err != nil {
 				// No PTR Record
 				rDNSChan <- nil

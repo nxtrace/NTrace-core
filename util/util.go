@@ -9,6 +9,7 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/fatih/color"
 )
@@ -16,6 +17,25 @@ import (
 var Uninterrupted = GetenvDefault("NEXTTRACE_UNINTERRUPTED", "")
 var EnvToken = GetenvDefault("NEXTTRACE_TOKEN", "")
 var UserAgent = fmt.Sprintf("NextTrace %s/%s/%s", config.Version, runtime.GOOS, runtime.GOARCH)
+var RdnsCache sync.Map
+
+func LookupAddr(addr string) ([]string, error) {
+	// 如果在缓存中找到，直接返回
+	if hostname, ok := RdnsCache.Load(addr); ok {
+		//fmt.Println("hit RdnsCache for", addr, hostname)
+		return []string{hostname.(string)}, nil
+	}
+	// 如果缓存中未找到，进行 DNS 查询
+	names, err := net.LookupAddr(addr)
+	if err != nil {
+		return nil, err
+	}
+	// 将查询结果存入缓存
+	if len(names) > 0 {
+		RdnsCache.Store(addr, names[0])
+	}
+	return names, nil
+}
 
 // LocalIPPort get the local ip and port based on our destination ip
 func LocalIPPort(dstip net.IP) (net.IP, int) {

@@ -92,6 +92,7 @@ func LeoIP(ip string, timeout time.Duration, lang string, maptrace bool) (*IPGeo
 	}
 	if value, ok := queryCache.Load(ip); ok {
 		// 从缓存中成功获取到IP信息
+		//fmt.Println("Get IP Data From Cache", ip)
 		return value.(*IPGeoData), nil
 	}
 
