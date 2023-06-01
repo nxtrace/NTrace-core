@@ -58,19 +58,11 @@
           ```
      * AUR 的2种构建分别由 huyz 和 ouuan 维护
   * Linuxbrew 安装命令
-     * homebrew-core版(仅支持amd64)
 
-          ```shell
-          brew install nexttrace
-          ```
-     * 本仓库ACTIONS自动构建版(更新更快)
-
-          ```shell
-          brew tap xgadget-lab/nexttrace && brew install nexttrace
-          ```
-     * homebrew-core 构建由 chenrui333 维护，请注意该版本更新可能会落后仓库Action版本
+     同macOS Homebrew安装方法(homebrew-core版仅支持amd64)
+     
 * macOS
-  * macOS brew 安装命令
+  * macOS Homebrew 安装命令
      * homebrew-core版
 
           ```shell
@@ -81,6 +73,7 @@
           ```shell
           brew tap xgadget-lab/nexttrace && brew install nexttrace
           ```
+     * homebrew-core 构建由 chenrui333 维护，请注意该版本更新可能会落后仓库Action自动构建版本
 
 * Windows
   * Windows Scoop 安装命令

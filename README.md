@@ -20,7 +20,7 @@ Document Language: English | [简体中文](README_zh_CN.md)
 
 * Linux
     * One-click installation script
-        * Download from Github
+        * Download from GitHub
 
              ```shell
              bash -c "$(curl -Ls https://github.com/sjlleo/nexttrace/raw/main/nt_install.sh)"
@@ -42,21 +42,12 @@ Document Language: English | [简体中文](README_zh_CN.md)
              yay -S nexttrace-bin
              ```
         * The two types of AUR builds are maintained by huyz and ouuan, respectively
-    * Linuxbrew installation command
-        * homebrew-core version (only supports amd64)
+    * Linuxbrew's installation command
 
-             ```shell
-             brew install nexttrace
-             ```
-        * Automatically built version by this repository's ACTIONS (updates faster)
-
-             ```shell
-             brew tap xgadget-lab/nexttrace && brew install nexttrace
-             ```
-        * The homebrew-core build is maintained by chenrui333, please note that this version's updates may lag behind the repository Action version
+        Same as the macOS Homebrew's installation method (homebrew-core version only supports amd64)
 
 * macOS
-    * macOS brew installation command
+    * macOS Homebrew's installation command
         * Homebrew-core version
 
              ```shell
@@ -67,6 +58,7 @@ Document Language: English | [简体中文](README_zh_CN.md)
              ```shell
              brew tap xgadget-lab/nexttrace && brew install nexttrace
              ```
+        * The homebrew-core build is maintained by chenrui333, please note that this version's updates may lag behind the repository Action automatically version
 
 * Windows
     * Windows Scoop installation command
@@ -350,7 +342,7 @@ The LeoMoeAPI data is subject to copyright restrictions from multiple data sourc
 
 1. We would like to credit samleong123 for providing nodes in Malaysia, TOHUNET Looking Glass for global nodes, and Ping.sx from Misaka, where more than 80% of reliable calibration data comes from ping/mtr reports.
 
-2. At the same time, we would like to credit isyekong for their contribution on rDNS-based calibration ideas and data. LeoMoeAPI is accelerating the development of rDNS resolution function, and has already achieved automated geolocation resolution for some backbone networks, but there are some misjudgments. We hope that NextTrace will become a One-Man ISP-friendly traceroute tool in the future, and we are working on improving the calibration of these ASN micro-backbones as much as possible.
+2. At the same time, we would like to credit isyekong for their contribution to rDNS-based calibration ideas and data. LeoMoeAPI is accelerating the development of rDNS resolution function, and has already achieved automated geolocation resolution for some backbone networks, but there are some misjudgments. We hope that NextTrace will become a One-Man ISP-friendly traceroute tool in the future, and we are working on improving the calibration of these ASN micro-backbones as much as possible.
 
 3. In terms of development, I would like to credit missuo and zhshch for their help with Go cross-compilation, design concepts and TCP/UDP Traceroute refactoring, and tsosunchia for their support on TraceMap.
 
@@ -367,7 +359,7 @@ We hope you can give us as much feedback as possible on IP geolocation errors (s
 
 ## Credits
 
-[BGP.TOOLS](https://bgp.tools) provided some data support for this project and we would like to express our sincere gratitude.
+[BGP.TOOLS](https://bgp.tools) provided some data support for this project. And we would like to express our sincere gratitude.
 
 [Vincent Young](https://github.com/missuo) (i@yyt.moe)
 

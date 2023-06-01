@@ -37,7 +37,7 @@ jobs:
           # BEIGIN MacOS ARM64
           - goos: darwin
             goarch: arm64
-          # END MacOS ARM64
+          # END macOS ARM64
           # BEGIN Linux ARM 5 6 7
           - goos: linux
             goarch: arm
