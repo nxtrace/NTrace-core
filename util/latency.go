@@ -14,8 +14,12 @@ var (
 	result  string
 	results = make(chan string)
 )
+var FastIpCache = ""
 
 func GetFastIP(domain string, port string, enableOutput bool) string {
+	if FastIpCache != "" {
+		return FastIpCache
+	}
 
 	ips, err := net.LookupIP(domain)
 	if err != nil {
@@ -44,7 +48,7 @@ func GetFastIP(domain string, port string, enableOutput bool) string {
 			)
 		}
 	}
-
+	FastIpCache = res[0]
 	return res[0]
 }
 

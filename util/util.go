@@ -13,6 +13,7 @@ import (
 	"github.com/fatih/color"
 )
 
+var Uninterrupted = GetenvDefault("NEXTTRACE_UNINTERRUPTED", "")
 var EnvToken = GetenvDefault("NEXTTRACE_TOKEN", "")
 var UserAgent = fmt.Sprintf("NextTrace %s/%s/%s", config.Version, runtime.GOOS, runtime.GOARCH)
 

@@ -58,7 +58,7 @@ func receiveParse() {
 		m := make(map[string][]string)
 		err := json.Unmarshal([]byte(res.Get("router").String()), &m)
 		if err != nil {
-			return
+			// 此处是正常的，因为有些IP没有路由信息
 		}
 
 		lat, _ := strconv.ParseFloat(res.Get("lat").String(), 32)

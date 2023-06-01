@@ -236,6 +236,15 @@ func Excute() {
 		conf.AsyncPrinter = nil
 	}
 
+	if util.Uninterrupted != "" || *rawPrint {
+		for {
+			_, err := trace.Traceroute(m, conf)
+			if err != nil {
+				fmt.Println(err)
+			}
+		}
+	}
+
 	res, err := trace.Traceroute(m, conf)
 
 	if err != nil {
