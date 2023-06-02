@@ -8,6 +8,6 @@ import (
 
 func TestDNS(t *testing.T) {
 	resolver := DNSSB()
-	ips, _ := resolver.LookupHost(context.Background(), "www.google.com")
+	ips, _ := resolver.LookupHost(context.Background(), "www.bing.com")
 	fmt.Println(ips)
 }
