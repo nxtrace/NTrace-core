@@ -14,8 +14,53 @@ var (
 	ErrInvalidMethod      = errors.New("invalid method")
 	ErrTracerouteExecuted = errors.New("traceroute already executed")
 	ErrHopLimitTimeout    = errors.New("hop timeout")
-	geoCache              = sync.Map{}
+	geoCache              = NewGeoCache()
 )
+
+type GeoCache struct {
+	cache    sync.Map
+	requests chan *CacheRequest
+}
+
+type CacheRequest struct {
+	key      string
+	response chan *ipgeo.IPGeoData
+}
+
+func NewGeoCache() *GeoCache {
+	gc := &GeoCache{
+		requests: make(chan *CacheRequest),
+	}
+	go gc.run()
+	return gc
+}
+
+func (gc *GeoCache) run() {
+	for req := range gc.requests {
+		val, ok := gc.cache.Load(req.key)
+		if ok {
+			req.response <- val.(*ipgeo.IPGeoData)
+		} else {
+			req.response <- nil
+		}
+	}
+}
+
+func (gc *GeoCache) Get(key string) (*ipgeo.IPGeoData, bool) {
+	req := &CacheRequest{
+		key:      key,
+		response: make(chan *ipgeo.IPGeoData),
+	}
+
+	gc.requests <- req
+	data := <-req.response
+
+	return data, data != nil
+}
+
+func (gc *GeoCache) Set(key string, data *ipgeo.IPGeoData) {
+	gc.cache.Store(key, data)
+}
 
 type Config struct {
 	SrcAddr          string
@@ -175,14 +220,15 @@ func (h *Hop) fetchIPData(c Config) (err error) {
 					timeout = 2 * time.Second
 				}
 				//h.Geo, err = c.IPGeoSource(h.Address.String(), timeout, c.Lang, c.Maptrace)
-				if cacheVal, ok := geoCache.Load(h.Address.String()); ok {
-					// 如果缓存中已有结果，直接使用
-					h.Geo = cacheVal.(*ipgeo.IPGeoData)
+				// Check if data exists in geoCache
+				data, ok := geoCache.Get(h.Address.String())
+				if ok {
+					h.Geo = data
 				} else {
-					// 如果缓存中无结果，进行查询并将结果存入缓存
 					h.Geo, err = c.IPGeoSource(h.Address.String(), timeout, c.Lang, c.Maptrace)
 					if err == nil {
-						geoCache.Store(h.Address.String(), h.Geo)
+						// Store the result to the geoCache
+						geoCache.Set(h.Address.String(), h.Geo)
 					}
 				}
 			}
