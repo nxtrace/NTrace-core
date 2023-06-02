@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/xgadget-lab/nexttrace/util"
 	"log"
+	"net"
 	"os"
 	"os/signal"
 	"time"
@@ -17,6 +18,18 @@ import (
 
 type FastTracer struct {
 	TracerouteMethod trace.Method
+	ParamsFastTrace  ParamsFastTrace
+}
+
+type ParamsFastTrace struct {
+	SrcDev         string
+	SrcAddr        string
+	BeginHop       int
+	MaxHops        int
+	RDns           bool
+	AlwaysWaitRDNS bool
+	Lang           string
+	PktSize        int
 }
 
 var oe = false
@@ -41,17 +54,21 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 	log.Printf("traceroute to %s, 30 hops max, 32 byte packets\n", ispCollection.IP)
 	ip := util.DomainLookUp(ispCollection.IP, "4", "", true)
 	var conf = trace.Config{
-		BeginHop:         1,
+		BeginHop:         f.ParamsFastTrace.BeginHop,
 		DestIP:           ip,
 		DestPort:         80,
-		MaxHops:          30,
+		MaxHops:          f.ParamsFastTrace.MaxHops,
 		NumMeasurements:  3,
 		ParallelRequests: 18,
-		RDns:             true,
+		RDns:             f.ParamsFastTrace.RDns,
+		AlwaysWaitRDNS:   f.ParamsFastTrace.AlwaysWaitRDNS,
 		PacketInterval:   100,
 		TTLInterval:      500,
 		IPGeoSource:      ipgeo.GetSource("LeoMoeAPI"),
 		Timeout:          1 * time.Second,
+		SrcAddr:          f.ParamsFastTrace.SrcAddr,
+		PktSize:          f.ParamsFastTrace.PktSize,
+		Lang:             f.ParamsFastTrace.Lang,
 	}
 
 	if oe {
@@ -66,6 +83,75 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 		log.Fatal(err)
 	}
 	println()
+}
+
+func FastTest(tm bool, outEnable bool, paramsFastTrace ParamsFastTrace) {
+	var c string
+	pFastTrace := paramsFastTrace
+	oe = outEnable
+	fmt.Println("Hi，欢迎使用 Fast Trace 功能，请注意 Fast Trace 功能只适合新手使用\n因为国内网络复杂，我们设置的测试目标有限，建议普通用户自测以获得更加精准的路由情况")
+	fmt.Println("请您选择要测试的 IP 类型\n1. IPv4\n2. IPv6")
+	fmt.Print("请选择选项：")
+	_, err := fmt.Scanln(&c)
+	if err != nil {
+		c = "1"
+	}
+	if c == "2" {
+		FastTestv6(tm, outEnable)
+		return
+	}
+
+	if pFastTrace.SrcDev != "" {
+		dev, _ := net.InterfaceByName(pFastTrace.SrcDev)
+		if addrs, err := dev.Addrs(); err == nil {
+			for _, addr := range addrs {
+				if addr.(*net.IPNet).IP.To4() == nil {
+					pFastTrace.SrcAddr = addr.(*net.IPNet).IP.String()
+				}
+			}
+		}
+	}
+
+	fmt.Println("您想测试哪些ISP的路由？\n1. 国内四网\n2. 电信\n3. 联通\n4. 移动\n5. 教育网")
+	fmt.Print("请选择选项：")
+	_, err = fmt.Scanln(&c)
+	if err != nil {
+		c = "1"
+	}
+
+	ft := FastTracer{
+		ParamsFastTrace: pFastTrace,
+	}
+
+	// 建立 WebSocket 连接
+	w := wshandle.New()
+	w.Interrupt = make(chan os.Signal, 1)
+	signal.Notify(w.Interrupt, os.Interrupt)
+	defer func() {
+		w.Conn.Close()
+	}()
+
+	if !tm {
+		ft.TracerouteMethod = trace.ICMPTrace
+		fmt.Println("您将默认使用ICMP协议进行路由跟踪，如果您想使用TCP SYN进行路由跟踪，可以加入 -T 参数")
+	} else {
+		ft.TracerouteMethod = trace.TCPTrace
+	}
+
+	switch c {
+	case "1":
+		ft.testAll()
+	case "2":
+		ft.testCT()
+	case "3":
+		ft.testCU()
+	case "4":
+		ft.testCM()
+	case "5":
+		ft.testEDU()
+	default:
+		ft.testAll()
+	}
 }
 
 func (f *FastTracer) testAll() {
@@ -110,60 +196,4 @@ func (f *FastTracer) testEDU() {
 	f.tracert(TestIPsCollection.Hangzhou.Location, TestIPsCollection.Hangzhou.EDU)
 	// 科技网暂时算在EDU里面，等拿到了足够多的数据再分离出去，单独用于测试
 	f.tracert(TestIPsCollection.Hefei.Location, TestIPsCollection.Hefei.CST)
-}
-
-func FastTest(tm bool, outEnable bool) {
-	var c string
-
-	oe = outEnable
-	fmt.Println("Hi，欢迎使用 Fast Trace 功能，请注意 Fast Trace 功能只适合新手使用\n因为国内网络复杂，我们设置的测试目标有限，建议普通用户自测以获得更加精准的路由情况")
-	fmt.Println("请您选择要测试的 IP 类型\n1. IPv4\n2. IPv6")
-	fmt.Print("请选择选项：")
-	_, err := fmt.Scanln(&c)
-	if err != nil {
-		c = "1"
-	}
-	if c == "2" {
-		FastTestv6(tm, outEnable)
-		return
-	}
-
-	fmt.Println("您想测试哪些ISP的路由？\n1. 国内四网\n2. 电信\n3. 联通\n4. 移动\n5. 教育网")
-	fmt.Print("请选择选项：")
-	_, err = fmt.Scanln(&c)
-	if err != nil {
-		c = "1"
-	}
-
-	ft := FastTracer{}
-
-	// 建立 WebSocket 连接
-	w := wshandle.New()
-	w.Interrupt = make(chan os.Signal, 1)
-	signal.Notify(w.Interrupt, os.Interrupt)
-	defer func() {
-		w.Conn.Close()
-	}()
-
-	if !tm {
-		ft.TracerouteMethod = trace.ICMPTrace
-		fmt.Println("您将默认使用ICMP协议进行路由跟踪，如果您想使用TCP SYN进行路由跟踪，可以加入 -T 参数")
-	} else {
-		ft.TracerouteMethod = trace.TCPTrace
-	}
-
-	switch c {
-	case "1":
-		ft.testAll()
-	case "2":
-		ft.testCT()
-	case "3":
-		ft.testCU()
-	case "4":
-		ft.testCM()
-	case "5":
-		ft.testEDU()
-	default:
-		ft.testAll()
-	}
 }

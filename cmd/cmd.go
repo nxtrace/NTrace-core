@@ -54,11 +54,11 @@ func Excute() {
 	beginHop := parser.Int("f", "first", &argparse.Options{Default: 1, Help: "Start from the first_ttl hop (instead from 1)"})
 	disableMaptrace := parser.Flag("M", "map", &argparse.Options{Help: "Disable Print Trace Map"})
 	ver := parser.Flag("v", "version", &argparse.Options{Help: "Print version info and exit"})
-	src_addr := parser.String("s", "source", &argparse.Options{Help: "Use source src_addr for outgoing packets"})
-	src_dev := parser.String("D", "dev", &argparse.Options{Help: "Use the following Network Devices as the source address in outgoing packets"})
+	srcAddr := parser.String("s", "source", &argparse.Options{Help: "Use source src_addr for outgoing packets"})
+	srcDev := parser.String("D", "dev", &argparse.Options{Help: "Use the following Network Devices as the source address in outgoing packets"})
 	router := parser.Flag("R", "route", &argparse.Options{Help: "Show Routing Table [Provided By BGP.Tools]"})
-	packet_interval := parser.Int("", "send-time", &argparse.Options{Default: 100, Help: "Set the time interval for sending every packet. Useful when some routers use rate-limit for ICMP messages"})
-	ttl_interval := parser.Int("i", "ttl-time", &argparse.Options{Default: 500, Help: "Set the time interval for sending packets groups by TTL. Useful when some routers use rate-limit for ICMP messages"})
+	packetInterval := parser.Int("", "send-time", &argparse.Options{Default: 100, Help: "Set the time interval for sending every packet. Useful when some routers use rate-limit for ICMP messages"})
+	ttlInterval := parser.Int("i", "ttl-time", &argparse.Options{Default: 500, Help: "Set the time interval for sending packets groups by TTL. Useful when some routers use rate-limit for ICMP messages"})
 	timeout := parser.Int("z", "timeout", &argparse.Options{Default: 1, Help: "The number of seconds to keep probe sockets open before giving up on the connection."})
 	packetSize := parser.Int("", "psize", &argparse.Options{Default: 52, Help: "Set the packet size (payload size)"})
 	str := parser.StringPositional(&argparse.Options{Help: "IP Address or domain name"})
@@ -89,7 +89,18 @@ func Excute() {
 	}
 
 	if *fast_trace {
-		fastTrace.FastTest(*tcp, *output)
+		var paramsFastTrace = fastTrace.ParamsFastTrace{
+			SrcDev:         *srcDev,
+			SrcAddr:        *srcAddr,
+			BeginHop:       *beginHop,
+			MaxHops:        *maxHops,
+			RDns:           !*noRdns,
+			AlwaysWaitRDNS: *alwaysRdns,
+			Lang:           *lang,
+			PktSize:        *packetSize,
+		}
+
+		fastTrace.FastTest(*tcp, *output, paramsFastTrace)
 		if *output {
 			fmt.Println("您的追踪日志已经存放在 /tmp/trace.log 中")
 		}
@@ -97,6 +108,7 @@ func Excute() {
 		os.Exit(0)
 	}
 
+	// DOMAIN处理开始
 	if domain == "" {
 		fmt.Print(parser.Usage(err))
 		return
@@ -113,6 +125,7 @@ func Excute() {
 			domain = strings.Split(domain, ":")[0]
 		}
 	}
+	// DOMAIN处理结束
 
 	capabilities_check()
 	// return
@@ -139,13 +152,13 @@ func Excute() {
 		}
 	}
 
-	if *src_dev != "" {
-		dev, _ := net.InterfaceByName(*src_dev)
+	if *srcDev != "" {
+		dev, _ := net.InterfaceByName(*srcDev)
 
 		if addrs, err := dev.Addrs(); err == nil {
 			for _, addr := range addrs {
 				if (addr.(*net.IPNet).IP.To4() == nil) == (ip.To4() == nil) {
-					*src_addr = addr.(*net.IPNet).IP.String()
+					*srcAddr = addr.(*net.IPNet).IP.String()
 				}
 			}
 		}
@@ -193,13 +206,13 @@ func Excute() {
 
 	var conf = trace.Config{
 		DN42:             *dn42,
-		SrcAddr:          *src_addr,
+		SrcAddr:          *srcAddr,
 		BeginHop:         *beginHop,
 		DestIP:           ip,
 		DestPort:         *port,
 		MaxHops:          *maxHops,
-		PacketInterval:   *packet_interval,
-		TTLInterval:      *ttl_interval,
+		PacketInterval:   *packetInterval,
+		TTLInterval:      *ttlInterval,
 		NumMeasurements:  *numMeasurements,
 		ParallelRequests: *parallelRequests,
 		Lang:             *lang,

@@ -11,7 +11,17 @@ import (
 )
 
 func TestTrace(t *testing.T) {
-	ft := FastTracer{}
+	pFastTrace := ParamsFastTrace{
+		SrcDev:         "",
+		SrcAddr:        "",
+		BeginHop:       1,
+		MaxHops:        30,
+		RDns:           false,
+		AlwaysWaitRDNS: false,
+		Lang:           "",
+		PktSize:        52,
+	}
+	ft := FastTracer{ParamsFastTrace: pFastTrace}
 	// 建立 WebSocket 连接
 	w := wshandle.New()
 	w.Interrupt = make(chan os.Signal, 1)
