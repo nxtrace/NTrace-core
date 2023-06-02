@@ -72,14 +72,14 @@ func (t *TCPTracerv6) Execute() (*Result, error) {
 		for i := 0; i < t.NumMeasurements; i++ {
 			t.wg.Add(1)
 			go t.send(ttl)
+			<-time.After(time.Millisecond * time.Duration(t.Config.PacketInterval))
 		}
 		if t.RealtimePrinter != nil {
 			// 对于实时模式，应该按照TTL进行并发请求
 			t.wg.Wait()
 			t.RealtimePrinter(&t.res, ttl-1)
 		}
-		time.Sleep(1 * time.Millisecond)
-
+		<-time.After(time.Millisecond * time.Duration(t.Config.TTLInterval))
 	}
 
 	go func() {
