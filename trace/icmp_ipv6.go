@@ -26,6 +26,7 @@ type ICMPTracerv6 struct {
 	icmpListen            net.PacketConn
 	final                 int
 	finalLock             sync.Mutex
+	fetchLock             sync.Mutex
 }
 
 func (t *ICMPTracerv6) PrintFunc() {
@@ -300,6 +301,8 @@ func (t *ICMPTracerv6) send(ttl int) error {
 		h.TTL = ttl
 		h.RTT = rtt
 
+		t.fetchLock.Lock()
+		defer t.fetchLock.Unlock()
 		h.fetchIPData(t.Config)
 
 		t.res.add(h)

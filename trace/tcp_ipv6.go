@@ -31,7 +31,8 @@ type TCPTracerv6 struct {
 	final     int
 	finalLock sync.Mutex
 
-	sem *semaphore.Weighted
+	sem       *semaphore.Weighted
+	fetchLock sync.Mutex
 }
 
 func (t *TCPTracerv6) Execute() (*Result, error) {
@@ -273,6 +274,8 @@ func (t *TCPTracerv6) send(ttl int) error {
 		h.TTL = ttl
 		h.RTT = rtt
 
+		t.fetchLock.Lock()
+		defer t.fetchLock.Unlock()
 		h.fetchIPData(t.Config)
 
 		t.res.add(h)
