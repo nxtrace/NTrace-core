@@ -237,18 +237,20 @@ All NextTrace IP geolocation `API DEMO` can refer to [here](https://github.com/x
 ### For full usage list, please refer to the usage menu
 
 ```shell
-Usage: nexttrace [-h|--help] [-T|--tcp] [-U|--udp] [-F|--fast-trace] [-p|--port
-                 <integer>] [-q|--queries <integer>] [--parallel-requests
-                 <integer>] [-m|--max-hops <integer>] [-d|--data-provider
+Usage: nexttrace [-h|--help] [-4|--ipv4] [-6|--ipv6] [-T|--tcp] [-U|--udp]
+                 [-F|--fast-trace] [-p|--port <integer>] [-q|--queries
+                 <integer>] [--parallel-requests <integer>] [-m|--max-hops
+                 <integer>] [-d|--data-provider
                  (Ip2region|ip2region|IP.SB|ip.sb|IPInfo|ipinfo|IPInsight|ipinsight|IPAPI.com|ip-api.com|IPInfoLocal|ipinfolocal|chunzhen|LeoMoeAPI|leomoeapi|disable-geoip)]
                  [-n|--no-rdns] [-a|--always-rdns] [-P|--route-path]
                  [-r|--report] [--dn42] [-o|--output] [-t|--table] [--raw]
                  [-j|--json] [-c|--classic] [-f|--first <integer>] [-M|--map]
                  [-v|--version] [-s|--source "<value>"] [-D|--dev "<value>"]
                  [-R|--route] [-z|--send-time <integer>] [-i|--ttl-time
-                 <integer>] [_positionalArg_nexttrace_27 "<value>"]
-                 [--dot-server (dnssb|aliyun|dnspod|google|cloudflare)]
-                 [-g|--language (en|cn)]
+                 <integer>] [--timeout <integer>] [--psize <integer>]
+                 [_positionalArg_nexttrace_31 "<value>"] [--dot-server
+                 (dnssb|aliyun|dnspod|google|cloudflare)] [-g|--language
+                 (en|cn)]
 
 Arguments:
 
@@ -302,18 +304,20 @@ Arguments:
   -D  --dev                          Use the following Network Devices as the
                                      source address in outgoing packets
   -R  --route                        Show Routing Table [Provided By BGP.Tools]
-      --send-time                    Set the time interval for sending every
-                                     packet. Useful when some routers use
-                                     rate-limit for ICMP messages. Default: 100
-  -i  --ttl-time                     Set the time interval for sending packets
-                                     groups by TTL. Useful when some routers
-                                     use rate-limit for ICMP messages. Default:
-                                     500
-  -z  --timeout                      The number of seconds to keep probe
+  -z  --send-time                    Set how many [milliseconds] between
+                                     sending each packet.. Useful when some
+                                     routers use rate-limit for ICMP messages.
+                                     Default: 100
+  -i  --ttl-time                     Set how many [milliseconds] between
+                                     sending packets groups by TTL. Useful when
+                                     some routers use rate-limit for ICMP
+                                     messages. Default: 500
+      --timeout                      The number of [milliseconds] to keep probe
                                      sockets open before giving up on the
-                                     connection.. Default: 1
+                                     connection.. Default: 1000
       --psize                        Set the packet size (payload size).
                                      Default: 52
+      --_positionalArg_nexttrace_31  IP Address or domain name
       --dot-server                   Use DoT Server for DNS Parse [dnssb,
                                      aliyun, dnspod, google, cloudflare]
   -g  --language                     Choose the language for displaying [en,

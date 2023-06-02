@@ -57,9 +57,9 @@ func Excute() {
 	srcAddr := parser.String("s", "source", &argparse.Options{Help: "Use source src_addr for outgoing packets"})
 	srcDev := parser.String("D", "dev", &argparse.Options{Help: "Use the following Network Devices as the source address in outgoing packets"})
 	router := parser.Flag("R", "route", &argparse.Options{Help: "Show Routing Table [Provided By BGP.Tools]"})
-	packetInterval := parser.Int("", "send-time", &argparse.Options{Default: 100, Help: "Set how many [milliseconds] between sending each packet.. Useful when some routers use rate-limit for ICMP messages"})
+	packetInterval := parser.Int("z", "send-time", &argparse.Options{Default: 100, Help: "Set how many [milliseconds] between sending each packet.. Useful when some routers use rate-limit for ICMP messages"})
 	ttlInterval := parser.Int("i", "ttl-time", &argparse.Options{Default: 500, Help: "Set how many [milliseconds] between sending packets groups by TTL. Useful when some routers use rate-limit for ICMP messages"})
-	timeout := parser.Int("z", "timeout", &argparse.Options{Default: 1, Help: "The number of [seconds] to keep probe sockets open before giving up on the connection."})
+	timeout := parser.Int("", "timeout", &argparse.Options{Default: 1000, Help: "The number of [milliseconds] to keep probe sockets open before giving up on the connection."})
 	packetSize := parser.Int("", "psize", &argparse.Options{Default: 52, Help: "Set the packet size (payload size)"})
 	str := parser.StringPositional(&argparse.Options{Help: "IP Address or domain name"})
 	dot := parser.Selector("", "dot-server", []string{"dnssb", "aliyun", "dnspod", "google", "cloudflare"}, &argparse.Options{
@@ -219,7 +219,7 @@ func Excute() {
 		RDns:             !*noRdns,
 		AlwaysWaitRDNS:   *alwaysRdns,
 		IPGeoSource:      ipgeo.GetSource(*dataOrigin),
-		Timeout:          time.Duration(*timeout) * time.Second,
+		Timeout:          time.Duration(*timeout) * time.Millisecond,
 		PktSize:          *packetSize,
 	}
 
