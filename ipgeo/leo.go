@@ -28,7 +28,6 @@ type IPPool struct {
 var IPPools = IPPool{
 	pool: make(map[string]chan IPGeoData),
 }
-var queryCache = sync.Map{}
 
 func sendIPRequest(ip string) {
 	wsConn := wshandle.GetWsConn()
@@ -90,11 +89,6 @@ func LeoIP(ip string, timeout time.Duration, lang string, maptrace bool) (*IPGeo
 	if timeout < 5*time.Second {
 		timeout = 5 * time.Second
 	}
-	if value, ok := queryCache.Load(ip); ok {
-		// 从缓存中成功获取到IP信息
-		//fmt.Println("Get IP Data From Cache", ip)
-		return value.(*IPGeoData), nil
-	}
 
 	// 缓存中没有找到IP信息，需要请求API获取
 	IPPools.poolMux.Lock()
@@ -111,8 +105,6 @@ func LeoIP(ip string, timeout time.Duration, lang string, maptrace bool) (*IPGeo
 	// 拥塞，等待数据返回
 	select {
 	case res := <-IPPools.pool[ip]:
-		// 将API请求到的IP信息存入缓存
-		queryCache.Store(ip, &res)
 		return &res, nil
 	// 5秒后依旧没有接收到返回的IP数据，不再等待，超时异常处理
 	case <-time.After(timeout):

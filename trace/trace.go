@@ -14,6 +14,7 @@ var (
 	ErrInvalidMethod      = errors.New("invalid method")
 	ErrTracerouteExecuted = errors.New("traceroute already executed")
 	ErrHopLimitTimeout    = errors.New("hop timeout")
+	geoCache              = sync.Map{}
 )
 
 type Config struct {
@@ -173,7 +174,17 @@ func (h *Hop) fetchIPData(c Config) (err error) {
 				if c.Timeout < 2*time.Second {
 					timeout = 2 * time.Second
 				}
-				h.Geo, err = c.IPGeoSource(h.Address.String(), timeout, c.Lang, c.Maptrace)
+				//h.Geo, err = c.IPGeoSource(h.Address.String(), timeout, c.Lang, c.Maptrace)
+				if cacheVal, ok := geoCache.Load(h.Address.String()); ok {
+					// 如果缓存中已有结果，直接使用
+					h.Geo = cacheVal.(*ipgeo.IPGeoData)
+				} else {
+					// 如果缓存中无结果，进行查询并将结果存入缓存
+					h.Geo, err = c.IPGeoSource(h.Address.String(), timeout, c.Lang, c.Maptrace)
+					if err == nil {
+						geoCache.Store(h.Address.String(), h.Geo)
+					}
+				}
 			}
 		}
 		// Fetch Done
