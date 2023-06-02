@@ -105,7 +105,7 @@ func FastTest(tm bool, outEnable bool, paramsFastTrace ParamsFastTrace) {
 		dev, _ := net.InterfaceByName(pFastTrace.SrcDev)
 		if addrs, err := dev.Addrs(); err == nil {
 			for _, addr := range addrs {
-				if addr.(*net.IPNet).IP.To4() == nil {
+				if addr.(*net.IPNet).IP.To4() != nil {
 					pFastTrace.SrcAddr = addr.(*net.IPNet).IP.String()
 				}
 			}
