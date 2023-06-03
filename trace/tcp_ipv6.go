@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
+	"github.com/xgadget-lab/nexttrace/trace/internal"
 	"github.com/xgadget-lab/nexttrace/util"
 	"golang.org/x/net/context"
 	"golang.org/x/net/icmp"
@@ -47,7 +48,7 @@ func (t *TCPTracerv6) Execute() (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	t.icmp, err = icmp.ListenPacket("ip6:58", "::")
+	t.icmp, err = internal.ListenICMP("ip6:58", "::")
 	if err != nil {
 		return &t.res, err
 	}
