@@ -9,7 +9,6 @@ import (
 	"os/signal"
 	"runtime"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/akamensky/argparse"
@@ -99,6 +98,7 @@ func Excute() {
 			AlwaysWaitRDNS: *alwaysRdns,
 			Lang:           *lang,
 			PktSize:        *packetSize,
+			Timeout:        time.Duration(*timeout) * time.Millisecond,
 		}
 
 		fastTrace.FastTest(*tcp, *output, paramsFastTrace)
@@ -144,46 +144,50 @@ func Excute() {
 		*disableMaptrace = true
 	}
 
-	var wg sync.WaitGroup
-	wg.Add(2)
-
-	go func() {
-		defer wg.Done()
-		if strings.ToUpper(*dataOrigin) == "LEOMOEAPI" {
-			val, ok := os.LookupEnv("NEXTTRACE_DATAPROVIDER")
-			if ok {
-				*dataOrigin = val
-			} else {
-				w := wshandle.New()
-				w.Interrupt = make(chan os.Signal, 1)
-				signal.Notify(w.Interrupt, os.Interrupt)
-				defer func() {
-					w.Conn.Close()
-				}()
-			}
+	/**
+	 * 此处若使用goroutine同时运行ws的建立与nslookup，
+	 * 会导致第一跳的IP信息无法获取，原因不明。
+	 */
+	//var wg sync.WaitGroup
+	//wg.Add(2)
+	//
+	//go func() {
+	//	defer wg.Done()
+	if strings.ToUpper(*dataOrigin) == "LEOMOEAPI" {
+		val, ok := os.LookupEnv("NEXTTRACE_DATAPROVIDER")
+		if ok {
+			*dataOrigin = val
+		} else {
+			w := wshandle.New()
+			w.Interrupt = make(chan os.Signal, 1)
+			signal.Notify(w.Interrupt, os.Interrupt)
+			defer func() {
+				w.Conn.Close()
+			}()
 		}
-	}()
-
-	go func() {
-		defer wg.Done()
-		if *udp {
-			if *ipv6Only {
-				fmt.Println("[Info] IPv6 UDP Traceroute is not supported right now.")
-				os.Exit(0)
-			}
+	}
+	//}()
+	//
+	//go func() {
+	//	defer wg.Done()
+	if *udp {
+		if *ipv6Only {
+			fmt.Println("[Info] IPv6 UDP Traceroute is not supported right now.")
+			os.Exit(0)
+		}
+		ip = util.DomainLookUp(domain, "4", *dot, *jsonPrint)
+	} else {
+		if *ipv6Only {
+			ip = util.DomainLookUp(domain, "6", *dot, *jsonPrint)
+		} else if *ipv4Only {
 			ip = util.DomainLookUp(domain, "4", *dot, *jsonPrint)
 		} else {
-			if *ipv6Only {
-				ip = util.DomainLookUp(domain, "6", *dot, *jsonPrint)
-			} else if *ipv4Only {
-				ip = util.DomainLookUp(domain, "4", *dot, *jsonPrint)
-			} else {
-				ip = util.DomainLookUp(domain, "all", *dot, *jsonPrint)
-			}
+			ip = util.DomainLookUp(domain, "all", *dot, *jsonPrint)
 		}
-	}()
-
-	wg.Wait()
+	}
+	//}()
+	//
+	//wg.Wait()
 
 	if *srcDev != "" {
 		dev, _ := net.InterfaceByName(*srcDev)
@@ -198,7 +202,7 @@ func Excute() {
 	}
 
 	if !*jsonPrint {
-		printer.PrintTraceRouteNav(ip, domain, *dataOrigin, *maxHops)
+		printer.PrintTraceRouteNav(ip, domain, *dataOrigin, *maxHops, *packetSize)
 	}
 
 	var m trace.Method = ""

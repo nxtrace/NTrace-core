@@ -2,18 +2,17 @@ package fastTrace
 
 import (
 	"fmt"
+	"github.com/xgadget-lab/nexttrace/ipgeo"
+	"github.com/xgadget-lab/nexttrace/printer"
+	"github.com/xgadget-lab/nexttrace/trace"
+	"github.com/xgadget-lab/nexttrace/tracelog"
 	"github.com/xgadget-lab/nexttrace/util"
+	"github.com/xgadget-lab/nexttrace/wshandle"
 	"log"
 	"net"
 	"os"
 	"os/signal"
 	"time"
-
-	"github.com/xgadget-lab/nexttrace/ipgeo"
-	"github.com/xgadget-lab/nexttrace/printer"
-	"github.com/xgadget-lab/nexttrace/trace"
-	"github.com/xgadget-lab/nexttrace/tracelog"
-	"github.com/xgadget-lab/nexttrace/wshandle"
 )
 
 type FastTracer struct {
@@ -30,6 +29,7 @@ type ParamsFastTrace struct {
 	AlwaysWaitRDNS bool
 	Lang           string
 	PktSize        int
+	Timeout        time.Duration
 }
 
 var oe = false
@@ -50,8 +50,8 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 	log.SetFlags(0)
 	fmt.Printf("%s『%s %s 』%s\n", printer.YELLOW_PREFIX, location, ispCollection.ISPName, printer.RESET_PREFIX)
 	log.Printf("『%s %s 』\n", location, ispCollection.ISPName)
-	fmt.Printf("traceroute to %s, 30 hops max, 32 byte packets\n", ispCollection.IP)
-	log.Printf("traceroute to %s, 30 hops max, 32 byte packets\n", ispCollection.IP)
+	fmt.Printf("traceroute to %s, %d hops max, %d byte packets\n", ispCollection.IP, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize)
+	log.Printf("traceroute to %s, %d hops max, %d byte packets\n", ispCollection.IP, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize)
 	ip := util.DomainLookUp(ispCollection.IP, "4", "", true)
 	var conf = trace.Config{
 		BeginHop:         f.ParamsFastTrace.BeginHop,
@@ -65,7 +65,7 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 		PacketInterval:   100,
 		TTLInterval:      500,
 		IPGeoSource:      ipgeo.GetSource("LeoMoeAPI"),
-		Timeout:          1 * time.Second,
+		Timeout:          f.ParamsFastTrace.Timeout,
 		SrcAddr:          f.ParamsFastTrace.SrcAddr,
 		PktSize:          f.ParamsFastTrace.PktSize,
 		Lang:             f.ParamsFastTrace.Lang,

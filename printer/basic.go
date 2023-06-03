@@ -63,13 +63,13 @@ func PluginCopyRight() {
 	)
 }
 
-func PrintTraceRouteNav(ip net.IP, domain string, dataOrigin string, maxHops int) {
+func PrintTraceRouteNav(ip net.IP, domain string, dataOrigin string, maxHops int, packetSize int) {
 	fmt.Println("IP Geo Data Provider: " + dataOrigin)
 
 	if ip.String() == domain {
-		fmt.Printf("traceroute to %s, %d hops max, 32 byte packets\n", ip.String(), maxHops)
+		fmt.Printf("traceroute to %s, %d hops max, %d bytes packets\n", ip.String(), maxHops, packetSize)
 	} else {
-		fmt.Printf("traceroute to %s (%s), %d hops max, 32 byte packets\n", ip.String(), domain, maxHops)
+		fmt.Printf("traceroute to %s (%s), %d hops max, %d bytes packets\n", ip.String(), domain, maxHops, packetSize)
 	}
 }
 

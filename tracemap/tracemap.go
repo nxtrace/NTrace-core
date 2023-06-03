@@ -26,7 +26,6 @@ func GetMapUrl(r string) (string, error) {
 	}
 	u := url.URL{Scheme: "https", Host: fastIp + ":" + port, Path: "/tracemap/api"}
 	tracemapUrl := u.String()
-	tracemapUrl = "https://api.leo.moe/tracemap/api"
 
 	client := &http.Client{
 		Timeout: 5 * time.Second,

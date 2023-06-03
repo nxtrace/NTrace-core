@@ -2,17 +2,15 @@ package fastTrace
 
 import (
 	"fmt"
-	"github.com/xgadget-lab/nexttrace/util"
-	"log"
-	"os"
-	"os/signal"
-	"time"
-
 	"github.com/xgadget-lab/nexttrace/ipgeo"
 	"github.com/xgadget-lab/nexttrace/printer"
 	"github.com/xgadget-lab/nexttrace/trace"
 	"github.com/xgadget-lab/nexttrace/tracelog"
+	"github.com/xgadget-lab/nexttrace/util"
 	"github.com/xgadget-lab/nexttrace/wshandle"
+	"log"
+	"os"
+	"os/signal"
 )
 
 func (f *FastTracer) tracert_v6(location string, ispCollection ISPCollection) {
@@ -31,19 +29,25 @@ func (f *FastTracer) tracert_v6(location string, ispCollection ISPCollection) {
 	log.SetFlags(0)
 	fmt.Printf("%s『%s %s 』%s\n", printer.YELLOW_PREFIX, location, ispCollection.ISPName, printer.RESET_PREFIX)
 	log.Printf("『%s %s 』\n", location, ispCollection.ISPName)
-	fmt.Printf("traceroute to %s, 30 hops max, 32 byte packets\n", ispCollection.IPv6)
-	log.Printf("traceroute to %s, 30 hops max, 32 byte packets\n", ispCollection.IPv6)
+	fmt.Printf("traceroute to %s, %d hops max, %d byte packets\n", ispCollection.IPv6, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize)
+	log.Printf("traceroute to %s, %d hops max, %d byte packets\n", ispCollection.IPv6, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize)
 	ip := util.DomainLookUp(ispCollection.IP, "6", "", true)
 	var conf = trace.Config{
-		BeginHop:         1,
+		BeginHop:         f.ParamsFastTrace.BeginHop,
 		DestIP:           ip,
 		DestPort:         80,
-		MaxHops:          30,
+		MaxHops:          f.ParamsFastTrace.MaxHops,
 		NumMeasurements:  3,
 		ParallelRequests: 18,
-		RDns:             true,
+		RDns:             f.ParamsFastTrace.RDns,
+		AlwaysWaitRDNS:   f.ParamsFastTrace.AlwaysWaitRDNS,
+		PacketInterval:   100,
+		TTLInterval:      500,
 		IPGeoSource:      ipgeo.GetSource("LeoMoeAPI"),
-		Timeout:          1 * time.Second,
+		Timeout:          f.ParamsFastTrace.Timeout,
+		SrcAddr:          f.ParamsFastTrace.SrcAddr,
+		PktSize:          f.ParamsFastTrace.PktSize,
+		Lang:             f.ParamsFastTrace.Lang,
 	}
 
 	if oe {
