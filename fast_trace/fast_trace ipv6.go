@@ -13,6 +13,8 @@ import (
 	"os/signal"
 )
 
+var pFastTracer ParamsFastTrace
+
 func (f *FastTracer) tracert_v6(location string, ispCollection ISPCollection) {
 	fp, err := os.OpenFile("/tmp/trace.log", os.O_CREATE|os.O_APPEND|os.O_RDWR, os.ModePerm)
 	if err != nil {
@@ -29,25 +31,24 @@ func (f *FastTracer) tracert_v6(location string, ispCollection ISPCollection) {
 	log.SetFlags(0)
 	fmt.Printf("%s『%s %s 』%s\n", printer.YELLOW_PREFIX, location, ispCollection.ISPName, printer.RESET_PREFIX)
 	log.Printf("『%s %s 』\n", location, ispCollection.ISPName)
-	fmt.Printf("traceroute to %s, %d hops max, %d byte packets\n", ispCollection.IPv6, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize)
-	log.Printf("traceroute to %s, %d hops max, %d byte packets\n", ispCollection.IPv6, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize)
-	ip := util.DomainLookUp(ispCollection.IP, "6", "", true)
+	fmt.Printf("traceroute to %s, %d hops max, %d byte packets\n", ispCollection.IPv6, pFastTracer.MaxHops, pFastTracer.PktSize)
+	log.Printf("traceroute to %s, %d hops max, %d byte packets\n", ispCollection.IPv6, pFastTracer.MaxHops, pFastTracer.PktSize)
+	ip := util.DomainLookUp(ispCollection.IPv6, "6", "", true)
 	var conf = trace.Config{
-		BeginHop:         f.ParamsFastTrace.BeginHop,
+		BeginHop:         pFastTracer.BeginHop,
 		DestIP:           ip,
 		DestPort:         80,
-		MaxHops:          f.ParamsFastTrace.MaxHops,
+		MaxHops:          pFastTracer.MaxHops,
 		NumMeasurements:  3,
 		ParallelRequests: 18,
-		RDns:             f.ParamsFastTrace.RDns,
-		AlwaysWaitRDNS:   f.ParamsFastTrace.AlwaysWaitRDNS,
+		RDns:             pFastTracer.RDns,
+		AlwaysWaitRDNS:   pFastTracer.AlwaysWaitRDNS,
 		PacketInterval:   100,
 		TTLInterval:      500,
 		IPGeoSource:      ipgeo.GetSource("LeoMoeAPI"),
-		Timeout:          f.ParamsFastTrace.Timeout,
-		SrcAddr:          f.ParamsFastTrace.SrcAddr,
-		PktSize:          f.ParamsFastTrace.PktSize,
-		Lang:             f.ParamsFastTrace.Lang,
+		Timeout:          pFastTracer.Timeout,
+		PktSize:          pFastTracer.PktSize,
+		Lang:             pFastTracer.Lang,
 	}
 
 	if oe {
@@ -102,10 +103,11 @@ func (f *FastTracer) testEDU_v6() {
 	f.tracert_v6(TestIPsCollection.Hangzhou.Location, TestIPsCollection.Hangzhou.EDU)
 }
 
-func FastTestv6(tm bool, outEnable bool) {
+func FastTestv6(tm bool, outEnable bool, paramsFastTrace ParamsFastTrace) {
 	var c string
 
 	oe = outEnable
+	pFastTracer = paramsFastTrace
 
 	fmt.Println("您想测试哪些ISP的路由？\n1. 国内四网\n2. 电信\n3. 联通\n4. 移动\n5. 教育网")
 	fmt.Print("请选择选项：")

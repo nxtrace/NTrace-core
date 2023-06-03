@@ -97,7 +97,7 @@ func FastTest(tm bool, outEnable bool, paramsFastTrace ParamsFastTrace) {
 		c = "1"
 	}
 	if c == "2" {
-		FastTestv6(tm, outEnable)
+		FastTestv6(tm, outEnable, paramsFastTrace)
 		return
 	}
 

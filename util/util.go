@@ -93,8 +93,8 @@ func DomainLookUp(host string, ipVersion string, dotServer string, disableOutput
 	default:
 		r = newUDPResolver()
 	}
-	ips_str, err := r.LookupHost(context.Background(), host)
-	for _, v := range ips_str {
+	ipsStr, err := r.LookupHost(context.Background(), host)
+	for _, v := range ipsStr {
 		ips = append(ips, net.ParseIP(v))
 	}
 	if err != nil {

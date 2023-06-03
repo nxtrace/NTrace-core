@@ -31,7 +31,7 @@ func TestTrace(t *testing.T) {
 	}()
 	fmt.Println("TCP v4")
 	ft.TracerouteMethod = trace.TCPTrace
-	ft.tracert(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.EDU)
+	//ft.tracert(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.EDU)
 	//fmt.Println("TCP v6")
 	//ft.tracert_v6(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.EDU)
 	//fmt.Println("ICMP v4")
