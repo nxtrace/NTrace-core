@@ -347,6 +347,12 @@ NextTrace 所有的的 IP 地理位置 `API DEMO` 可以参考[这里](https://g
 
 [GitHub - sjlleo/nexttrace-backend: NextTrace BackEnd](https://github.com/sjlleo/nexttrace-backend)
 
+NextTrace `LeoMoeAPI`现已使用Proof of Work(POW)机制来防止滥用，其中NextTrace作为客户端引入了powclient库，POW CLIENT/SERVER均已开源，欢迎大家使用。(POW模块相关问题请发到对应的仓库)
+- [GitHub - tsosunchia/powclient: Proof of Work CLIENT for NextTrace](https://github.com/tsosunchia/powclient)
+- [GitHub - tsosunchia/powserver: Proof of Work SERVER for NextTrace](https://github.com/tsosunchia/powserver)
+
+```go
+
 ## NextTrace Enhanced
 
 [https://github.com/OwO-Network/nexttrace-enhanced](https://github.com/OwO-Network/nexttrace-enhanced)
