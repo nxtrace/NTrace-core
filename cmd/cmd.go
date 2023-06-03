@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/akamensky/argparse"
@@ -136,21 +137,53 @@ func Excute() {
 		fmt.Println("NextTrace 基于 Windows 的路由跟踪还在早期开发阶段，目前还存在诸多问题，TCP/UDP SYN 包请求可能不能正常运行")
 	}
 
-	if *udp {
-		if *ipv6Only {
-			fmt.Println("[Info] IPv6 UDP Traceroute is not supported right now.")
-			os.Exit(0)
+	if *dn42 {
+		// 初始化配置
+		config.InitConfig()
+		*dataOrigin = "DN42"
+		*disableMaptrace = true
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		if strings.ToUpper(*dataOrigin) == "LEOMOEAPI" {
+			val, ok := os.LookupEnv("NEXTTRACE_DATAPROVIDER")
+			if ok {
+				*dataOrigin = val
+			} else {
+				w := wshandle.New()
+				w.Interrupt = make(chan os.Signal, 1)
+				signal.Notify(w.Interrupt, os.Interrupt)
+				defer func() {
+					w.Conn.Close()
+				}()
+			}
 		}
-		ip = util.DomainLookUp(domain, "4", *dot, *jsonPrint)
-	} else {
-		if *ipv6Only {
-			ip = util.DomainLookUp(domain, "6", *dot, *jsonPrint)
-		} else if *ipv4Only {
+	}()
+
+	go func() {
+		defer wg.Done()
+		if *udp {
+			if *ipv6Only {
+				fmt.Println("[Info] IPv6 UDP Traceroute is not supported right now.")
+				os.Exit(0)
+			}
 			ip = util.DomainLookUp(domain, "4", *dot, *jsonPrint)
 		} else {
-			ip = util.DomainLookUp(domain, "all", *dot, *jsonPrint)
+			if *ipv6Only {
+				ip = util.DomainLookUp(domain, "6", *dot, *jsonPrint)
+			} else if *ipv4Only {
+				ip = util.DomainLookUp(domain, "4", *dot, *jsonPrint)
+			} else {
+				ip = util.DomainLookUp(domain, "all", *dot, *jsonPrint)
+			}
 		}
-	}
+	}()
+
+	wg.Wait()
 
 	if *srcDev != "" {
 		dev, _ := net.InterfaceByName(*srcDev)
@@ -161,27 +194,6 @@ func Excute() {
 					*srcAddr = addr.(*net.IPNet).IP.String()
 				}
 			}
-		}
-	}
-
-	if *dn42 {
-		// 初始化配置
-		config.InitConfig()
-		*dataOrigin = "DN42"
-		*disableMaptrace = true
-	}
-
-	if strings.ToUpper(*dataOrigin) == "LEOMOEAPI" {
-		val, ok := os.LookupEnv("NEXTTRACE_DATAPROVIDER")
-		if ok {
-			*dataOrigin = val
-		} else {
-			w := wshandle.New()
-			w.Interrupt = make(chan os.Signal, 1)
-			signal.Notify(w.Interrupt, os.Interrupt)
-			defer func() {
-				w.Conn.Close()
-			}()
 		}
 	}
 
