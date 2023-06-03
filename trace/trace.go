@@ -2,12 +2,12 @@ package trace
 
 import (
 	"errors"
-	"github.com/xgadget-lab/nexttrace/util"
 	"net"
 	"sync"
 	"time"
 
 	"github.com/xgadget-lab/nexttrace/ipgeo"
+	"github.com/xgadget-lab/nexttrace/util"
 )
 
 var (
