@@ -12,6 +12,8 @@ NextTrace is part of the [OwO Network](https://github.com/OwO-Network) project. 
 
 If you like this project, [Donate us](https://afdian.net/a/sjlleo/plan) to help us to provide long-lasting API cost expenses.
 
+The project is currently undergoing a major refactoring. During this period, this repository will no longer accept new feature requests or bug reports. If you have any issues, please go to the ISSUE section of [tsosunchia/nexttrace-core](https://github.com/tsosunchia/nexttrace-core) to provide feedback. Thank you for your support!
+
 ## How To Use
 
 Document Language: English | [简体中文](README_zh_CN.md)
@@ -56,7 +58,7 @@ Document Language: English | [简体中文](README_zh_CN.md)
         * This repository's ACTIONS automatically built version (updates faster)
 
              ```shell
-             brew tap xgadget-lab/nexttrace && brew install nexttrace
+             brew tap xgadget-lab/nexttrace && brew install xgadget-lab/nexttrace/nexttrace
              ```
         * The homebrew-core build is maintained by chenrui333, please note that this version's updates may lag behind the repository Action automatically version
 

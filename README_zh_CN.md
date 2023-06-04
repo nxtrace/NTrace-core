@@ -25,6 +25,8 @@
 
 如果您喜欢这个项目，可以通过[爱发电支持](https://afdian.net/a/sjlleo/plan)我们项目的持续发展，您的捐助将用于服务器和 API 开支，非常感谢！
 
+本项目近期在进行整体重构，期间此仓库不再接受新功能需求、问题BUG反馈，如有问题请前往 [tsosunchia/nexttrace-core](https://github.com/tsosunchia/nexttrace-core) 的ISSUE区反馈，感谢您的支持！
+
 ## How To Use
 
 ### Before Using
@@ -71,7 +73,7 @@
      * 本仓库ACTIONS自动构建版(更新更快)
 
           ```shell
-          brew tap xgadget-lab/nexttrace && brew install nexttrace
+          brew tap xgadget-lab/nexttrace && brew install xgadget-lab/nexttrace/nexttrace
           ```
      * homebrew-core 构建由 chenrui333 维护，请注意该版本更新可能会落后仓库Action自动构建版本
 
@@ -350,8 +352,6 @@ NextTrace 所有的的 IP 地理位置 `API DEMO` 可以参考[这里](https://g
 NextTrace `LeoMoeAPI`现已使用Proof of Work(POW)机制来防止滥用，其中NextTrace作为客户端引入了powclient库，POW CLIENT/SERVER均已开源，欢迎大家使用。(POW模块相关问题请发到对应的仓库)
 - [GitHub - tsosunchia/powclient: Proof of Work CLIENT for NextTrace](https://github.com/tsosunchia/powclient)
 - [GitHub - tsosunchia/powserver: Proof of Work SERVER for NextTrace](https://github.com/tsosunchia/powserver)
-
-```go
 
 ## NextTrace Enhanced
 
