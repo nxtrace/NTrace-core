@@ -9,7 +9,7 @@ require (
 	github.com/spf13/viper v1.16.0
 	github.com/stretchr/testify v1.8.4
 	github.com/syndtr/gocapability v0.0.0-20200815063812-42c35b437635
-	github.com/tsosunchia/powclient v0.1.1
+	github.com/tsosunchia/powclient v0.1.3
 	golang.org/x/net v0.10.0
 	golang.org/x/sync v0.2.0
 )
