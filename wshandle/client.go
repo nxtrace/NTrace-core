@@ -148,6 +148,10 @@ func (c *WsConn) recreateWsConn() {
 	dialer.TLSClientConfig = &tls.Config{
 		ServerName: host,
 	}
+	proxyUrl := util.GetProxy()
+	if proxyUrl != nil {
+		dialer.Proxy = http.ProxyURL(proxyUrl)
+	}
 	ws, _, err := websocket.DefaultDialer.Dial(u.String(), requestHeader)
 	c.Conn = ws
 	if err != nil {

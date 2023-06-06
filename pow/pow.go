@@ -19,6 +19,10 @@ func GetToken(fastIp string, host string, port string) (string, error) {
 	getTokenParams.SNI = host
 	getTokenParams.Host = host
 	getTokenParams.UserAgent = util.UserAgent
+	proxyUrl := util.GetProxy()
+	if proxyUrl != nil {
+		getTokenParams.Proxy = proxyUrl
+	}
 	var err error
 	// 尝试三次RetToken，如果都失败了，异常退出
 	for i := 0; i < 3; i++ {
