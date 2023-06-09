@@ -5,8 +5,6 @@ import (
 	"net"
 	"sync"
 	"time"
-
-	"github.com/xgadget-lab/nexttrace/ipgeo"
 )
 
 var (
@@ -25,15 +23,8 @@ type Config struct {
 	DestIP           net.IP
 	DestPort         int
 	Quic             bool
-	IPGeoSource      ipgeo.Source
-	RDns             bool
-	AlwaysWaitRDNS   bool
 	PacketInterval   int
 	TTLInterval      int
-	Lang             string
-	DN42             bool
-	RealtimePrinter  func(res *Result, ttl int)
-	AsyncPrinter     func(res *Result)
 }
 
 type Method string
@@ -111,97 +102,9 @@ func (s *Result) reduce(final int) {
 }
 
 type Hop struct {
-	Success  bool
 	Address  net.Addr
 	Hostname string
 	TTL      int
 	RTT      time.Duration
 	Error    error
-	Geo      *ipgeo.IPGeoData
-	Lang     string
-}
-
-func (h *Hop) fetchIPData(c Config) (err error) {
-	// DN42
-	if c.DN42 {
-		var ip string
-		// 首先查找 PTR 记录
-		r, err := net.LookupAddr(h.Address.String())
-		if err == nil && len(r) > 0 {
-			h.Hostname = r[0][:len(r[0])-1]
-			ip = h.Address.String() + "," + h.Hostname
-		}
-		h.Geo, err = c.IPGeoSource(ip)
-		return nil
-	}
-
-	// Debug Area
-	// c.AlwaysWaitRDNS = true
-
-	// Initialize a rDNS Channel
-	rDNSChan := make(chan []string)
-	fetchDoneChan := make(chan bool)
-
-	if c.RDns && h.Hostname == "" {
-		// Create a rDNS Query go-routine
-		go func() {
-			r, err := net.LookupAddr(h.Address.String())
-			if err != nil {
-				// No PTR Record
-				rDNSChan <- nil
-			} else {
-				// One PTR Record is found
-				rDNSChan <- r
-			}
-		}()
-	}
-
-	// Create Data Fetcher go-routine
-	go func() {
-		// Start to fetch IP Geolocation data
-		if c.IPGeoSource != nil && h.Geo == nil {
-			res := false
-			h.Lang = c.Lang
-			h.Geo, res = ipgeo.Filter(h.Address.String())
-			if !res {
-				h.Geo, err = c.IPGeoSource(h.Address.String())
-			}
-		}
-		// Fetch Done
-		fetchDoneChan <- true
-	}()
-
-	// Select Close Flag
-	var selectClose bool
-	if !c.AlwaysWaitRDNS {
-		select {
-		case <-fetchDoneChan:
-			// When fetch done signal recieved, stop waiting PTR record
-		case ptr := <-rDNSChan:
-			// process result
-			if err == nil && len(ptr) > 0 {
-				h.Hostname = ptr[0][:len(ptr[0])-1]
-			}
-			selectClose = true
-		}
-	} else {
-		select {
-		case ptr := <-rDNSChan:
-			// process result
-			if err == nil && len(ptr) > 0 {
-				h.Hostname = ptr[0]
-			}
-		// 1 second timeout
-		case <-time.After(time.Second * 1):
-		}
-		selectClose = true
-	}
-
-	// When Select Close, fetchDoneChan Reciever will also be closed
-	if selectClose {
-		// New a reciever to prevent channel congestion
-		<-fetchDoneChan
-	}
-
-	return
 }

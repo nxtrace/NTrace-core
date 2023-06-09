@@ -81,28 +81,9 @@ func (t *TCPTracer) Execute() (*Result, error) {
 			go t.send(ttl)
 
 		}
-		if t.RealtimePrinter != nil {
-			// 对于实时模式，应该按照TTL进行并发请求
-			t.wg.Wait()
-			t.RealtimePrinter(&t.res, ttl-1)
-		}
-
 		time.Sleep(1 * time.Millisecond)
 	}
-	go func() {
-		if t.AsyncPrinter != nil {
-			for {
-				t.AsyncPrinter(&t.res)
-				time.Sleep(200 * time.Millisecond)
-			}
-		}
 
-	}()
-
-	// 如果是表格模式，则一次性并发请求
-	if t.RealtimePrinter == nil {
-		t.wg.Wait()
-	}
 	t.res.reduce(t.final)
 
 	return &t.res, nil
@@ -168,7 +149,6 @@ func (t *TCPTracer) listenTCP() {
 				if ch, ok := t.inflightRequest[int(tcp.Ack-1)]; ok {
 					// 最后一跳
 					ch <- Hop{
-						Success: true,
 						Address: msg.Peer,
 					}
 				}
@@ -191,7 +171,6 @@ func (t *TCPTracer) handleICMPMessage(msg ReceivedMessage, data []byte) {
 		return
 	}
 	ch <- Hop{
-		Success: true,
 		Address: msg.Peer,
 	}
 
@@ -285,8 +264,6 @@ func (t *TCPTracer) send(ttl int) error {
 		h.TTL = ttl
 		h.RTT = rtt
 
-		h.fetchIPData(t.Config)
-
 		t.res.add(h)
 
 	case <-time.After(t.Timeout):
@@ -295,7 +272,6 @@ func (t *TCPTracer) send(ttl int) error {
 		}
 
 		t.res.add(Hop{
-			Success: false,
 			Address: nil,
 			TTL:     ttl,
 			RTT:     0,

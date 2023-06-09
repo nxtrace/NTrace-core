@@ -28,29 +28,6 @@ type ICMPTracer struct {
 	finalLock             sync.Mutex
 }
 
-func (t *ICMPTracer) PrintFunc() {
-	defer t.wg.Done()
-	var ttl = t.Config.BeginHop - 1
-	for {
-		if t.AsyncPrinter != nil {
-			t.AsyncPrinter(&t.res)
-		}
-		if len(t.res.Hops)-1 > ttl {
-			if len(t.res.Hops[ttl]) == t.NumMeasurements {
-				if t.RealtimePrinter != nil {
-					t.RealtimePrinter(&t.res, ttl)
-				}
-				ttl++
-
-				if ttl == t.final-1 || ttl >= t.MaxHops-1 {
-					return
-				}
-			}
-		}
-		<-time.After(200 * time.Millisecond)
-	}
-}
-
 func (t *ICMPTracer) Execute() (*Result, error) {
 	t.inflightRequestRWLock.Lock()
 	t.inflightRequest = make(map[int]chan Hop)
@@ -75,7 +52,6 @@ func (t *ICMPTracer) Execute() (*Result, error) {
 
 	go t.listenICMP()
 	t.wg.Add(1)
-	go t.PrintFunc()
 	for ttl := t.BeginHop; ttl <= t.MaxHops; ttl++ {
 		t.inflightRequestRWLock.Lock()
 		t.inflightRequest[ttl] = make(chan Hop, t.NumMeasurements)
@@ -94,21 +70,14 @@ func (t *ICMPTracer) Execute() (*Result, error) {
 	t.wg.Wait()
 	t.res.reduce(t.final)
 	if t.final != -1 {
-		if t.RealtimePrinter != nil {
-			t.RealtimePrinter(&t.res, t.final-1)
-		}
 	} else {
 		for i := 0; i < t.NumMeasurements; i++ {
 			t.res.add(Hop{
-				Success: false,
 				Address: nil,
 				TTL:     30,
 				RTT:     0,
 				Error:   ErrHopLimitTimeout,
 			})
-		}
-		if t.RealtimePrinter != nil {
-			t.RealtimePrinter(&t.res, t.MaxHops-1)
 		}
 	}
 	return &t.res, nil
@@ -175,7 +144,6 @@ func (t *ICMPTracer) handleICMPMessage(msg ReceivedMessage, icmpType int8, data 
 	defer t.inflightRequestRWLock.RUnlock()
 	if _, ok := t.inflightRequest[ttl]; ok {
 		t.inflightRequest[ttl] <- Hop{
-			Success: true,
 			Address: msg.Peer,
 		}
 	}
@@ -298,8 +266,6 @@ func (t *ICMPTracer) send(ttl int) error {
 		h.TTL = ttl
 		h.RTT = rtt
 
-		h.fetchIPData(t.Config)
-
 		t.res.add(h)
 	case <-time.After(t.Timeout):
 		if t.final != -1 && ttl > t.final {
@@ -307,7 +273,6 @@ func (t *ICMPTracer) send(ttl int) error {
 		}
 
 		t.res.add(Hop{
-			Success: false,
 			Address: nil,
 			TTL:     ttl,
 			RTT:     0,

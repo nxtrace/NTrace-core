@@ -27,31 +27,6 @@ type ICMPTracerv6 struct {
 	finalLock             sync.Mutex
 }
 
-func (t *ICMPTracerv6) PrintFunc() {
-	// defer t.wg.Done()
-	var ttl = t.Config.BeginHop - 1
-	for {
-		if t.AsyncPrinter != nil {
-			t.AsyncPrinter(&t.res)
-		}
-
-		// 接收的时候检查一下是不是 3 跳都齐了
-		if len(t.res.Hops)-1 > ttl {
-			if len(t.res.Hops[ttl]) == t.NumMeasurements {
-				if t.RealtimePrinter != nil {
-					t.RealtimePrinter(&t.res, ttl)
-				}
-				ttl++
-				if ttl == t.final {
-					return
-				}
-			}
-		}
-
-		<-time.After(200 * time.Millisecond)
-	}
-}
-
 func (t *ICMPTracerv6) Execute() (*Result, error) {
 	t.inflightRequestRWLock.Lock()
 	t.inflightRequest = make(map[int]chan Hop)
@@ -76,7 +51,6 @@ func (t *ICMPTracerv6) Execute() (*Result, error) {
 	t.final = -1
 
 	go t.listenICMP()
-	go t.PrintFunc()
 	for ttl := t.BeginHop; ttl <= t.MaxHops; ttl++ {
 		t.inflightRequestRWLock.Lock()
 		t.inflightRequest[ttl] = make(chan Hop, t.NumMeasurements)
@@ -111,22 +85,15 @@ func (t *ICMPTracerv6) Execute() (*Result, error) {
 	// }
 	t.wg.Wait()
 	t.res.reduce(t.final)
-	if t.final != -1 {
-		if t.RealtimePrinter != nil {
-			t.RealtimePrinter(&t.res, t.final-1)
-		}
-	} else {
+	if t.final == -1 {
+
 		for i := 0; i < t.NumMeasurements; i++ {
 			t.res.add(Hop{
-				Success: false,
 				Address: nil,
 				TTL:     30,
 				RTT:     0,
 				Error:   ErrHopLimitTimeout,
 			})
-		}
-		if t.RealtimePrinter != nil {
-			t.RealtimePrinter(&t.res, t.MaxHops-1)
 		}
 	}
 
@@ -233,7 +200,6 @@ func (t *ICMPTracerv6) handleICMPMessage(msg ReceivedMessage, icmpType int8, dat
 	defer t.inflightRequestRWLock.RUnlock()
 	if _, ok := t.inflightRequest[ttl]; ok {
 		t.inflightRequest[ttl] <- Hop{
-			Success: true,
 			Address: msg.Peer,
 		}
 	}
@@ -298,8 +264,6 @@ func (t *ICMPTracerv6) send(ttl int) error {
 		h.TTL = ttl
 		h.RTT = rtt
 
-		h.fetchIPData(t.Config)
-
 		t.res.add(h)
 
 	case <-time.After(t.Timeout):
@@ -308,7 +272,6 @@ func (t *ICMPTracerv6) send(ttl int) error {
 		}
 
 		t.res.add(Hop{
-			Success: false,
 			Address: nil,
 			TTL:     ttl,
 			RTT:     0,

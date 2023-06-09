@@ -62,24 +62,7 @@ func (t *UDPTracer) Execute() (*Result, error) {
 			go t.send(ttl)
 
 		}
-		if t.RealtimePrinter != nil {
-			// 对于实时模式，应该按照TTL进行并发请求
-			t.wg.Wait()
-			t.RealtimePrinter(&t.res, ttl-1)
-		}
 		time.Sleep(1 * time.Millisecond)
-	}
-	go func() {
-		if t.AsyncPrinter != nil {
-			for {
-				t.AsyncPrinter(&t.res)
-				time.Sleep(200 * time.Millisecond)
-			}
-		}
-	}()
-	// 如果是表格模式，则一次性并发请求
-	if t.AsyncPrinter != nil {
-		t.wg.Wait()
 	}
 	t.res.reduce(t.final)
 
@@ -128,7 +111,6 @@ func (t *UDPTracer) handleICMPMessage(msg ReceivedMessage, data []byte) {
 		return
 	}
 	ch <- Hop{
-		Success: true,
 		Address: msg.Peer,
 	}
 }
@@ -225,7 +207,6 @@ func (t *UDPTracer) send(ttl int) error {
 			return
 		}
 		hopCh <- Hop{
-			Success: true,
 			Address: peer,
 		}
 	}()
@@ -256,8 +237,6 @@ func (t *UDPTracer) send(ttl int) error {
 		h.TTL = ttl
 		h.RTT = rtt
 
-		h.fetchIPData(t.Config)
-
 		t.res.add(h)
 
 	case <-time.After(t.Timeout):
@@ -266,7 +245,6 @@ func (t *UDPTracer) send(ttl int) error {
 		}
 
 		t.res.add(Hop{
-			Success: false,
 			Address: nil,
 			TTL:     ttl,
 			RTT:     0,
