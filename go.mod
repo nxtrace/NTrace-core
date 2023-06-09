@@ -1,4 +1,4 @@
-module github.com/xgadget-lab/nexttrace
+module github.com/sjlleo/nexttrace-core
 
 go 1.20
 
