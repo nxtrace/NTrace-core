@@ -42,16 +42,6 @@ type Tracer interface {
 func Traceroute(method Method, config Config) (*Result, error) {
 	var tracer Tracer
 
-	if config.MaxHops == 0 {
-		config.MaxHops = 30
-	}
-	if config.NumMeasurements == 0 {
-		config.NumMeasurements = 3
-	}
-	if config.ParallelRequests == 0 {
-		config.ParallelRequests = config.NumMeasurements * 5
-	}
-
 	switch method {
 	case ICMPTrace:
 		if config.DestIP.To4() != nil {
