@@ -46,7 +46,7 @@ func (t *TCPTracerv6) Execute() (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	t.icmp, err = icmp.ListenPacket("ip6:58", "::")
+	t.icmp, err = icmp.ListenPacket("ip6:58", t.SrcAddr)
 	if err != nil {
 		return &t.res, err
 	}
@@ -63,7 +63,7 @@ func (t *TCPTracerv6) Execute() (*Result, error) {
 
 	t.sem = semaphore.NewWeighted(int64(t.ParallelRequests))
 
-	for ttl := 1; ttl <= t.MaxHops; ttl++ {
+	for ttl := t.BeginHop; ttl <= t.MaxHops; ttl++ {
 		// 如果到达最终跳，则退出
 		if t.final != -1 && ttl > t.final {
 			break
