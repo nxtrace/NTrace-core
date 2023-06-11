@@ -2,6 +2,8 @@ package trace
 
 import (
 	"errors"
+	"fmt"
+	"log"
 	"net"
 	"sync"
 	"time"
@@ -13,7 +15,15 @@ var (
 	ErrHopLimitTimeout    = errors.New("hop timeout")
 )
 
+type Method string
+
+type TraceInstance struct {
+	Tracer
+	ErrorStr string
+}
+
 type Config struct {
+	TraceMethod      Method
 	SrcAddr          string
 	BeginHop         int
 	MaxHops          int
@@ -23,11 +33,9 @@ type Config struct {
 	DestIP           net.IP
 	DestPort         int
 	Quic             bool
-	PacketInterval   int
-	TTLInterval      int
+	PacketInterval   time.Duration
+	TTLInterval      time.Duration
 }
-
-type Method string
 
 const (
 	ICMPTrace Method = "icmp"
@@ -37,41 +45,89 @@ const (
 
 type Tracer interface {
 	Execute() (*Result, error)
-}
-
-func Traceroute(method Method, config Config) (*Result, error) {
-	var tracer Tracer
-
-	switch method {
-	case ICMPTrace:
-		if config.DestIP.To4() != nil {
-			tracer = &ICMPTracer{Config: config}
-		} else {
-			tracer = &ICMPTracerv6{Config: config}
-		}
-
-	case UDPTrace:
-		if config.DestIP.To4() != nil {
-			tracer = &UDPTracer{Config: config}
-		} else {
-			return nil, errors.New("IPv6 UDP Traceroute is not supported")
-		}
-	case TCPTrace:
-		if config.DestIP.To4() != nil {
-			tracer = &TCPTracer{Config: config}
-		} else {
-			tracer = &TCPTracerv6{Config: config}
-			// return nil, errors.New("IPv6 TCP Traceroute is not supported")
-		}
-	default:
-		return &Result{}, ErrInvalidMethod
-	}
-	return tracer.Execute()
+	GetConfig() *Config
+	SetConfig(Config)
 }
 
 type Result struct {
 	Hops [][]Hop
 	lock sync.Mutex
+}
+
+type Hop struct {
+	Address  net.Addr
+	Hostname string
+	TTL      int
+	RTT      time.Duration
+	Error    error
+}
+
+func NewTracer(config Config) (*TraceInstance, error) {
+	t := TraceInstance{}
+	switch config.TraceMethod {
+	case ICMPTrace:
+		if config.DestIP.To4() != nil {
+			t.Tracer = &ICMPTracer{Config: config}
+		} else {
+			t.Tracer = &ICMPTracerv6{Config: config}
+		}
+
+	case UDPTrace:
+		if config.DestIP.To4() != nil {
+			t.Tracer = &UDPTracer{Config: config}
+		} else {
+			t.Tracer = &UDPTracerv6{Config: config}
+		}
+	case TCPTrace:
+		if config.DestIP.To4() != nil {
+			t.Tracer = &TCPTracer{Config: config}
+		} else {
+			t.Tracer = &TCPTracerv6{Config: config}
+		}
+	default:
+		return &TraceInstance{}, ErrInvalidMethod
+	}
+	return &t, t.CheckConfig()
+}
+
+func (t *TraceInstance) CheckConfig() (err error) {
+	c := t.GetConfig()
+
+	configValidConditions := map[string]bool{
+		"DestIP is null":            c.DestIP == nil,
+		"BeginHop is empty":         c.BeginHop == 0,
+		"MaxHops is empty":          c.MaxHops == 0,
+		"NumMeasurements is empty":  c.NumMeasurements == 0,
+		"ParallelRequests is empty": c.ParallelRequests == 0,
+		"Trace Timeout is empty":    c.Timeout == 0,
+		"You must specific at least one of TTLInterval and PacketInterval":           c.TTLInterval|c.PacketInterval == 0,
+		"You choose " + string(c.TraceMethod) + " trace. DestPort must be specified": (c.TraceMethod == TCPTrace || c.TraceMethod == UDPTrace) && c.DestPort == 0,
+	}
+
+	var (
+		inValidFlag bool
+	)
+
+	for condition, notValid := range configValidConditions {
+		if notValid {
+			inValidFlag = true
+			t.ErrorStr += fmt.Sprintf("Invalid config: %s\n", condition)
+		}
+	}
+
+	if inValidFlag {
+		return fmt.Errorf(t.ErrorStr)
+	}
+
+	return nil
+
+}
+
+func (t *TraceInstance) Traceroute() (*Result, error) {
+	if t.ErrorStr != "" {
+		log.Fatal(t.ErrorStr)
+	}
+	return t.Tracer.Execute()
 }
 
 func (s *Result) add(hop Hop) {
@@ -89,12 +145,4 @@ func (s *Result) reduce(final int) {
 	if final > 0 && final < len(s.Hops) {
 		s.Hops = s.Hops[:final]
 	}
-}
-
-type Hop struct {
-	Address  net.Addr
-	Hostname string
-	TTL      int
-	RTT      time.Duration
-	Error    error
 }
