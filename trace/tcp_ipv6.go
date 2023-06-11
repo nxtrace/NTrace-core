@@ -34,13 +34,20 @@ type TCPTracerv6 struct {
 	sem *semaphore.Weighted
 }
 
+func (t *TCPTracerv6) GetConfig() *Config {
+	return &t.Config
+}
+
+func (t *TCPTracerv6) SetConfig(c Config) {
+	t.Config = c
+}
+
 func (t *TCPTracerv6) Execute() (*Result, error) {
 	if len(t.res.Hops) > 0 {
 		return &t.res, ErrTracerouteExecuted
 	}
 
 	t.SrcIP, _ = util.LocalIPPortv6(t.DestIP)
-	// log.Println(util.LocalIPPortv6(t.DestIP))
 	var err error
 	t.tcp, err = net.ListenPacket("ip6:tcp", t.SrcIP.String())
 	if err != nil {
@@ -71,9 +78,9 @@ func (t *TCPTracerv6) Execute() (*Result, error) {
 		for i := 0; i < t.NumMeasurements; i++ {
 			t.wg.Add(1)
 			go t.send(ttl)
+			<-time.After(t.Config.PacketInterval)
 		}
-		time.Sleep(1 * time.Millisecond)
-
+		<-time.After(t.Config.TTLInterval)
 	}
 
 	t.res.reduce(t.final)

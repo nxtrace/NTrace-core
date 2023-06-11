@@ -28,6 +28,14 @@ type ICMPTracer struct {
 	finalLock             sync.Mutex
 }
 
+func (t *ICMPTracer) GetConfig() *Config {
+	return &t.Config
+}
+
+func (t *ICMPTracer) SetConfig(c Config) {
+	t.Config = c
+}
+
 func (t *ICMPTracer) Execute() (*Result, error) {
 	t.inflightRequestRWLock.Lock()
 	t.inflightRequest = make(map[int]chan Hop)
@@ -51,7 +59,6 @@ func (t *ICMPTracer) Execute() (*Result, error) {
 	t.final = -1
 
 	go t.listenICMP()
-	t.wg.Add(1)
 	for ttl := t.BeginHop; ttl <= t.MaxHops; ttl++ {
 		t.inflightRequestRWLock.Lock()
 		t.inflightRequest[ttl] = make(chan Hop, t.NumMeasurements)
@@ -62,9 +69,9 @@ func (t *ICMPTracer) Execute() (*Result, error) {
 		for i := 0; i < t.NumMeasurements; i++ {
 			t.wg.Add(1)
 			go t.send(ttl)
-			<-time.After(time.Millisecond * time.Duration(t.Config.PacketInterval))
+			<-time.After(t.Config.PacketInterval)
 		}
-		<-time.After(time.Millisecond * time.Duration(t.Config.TTLInterval))
+		<-time.After(t.Config.TTLInterval)
 	}
 
 	t.wg.Wait()
@@ -190,17 +197,11 @@ func reverseID(id string) (int64, int64, error) {
 	}
 
 	if parity%2 == 1 {
-		if id[len(id)-1] == '0' {
-			// fmt.Println("Parity check passed.")
-		} else {
-			// fmt.Println("Parity check failed.")
+		if id[len(id)-1] != '0' {
 			return 0, 0, errors.New("err")
 		}
 	} else {
-		if id[len(id)-1] == '1' {
-			// fmt.Println("Parity check passed.")
-		} else {
-			// fmt.Println("Parity check failed.")
+		if id[len(id)-1] != '1' {
 			return 0, 0, errors.New("err")
 		}
 	}

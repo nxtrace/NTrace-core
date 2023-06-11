@@ -27,6 +27,14 @@ type ICMPTracerv6 struct {
 	finalLock             sync.Mutex
 }
 
+func (t *ICMPTracerv6) GetConfig() *Config {
+	return &t.Config
+}
+
+func (t *ICMPTracerv6) SetConfig(c Config) {
+	t.Config = c
+}
+
 func (t *ICMPTracerv6) Execute() (*Result, error) {
 	t.inflightRequestRWLock.Lock()
 	t.inflightRequest = make(map[int]chan Hop)
@@ -61,28 +69,11 @@ func (t *ICMPTracerv6) Execute() (*Result, error) {
 		for i := 0; i < t.NumMeasurements; i++ {
 			t.wg.Add(1)
 			go t.send(ttl)
-			<-time.After(time.Millisecond * time.Duration(t.Config.PacketInterval))
+			<-time.After(t.Config.PacketInterval)
 		}
-		<-time.After(time.Millisecond * time.Duration(t.Config.TTLInterval))
+		<-time.After(t.Config.TTLInterval)
 	}
-	// for ttl := t.BeginHop; ttl <= t.MaxHops; ttl++ {
-	// 	if t.final != -1 && ttl > t.final {
-	// 		break
-	// 	}
-	// 	for i := 0; i < t.NumMeasurements; i++ {
-	// 		t.wg.Add(1)
-	// 		go t.send(ttl)
-	// 	}
-	// 	// 一组TTL全部退出（收到应答或者超时终止）以后，再进行下一个TTL的包发送
-	// 	t.wg.Wait()
-	// 	if t.RealtimePrinter != nil {
-	// 		t.RealtimePrinter(&t.res, ttl-1)
-	// 	}
 
-	// 	if t.AsyncPrinter != nil {
-	// 		t.AsyncPrinter(&t.res)
-	// 	}
-	// }
 	t.wg.Wait()
 	t.res.reduce(t.final)
 	if t.final == -1 {

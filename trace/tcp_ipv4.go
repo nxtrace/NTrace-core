@@ -34,6 +34,14 @@ type TCPTracer struct {
 	sem *semaphore.Weighted
 }
 
+func (t *TCPTracer) GetConfig() *Config {
+	return &t.Config
+}
+
+func (t *TCPTracer) SetConfig(c Config) {
+	t.Config = c
+}
+
 func (t *TCPTracer) Execute() (*Result, error) {
 	if len(t.res.Hops) > 0 {
 		return &t.res, ErrTracerouteExecuted
@@ -79,9 +87,9 @@ func (t *TCPTracer) Execute() (*Result, error) {
 		for i := 0; i < t.NumMeasurements; i++ {
 			t.wg.Add(1)
 			go t.send(ttl)
-
+			<-time.After(t.Config.PacketInterval)
 		}
-		time.Sleep(1 * time.Millisecond)
+		<-time.After(t.Config.TTLInterval)
 	}
 
 	t.res.reduce(t.final)
@@ -229,15 +237,7 @@ func (t *TCPTracer) send(ttl int) error {
 	hopCh := make(chan Hop)
 	t.inflightRequest[int(sequenceNumber)] = hopCh
 	t.inflightRequestLock.Unlock()
-	/*
-		// 这里属于 2个Sender，N个Reciever的情况，在哪里关闭Channel都容易导致Panic
-		defer func() {
-			t.inflightRequestLock.Lock()
-			close(hopCh)
-			delete(t.inflightRequest, srcPort)
-			t.inflightRequestLock.Unlock()
-		}()
-	*/
+
 	select {
 	case <-t.ctx.Done():
 		return nil

@@ -31,6 +31,14 @@ type UDPTracerv6 struct {
 	sem *semaphore.Weighted
 }
 
+func (t *UDPTracerv6) GetConfig() *Config {
+	return &t.Config
+}
+
+func (t *UDPTracerv6) SetConfig(c Config) {
+	t.Config = c
+}
+
 func (t *UDPTracerv6) Execute() (*Result, error) {
 	if len(t.res.Hops) > 0 {
 		return &t.res, ErrTracerouteExecuted
@@ -60,9 +68,9 @@ func (t *UDPTracerv6) Execute() (*Result, error) {
 		for i := 0; i < t.NumMeasurements; i++ {
 			t.wg.Add(1)
 			go t.send(ttl)
-
+			<-time.After(time.Millisecond * time.Duration(t.Config.PacketInterval))
 		}
-		time.Sleep(1 * time.Millisecond)
+		<-time.After(time.Millisecond * time.Duration(t.Config.TTLInterval))
 	}
 	t.res.reduce(t.final)
 
