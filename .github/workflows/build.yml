@@ -145,7 +145,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v1
         with: # 将下述可执行文件 release 上去
-          draft: false # Release草稿
+          draft: true # Release草稿
           files: |
             dist/*
         env:

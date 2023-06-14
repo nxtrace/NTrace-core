@@ -6,6 +6,7 @@ import (
 	"github.com/xgadget-lab/nexttrace/config"
 	"log"
 	"net"
+	"net/url"
 	"os"
 	"runtime"
 	"strings"
@@ -181,4 +182,17 @@ func GetHostAndPort() (host string, port string) {
 		port = "443"
 	}
 	return
+}
+
+func GetProxy() *url.URL {
+	proxyURLStr := GetenvDefault("NEXTTRACE_PROXY", "")
+	if proxyURLStr == "" {
+		return nil
+	}
+	proxyURL, err := url.Parse(proxyURLStr)
+	if err != nil {
+		log.Println("Failed to parse proxy URL:", err)
+		return nil
+	}
+	return proxyURL
 }
