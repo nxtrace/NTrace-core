@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - backup
     paths:
       - "**/*.go"
       - "go.mod"

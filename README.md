@@ -8,6 +8,18 @@
 
 An open source visual routing tool that pursues light weight, developed using Golang.
 
+<p align="center">
+  <a href="https://github.com/sjlleo/nexttrace/actions">
+    <img src="https://img.shields.io/github/actions/workflow/status/sjlleo/nexttrace/build.yml?branch=main&style=flat-square" alt="Github Actions">
+  </a>
+  <a href="https://goreportcard.com/report/github.com/sjlleo/nexttrace">
+    <img src="https://goreportcard.com/badge/github.com/sjlleo/nexttrace?style=flat-square">
+  </a>
+  <a href="https://github.com/sjlleo/nexttrace/releases">
+    <img src="https://img.shields.io/github/release/sjlleo/nexttrace/all.svg?style=flat-square">
+  </a>
+</p>
+
 NextTrace is part of the [OwO Network](https://github.com/OwO-Network) project. The project is a joint initiative of Leo and Vincent.
 
 If you like this project, [Donate us](https://afdian.net/a/sjlleo/plan) to help us to provide long-lasting API cost expenses.
