@@ -365,6 +365,12 @@ This software is still in the early stages of development and may have many flaw
 
 [https://github.com/Archeb/opentrace](https://github.com/Archeb/opentrace)
 
+## NEXTTRACE WEB API
+
+`NextTraceWebApi` is a web-based server implementation of `NextTrace` in the `MTR` style, offering various deployment options including `Docker`.
+
+[https://github.com/tsosunchia/nexttracewebapi](https://github.com/tsosunchia/nexttracewebapi)
+
 ## LeoMoeAPI Credit
 
 NextTrace focuses on Golang Traceroute implementations, and its LeoMoeAPI geolocation information is not supported by raw data, so a commercial version is not possible.

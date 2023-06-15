@@ -365,6 +365,12 @@ NextTrace `LeoMoeAPI`现已使用Proof of Work(POW)机制来防止滥用，其�
 
 [https://github.com/Archeb/opentrace](https://github.com/Archeb/opentrace)
 
+## NEXTTRACE WEB API
+
+`NextTraceWebApi`是一个`MTR`风格的`NextTrace`网页版服务端实现，提供了包括`Docker`在内多种部署方式。
+
+[https://github.com/tsosunchia/nexttracewebapi](https://github.com/tsosunchia/nexttracewebapi)
+
 ## Credits
 
 [BGP.TOOLS](https://bgp.tools) 提供了本项目的一些数据支持，在此表示由衷地感谢。
