@@ -4,13 +4,30 @@
 
 </div>
 
-## NextTrace
+<h1 align="center">
+  <br>NextTrace<br>
+</h1>
 
-An open source visual routing tool that pursues light weight, developed using Golang.
+<h4 align="center">An open source visual routing tool that pursues light weight, developed using Golang.</h4>
+
+<p align="center">
+  <a href="https://github.com/sjlleo/nexttrace/actions">
+    <img src="https://img.shields.io/github/actions/workflow/status/nxtrace/Ntrace-core/build.yml?branch=main&style=flat-square" alt="Github Actions">
+  </a>
+  <a href="https://goreportcard.com/report/github.com/sjlleo/nexttrace">
+    <img src="https://goreportcard.com/badge/github.com/nxtrace/Ntrace-core?style=flat-square">
+  </a>
+  <a href="https://github.com/sjlleo/nexttrace/releases">
+    <img src="https://img.shields.io/github/release/nxtrace/Ntrace-core/all.svg?style=flat-square">
+  </a>
+</p>
 
 ## How To Use
 
 Document Language: English | [简体中文](README_zh_CN.md)
+
+⚠️ This is the README for the refactored version of NextTrace. For the V1(v1.1.3 - v1.1.7-x) version, please turn to [nxtrace/Ntrace-V1](https://github.com/nxtrace/Ntrace-V1). 
+<br> For the V1 version of NextTrace, there will be no more feature updates (bug fixes for existing features will continue), and future efforts will be shifted to this refactored version.
 
 ### Automated Installation
 
