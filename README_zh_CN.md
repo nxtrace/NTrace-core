@@ -12,26 +12,32 @@
 <h4 align="center">一款追求轻量化的开源可视化路由跟踪工具。</h4>
 
 <p align="center">
-  <a href="https://github.com/sjlleo/nexttrace/actions">
-    <img src="https://img.shields.io/github/actions/workflow/status/sjlleo/nexttrace/build.yml?branch=main&style=flat-square" alt="Github Actions">
+  <a href="https://github.com/nxtrace/Ntrace-V1/actions">
+    <img src="https://img.shields.io/github/actions/workflow/status/nxtrace/Ntrace-V1/build.yml?branch=main&style=flat-square" alt="Github Actions">
   </a>
-  <a href="https://goreportcard.com/report/github.com/sjlleo/nexttrace">
-    <img src="https://goreportcard.com/badge/github.com/sjlleo/nexttrace?style=flat-square">
+  <a href="https://goreportcard.com/report/github.com/nxtrace/Ntrace-V1">
+    <img src="https://goreportcard.com/badge/github.com/nxtrace/Ntrace-V1?style=flat-square">
   </a>
-  <a href="https://github.com/sjlleo/nexttrace/releases">
-    <img src="https://img.shields.io/github/release/sjlleo/nexttrace/all.svg?style=flat-square">
+  <a href="https://github.com/nxtrace/Ntrace-V1/releases">
+    <img src="https://img.shields.io/github/release/nxtrace/Ntrace-V1/all.svg?style=flat-square">
   </a>
 </p>
 
-如果您喜欢这个项目，可以通过[爱发电支持](https://afdian.net/a/sjlleo/plan)我们项目的持续发展，您的捐助将用于服务器和 API 开支，非常感谢！
-
-本项目近期在进行整体重构，期间此仓库不再接受新功能需求、问题BUG反馈，如有问题请前往 [tsosunchia/nexttrace-core](https://github.com/tsosunchia/nexttrace-core) 的ISSUE区反馈，感谢您的支持！
 
 ## How To Use
+
+Document Language: [English](README.md) | 简体中文
+
+⚠️ 这是NextTrace V1 版本的README文件。对于重构版本，请参阅 [nxtrace/Ntrace-core](https://github.com/nxtrace/Ntrace-core)。 
+<br>对于此V1版本的NextTrace我们将不再有功能性更新(已有功能BUG修复继续进行)，未来的工作重心将转移到重构版本。
 
 ### Before Using
 
 使用 NextTrace 之前，我们建议您先阅读 [#IP 数据以及精准度说明](https://github.com/sjlleo/nexttrace/blob/main/README_zh_CN.md#ip-%E6%95%B0%E6%8D%AE%E4%BB%A5%E5%8F%8A%E7%B2%BE%E5%87%86%E5%BA%A6%E8%AF%B4%E6%98%8E)，在了解您自己的对数据精准度需求以后再进行抉择。
+
+NextTrace 的频道由项目成员负责，会传递一部分通知，也会发布一些成员自己分享的小工具。项目成员的意见可作为未来项目发展的可能方向，随着开发进度变化可能会有所改动，不代表未来一定会实装，正式定稿公告会发布于 Issue 中。
+
+目前项目重构中，1.0 版本将进入维护期，提供长达 2 年的 LTS 支持，新版本将启用 PoW 验证，届时内部 API 会有大幅的调整，会导致参数的大量变动，请知悉。
 
 ### Automated Install
 
@@ -364,6 +370,12 @@ NextTrace `LeoMoeAPI`现已使用Proof of Work(POW)机制来防止滥用，其�
 该软件仍然处于早期开发阶段，可能存在许多缺陷和错误，需要您宝贵的使用反馈。
 
 [https://github.com/Archeb/opentrace](https://github.com/Archeb/opentrace)
+
+## NEXTTRACE WEB API
+
+`NextTraceWebApi`是一个`MTR`风格的`NextTrace`网页版服务端实现，提供了包括`Docker`在内多种部署方式。
+
+[https://github.com/nxtrace/nexttracewebapi](https://github.com/nxtrace/nexttracewebapi)
 
 ## Credits
 

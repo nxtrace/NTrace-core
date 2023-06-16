@@ -4,19 +4,30 @@
 
 </div>
 
-## NextTrace
+<h1 align="center">
+  <br>NextTrace<br>
+</h1>
 
-An open source visual routing tool that pursues light weight, developed using Golang.
+<h4 align="center">An open source visual routing tool that pursues light weight, developed using Golang.</h4>
 
-NextTrace is part of the [OwO Network](https://github.com/OwO-Network) project. The project is a joint initiative of Leo and Vincent.
-
-If you like this project, [Donate us](https://afdian.net/a/sjlleo/plan) to help us to provide long-lasting API cost expenses.
-
-The project is currently undergoing a major refactoring. During this period, this repository will no longer accept new feature requests or bug reports. If you have any issues, please go to the ISSUE section of [tsosunchia/nexttrace-core](https://github.com/tsosunchia/nexttrace-core) to provide feedback. Thank you for your support!
+<p align="center">
+  <a href="https://github.com/nxtrace/Ntrace-V1/actions">
+    <img src="https://img.shields.io/github/actions/workflow/status/nxtrace/Ntrace-V1/build.yml?branch=main&style=flat-square" alt="Github Actions">
+  </a>
+  <a href="https://goreportcard.com/report/github.com/nxtrace/Ntrace-V1">
+    <img src="https://goreportcard.com/badge/github.com/nxtrace/Ntrace-V1?style=flat-square">
+  </a>
+  <a href="https://github.com/nxtrace/Ntrace-V1/releases">
+    <img src="https://img.shields.io/github/release/nxtrace/Ntrace-V1/all.svg?style=flat-square">
+  </a>
+</p>
 
 ## How To Use
 
 Document Language: English | [简体中文](README_zh_CN.md)
+
+⚠️ This is the README for the V1 version of NextTrace. For the refactored version, please turn to [nxtrace/Ntrace-core](https://github.com/nxtrace/Ntrace-core). 
+<br> For this V1 version of NextTrace, there will be no more feature updates (bug fixes for existing features will continue), and future efforts will be shifted to refactored version.
 
 ### Automated Install
 
@@ -25,12 +36,12 @@ Document Language: English | [简体中文](README_zh_CN.md)
         * Download from GitHub
 
              ```shell
-             bash -c "$(curl -Ls https://github.com/sjlleo/nexttrace/raw/main/nt_install.sh)"
+             bash -c "$(curl -Ls https://github.com/nxtrace/Ntrace-V1/raw/main/nt_install.sh)"
              ```
         * GHPROXY mirror (For use in Mainland China)
 
              ```shell
-             bash -c "$(curl -Ls https://ghproxy.com/https://github.com/sjlleo/nexttrace/raw/main/nt_install.sh)"
+             bash -c "$(curl -Ls https://ghproxy.com/https://github.com/nxtrace/Ntrace-V1/raw/main/nt_install.sh)"
              ```
     * Arch Linux AUR installation command
         * Build from source
@@ -352,6 +363,12 @@ Please Notice that `NextTrace Enhanced` is currently not supported in English.
 This software is still in the early stages of development and may have many flaws and errors. We value your feedback.
 
 [https://github.com/Archeb/opentrace](https://github.com/Archeb/opentrace)
+
+## NEXTTRACE WEB API
+
+`NextTraceWebApi` is a web-based server implementation of `NextTrace` in the `MTR` style, offering various deployment options including `Docker`.
+
+[https://github.com/nxtrace/nexttracewebapi](https://github.com/nxtrace/nexttracewebapi)
 
 ## LeoMoeAPI Credit
 
