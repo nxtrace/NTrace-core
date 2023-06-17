@@ -28,9 +28,10 @@
 
 Document Language: [English](README.md) | 简体中文
 
-⚠️ 这是NextTrace重构版本的README文件。对于V1(v1.1.3 - v1.1.7-x)版本，请参阅 [nxtrace/Ntrace-V1](https://github.com/nxtrace/Ntrace-V1). 
+目前 NextTrace 最新稳定版为 v1.1.2 版本，core 项目为最新的重构项目，对于 v1+ 版本的 NextTrace 我们将不再有功能性更新(已有功能BUG修复继续进行)
 
-追求稳定的用户依旧应该使用 v1.1.2 版本，core 项目为最新的重构项目，对于 v1+ 版本的 NextTrace 我们将不再有功能性更新(已有功能BUG修复继续进行)，对于 v1.1.3+ 来说，目前依旧不稳定。
+对于 V1 (v1.1.3 - v1.1.7) 是实验性版本，目前也一并进入维护状态，不会再并入主线，如无特殊需求建议使用稳定版，具体代码请查阅 [nxtrace/Ntrace-V1](https://github.com/nxtrace/Ntrace-V1). 
+
 
 ### Before Using
 
