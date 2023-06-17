@@ -29,13 +29,14 @@
 Document Language: [English](README.md) | 简体中文
 
 ⚠️ 这是NextTrace重构版本的README文件。对于V1(v1.1.3 - v1.1.7-x)版本，请参阅 [nxtrace/Ntrace-V1](https://github.com/nxtrace/Ntrace-V1). 
-<br> 对于V1版本的NextTrace我们将不再有功能性更新(已有功能BUG修复继续进行)，未来的工作重心将转移到此重构版本。
+
+追求稳定的用户依旧应该使用 v1.1.2 版本，core 项目为最新的重构项目，对于 v1+ 版本的 NextTrace 我们将不再有功能性更新(已有功能BUG修复继续进行)，对于 v1.1.3+ 来说，目前依旧不稳定。
 
 ### Before Using
 
 使用 NextTrace 之前，我们建议您先阅读 [#IP 数据以及精准度说明](https://github.com/sjlleo/nexttrace/blob/main/README_zh_CN.md#ip-%E6%95%B0%E6%8D%AE%E4%BB%A5%E5%8F%8A%E7%B2%BE%E5%87%86%E5%BA%A6%E8%AF%B4%E6%98%8E)，在了解您自己的对数据精准度需求以后再进行抉择。
 
-NextTrace 的[TG频道](https://t.me/nexttrace)由项目成员负责，会传递一部分通知，也会发布一些成员自己分享的小工具。项目成员的意见可作为未来项目发展的可能方向，随着开发进度变化可能会有所改动，不代表未来一定会实装，正式定稿公告会发布于 Issue 中。
+NextTrace 的频道由项目成员负责，会传递一部分通知，也会发布一些成员自己分享的小工具。项目成员的意见可作为未来项目发展的可能方向，随着开发进度变化可能会有所改动，不代表未来一定会实装，正式定稿公告会发布于 Issue 中。
 
 目前项目重构中，Ntrace-V1 将进入维护期，提供长达 2 年的 LTS 支持，新版本将启用 PoW 验证，届时内部 API 会有大幅的调整，会导致参数的大量变动，请知悉。
 
