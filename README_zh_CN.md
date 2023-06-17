@@ -30,8 +30,7 @@ Document Language: [English](README.md) | 简体中文
 
 目前 NextTrace 最新稳定版为 v1.1.2 版本，core 项目为最新的重构项目，对于 v1+ 版本的 NextTrace 我们将不再有功能性更新(已有功能BUG修复继续进行)
 
-对于 V1 (v1.1.3 - v1.1.7) 是实验性版本，目前也一并进入维护状态，不会再并入主线，如无特殊需求建议使用稳定版，具体代码请查阅 [nxtrace/Ntrace-V1](https://github.com/nxtrace/Ntrace-V1). 
-
+V1 (v1.1.3 - v1.1.7) 是**实验性**版本，**无SLA**保证，目前也一并进入维护状态，不会再并入`Ntrace-core`主线仓库，如果您不需要v1.1.3及其后续版本包含的功能更新(请阅读[#Others](#others)中相关部分)，建议使用稳定版 v1.1.2，具体代码请查阅 [nxtrace/Ntrace-V1](https://github.com/nxtrace/Ntrace-V1).
 
 ### Before Using
 
@@ -279,6 +278,25 @@ BGP.TOOLS 提供了本项目的一些数据支持，在此表示由衷地感谢�
 ## Others
 
 其他第三方 API 尽管集成在本项目内，但是具体的 TOS 以及 AUP，请详见第三方 API 官网。如遇到 IP 数据错误，也请直接联系他们纠错。
+
+关于 v1.1.2(稳定版) 与 v1.1.7-2(实验版) 的区别：
+* 增加和修复了部分第三方GEOIP API的支持
+    * ipinfo
+    * ipinfoLocal 即ipinfo数据库离线版
+    * chunzhen
+    * ipinsight
+    * (disable-geoip)
+* 增加了部分参数
+    * 供其他项目二次开发调用
+        * json 输出
+        * raw 输出
+    * 仅解析域名的IPv4/IPv6地址
+    * packet-size 设置ICMP包大小
+    * timeout 设置超时时间
+* 支持使用socks5/http代理访问API
+* fasttrace模式下支持更多的参数
+* 增加缓存处理以加速解析
+* 修复了部分BUG
 
 ## IP 数据以及精准度说明
 
