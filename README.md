@@ -26,8 +26,9 @@
 
 Document Language: English | [简体中文](README_zh_CN.md)
 
-⚠️ This is the README for the refactored version of NextTrace. For the V1(v1.1.3 - v1.1.7-x) version, please turn to [nxtrace/Ntrace-V1](https://github.com/nxtrace/Ntrace-V1). 
-<br> For the V1 version of NextTrace, there will be no more feature updates (bug fixes for existing features will continue), and future efforts will be shifted to this refactored version.
+⚠️ The latest stable version of NextTrace is v1.1.2, while the core project is the latest restructured project. For the v1+ versions of NextTrace, we will no longer have functional updates (bug fixes for existing features will continue).
+
+V1 (v1.1.3 - v1.1.7) is an **experimental** version with **no SLA** guarantees, and is currently in maintenance mode. It will not be merged into the `Ntrace-core` main repository. If you do not need the feature updates included in version v1.1.3 and subsequent versions (please read the relevant section in [#Others](#others)), it is recommended to use the stable version v1.1.2. For the specific code, please refer to [nxtrace/Ntrace-V1](https://github.com/nxtrace/Ntrace-V1).
 
 ### Automated Installation
 
@@ -297,6 +298,25 @@ BGP.TOOLS provided some data support for this project and we would like to expre
 ### Others
 
 Although other third-party APIs are integrated in this project, please refer to the official website of the third-party APIs for specific TOS and AUP. If you encounter IP data errors, please contact them directly to correct them.
+
+Differences between version v1.1.2 and v1.1.7-2:
+* Added and fixed support for some third-party GEOIP APIs
+    * ipinfo
+    * ipinfoLocal, which is the offline version of the ipinfo database
+    * chunzhen
+    * ipinsight
+    * (disable-geoip)
+* Added some parameters
+    * For use in secondary development by other projects
+        * JSON output
+        * raw output
+    * Parse only the IPv4/IPv6 addresses of the domain
+    * packet-size to set the ICMP packet size
+    * timeout to set the timeout period
+* Supports accessing APIs through socks5/http proxy
+* Supports more parameters in fasttrace mode
+* Added cache handling to speed up resolution
+* Fixed some bugs
 
 ## Star History
 
