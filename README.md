@@ -88,7 +88,7 @@ Document Language: English | [简体中文](README_zh_CN.md)
 ### Manual Install
 * Download the precompiled executable
 
-    For users not covered by the above methods, please go directly to [Release](https://github.com/sjlleo/nexttrace/releases/latest) to download the compiled binary executable.
+    For users not covered by the above methods, please go directly to [Release](https://github.com/nxtrace/Ntrace-V1/releases/latest) to download the compiled binary executable.
 
     * `Release` provides compiled binary executables for many systems and different architectures. If none are available, you can compile it yourself.
     * Some essential dependencies of this project are not fully implemented on `Windows` by `Golang`, so currently, `NextTrace` is in an experimental support phase on the `Windows` platform.
@@ -98,7 +98,7 @@ Document Language: English | [简体中文](README_zh_CN.md)
     After installing Go >= 1.20 yourself, you can use the following command to install
 
     ```shell
-    go install github.com/xgadget-lab/nexttrace@latest
+    go install github.com/nxtrace/Ntrace-V1@latest
     ```
     After installation, the executable is in the `$GOPATH/bin` directory. If you have not set `GOPATH`, it is in the `$HOME/go/bin` directory.
 
