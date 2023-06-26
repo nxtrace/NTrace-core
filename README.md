@@ -8,101 +8,27 @@
 
 An open source visual routing tool that pursues light weight, developed using Golang.
 
-<p align="center">
-  <a href="https://github.com/sjlleo/nexttrace/actions">
-    <img src="https://img.shields.io/github/actions/workflow/status/sjlleo/nexttrace/build.yml?branch=main&style=flat-square" alt="Github Actions">
-  </a>
-  <a href="https://goreportcard.com/report/github.com/sjlleo/nexttrace">
-    <img src="https://goreportcard.com/badge/github.com/sjlleo/nexttrace?style=flat-square">
-  </a>
-  <a href="https://github.com/sjlleo/nexttrace/releases">
-    <img src="https://img.shields.io/github/release/sjlleo/nexttrace/all.svg?style=flat-square">
-  </a>
-</p>
-
-NextTrace is part of the [OwO Network](https://github.com/OwO-Network) project. The project is a joint initiative of Leo and Vincent.
-
-If you like this project, [Donate us](https://afdian.net/a/sjlleo/plan) to help us to provide long-lasting API cost expenses.
-
-The project is currently undergoing a major refactoring. During this period, this repository will no longer accept new feature requests or bug reports. If you have any issues, please go to the ISSUE section of [tsosunchia/nexttrace-core](https://github.com/tsosunchia/nexttrace-core) to provide feedback. Thank you for your support!
-
 ## How To Use
 
 Document Language: English | [简体中文](README_zh_CN.md)
 
-### Automated Install
+### Automated Installation
 
-* Linux
-    * One-click installation script
-        * Download from GitHub
+```bash
+# Linux one-click install script
+bash <(curl -Ls https://raw.githubusercontent.com/sjlleo/nexttrace/main/nt_install.sh)
 
-             ```shell
-             bash -c "$(curl -Ls https://github.com/sjlleo/nexttrace/raw/main/nt_install.sh)"
-             ```
-        * GHPROXY mirror (For use in Mainland China)
+# macOS brew install command
+brew tap xgadget-lab/nexttrace && brew install nexttrace
 
-             ```shell
-             bash -c "$(curl -Ls https://ghproxy.com/https://github.com/sjlleo/nexttrace/raw/main/nt_install.sh)"
-             ```
-    * Arch Linux AUR installation command
-        * Build from source
+# GHProxy Mirror (For China Mainland User)
+bash -c "$(curl -Ls https://ghproxy.com/https://raw.githubusercontent.com/sjlleo/nexttrace/main/nt_install.sh)"
+```
 
-             ```shell
-             yay -S nexttrace
-             ```
-        * Directly download bin package (only supports amd64)
+Windows users please go to [Release Page](https://github.com/sjlleo/nexttrace/releases/latest) directly and download exe file.
 
-             ```shell
-             yay -S nexttrace-bin
-             ```
-        * The two types of AUR builds are maintained by huyz and ouuan, respectively
-    * Linuxbrew's installation command
-
-        Same as the macOS Homebrew's installation method (homebrew-core version only supports amd64)
-
-* macOS
-    * macOS Homebrew's installation command
-        * Homebrew-core version
-
-             ```shell
-             brew install nexttrace
-             ```
-        * This repository's ACTIONS automatically built version (updates faster)
-
-             ```shell
-             brew tap xgadget-lab/nexttrace && brew install xgadget-lab/nexttrace/nexttrace
-             ```
-        * The homebrew-core build is maintained by chenrui333, please note that this version's updates may lag behind the repository Action automatically version
-
-* Windows
-    * Windows Scoop installation command
-        * Scoop-extras version
-
-             ```powershell
-             scoop bucket add extras && scoop install extras/nexttrace
-             ```
-
-        * Scoop-extra is maintained by soenggam
-
-    Please note, the repositories for all of the above installation methods are maintained by open source enthusiasts. Availability and timely updates are not guaranteed. If you encounter problems, please contact the repository maintainer to solve them, or use the binary packages provided by the official build of this project.
-
-### Manual Install
-* Download the precompiled executable
-
-    For users not covered by the above methods, please go directly to [Release](https://github.com/sjlleo/nexttrace/releases/latest) to download the compiled binary executable.
-
-    * `Release` provides compiled binary executables for many systems and different architectures. If none are available, you can compile it yourself.
-    * Some essential dependencies of this project are not fully implemented on `Windows` by `Golang`, so currently, `NextTrace` is in an experimental support phase on the `Windows` platform.
-
-* Install from source
-
-    After installing Go >= 1.20 yourself, you can use the following command to install
-
-    ```shell
-    go install github.com/xgadget-lab/nexttrace@latest
-    ```
-    After installation, the executable is in the `$GOPATH/bin` directory. If you have not set `GOPATH`, it is in the `$HOME/go/bin` directory.
-
+- `Release` provides compiled executables for many systems and architectures, if not, you can compile it yourself.
+- Some of the necessary dependencies of this project are not fully implemented in `Golang` on `Windows`, so currently `NextTrace` is experimental on `Windows` platform.
 
 ### Get Started
 
@@ -114,16 +40,8 @@ nexttrace 1.0.0.1
 # URL
 nexttrace http://example.com:8080/index.html?q=1
 
-# Form printing
+# Form printing (output all hops at one time, wait 20-40 seconds)
 nexttrace --table 1.0.0.1
-
-# An Output Easy to Parse
-nexttrace --raw 1.0.0.1
-nexttrace --json 1.0.0.1
-
-# IPv4/IPv6 Resolve Only
-nexttrace --ipv4 g.co
-nexttrace --ipv6 g.co
 
 # IPv6 ICMP Trace
 nexttrace 2606:4700:4700::1111
@@ -190,9 +108,6 @@ nexttrace --first 5 --max-hops 10 www.decix.net
 # Turn off the IP reverse parsing function
 nexttrace --no-rdns www.bbix.net
 
-# Set the payload size to 1024 bytes
-nexttrace --psize 1024 example.com
-
 # Feature: print Route-Path diagram
 # Route-Path diagram example:
 # AS6453 Tata Communication「Singapore『Singapore』」
@@ -205,25 +120,15 @@ nexttrace --psize 1024 example.com
 nexttrace --route-path www.time.com.my
 ```
 
-`NextTrace` supports users to select their own IP API (currently supports: `LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`, `Ip2region`, `IPInfoLocal`, `CHUNZHEN`)
+`NextTrace` supports users to select their own IP API (currently supports: `LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`)
 
 ```bash
-# You can specify the IP database by yourself [IP-API.com here], if not specified, LeoMoeAPI will be used
-nexttrace --data-provider ip-api.com
-## Note There are frequency limits for free queries of the ipinfo and IPInsight APIs. You can purchase services from these providers to remove the limits
-##      If necessary, you can clone this project, add the token provided by ipinfo or IPInsight and compile it yourself
-## Note For the offline database IPInfoLocal, please download it manually and rename it to ipinfoLocal.mmdb. (You can download it from here: https://ipinfo.io/signup?ref=free-database-downloads)
-##      For the offline database Ip2region, you can download it manually and rename it to ip2region.db, or let NextTrace download it automatically
+# You can specify the IP database by yourself [IP.SB here], if not specified, LeoMoeAPI will be used
+nexttrace --data-provider IP.SB
+## Note that the ipinfo API needs users to purchase services from ipinfo. If necessary, you can clone this project, add the token provided by ipinfo and compile it yourself
 ## Fill the token to: ipgeo/tokens.go
 ## Please be aware: Due to the serious abuse of IP.SB, you will often be not able to query IP data from this source
-## IP-API.com has a stricter restiction on API calls, if you can't query IP data from this source, please try again in a few minutes
-
-# The Pure-FTPd IP database defaults to using http://127.0.0.1:2060 as the query interface. To customize it, please use environment variables
-export NEXTTRACE_CHUNZHENURL=http://127.0.0.1:2060
-## You can use https://github.com/freshcn/qqwry to build your own Pure-FTPd IP database service
-
-# You can also specify the default IP database by setting an environment variable
-export NEXTTRACE_DATAPROVIDER=ipinfo
+## IPAPI.com has a stricter restiction on API calls, if you can't query IP data from this source, please try again in a few minutes.
 ```
 
 `NextTrace` supports mixed parameters and shortened parameters
@@ -246,36 +151,27 @@ NextTrace BackEnd is now open-source.
 
 https://github.com/sjlleo/nexttrace-backend
 
-NextTrace `LeoMoeAPI` now utilizes the Proof of Work (POW) mechanism to prevent abuse, where NextTrace introduces the powclient library as a client-side component. Both the POW CLIENT and SERVER are open source, and everyone is welcome to use them. (Please direct any POW module-related questions to the corresponding repositories)
-
-- [GitHub - tsosunchia/powclient: Proof of Work CLIENT for NextTrace](https://github.com/tsosunchia/powclient)
-- [GitHub - tsosunchia/powserver: Proof of Work SERVER for NextTrace](https://github.com/tsosunchia/powserver)
-
 All NextTrace IP geolocation `API DEMO` can refer to [here](https://github.com/xgadget-lab/nexttrace/blob/main/ipgeo/)
 
 ### For full usage list, please refer to the usage menu
 
 ```shell
-Usage: nexttrace [-h|--help] [-4|--ipv4] [-6|--ipv6] [-T|--tcp] [-U|--udp]
-                 [-F|--fast-trace] [-p|--port <integer>] [-q|--queries
-                 <integer>] [--parallel-requests <integer>] [-m|--max-hops
-                 <integer>] [-d|--data-provider
-                 (Ip2region|ip2region|IP.SB|ip.sb|IPInfo|ipinfo|IPInsight|ipinsight|IPAPI.com|ip-api.com|IPInfoLocal|ipinfolocal|chunzhen|LeoMoeAPI|leomoeapi|disable-geoip)]
-                 [-n|--no-rdns] [-a|--always-rdns] [-P|--route-path]
-                 [-r|--report] [--dn42] [-o|--output] [-t|--table] [--raw]
-                 [-j|--json] [-c|--classic] [-f|--first <integer>] [-M|--map]
-                 [-v|--version] [-s|--source "<value>"] [-D|--dev "<value>"]
-                 [-R|--route] [-z|--send-time <integer>] [-i|--ttl-time
-                 <integer>] [--timeout <integer>] [--psize <integer>]
-                 [_positionalArg_nexttrace_31 "<value>"] [--dot-server
-                 (dnssb|aliyun|dnspod|google|cloudflare)] [-g|--language
-                 (en|cn)]
+usage: nexttrace [-h|--help] [-T|--tcp] [-U|--udp] [-F|--fast-trace] [-p|--port
+                 <integer>] [-q|--queries <integer>] [--parallel-requests
+                 <integer>] [-m|--max-hops <integer>] [-d|--data-provider
+                 (IP.SB|IPInfo|IPInsight|IPAPI.com)] [-n|--no-rdns]
+                 [-a|--always-rdns] [-P|--route-path] [-r|--report]
+                 [-o|--output] [-t|--table] [-c|--classic] [-f|--first
+                 <integer>] [-M|--map] [-v|--version] [-s|--source "<value>"]
+                 [-D|--dev "<value>"] [-R|--route] [-z|--send-time <integer>]
+                 [-i|--ttl-time <integer>] [-g|--language (en|cn)] [IP Address
+                 or Domain]
+
+                 An open source visual route tracking CLI tool
 
 Arguments:
 
   -h  --help                         Print help information
-  -4  --ipv4                         Use IPv4 only
-  -6  --ipv6                         Use IPv6 only
   -T  --tcp                          Use TCP SYN for tracerouting (default port
                                      is 80)
   -U  --udp                          Use UDP SYN for tracerouting (default port
@@ -296,10 +192,9 @@ Arguments:
                                      18
   -m  --max-hops                     Set the max number of hops (max TTL to be
                                      reached). Default: 30
-  -d  --data-provider                Choose IP Geograph Data Provider [IP.SB,
-                                     IPInfo, IPInsight, IP-API.com, Ip2region,
-                                     IPInfoLocal, CHUNZHEN, disable-geoip].
-                                     Default: LeoMoeAPI
+  -d  --data-provider                Choose IP Geograph Data Provider
+                                     [LeoMoeAPI,IP.SB, IPInfo, IPInsight,
+                                     IPAPI.com]. Default: LeoMoeAPI
   -n  --no-rdns                      Do not resolve IP addresses to their
                                      domain names
   -a  --always-rdns                  Always resolve IP addresses to their
@@ -307,38 +202,26 @@ Arguments:
   -P  --route-path                   Print traceroute hop path by ASN and
                                      location
   -r  --report                       output using report mode
-      --dn42                         DN42 Mode
   -o  --output                       Write trace result to file
                                      (RealTimePrinter ONLY)
   -t  --table                        Output trace results as table
-      --raw                          An Output Easy to Parse
-  -j  --json                         Output trace results as JSON
   -c  --classic                      Classic Output trace results like
                                      BestTrace
   -f  --first                        Start from the first_ttl hop (instead from
                                      1). Default: 1
-  -M  --map                          Disable Print Trace Map
+  -M  --map                          Disable Print Trace Map Function
   -v  --version                      Print version info and exit
   -s  --source                       Use source src_addr for outgoing packets
   -D  --dev                          Use the following Network Devices as the
                                      source address in outgoing packets
   -R  --route                        Show Routing Table [Provided By BGP.Tools]
-  -z  --send-time                    Set how many [milliseconds] between
-                                     sending each packet.. Useful when some
-                                     routers use rate-limit for ICMP messages.
-                                     Default: 100
-  -i  --ttl-time                     Set how many [milliseconds] between
-                                     sending packets groups by TTL. Useful when
-                                     some routers use rate-limit for ICMP
-                                     messages. Default: 500
-      --timeout                      The number of [milliseconds] to keep probe
-                                     sockets open before giving up on the
-                                     connection.. Default: 1000
-      --psize                        Set the packet size (payload size).
-                                     Default: 52
-      --_positionalArg_nexttrace_31  IP Address or domain name
-      --dot-server                   Use DoT Server for DNS Parse [dnssb,
-                                     aliyun, dnspod, google, cloudflare]
+  -z  --send-time                    Set the time interval for sending every
+                                     packet. Useful when some routers use
+                                     rate-limit for ICMP messages. Default: 100
+  -i  --ttl-time                     Set the time interval for sending packets
+                                     groups by TTL. Useful when some routers
+                                     use rate-limit for ICMP messages. Default:
+                                     500
   -g  --language                     Choose the language for displaying [en,
                                      cn]. Default: cn
 ```
@@ -355,21 +238,7 @@ Arguments:
 
 Please Notice that `NextTrace Enhanced` is currently not supported in English.
 
-[https://github.com/OwO-Network/nexttrace-enhanced](https://github.com/OwO-Network/nexttrace-enhanced)
-
-## OpenTrace
-
-`OpenTrace` is the cross-platform `GUI` version of `NextTrace` developed by @Archeb, bringing a familiar but more powerful user experience.
-
-This software is still in the early stages of development and may have many flaws and errors. We value your feedback.
-
-[https://github.com/Archeb/opentrace](https://github.com/Archeb/opentrace)
-
-## NEXTTRACE WEB API
-
-`NextTraceWebApi` is a web-based server implementation of `NextTrace` in the `MTR` style, offering various deployment options including `Docker`.
-
-[https://github.com/tsosunchia/nexttracewebapi](https://github.com/tsosunchia/nexttracewebapi)
+https://github.com/OwO-Network/nexttrace-enhanced
 
 ## LeoMoeAPI Credit
 
@@ -379,7 +248,7 @@ The LeoMoeAPI data is subject to copyright restrictions from multiple data sourc
 
 1. We would like to credit samleong123 for providing nodes in Malaysia, TOHUNET Looking Glass for global nodes, and Ping.sx from Misaka, where more than 80% of reliable calibration data comes from ping/mtr reports.
 
-2. At the same time, we would like to credit isyekong for their contribution to rDNS-based calibration ideas and data. LeoMoeAPI is accelerating the development of rDNS resolution function, and has already achieved automated geolocation resolution for some backbone networks, but there are some misjudgments. We hope that NextTrace will become a One-Man ISP-friendly traceroute tool in the future, and we are working on improving the calibration of these ASN micro-backbones as much as possible.
+2. At the same time, we would like to credit isyekong for their contribution on rDNS-based calibration ideas and data. LeoMoeAPI is accelerating the development of rDNS resolution function, and has already achieved automated geolocation resolution for some backbone networks, but there are some misjudgments. We hope that NextTrace will become a One-Man ISP-friendly traceroute tool in the future, and we are working on improving the calibration of these ASN micro-backbones as much as possible.
 
 3. In terms of development, I would like to credit missuo and zhshch for their help with Go cross-compilation, design concepts and TCP/UDP Traceroute refactoring, and tsosunchia for their support on TraceMap.
 
@@ -396,7 +265,7 @@ We hope you can give us as much feedback as possible on IP geolocation errors (s
 
 ## Credits
 
-[BGP.TOOLS](https://bgp.tools) provided some data support for this project. And we would like to express our sincere gratitude.
+BGP.TOOLS provided some data support for this project and we would like to express our sincere gratitude.
 
 [Vincent Young](https://github.com/missuo) (i@yyt.moe)
 
@@ -406,18 +275,11 @@ We hope you can give us as much feedback as possible on IP geolocation errors (s
 
 [waiting4new](https://github.com/waiting4new)
 
-[FFEE_CO](https://github.com/fkx4-p)
+[FFEE_CO](https://github.com/fkx4-p) 
 
 ### Others
 
 Although other third-party APIs are integrated in this project, please refer to the official website of the third-party APIs for specific TOS and AUP. If you encounter IP data errors, please contact them directly to correct them.
-
-For feedback related to corrections about IP information, we currently have two channels available:
->- [IP 错误报告汇总帖](https://github.com/sjlleo/nexttrace/issues/41) in the GITHUB ISSUES section of this project (Recommended)
->- This project's dedicated correction email: `correction@moeqing.com` (Please note that this email is only for correcting IP-related information. For other feedback, please submit an ISSUE)
-
-How to obtain the freshly baked binary executable of the latest commit?
-> Please go to the most recent [Build & Release](https://github.com/sjlleo/nexttrace/actions/workflows/build.yml) workflow in GitHub Actions.
 
 ## Star History
 

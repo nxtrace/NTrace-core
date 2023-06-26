@@ -1,4 +1,4 @@
-package util
+package wshandle
 
 import (
 	"fmt"
@@ -14,16 +14,13 @@ var (
 	result  string
 	results = make(chan string)
 )
-var FastIpCache = ""
 
-func GetFastIP(domain string, port string, enableOutput bool) string {
-	if FastIpCache != "" {
-		return FastIpCache
-	}
+func GetFastIP(domain string, port string) string {
 
 	ips, err := net.LookupIP(domain)
 	if err != nil {
 		log.Fatal("DNS resolution failed, please check your system DNS Settings")
+		return ""
 	}
 
 	for _, ip := range ips {
@@ -33,6 +30,7 @@ func GetFastIP(domain string, port string, enableOutput bool) string {
 	select {
 	case result = <-results:
 	case <-time.After(1 * time.Second):
+
 	}
 	if result == "" {
 		log.Fatal("IP connection has been timeout, please check your network")
@@ -40,15 +38,13 @@ func GetFastIP(domain string, port string, enableOutput bool) string {
 	res := strings.Split(result, "-")
 
 	if len(ips) > 1 {
-		if enableOutput {
-			_, _ = fmt.Fprintf(color.Output, "%s prefered API IP - %s - %s\n",
-				color.New(color.FgWhite, color.Bold).Sprintf("[NextTrace API]"),
-				color.New(color.FgGreen, color.Bold).Sprintf("%s", res[0]),
-				color.New(color.FgCyan, color.Bold).Sprintf("%sms", res[1]),
-			)
-		}
+		_, _ = fmt.Fprintf(color.Output, "%s prefered API IP - %s - %s\n",
+			color.New(color.FgWhite, color.Bold).Sprintf("[NextTrace API]"),
+			color.New(color.FgGreen, color.Bold).Sprintf("%s", res[0]),
+			color.New(color.FgCyan, color.Bold).Sprintf("%sms", res[1]),
+		)
 	}
-	FastIpCache = res[0]
+
 	return res[0]
 }
 

@@ -93,7 +93,7 @@ checkWgetPackage() {
 downloadBinrayFile() {
     echo -e "${Info} 获取最新版的 NextTrace 发行版文件信息"
     # 简单说明一下，Github提供了一个API，可以获取最新发行版本的二进制文件下载地址（对应的是browser_download_url），根据刚刚测得的osDistribution、archParam，获取对应的下载地址
-    latestURL=$(curl -sL https://api.github.com/repos/sjlleo/nexttrace-core/releases/latest | grep -i "browser_download_url.*${osDistribution}.*${archParam}" | awk -F '"' '{print $4}')
+    latestURL=$(curl -s https://api.github.com/repos/sjlleo/nexttrace/releases/latest | grep -i "browser_download_url.*${osDistribution}.*${archParam}" | awk -F '"' '{print $4}')
     
     if [ "$countryCode" == "CN" ]; then
         echo -e "${Info} 检测到国内环境，正在使用镜像下载"

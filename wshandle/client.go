@@ -2,18 +2,18 @@ package wshandle
 
 import (
 	"crypto/tls"
-	"github.com/xgadget-lab/nexttrace/pow"
-	"github.com/xgadget-lab/nexttrace/util"
 	"log"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/xgadget-lab/nexttrace/util"
 )
 
 type WsConn struct {
@@ -29,10 +29,8 @@ type WsConn struct {
 }
 
 var wsconn *WsConn
-var host, port, fastIp string
-var envToken = util.EnvToken
-var cacheToken string
-var cacheTokenFailedTimes int
+var hostP = util.GetenvDefault("NEXTTRACE_HOSTPORT", "api.leo.moe")
+var host, port, fast_ip string
 
 func (c *WsConn) keepAlive() {
 	go func() {
@@ -118,39 +116,14 @@ func (c *WsConn) messageSendHandler() {
 }
 
 func (c *WsConn) recreateWsConn() {
-	// 尝试重新连线
-	u := url.URL{Scheme: "wss", Host: fastIp + ":" + port, Path: "/v3/ipGeoWs"}
+	u := url.URL{Scheme: "wss", Host: fast_ip + ":" + port, Path: "/v2/ipGeoWs"}
 	// log.Printf("connecting to %s", u.String())
-	jwtToken, ua := envToken, []string{"Privileged Client"}
-	err := error(nil)
-	if envToken == "" {
-		// 无环境变量 token
-		if cacheToken == "" {
-			// 无cacheToken, 重新获取 token
-			jwtToken, err = pow.GetToken(fastIp, host, port)
-			if err != nil {
-				log.Println(err)
-				os.Exit(1)
-			}
-		} else {
-			// 使用 cacheToken
-			jwtToken = cacheToken
-		}
-		ua = []string{util.UserAgent}
-	}
-	cacheToken = jwtToken
 	requestHeader := http.Header{
-		"Host":          []string{host},
-		"User-Agent":    ua,
-		"Authorization": []string{"Bearer " + jwtToken},
+		"Host": []string{host},
 	}
 	dialer := websocket.DefaultDialer
 	dialer.TLSClientConfig = &tls.Config{
 		ServerName: host,
-	}
-	proxyUrl := util.GetProxy()
-	if proxyUrl != nil {
-		dialer.Proxy = http.ProxyURL(proxyUrl)
 	}
 	ws, _, err := websocket.DefaultDialer.Dial(u.String(), requestHeader)
 	c.Conn = ws
@@ -159,11 +132,6 @@ func (c *WsConn) recreateWsConn() {
 		// <-time.After(time.Second * 1)
 		c.Connected = false
 		c.Connecting = false
-		if cacheTokenFailedTimes > 3 {
-			cacheToken = ""
-		}
-		cacheTokenFailedTimes += 1
-		//fmt.Println("重连失败", cacheTokenFailedTimes, "次")
 		return
 	} else {
 		c.Connected = true
@@ -175,40 +143,47 @@ func (c *WsConn) recreateWsConn() {
 }
 
 func createWsConn() *WsConn {
-	//fmt.Println("正在连接 WS")
 	// 设置终端中断通道
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
-	host, port = util.GetHostAndPort()
+	// 解析域名
+	hostArr := strings.Split(hostP, ":")
+	// 判断是否有指定端口
+	if len(hostArr) > 1 {
+		// 判断是否为 IPv6
+		if strings.HasPrefix(hostP, "[") {
+			tmp := strings.Split(hostP, "]")
+			host = tmp[0]
+			host = host[1:]
+			if port = tmp[1]; port != "" {
+				port = port[1:]
+			}
+		} else {
+			host, port = hostArr[0], hostArr[1]
+		}
+	} else {
+		host = hostP
+	}
+	if port == "" {
+		// 默认端口
+		port = "443"
+	}
+	// 默认配置完成，开始寻找最优 IP
+	fast_ip = GetFastIP(host, port)
+
 	// 如果 host 是一个 IP 使用默认域名
 	if valid := net.ParseIP(host); valid != nil {
 		host = "api.leo.moe"
-	} else {
-		// 默认配置完成，开始寻找最优 IP
-		fastIp = util.GetFastIP(host, port, true)
 	}
-	jwtToken, ua := envToken, []string{"Privileged Client"}
-	err := error(nil)
-	if envToken == "" {
-		jwtToken, err = pow.GetToken(fastIp, host, port)
-		if err != nil {
-			log.Println(err)
-			os.Exit(1)
-		}
-		ua = []string{util.UserAgent}
-	}
-	cacheToken = jwtToken
-	cacheTokenFailedTimes = 0
+	// 判断是否是一个 IP
 	requestHeader := http.Header{
-		"Host":          []string{host},
-		"User-Agent":    ua,
-		"Authorization": []string{"Bearer " + jwtToken},
+		"Host": []string{host},
 	}
 	dialer := websocket.DefaultDialer
 	dialer.TLSClientConfig = &tls.Config{
 		ServerName: host,
 	}
-	u := url.URL{Scheme: "wss", Host: fastIp + ":" + port, Path: "/v3/ipGeoWs"}
+	u := url.URL{Scheme: "wss", Host: fast_ip + ":" + port, Path: "/v2/ipGeoWs"}
 	// log.Printf("connecting to %s", u.String())
 
 	c, _, err := websocket.DefaultDialer.Dial(u.String(), requestHeader)

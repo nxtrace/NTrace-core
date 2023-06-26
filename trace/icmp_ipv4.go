@@ -1,7 +1,6 @@
 package trace
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -12,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/xgadget-lab/nexttrace/trace/internal"
 	"golang.org/x/net/context"
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv4"
@@ -28,30 +26,6 @@ type ICMPTracer struct {
 	icmpListen            net.PacketConn
 	final                 int
 	finalLock             sync.Mutex
-	fetchLock             sync.Mutex
-}
-
-func (t *ICMPTracer) PrintFunc() {
-	defer t.wg.Done()
-	var ttl = t.Config.BeginHop - 1
-	for {
-		if t.AsyncPrinter != nil {
-			t.AsyncPrinter(&t.res)
-		}
-		if len(t.res.Hops)-1 > ttl {
-			if len(t.res.Hops[ttl]) == t.NumMeasurements {
-				if t.RealtimePrinter != nil {
-					t.RealtimePrinter(&t.res, ttl)
-				}
-				ttl++
-
-				if ttl == t.final-1 || ttl >= t.MaxHops-1 {
-					return
-				}
-			}
-		}
-		<-time.After(200 * time.Millisecond)
-	}
 }
 
 func (t *ICMPTracer) Execute() (*Result, error) {
@@ -65,7 +39,7 @@ func (t *ICMPTracer) Execute() (*Result, error) {
 
 	var err error
 
-	t.icmpListen, err = internal.ListenICMP("ip4:1", t.SrcAddr)
+	t.icmpListen, err = net.ListenPacket("ip4:1", t.SrcAddr)
 	if err != nil {
 		return &t.res, err
 	}
@@ -78,7 +52,6 @@ func (t *ICMPTracer) Execute() (*Result, error) {
 
 	go t.listenICMP()
 	t.wg.Add(1)
-	go t.PrintFunc()
 	for ttl := t.BeginHop; ttl <= t.MaxHops; ttl++ {
 		t.inflightRequestRWLock.Lock()
 		t.inflightRequest[ttl] = make(chan Hop, t.NumMeasurements)
@@ -97,21 +70,14 @@ func (t *ICMPTracer) Execute() (*Result, error) {
 	t.wg.Wait()
 	t.res.reduce(t.final)
 	if t.final != -1 {
-		if t.RealtimePrinter != nil {
-			t.RealtimePrinter(&t.res, t.final-1)
-		}
 	} else {
 		for i := 0; i < t.NumMeasurements; i++ {
 			t.res.add(Hop{
-				Success: false,
 				Address: nil,
 				TTL:     30,
 				RTT:     0,
 				Error:   ErrHopLimitTimeout,
 			})
-		}
-		if t.RealtimePrinter != nil {
-			t.RealtimePrinter(&t.res, t.MaxHops-1)
 		}
 	}
 	return &t.res, nil
@@ -178,7 +144,6 @@ func (t *ICMPTracer) handleICMPMessage(msg ReceivedMessage, icmpType int8, data 
 	defer t.inflightRequestRWLock.RUnlock()
 	if _, ok := t.inflightRequest[ttl]; ok {
 		t.inflightRequest[ttl] <- Hop{
-			Success: true,
 			Address: msg.Peer,
 		}
 	}
@@ -255,9 +220,8 @@ func (t *ICMPTracer) send(ttl int) error {
 	icmpHeader := icmp.Message{
 		Type: ipv4.ICMPTypeEcho, Code: 0,
 		Body: &icmp.Echo{
-			ID: id,
-			//Data: []byte("HELLO-R-U-THERE"),
-			Data: bytes.Repeat([]byte{1}, t.Config.PktSize),
+			ID:   id,
+			Data: []byte("HELLO-R-U-THERE"),
 			Seq:  ttl,
 		},
 	}
@@ -302,10 +266,6 @@ func (t *ICMPTracer) send(ttl int) error {
 		h.TTL = ttl
 		h.RTT = rtt
 
-		t.fetchLock.Lock()
-		defer t.fetchLock.Unlock()
-		h.fetchIPData(t.Config)
-
 		t.res.add(h)
 	case <-time.After(t.Timeout):
 		if t.final != -1 && ttl > t.final {
@@ -313,7 +273,6 @@ func (t *ICMPTracer) send(ttl int) error {
 		}
 
 		t.res.add(Hop{
-			Success: false,
 			Address: nil,
 			TTL:     ttl,
 			RTT:     0,

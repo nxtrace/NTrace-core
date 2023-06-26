@@ -38,7 +38,3 @@ copyright: [v2fly](https://github.com/v2fly)
 
 
 ## 请附上出错时软件输出的错误信息
-
-## 是否查询过本仓库wiki有没有类似错误
-
-<!-- wiki: https://github.com/sjlleo/nexttrace/wiki -->

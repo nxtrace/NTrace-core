@@ -27,14 +27,8 @@ func InitConfig() {
 	err := viper.ReadInConfig() // Find and read the config file
 	if err != nil {             // Handle errors reading the config file
 		fmt.Println("未能找到配置文件，我们将在您的运行目录为您创建 nt_config.yaml 默认配置")
-		err := viper.SafeWriteConfigAs("./nt_config.yaml")
-		if err != nil {
-			return
-		}
+		viper.SafeWriteConfigAs("./nt_config.yaml")
 	}
 
-	err = viper.ReadInConfig()
-	if err != nil {
-		return
-	}
+	viper.ReadInConfig()
 }

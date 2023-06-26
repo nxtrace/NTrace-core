@@ -28,8 +28,7 @@ type UDPTracer struct {
 	final     int
 	finalLock sync.Mutex
 
-	sem       *semaphore.Weighted
-	fetchLock sync.Mutex
+	sem *semaphore.Weighted
 }
 
 func (t *UDPTracer) Execute() (*Result, error) {
@@ -61,26 +60,9 @@ func (t *UDPTracer) Execute() (*Result, error) {
 		for i := 0; i < t.NumMeasurements; i++ {
 			t.wg.Add(1)
 			go t.send(ttl)
-			<-time.After(time.Millisecond * time.Duration(t.Config.PacketInterval))
+
 		}
-		if t.RealtimePrinter != nil {
-			// 对于实时模式，应该按照TTL进行并发请求
-			t.wg.Wait()
-			t.RealtimePrinter(&t.res, ttl-1)
-		}
-		<-time.After(time.Millisecond * time.Duration(t.Config.TTLInterval))
-	}
-	go func() {
-		if t.AsyncPrinter != nil {
-			for {
-				t.AsyncPrinter(&t.res)
-				time.Sleep(200 * time.Millisecond)
-			}
-		}
-	}()
-	// 如果是表格模式，则一次性并发请求
-	if t.AsyncPrinter != nil {
-		t.wg.Wait()
+		time.Sleep(1 * time.Millisecond)
 	}
 	t.res.reduce(t.final)
 
@@ -129,7 +111,6 @@ func (t *UDPTracer) handleICMPMessage(msg ReceivedMessage, data []byte) {
 		return
 	}
 	ch <- Hop{
-		Success: true,
 		Address: msg.Peer,
 	}
 }
@@ -189,12 +170,7 @@ func (t *UDPTracer) send(ttl int) error {
 			ComputeChecksums: true,
 			FixLengths:       true,
 		}
-
-		desiredPayloadSize := t.Config.PktSize
-		payload := make([]byte, desiredPayloadSize)
-		copy(buf.Bytes(), payload)
-
-		if err := gopacket.SerializeLayers(buf, opts, udpHeader); err != nil {
+		if err := gopacket.SerializeLayers(buf, opts, udpHeader, gopacket.Payload("HAJSFJHKAJSHFKJHAJKFHKASHKFHHKAFKHFAHSJK")); err != nil {
 			return err
 		}
 
@@ -231,7 +207,6 @@ func (t *UDPTracer) send(ttl int) error {
 			return
 		}
 		hopCh <- Hop{
-			Success: true,
 			Address: peer,
 		}
 	}()
@@ -262,10 +237,6 @@ func (t *UDPTracer) send(ttl int) error {
 		h.TTL = ttl
 		h.RTT = rtt
 
-		t.fetchLock.Lock()
-		defer t.fetchLock.Unlock()
-		h.fetchIPData(t.Config)
-
 		t.res.add(h)
 
 	case <-time.After(t.Timeout):
@@ -274,7 +245,6 @@ func (t *UDPTracer) send(ttl int) error {
 		}
 
 		t.res.add(Hop{
-			Success: false,
 			Address: nil,
 			TTL:     ttl,
 			RTT:     0,

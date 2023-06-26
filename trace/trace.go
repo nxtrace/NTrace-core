@@ -5,16 +5,12 @@ import (
 	"net"
 	"sync"
 	"time"
-
-	"github.com/xgadget-lab/nexttrace/ipgeo"
-	"github.com/xgadget-lab/nexttrace/util"
 )
 
 var (
 	ErrInvalidMethod      = errors.New("invalid method")
 	ErrTracerouteExecuted = errors.New("traceroute already executed")
 	ErrHopLimitTimeout    = errors.New("hop timeout")
-	geoCache              = sync.Map{}
 )
 
 type Config struct {
@@ -27,17 +23,8 @@ type Config struct {
 	DestIP           net.IP
 	DestPort         int
 	Quic             bool
-	IPGeoSource      ipgeo.Source
-	RDns             bool
-	AlwaysWaitRDNS   bool
 	PacketInterval   int
 	TTLInterval      int
-	Lang             string
-	DN42             bool
-	RealtimePrinter  func(res *Result, ttl int)
-	AsyncPrinter     func(res *Result)
-	PktSize          int
-	Maptrace         bool
 }
 
 type Method string
@@ -93,9 +80,8 @@ func Traceroute(method Method, config Config) (*Result, error) {
 }
 
 type Result struct {
-	Hops        [][]Hop
-	lock        sync.Mutex
-	TraceMapUrl string
+	Hops [][]Hop
+	lock sync.Mutex
 }
 
 func (s *Result) add(hop Hop) {
@@ -116,112 +102,9 @@ func (s *Result) reduce(final int) {
 }
 
 type Hop struct {
-	Success  bool
 	Address  net.Addr
 	Hostname string
 	TTL      int
 	RTT      time.Duration
 	Error    error
-	Geo      *ipgeo.IPGeoData
-	Lang     string
-}
-
-func (h *Hop) fetchIPData(c Config) (err error) {
-
-	// DN42
-	if c.DN42 {
-		var ip string
-		// 首先查找 PTR 记录
-		r, err := util.LookupAddr(h.Address.String())
-		if err == nil && len(r) > 0 {
-			h.Hostname = r[0][:len(r[0])-1]
-			ip = h.Address.String() + "," + h.Hostname
-		}
-		h.Geo, err = c.IPGeoSource(ip, c.Timeout, c.Lang, c.Maptrace)
-		return nil
-	}
-
-	// Debug Area
-	// c.AlwaysWaitRDNS = true
-
-	// Initialize a rDNS Channel
-	rDNSChan := make(chan []string)
-	fetchDoneChan := make(chan bool)
-
-	if c.RDns && h.Hostname == "" {
-		// Create a rDNS Query go-routine
-		go func() {
-			r, err := util.LookupAddr(h.Address.String())
-			if err != nil {
-				// No PTR Record
-				rDNSChan <- nil
-			} else {
-				// One PTR Record is found
-				rDNSChan <- r
-			}
-		}()
-	}
-
-	// Create Data Fetcher go-routine
-	go func() {
-		// Start to fetch IP Geolocation data
-		if c.IPGeoSource != nil && h.Geo == nil {
-			res := false
-			h.Lang = c.Lang
-			h.Geo, res = ipgeo.Filter(h.Address.String())
-			if !res {
-				timeout := c.Timeout
-				if c.Timeout < 2*time.Second {
-					timeout = 2 * time.Second
-				}
-				//h.Geo, err = c.IPGeoSource(h.Address.String(), timeout, c.Lang, c.Maptrace)
-				if cacheVal, ok := geoCache.Load(h.Address.String()); ok {
-					// 如果缓存中已有结果，直接使用
-					h.Geo = cacheVal.(*ipgeo.IPGeoData)
-				} else {
-					// 如果缓存中无结果，进行查询并将结果存入缓存
-					h.Geo, err = c.IPGeoSource(h.Address.String(), timeout, c.Lang, c.Maptrace)
-					if err == nil {
-						geoCache.Store(h.Address.String(), h.Geo)
-					}
-				}
-			}
-		}
-		// Fetch Done
-		fetchDoneChan <- true
-	}()
-
-	// Select Close Flag
-	var selectClose bool
-	if !c.AlwaysWaitRDNS {
-		select {
-		case <-fetchDoneChan:
-			// When fetch done signal recieved, stop waiting PTR record
-		case ptr := <-rDNSChan:
-			// process result
-			if err == nil && len(ptr) > 0 {
-				h.Hostname = ptr[0][:len(ptr[0])-1]
-			}
-			selectClose = true
-		}
-	} else {
-		select {
-		case ptr := <-rDNSChan:
-			// process result
-			if err == nil && len(ptr) > 0 {
-				h.Hostname = ptr[0]
-			}
-		// 1 second timeout
-		case <-time.After(time.Second * 1):
-		}
-		selectClose = true
-	}
-
-	// When Select Close, fetchDoneChan Reciever will also be closed
-	if selectClose {
-		// New a reciever to prevent channel congestion
-		<-fetchDoneChan
-	}
-
-	return
 }
