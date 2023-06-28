@@ -175,6 +175,7 @@ func (c *WsConn) recreateWsConn() {
 }
 
 func createWsConn() *WsConn {
+	proxyUrl := util.GetProxy()
 	//fmt.Println("正在连接 WS")
 	// 设置终端中断通道
 	interrupt := make(chan os.Signal, 1)
@@ -186,6 +187,9 @@ func createWsConn() *WsConn {
 	} else {
 		// 默认配置完成，开始寻找最优 IP
 		fastIp = util.GetFastIP(host, port, true)
+		if proxyUrl != nil {
+			fastIp = "api.leo.moe"
+		}
 	}
 	jwtToken, ua := envToken, []string{"Privileged Client"}
 	err := error(nil)
@@ -207,6 +211,9 @@ func createWsConn() *WsConn {
 	dialer := websocket.DefaultDialer
 	dialer.TLSClientConfig = &tls.Config{
 		ServerName: host,
+	}
+	if proxyUrl != nil {
+		dialer.Proxy = http.ProxyURL(proxyUrl)
 	}
 	u := url.URL{Scheme: "wss", Host: fastIp + ":" + port, Path: "/v3/ipGeoWs"}
 	// log.Printf("connecting to %s", u.String())
