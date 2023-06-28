@@ -17,6 +17,10 @@ var (
 var FastIpCache = ""
 
 func GetFastIP(domain string, port string, enableOutput bool) string {
+	proxyUrl := GetProxy()
+	if proxyUrl != nil {
+		return "api.leo.moe"
+	}
 	if FastIpCache != "" {
 		return FastIpCache
 	}

@@ -187,9 +187,6 @@ func createWsConn() *WsConn {
 	} else {
 		// 默认配置完成，开始寻找最优 IP
 		fastIp = util.GetFastIP(host, port, true)
-		if proxyUrl != nil {
-			fastIp = "api.leo.moe"
-		}
 	}
 	jwtToken, ua := envToken, []string{"Privileged Client"}
 	err := error(nil)
