@@ -175,12 +175,12 @@ var Hefei = BackBoneCollection{
 	// 中国科学技术大学 教育网
 	EDU: ISPCollection{
 		ISPName: EDU,
-		IP:      "ipv4.hef-4538.nexttrace-io-fasttrace-endpoint.win.",
-		IPv6:    "ipv6.hef-4538.nexttrace-io-fasttrace-endpoint.win.",
+		IP:      "ipv4.hfe-4538.nexttrace-io-fasttrace-endpoint.win.",
+		IPv6:    "ipv6.hfe-4538.nexttrace-io-fasttrace-endpoint.win.",
 	},
 	// 中国科学技术大学 科技网
 	CST: ISPCollection{
 		ISPName: "中国科学技术大学 科技网 AS7497",
-		IP:      "ipv4.hef-7497.nexttrace-io-fasttrace-endpoint.win.",
+		IP:      "ipv4.hfe-7497.nexttrace-io-fasttrace-endpoint.win.",
 	},
 }
