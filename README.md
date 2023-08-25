@@ -22,26 +22,37 @@
   </a>
 </p>
 
+## IAAS Sponsor
+
+<div style="text-align: center;">
+    <a href="https://dmit.io">
+        <img src="https://www.dmit.io/templates/dmit_theme_2020/dmit/assets/images/dmit_logo_with_text_blue.svg" width="170.7" height="62.9">
+    </a>
+    &nbsp;&nbsp;&nbsp;&nbsp;
+    <a href="https://misaka.io" >
+        <img src="https://www.jsdelivr.com/assets/8997e39e1f9d776502ab4d7cdff9d1608aa67aaf/img/globalping/sponsors/misaka.svg" width="170.7" height="62.9">
+    </a>
+    &nbsp;&nbsp;&nbsp;&nbsp;
+    <a href="https://skywolf.cloud" >
+        <img src="https://github.com/nxtrace/Ntrace-core/assets/59512455/19b659f4-31f5-4816-9821-bf2a73c60336" width="170.7" height="62.9">
+    </a>
+
+</div>
+
+We are extremely grateful to [DMIT](https://dmit.io) and [Misaka](https://misaka.io) and [Skywolf](https://skywolf.cloud) for providing the network infrastructure that powers this project.
+
 ## How To Use
 
 Document Language: English | [简体中文](README_zh_CN.md)
-
-⚠️ The latest stable version of NextTrace is v1.1.2, while the core project is the latest restructured project. For the v1+ versions of NextTrace, we will no longer have functional updates (bug fixes for existing features will continue).
-
-V1 (v1.1.3 - v1.1.7) is an **experimental** version with **no SLA** guarantees, and is currently in maintenance mode. It will not be merged into the `Ntrace-core` main repository. If you do not need the feature updates included in version v1.1.3 and subsequent versions (please read the relevant section in [#Others](#others)), it is recommended to use the stable version v1.1.2. For the specific code, please refer to [nxtrace/Ntrace-V1](https://github.com/nxtrace/Ntrace-V1).
 
 ### Automated Installation
 
 ```bash
 # Linux one-click install script
-bash <(curl -Ls https://raw.githubusercontent.com/sjlleo/nexttrace/main/nt_install.sh)
+bash -c "$(curl http://nexttrace-io-leomoe-api-a0.shop/nt_install.sh)"
 
 # macOS brew install command
 brew tap xgadget-lab/nexttrace && brew install nexttrace
-
-# GHProxy Mirror (For China Mainland User)
-bash -c "$(curl -Ls https://ghproxy.com/https://raw.githubusercontent.com/sjlleo/nexttrace/main/nt_install.sh)"
-```
 
 Windows users please go to [Release Page](https://github.com/sjlleo/nexttrace/releases/latest) directly and download exe file.
 
@@ -298,6 +309,13 @@ BGP.TOOLS provided some data support for this project and we would like to expre
 ### Others
 
 Although other third-party APIs are integrated in this project, please refer to the official website of the third-party APIs for specific TOS and AUP. If you encounter IP data errors, please contact them directly to correct them.
+
+For feedback related to corrections about IP information, we currently have two channels available:
+>- [IP 错误报告汇总帖](https://github.com/sjlleo/nexttrace/issues/41) in the GITHUB ISSUES section of this project (Recommended)
+>- This project's dedicated correction email: `correction@moeqing.com` (Please note that this email is only for correcting IP-related information. For other feedback, please submit an ISSUE)
+
+How to obtain the freshly baked binary executable of the latest commit?
+> Please go to the most recent [Build & Release](https://github.com/nxtrace/Ntrace-V1/actions/workflows/build.yml) workflow in GitHub Actions.
 
 Differences between version v1.1.2 and v1.1.7-2:
 * Added and fixed support for some third-party GEOIP APIs

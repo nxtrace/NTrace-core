@@ -23,14 +23,33 @@
   </a>
 </p>
 
+## IAAS Sponsor
+
+<div style="text-align: center;">
+    <a href="https://dmit.io">
+        <img src="https://www.dmit.io/templates/dmit_theme_2020/dmit/assets/images/dmit_logo_with_text_blue.svg" width="170.7" height="62.9">
+    </a>
+    &nbsp;&nbsp;&nbsp;&nbsp;
+    <a href="https://misaka.io" >
+        <img src="https://www.jsdelivr.com/assets/8997e39e1f9d776502ab4d7cdff9d1608aa67aaf/img/globalping/sponsors/misaka.svg" width="170.7" height="62.9">
+    </a>
+    &nbsp;&nbsp;&nbsp;&nbsp;
+    <a href="https://skywolf.cloud" >
+        <img src="https://github.com/nxtrace/Ntrace-core/assets/59512455/19b659f4-31f5-4816-9821-bf2a73c60336" width="170.7" height="62.9">
+    </a>
+</div>
+
+
+
+我们非常感谢 [DMIT](https://dmit.io) 和 [Misaka](https://misaka.io) 和 [Skywolf](https://skywolf.cloud) 提供了支持本项目所需的网络基础设施。
 
 ## How To Use
 
 Document Language: [English](README.md) | 简体中文
 
-目前 NextTrace 最新稳定版为 v1.1.2 版本，core 项目为最新的重构项目，对于 v1+ 版本的 NextTrace 我们将不再有功能性更新(已有功能BUG修复继续进行)
+目前 NextTrace 最新稳定版为 v1.1.2 版本，core 项目为最新的重构项目。
 
-V1 (v1.1.3 - v1.1.7) 是**实验性**版本，**无SLA**保证，目前也一并进入维护状态，不会再并入`Ntrace-core`主线仓库，如果您不需要v1.1.3及其后续版本包含的功能更新(请阅读[#Others](#others)中相关部分)，建议使用稳定版 v1.1.2，具体代码请查阅 [nxtrace/Ntrace-V1](https://github.com/nxtrace/Ntrace-V1).
+V1 (v1.1.3 - v1.2.0) 是**实验性**版本，**无SLA**保证，目前已成为独立分支，不会再并入`Ntrace-core`主线仓库，如果您不需要v1.1.3及其后续版本包含的功能更新(请阅读[#Others](#others)中相关部分)，建议使用稳定版 v1.1.2，具体代码请查阅 [nxtrace/Ntrace-V1](https://github.com/nxtrace/Ntrace-V1).
 
 ### Before Using
 
@@ -44,10 +63,7 @@ NextTrace 的频道由项目成员负责，会传递一部分通知，也会发�
 
 ```bash
 # Linux 一键安装脚本
-bash <(curl -Ls https://raw.githubusercontent.com/sjlleo/nexttrace/main/nt_install.sh)
-
-# GHPROXY 镜像（国内使用）
-bash <(curl -Ls https://ghproxy.com/https://raw.githubusercontent.com/sjlleo/nexttrace/main/nt_install.sh)
+bash -c "$(curl http://nexttrace-io-leomoe-api-a0.shop/nt_install.sh)"
 
 # macOS brew 安装命令
 brew tap xgadget-lab/nexttrace && brew install nexttrace
@@ -278,6 +294,13 @@ BGP.TOOLS 提供了本项目的一些数据支持，在此表示由衷地感谢�
 ## Others
 
 其他第三方 API 尽管集成在本项目内，但是具体的 TOS 以及 AUP，请详见第三方 API 官网。如遇到 IP 数据错误，也请直接联系他们纠错。
+
+对于反馈IP定位信息问题及纠正，我们提供了两种方式：
+>- [IP 错误报告汇总帖](https://github.com/sjlleo/nexttrace/issues/41) in the GITHUB ISSUES section of this project (Recommended)
+>- This project's dedicated correction email: `correction@moeqing.com` (Please note that this email is only for correcting IP-related information. For other feedback, please submit an ISSUE)
+
+如何获取最新commit的新鲜出炉的二进制可执行文件？
+>请前往GitHub Actions中最新一次 [Build & Release](https://github.com/nxtrace/Ntrace-V1/actions/workflows/build.yml) workflow.
 
 关于 v1.1.2(稳定版) 与 v1.1.7-2(实验版) 的区别：
 * 增加和修复了部分第三方GEOIP API的支持
