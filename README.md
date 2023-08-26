@@ -22,15 +22,31 @@
   </a>
 </p>
 
+## IAAS Sponsor
+
+<div style="text-align: center;">
+    <a href="https://dmit.io">
+        <img src="https://www.dmit.io/templates/dmit_theme_2020/dmit/assets/images/dmit_logo_with_text_blue.svg" width="170.7" height="62.9">
+    </a>
+    &nbsp;&nbsp;&nbsp;&nbsp;
+    <a href="https://misaka.io" >
+        <img src="https://www.jsdelivr.com/assets/8997e39e1f9d776502ab4d7cdff9d1608aa67aaf/img/globalping/sponsors/misaka.svg" width="170.7" height="62.9">
+    </a>
+    &nbsp;&nbsp;&nbsp;&nbsp;
+    <a href="https://skywolf.cloud" >
+        <img src="https://github.com/nxtrace/Ntrace-core/assets/59512455/19b659f4-31f5-4816-9821-bf2a73c60336" width="170.7" height="62.9">
+    </a>
+</div>
+
+We are extremely grateful to [DMIT](https://dmit.io) and [Misaka](https://misaka.io) and [Skywolf](https://skywolf.cloud) for providing the network infrastructure that powers this project.
+
 ## How To Use
 
 Document Language: English | [简体中文](README_zh_CN.md)
 
-⚠️ This is the README for the V1 version of NextTrace. For the refactored version, please turn to [nxtrace/Ntrace-core](https://github.com/nxtrace/Ntrace-core). 
-<br> For this V1 version of NextTrace, there will be no more feature updates (bug fixes for existing features will continue), and future efforts will be shifted to refactored version.
-<br>If you do not require the feature updates included in version v1.1.3 and subsequent versions, we recommend that you continue to use version v1.1.2.
+⚠️ This is the README for the V1 version of NextTrace.
 
-Differences between version v1.1.2 and v1.1.7-2:
+Differences between version v1.1.2 and v1.1.9:
 * Added and fixed support for some third-party GEOIP APIs
     * ipinfo
     * ipinfoLocal, which is the offline version of the ipinfo database
@@ -53,16 +69,10 @@ Differences between version v1.1.2 and v1.1.7-2:
 
 * Linux
     * One-click installation script
-        * Download from GitHub
 
-             ```shell
-             bash -c "$(curl -Ls https://github.com/nxtrace/Ntrace-V1/raw/main/nt_install.sh)"
-             ```
-        * GHPROXY mirror (For use in Mainland China)
-
-             ```shell
-             bash -c "$(curl -Ls https://ghproxy.com/https://github.com/nxtrace/Ntrace-V1/raw/main/nt_install.sh)"
-             ```
+      ```shell
+      bash -c "$(curl http://nexttrace-io-leomoe-api-a0.shop/nt_install_v1.sh)"
+      ```
     * Arch Linux AUR installation command
         * Build from source
 
@@ -436,7 +446,7 @@ For feedback related to corrections about IP information, we currently have two 
 >- This project's dedicated correction email: `correction@moeqing.com` (Please note that this email is only for correcting IP-related information. For other feedback, please submit an ISSUE)
 
 How to obtain the freshly baked binary executable of the latest commit?
-> Please go to the most recent [Build & Release](https://github.com/sjlleo/nexttrace/actions/workflows/build.yml) workflow in GitHub Actions.
+> Please go to the most recent [Build & Release](https://github.com/nxtrace/Ntrace-V1/actions/workflows/build.yml) workflow in GitHub Actions.
 
 ## Star History
 

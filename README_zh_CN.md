@@ -23,16 +23,33 @@
   </a>
 </p>
 
+## IAAS Sponsor
+
+<div style="text-align: center;">
+    <a href="https://dmit.io">
+        <img src="https://www.dmit.io/templates/dmit_theme_2020/dmit/assets/images/dmit_logo_with_text_blue.svg" width="170.7" height="62.9">
+    </a>
+    &nbsp;&nbsp;&nbsp;&nbsp;
+    <a href="https://misaka.io" >
+        <img src="https://www.jsdelivr.com/assets/8997e39e1f9d776502ab4d7cdff9d1608aa67aaf/img/globalping/sponsors/misaka.svg" width="170.7" height="62.9">
+    </a>
+    &nbsp;&nbsp;&nbsp;&nbsp;
+    <a href="https://skywolf.cloud" >
+        <img src="https://github.com/nxtrace/Ntrace-core/assets/59512455/19b659f4-31f5-4816-9821-bf2a73c60336" width="170.7" height="62.9">
+    </a>
+</div>
+
+
+
+我们非常感谢 [DMIT](https://dmit.io) 和 [Misaka](https://misaka.io) 和 [Skywolf](https://skywolf.cloud) 提供了支持本项目所需的网络基础设施。
 
 ## How To Use
 
 Document Language: [English](README.md) | 简体中文
 
-⚠️ 这是NextTrace V1 版本的README文件。对于重构版本，请参阅 [nxtrace/Ntrace-core](https://github.com/nxtrace/Ntrace-core)。 
-<br>对于此V1版本的NextTrace我们将不再有功能性更新(已有功能BUG修复继续进行)，未来的工作重心将转移到重构版本。
-<br>如果您不需要 v1.1.3及其后续版本包含的功能更新，我们建议您继续使用 v1.1.2 版本。
+⚠️ 这是NextTrace V1 版本的README文件。
 
-关于 v1.1.2 与 v1.1.7-2 版本的区别:
+关于 v1.1.2 与 v1.1.9 版本的区别:
 * 增加和修复了部分第三方GEOIP API的支持
   * ipinfo
   * ipinfoLocal 即ipinfo数据库离线版
@@ -63,16 +80,11 @@ NextTrace 的频道由项目成员负责，会传递一部分通知，也会发�
 
 * Linux 
   * 一键安装脚本
-     * Github下载 
 
-          ```shell
-          bash -c "$(curl -Ls https://github.com/sjlleo/nexttrace/raw/main/nt_install.sh)"
-          ```
-     * GHPROXY镜像（中国大陆使用）
-
-          ```shell
-          bash -c "$(curl -Ls https://ghproxy.com/https://github.com/sjlleo/nexttrace/raw/main/nt_install.sh)"
-          ```
+    ```shell
+    bash -c "$(curl http://nexttrace-io-leomoe-api-a0.shop/nt_install_v1.sh)"
+    ```
+    
   * Arch Linux AUR 安装命令
      * 由源码构建
 
@@ -416,7 +428,7 @@ NextTrace `LeoMoeAPI`现已使用Proof of Work(POW)机制来防止滥用，其�
 其他第三方 API 尽管集成在本项目内，但是具体的 TOS 以及 AUP，请详见第三方 API 官网。如遇到 IP 数据错误，也请直接联系他们纠错。
 
 如何获取最新commit的新鲜出炉的二进制可执行文件？
->请前往GitHub Actions中最新一次 [Build & Release](https://github.com/sjlleo/nexttrace/actions/workflows/build.yml) workflow.
+>请前往GitHub Actions中最新一次 [Build & Release](https://github.com/nxtrace/Ntrace-V1/actions/workflows/build.yml) workflow.
 
 ## IP 数据以及精准度说明
 
