@@ -49,7 +49,7 @@ Document Language: [English](README.md) | 简体中文
 
 ⚠️ 这是NextTrace V1 版本的README文件。
 
-关于 v1.1.2 与 v1.1.9 版本的区别:
+关于 v1.1.2 与 v1.2.0 版本的区别:
 * 增加和修复了部分第三方GEOIP API的支持
   * ipinfo
   * ipinfoLocal 即ipinfo数据库离线版
@@ -67,6 +67,7 @@ Document Language: [English](README.md) | 简体中文
 * fasttrace模式下支持更多的参数
 * 增加缓存处理以加速解析
 * 修复了部分BUG
+* Golang v1.21.0
 
 ### Before Using
 

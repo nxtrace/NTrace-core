@@ -46,7 +46,7 @@ Document Language: English | [简体中文](README_zh_CN.md)
 
 ⚠️ This is the README for the V1 version of NextTrace.
 
-Differences between version v1.1.2 and v1.1.9:
+Differences between version v1.1.2 and v1.2.0:
 * Added and fixed support for some third-party GEOIP APIs
     * ipinfo
     * ipinfoLocal, which is the offline version of the ipinfo database
@@ -64,6 +64,7 @@ Differences between version v1.1.2 and v1.1.9:
 * Supports more parameters in fasttrace mode
 * Added cache handling to speed up resolution
 * Fixed some bugs
+* Golang v1.21.0
 
 ### Automated Install
 
