@@ -379,14 +379,6 @@ Arguments:
 
 ![image](https://user-images.githubusercontent.com/59512455/218501311-1ceb9b79-79e6-4eb6-988a-9d38f626cdb8.png)
 
-## NextTrace Enhanced
-
-`NextTrace Enhanced` is an enhanced version for enthusiasts, `Enhanced` provides trace route calls in the form of Web API and a simple Looking Glass webpage with built-in visualization.
-
-Please Notice that `NextTrace Enhanced` is currently not supported in English.
-
-[https://github.com/OwO-Network/nexttrace-enhanced](https://github.com/OwO-Network/nexttrace-enhanced)
-
 ## OpenTrace
 
 `OpenTrace` is the cross-platform `GUI` version of `NextTrace` developed by @Archeb, bringing a familiar but more powerful user experience.
