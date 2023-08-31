@@ -17,8 +17,8 @@
   <a href="https://goreportcard.com/report/github.com/sjlleo/nexttrace">
     <img src="https://goreportcard.com/badge/github.com/nxtrace/Ntrace-core?style=flat-square">
   </a>
-  <a href="https://github.com/sjlleo/nexttrace/releases">
-    <img src="https://img.shields.io/github/release/nxtrace/Ntrace-core/all.svg?style=flat-square">
+  <a href="https://github.com/nxtrace/Ntrace-V1/releases">
+    <img src="https://img.shields.io/github/release/nxtrace/Ntrace-V1/all.svg?style=flat-square">
   </a>
 </p>
 
@@ -41,9 +41,19 @@
 
 We are extremely grateful to [DMIT](https://dmit.io) and [Misaka](https://misaka.io) and [Skywolf](https://skywolf.cloud) for providing the network infrastructure that powers this project.
 
+## Announcement
+
+⚠️ LeoMoeAPI v1 API is about to stop maintenance, and versions below **v1.1.7** that rely on its services will not be available. Please [download and update NextTrace from Ntrace-V1](https://github.com/nxtrace/Ntrace-V1/release) as soon as possible.
+
+For details, please check [#159](https://github.com/nxtrace/Ntrace-core/issues/159).
+
 ## How To Use
 
 Document Language: English | [简体中文](README_zh_CN.md)
+
+At present, the Ntrace-core repository is a new refactoring project. We are recruiting users to test the refactoring version (V2) internally. If you are interested, please check [#159](https://github.com/nxtrace/Ntrace-core/issues/159). Before the official release of the first refactored version, please temporarily go to the [Ntrace-V1 repository](https://github.com/nxtrace/Ntrace-V1/release) to download NextTrace.
+
+**V1 enhanced version** is a **experimental** version, which has now become an independent repository. It will no longer be merged into the main line repository of 'Ntrace-core`, but develops independently in another direction. The enhanced version contains additional functions (please read the relevant part of [#Others](#others). For the V1 enhanced version, please go to [nxtrace/Ntrace-V1](https://github.com/nxtrace/Ntrace-V1).
 
 ### Automated Installation
 
@@ -52,9 +62,9 @@ Document Language: English | [简体中文](README_zh_CN.md)
 bash -c "$(curl http://nexttrace-io-leomoe-api-a0.shop/nt_install.sh)"
 
 # macOS brew install command
-brew tap xgadget-lab/nexttrace && brew install nexttrace
+brew install nexttrace
 
-Windows users please go to [Release Page](https://github.com/sjlleo/nexttrace/releases/latest) directly and download exe file.
+Windows users please go to [Release Page](https://github.com/nxtrace/Ntrace-V1/releases/latest) directly and download exe file.
 
 - `Release` provides compiled executables for many systems and architectures, if not, you can compile it yourself.
 - Some of the necessary dependencies of this project are not fully implemented in `Golang` on `Windows`, so currently `NextTrace` is experimental on `Windows` platform.

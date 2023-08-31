@@ -18,8 +18,8 @@
   <a href="https://goreportcard.com/report/github.com/sjlleo/nexttrace">
     <img src="https://goreportcard.com/badge/github.com/nxtrace/Ntrace-core?style=flat-square">
   </a>
-  <a href="https://github.com/sjlleo/nexttrace/releases">
-    <img src="https://img.shields.io/github/release/nxtrace/Ntrace-core/all.svg?style=flat-square">
+  <a href="https://github.com/nxtrace/Ntrace-V1/releases">
+    <img src="https://img.shields.io/github/release/nxtrace/Ntrace-V1/all.svg?style=flat-square">
   </a>
 </p>
 
@@ -43,13 +43,19 @@
 
 我们非常感谢 [DMIT](https://dmit.io) 和 [Misaka](https://misaka.io) 和 [Skywolf](https://skywolf.cloud) 提供了支持本项目所需的网络基础设施。
 
+## Announcement
+
+⚠️ LeoMoeAPI v1 API 即将停止维护，届时依赖其提供服务的**v1.1.7**以下的版本将无法使用。请尽快到 [Ntrace-V1 仓库下载](https://github.com/nxtrace/Ntrace-V1/release)更新NextTrace。
+
+详情请查看[公告#159](https://github.com/nxtrace/Ntrace-core/issues/159)。
+
 ## How To Use
 
 Document Language: [English](README.md) | 简体中文
 
-目前 NextTrace 最新稳定版为 v1.1.2 版本，core 项目为最新的重构项目。
+目前 Ntrace-core 仓库为全新的重构项目，我们正在招募内测该重构版本(V2)的用户，若有意请查看 [#159](https://github.com/nxtrace/Ntrace-core/issues/159)。在正式发布第一个重构版本前，请暂时前往 [Ntrace-V1 仓库](https://github.com/nxtrace/Ntrace-V1/release)下载 NextTrace。
 
-V1 (v1.1.3 - v1.2.0) 是**实验性**版本，**无SLA**保证，目前已成为独立分支，不会再并入`Ntrace-core`主线仓库，如果您不需要v1.1.3及其后续版本包含的功能更新(请阅读[#Others](#others)中相关部分)，建议使用稳定版 v1.1.2，具体代码请查阅 [nxtrace/Ntrace-V1](https://github.com/nxtrace/Ntrace-V1).
+**V1增强版**是一个**实验性**版本，目前已成为独立仓库，不会再并入`Ntrace-core`主线仓库，而是独立向另一个方向发展，增强版包含的额外功能(请阅读[#Others](#others)中相关部分)，关于V1增强版本请转至 [nxtrace/Ntrace-V1](https://github.com/nxtrace/Ntrace-V1)。
 
 ### Before Using
 
@@ -57,7 +63,7 @@ V1 (v1.1.3 - v1.2.0) 是**实验性**版本，**无SLA**保证，目前已成为
 
 NextTrace 的频道由项目成员负责，会传递一部分通知，也会发布一些成员自己分享的小工具。项目成员的意见可作为未来项目发展的可能方向，随着开发进度变化可能会有所改动，不代表未来一定会实装，正式定稿公告会发布于 Issue 中。
 
-目前项目重构中，Ntrace-V1 将进入维护期，提供长达 2 年的 LTS 支持，新版本将启用 PoW 验证，届时内部 API 会有大幅的调整，会导致参数的大量变动，请知悉。
+目前项目重构中，[Ntrace-V1](https://github.com/nxtrace/Ntrace-V1) 将进入维护期，提供长达 2 年的 LTS 支持，新版本将启用 PoW 验证，届时内部 API 会有大幅的调整，会导致参数的大量变动，请知悉。
 
 ### Automated Install
 
@@ -66,10 +72,10 @@ NextTrace 的频道由项目成员负责，会传递一部分通知，也会发�
 bash -c "$(curl http://nexttrace-io-leomoe-api-a0.shop/nt_install.sh)"
 
 # macOS brew 安装命令
-brew tap xgadget-lab/nexttrace && brew install nexttrace
+brew install nexttrace
 ```
 
-Windows 用户请直接前往 [Release](https://github.com/sjlleo/nexttrace/releases/latest) 下载编译后的二进制 exe 文件。
+Windows 用户请直接前往 [Release](https://github.com/nxtrace/Ntrace-V1/releases/latest) 下载编译后的二进制 exe 文件。
 
 - `Release`里面为很多系统以及不同架构提供了编译好的二进制可执行文件，如果没有可以自行编译。
 - 一些本项目的必要依赖在`Windows`上`Golang`底层实现不完全，所以目前`NextTrace`在`Windows`平台出于实验性支持阶段。
