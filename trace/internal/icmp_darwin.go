@@ -28,6 +28,7 @@ var (
 	}
 )
 
+// 会造成指定出口IP功能不可使用
 func ListenICMP(network string, laddr string) (net.PacketConn, error) {
 	if os.Getuid() == 0 { // root
 		return net.ListenPacket(network, laddr)
