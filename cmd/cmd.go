@@ -191,11 +191,18 @@ func Excute() {
 
 	if *srcDev != "" {
 		dev, _ := net.InterfaceByName(*srcDev)
-
 		if addrs, err := dev.Addrs(); err == nil {
 			for _, addr := range addrs {
 				if (addr.(*net.IPNet).IP.To4() == nil) == (ip.To4() == nil) {
 					*srcAddr = addr.(*net.IPNet).IP.String()
+					// 检查是否是内网IP
+					if !(net.ParseIP(*srcAddr).IsPrivate() ||
+						net.ParseIP(*srcAddr).IsLoopback() ||
+						net.ParseIP(*srcAddr).IsLinkLocalUnicast() ||
+						net.ParseIP(*srcAddr).IsLinkLocalMulticast()) {
+						// 若不是则跳出
+						break
+					}
 				}
 			}
 		}
