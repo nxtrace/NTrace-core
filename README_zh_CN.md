@@ -45,7 +45,7 @@
 
 ## Announcement
 
-⚠️ LeoMoeAPI v1 API 即将停止维护，届时依赖其提供服务的**v1.1.7**以下的版本将无法使用。请尽快到 [Ntrace-V1 仓库下载](https://github.com/nxtrace/Ntrace-V1/release)更新NextTrace。
+⚠️ LeoMoeAPI v1 API 即将停止维护，届时依赖其提供服务的**v1.1.7**以下的版本将无法使用。请尽快到 [Ntrace-V1 仓库下载](https://github.com/nxtrace/Ntrace-V1/releases)更新NextTrace。
 
 详情请查看[公告#159](https://github.com/nxtrace/Ntrace-core/issues/159)。
 
@@ -53,7 +53,7 @@
 
 Document Language: [English](README.md) | 简体中文
 
-目前 Ntrace-core 仓库为全新的重构项目，我们正在招募内测该重构版本(V2)的用户，若有意请查看 [#159](https://github.com/nxtrace/Ntrace-core/issues/159)。在正式发布第一个重构版本前，请暂时前往 [Ntrace-V1 仓库](https://github.com/nxtrace/Ntrace-V1/release)下载 NextTrace。
+目前 Ntrace-core 仓库为全新的重构项目，我们正在招募内测该重构版本(V2)的用户，若有意请查看 [#159](https://github.com/nxtrace/Ntrace-core/issues/159)。在正式发布第一个重构版本前，请暂时前往 [Ntrace-V1 仓库](https://github.com/nxtrace/Ntrace-V1/releases)下载 NextTrace。
 
 **V1增强版**是一个**实验性**版本，目前已成为独立仓库，不会再并入`Ntrace-core`主线仓库，而是独立向另一个方向发展，增强版包含的额外功能(请阅读[#Others](#others)中相关部分)，关于V1增强版本请转至 [nxtrace/Ntrace-V1](https://github.com/nxtrace/Ntrace-V1)。
 
