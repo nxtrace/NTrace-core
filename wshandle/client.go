@@ -127,7 +127,11 @@ func (c *WsConn) recreateWsConn() {
 		// 无环境变量 token
 		if cacheToken == "" {
 			// 无cacheToken, 重新获取 token
-			jwtToken, err = pow.GetToken(fastIp, host, port)
+			if util.GetPowProvider() == "" {
+				jwtToken, err = pow.GetToken(fastIp, host, port)
+			} else {
+				jwtToken, err = pow.GetToken(util.GetPowProvider(), util.GetPowProvider(), port)
+			}
 			if err != nil {
 				log.Println(err)
 				os.Exit(1)
@@ -191,7 +195,11 @@ func createWsConn() *WsConn {
 	jwtToken, ua := envToken, []string{"Privileged Client"}
 	err := error(nil)
 	if envToken == "" {
-		jwtToken, err = pow.GetToken(fastIp, host, port)
+		if util.GetPowProvider() == "" {
+			jwtToken, err = pow.GetToken(fastIp, host, port)
+		} else {
+			jwtToken, err = pow.GetToken(util.GetPowProvider(), util.GetPowProvider(), port)
+		}
 		if err != nil {
 			log.Println(err)
 			os.Exit(1)

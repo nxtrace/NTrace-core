@@ -329,6 +329,9 @@ Arguments:
                                      IPInfo, IPInsight, IP-API.com, Ip2region,
                                      IPInfoLocal, CHUNZHEN, disable-geoip].
                                      Default: LeoMoeAPI
+      --pow-provider                 Choose PoW Provider [api.leo.moe, sakura]
+                                     For China mainland users, please use
+                                     sakura. Default: api.leo.moe
   -n  --no-rdns                      Do not resolve IP addresses to their
                                      domain names
   -a  --always-rdns                  Always resolve IP addresses to their
@@ -391,6 +394,15 @@ NextTrace 所有的的 IP 地理位置 `API DEMO` 可以参考[这里](https://g
 NextTrace `LeoMoeAPI`现已使用Proof of Work(POW)机制来防止滥用，其中NextTrace作为客户端引入了powclient库，POW CLIENT/SERVER均已开源，欢迎大家使用。(POW模块相关问题请发到对应的仓库)
 - [GitHub - tsosunchia/powclient: Proof of Work CLIENT for NextTrace](https://github.com/tsosunchia/powclient)
 - [GitHub - tsosunchia/powserver: Proof of Work SERVER for NextTrace](https://github.com/tsosunchia/powserver)
+
+对于中国大陆用户，可以使用 [Nya Labs](https://natfrp.com) 提供的位于大陆的POW服务器优化访问速度
+```shell
+#使用方法任选其一
+#1. 在环境变量中设置
+export NEXTTRACE_POWPROVIDER=sakura
+#2. 在命令行中设置
+nexttrace --pow-provider sakura example.com
+```
 
 ## OpenTrace
 
