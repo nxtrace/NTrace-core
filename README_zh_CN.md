@@ -41,19 +41,19 @@
 
 
 
-我们非常感谢 [DMIT](https://dmit.io) 和 [Misaka](https://misaka.io) 和 [Skywolf](https://skywolf.cloud) 提供了支持本项目所需的网络基础设施。
+我们非常感谢 [DMIT](https://dmit.io), [Misaka](https://misaka.io) 和 [Skywolf](https://skywolf.cloud) 提供了支持本项目所需的网络基础设施。
 
 ## Announcement
 
-⚠️ LeoMoeAPI v1 API 即将停止维护，届时依赖其提供服务的**v1.1.7**以下的版本将无法使用。请尽快到 [Ntrace-V1 仓库下载](https://github.com/nxtrace/Ntrace-V1/releases)更新NextTrace。
+LeoMoeAPI v1 将于2024 年 9 月 1 日结束服务支持，届时依赖其提供服务的 **v1.1.7** 以下的版本将无法使用。对于 V1 分支，请至 [Ntrace-V1 仓库下载](https://github.com/nxtrace/Ntrace-V1/releases) NextTrace。
 
-详情请查看[公告#159](https://github.com/nxtrace/Ntrace-core/issues/159)。
+由于 NextTrace V1 与 V2 分支是两个开发方向理念不完全相同的分支，目前由内部分别有一名 Owner 负责，各有其侧重点，面向不同需求的开发者，现 V1 分支已建立独立仓库，在未来相当长的一段时间里，我们会同时维护两个分支的开发与维护。
 
 ## How To Use
 
 Document Language: [English](README.md) | 简体中文
 
-目前 Ntrace-core 仓库为全新的重构项目，我们正在招募内测该重构版本(V2)的用户，若有意请查看 [#159](https://github.com/nxtrace/Ntrace-core/issues/159)。在正式发布第一个重构版本前，请暂时前往 [Ntrace-V1 仓库](https://github.com/nxtrace/Ntrace-V1/releases)下载 NextTrace。
+目前 Ntrace-core 仓库为全新的重构项目，为 V2 分支的重要组成部分，我们正在招募内测该重构版本(V2)的用户，若有意请查看 [#159](https://github.com/nxtrace/Ntrace-core/issues/159)。在正式发布第一个重构版本前，请暂时前往 [Ntrace-V1 仓库](https://github.com/nxtrace/Ntrace-V1/releases)下载 NextTrace。
 
 **V1增强版**是一个**实验性**版本，目前已成为独立仓库，不会再并入`Ntrace-core`主线仓库，而是独立向另一个方向发展，增强版包含的额外功能(请阅读[#Others](#others)中相关部分)，关于V1增强版本请转至 [nxtrace/Ntrace-V1](https://github.com/nxtrace/Ntrace-V1)。
 

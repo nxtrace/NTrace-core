@@ -39,21 +39,22 @@
 
 </div>
 
-We are extremely grateful to [DMIT](https://dmit.io) and [Misaka](https://misaka.io) and [Skywolf](https://skywolf.cloud) for providing the network infrastructure that powers this project.
+We are extremely grateful to [DMIT](https://dmit.io), [Misaka](https://misaka.io) and [Skywolf](https://skywolf.cloud) for providing the network infrastructure that powers this project.
 
 ## Announcement
 
-⚠️ LeoMoeAPI v1 API is about to stop maintenance, and versions below **v1.1.7** that rely on its services will not be available. Please [download and update NextTrace from Ntrace-V1](https://github.com/nxtrace/Ntrace-V1/releases) as soon as possible.
+LeoMoeAPI v1 will end service support on September 1, 2024. Versions **v1.1.7** and below that rely on its service will become unusable. For the V1 branch, please download from the [Ntrace-V1 repository](https://github.com/nxtrace/Ntrace-V1/releases) NextTrace.
 
-For details, please check [#159](https://github.com/nxtrace/Ntrace-core/issues/159).
+Because NextTrace V1 and V2 are branches with differing development philosophies, each is currently managed by an internal Owner focusing on different aspects. These branches cater to developers with varying needs. Now, the V1 branch has established its own separate repository. For a considerably long period in the future, we plan to maintain the development and upkeep of both branches simultaneously.
 
 ## How To Use
 
 Document Language: English | [简体中文](README_zh_CN.md)
 
-At present, the Ntrace-core repository is a new refactoring project. We are recruiting users to test the refactoring version (V2) internally. If you are interested, please check [#159](https://github.com/nxtrace/Ntrace-core/issues/159). Before the official release of the first refactored version, please temporarily go to the [Ntrace-V1 repository](https://github.com/nxtrace/Ntrace-V1/releases) to download NextTrace.
+The Ntrace-core repository is currently a brand-new refactoring project and an important part of the V2 branch. We are recruiting users to beta test this refactored version (V2). If interested, please see [#159](https://github.com/nxtrace/Ntrace-core/issues/159). Before the official release of the first refactored version, please temporarily download NextTrace from the [Ntrace-V1 repository](https://github.com/nxtrace/Ntrace-V1/releases).
 
-**V1 enhanced version** is a **experimental** version, which has now become an independent repository. It will no longer be merged into the main line repository of 'Ntrace-core`, but develops independently in another direction. The enhanced version contains additional functions (please read the relevant part of [#Others](#others). For the V1 enhanced version, please go to [nxtrace/Ntrace-V1](https://github.com/nxtrace/Ntrace-V1).
+**V1 Enhanced Edition** is an **experimental** version and has now become an independent repository. It will not be merged back into the `Ntrace-core` mainline repository but will develop independently in another direction. The enhanced version includes additional features (please read the related section in [#Others](#others)). For more information about the V1 Enhanced Edition, please go to [nxtrace/Ntrace-V1](https://github.com/nxtrace/Ntrace-V1).
+
 
 ### Automated Installation
 
