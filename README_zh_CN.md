@@ -401,7 +401,7 @@ NextTrace `LeoMoeAPI`现已使用Proof of Work(POW)机制来防止滥用，其�
 #1. 在环境变量中设置
 export NEXTTRACE_POWPROVIDER=sakura
 #2. 在命令行中设置
-nexttrace --pow-provider sakura example.com
+nexttrace --pow-provider sakura
 ```
 
 ## OpenTrace
