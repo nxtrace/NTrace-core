@@ -1,7 +1,7 @@
-package trace
+package core
 
 import (
-	"log"
+	"encoding/binary"
 	"math"
 	"math/rand"
 	"net"
@@ -13,11 +13,11 @@ import (
 	"github.com/sjlleo/nexttrace-core/util"
 	"golang.org/x/net/context"
 	"golang.org/x/net/icmp"
-	"golang.org/x/net/ipv4"
+	"golang.org/x/net/ipv6"
 	"golang.org/x/sync/semaphore"
 )
 
-type TCPTracer struct {
+type TCPTracerv6 struct {
 	Config
 	wg                  sync.WaitGroup
 	res                 Result
@@ -34,32 +34,26 @@ type TCPTracer struct {
 	sem *semaphore.Weighted
 }
 
-func (t *TCPTracer) GetConfig() *Config {
+func (t *TCPTracerv6) GetConfig() *Config {
 	return &t.Config
 }
 
-func (t *TCPTracer) SetConfig(c Config) {
+func (t *TCPTracerv6) SetConfig(c Config) {
 	t.Config = c
 }
 
-func (t *TCPTracer) Execute() (*Result, error) {
+func (t *TCPTracerv6) Execute() (*Result, error) {
 	if len(t.res.Hops) > 0 {
 		return &t.res, ErrTracerouteExecuted
 	}
 
-	t.SrcIP, _ = util.LocalIPPort(t.DestIP)
-
+	t.SrcIP, _ = util.LocalIPPortv6(t.DestIP)
 	var err error
-	if t.SrcAddr != "" {
-		t.tcp, err = net.ListenPacket("ip4:tcp", t.SrcAddr)
-	} else {
-		t.tcp, err = net.ListenPacket("ip4:tcp", t.SrcIP.String())
-	}
-
+	t.tcp, err = net.ListenPacket("ip6:tcp", t.SrcIP.String())
 	if err != nil {
 		return nil, err
 	}
-	t.icmp, err = icmp.ListenPacket("ip4:icmp", t.SrcAddr)
+	t.icmp, err = icmp.ListenPacket("ip6:58", t.SrcAddr)
 	if err != nil {
 		return &t.res, err
 	}
@@ -68,10 +62,7 @@ func (t *TCPTracer) Execute() (*Result, error) {
 	var cancel context.CancelFunc
 	t.ctx, cancel = context.WithCancel(context.Background())
 	defer cancel()
-	t.inflightRequestLock.Lock()
 	t.inflightRequest = make(map[int]chan Hop)
-	t.inflightRequestLock.Unlock()
-
 	t.final = -1
 
 	go t.listenICMP()
@@ -97,7 +88,7 @@ func (t *TCPTracer) Execute() (*Result, error) {
 	return &t.res, nil
 }
 
-func (t *TCPTracer) listenICMP() {
+func (t *TCPTracerv6) listenICMP() {
 	lc := NewPacketListener(t.icmp, t.ctx)
 	go lc.Start()
 	for {
@@ -105,24 +96,23 @@ func (t *TCPTracer) listenICMP() {
 		case <-t.ctx.Done():
 			return
 		case msg := <-lc.Messages:
+			// log.Println(msg)
+
 			if msg.N == nil {
 				continue
 			}
-			dstip := net.IP(msg.Msg[24:28])
-			if dstip.Equal(t.DestIP) {
-				rm, err := icmp.ParseMessage(1, msg.Msg[:*msg.N])
-				if err != nil {
-					log.Println(err)
-					continue
-				}
-				switch rm.Type {
-				case ipv4.ICMPTypeTimeExceeded:
-					t.handleICMPMessage(msg, rm.Body.(*icmp.TimeExceeded).Data)
-				case ipv4.ICMPTypeDestinationUnreachable:
-					t.handleICMPMessage(msg, rm.Body.(*icmp.DstUnreach).Data)
-				default:
-					//log.Println("received icmp message of unknown type", rm.Type)
-				}
+			rm, err := icmp.ParseMessage(58, msg.Msg[:*msg.N])
+			if err != nil {
+				// log.Println(err)
+				continue
+			}
+			switch rm.Type {
+			case ipv6.ICMPTypeTimeExceeded:
+				t.handleICMPMessage(msg)
+			case ipv6.ICMPTypeDestinationUnreachable:
+				t.handleICMPMessage(msg)
+			default:
+				//log.Println("received icmp message of unknown type", rm.Type)
 			}
 		}
 	}
@@ -131,7 +121,7 @@ func (t *TCPTracer) listenICMP() {
 
 // @title    listenTCP
 // @description   监听TCP的响应数据包
-func (t *TCPTracer) listenTCP() {
+func (t *TCPTracerv6) listenTCP() {
 	lc := NewPacketListener(t.tcp, t.ctx)
 	go lc.Start()
 
@@ -140,6 +130,8 @@ func (t *TCPTracer) listenTCP() {
 		case <-t.ctx.Done():
 			return
 		case msg := <-lc.Messages:
+			// log.Println(msg)
+			// return
 			if msg.N == nil {
 				continue
 			}
@@ -153,38 +145,35 @@ func (t *TCPTracer) listenTCP() {
 			if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {
 				tcp, _ := tcpLayer.(*layers.TCP)
 				// 取得目标主机的Sequence Number
-				t.inflightRequestLock.Lock()
+
 				if ch, ok := t.inflightRequest[int(tcp.Ack-1)]; ok {
 					// 最后一跳
 					ch <- Hop{
 						Address: msg.Peer,
 					}
 				}
-				t.inflightRequestLock.Unlock()
 			}
 		}
 	}
 }
 
-func (t *TCPTracer) handleICMPMessage(msg ReceivedMessage, data []byte) {
-	header, err := util.GetICMPResponsePayload(data)
-	if err != nil {
-		return
-	}
-	sequenceNumber := util.GetTCPSeq(header)
+func (t *TCPTracerv6) handleICMPMessage(msg ReceivedMessage) {
+	var sequenceNumber = binary.BigEndian.Uint32(msg.Msg[52:56])
+
 	t.inflightRequestLock.Lock()
 	defer t.inflightRequestLock.Unlock()
 	ch, ok := t.inflightRequest[int(sequenceNumber)]
 	if !ok {
 		return
 	}
+	// log.Println("发送数据", sequenceNumber)
 	ch <- Hop{
 		Address: msg.Peer,
 	}
-
+	// log.Println("发送成功")
 }
 
-func (t *TCPTracer) send(ttl int) error {
+func (t *TCPTracerv6) send(ttl int) error {
 	err := t.sem.Acquire(context.Background(), 1)
 	if err != nil {
 		return err
@@ -197,15 +186,16 @@ func (t *TCPTracer) send(ttl int) error {
 	}
 	// 随机种子
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	_, srcPort := util.LocalIPPort(t.DestIP)
-	ipHeader := &layers.IPv4{
-		SrcIP:    t.SrcIP,
-		DstIP:    t.DestIP,
-		Protocol: layers.IPProtocolTCP,
-		TTL:      uint8(ttl),
+	_, srcPort := util.LocalIPPortv6(t.DestIP)
+	ipHeader := &layers.IPv6{
+		SrcIP:      t.SrcIP,
+		DstIP:      t.DestIP,
+		NextHeader: layers.IPProtocolTCP,
+		HopLimit:   uint8(ttl),
 	}
 	// 使用Uint16兼容32位系统，防止在rand的时候因使用int32而溢出
 	sequenceNumber := uint32(r.Intn(math.MaxUint16))
+
 	tcpHeader := &layers.TCP{
 		SrcPort: layers.TCPPort(srcPort),
 		DstPort: layers.TCPPort(t.DestPort),
@@ -224,7 +214,7 @@ func (t *TCPTracer) send(ttl int) error {
 		return err
 	}
 
-	err = ipv4.NewPacketConn(t.tcp).SetTTL(ttl)
+	ipv6.NewPacketConn(t.tcp).SetHopLimit(ttl)
 	if err != nil {
 		return err
 	}
@@ -233,6 +223,7 @@ func (t *TCPTracer) send(ttl int) error {
 	if _, err := t.tcp.WriteTo(buf.Bytes(), &net.IPAddr{IP: t.DestIP}); err != nil {
 		return err
 	}
+	// log.Println(ttl, sequenceNumber)
 	t.inflightRequestLock.Lock()
 	hopCh := make(chan Hop)
 	t.inflightRequest[int(sequenceNumber)] = hopCh

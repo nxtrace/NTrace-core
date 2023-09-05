@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sjlleo/nexttrace-core/trace"
+	"github.com/sjlleo/nexttrace-core/core"
 )
 
 func traceroute() {
-	var test_config = trace.Config{
+	var test_config = core.Config{
 		DestIP:           net.IPv4(1, 1, 1, 1),
 		DestPort:         443,
 		ParallelRequests: 30,
@@ -19,9 +19,9 @@ func traceroute() {
 		MaxHops:          30,
 		TTLInterval:      1 * time.Millisecond,
 		Timeout:          2 * time.Second,
-		TraceMethod:      trace.ICMPTrace,
+		TraceMethod:      core.ICMPTrace,
 	}
-	traceInstance, err := trace.NewTracer(test_config)
+	traceInstance, err := core.NewTracer(test_config)
 	if err != nil {
 		log.Println(err)
 		return

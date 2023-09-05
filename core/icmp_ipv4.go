@@ -1,4 +1,4 @@
-package trace
+package core
 
 import (
 	"encoding/binary"
@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sjlleo/nexttrace-core/trace/internal"
+	"github.com/sjlleo/nexttrace-core/core/internal"
 	"golang.org/x/net/context"
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv4"
@@ -27,6 +27,7 @@ type ICMPTracer struct {
 	icmpListen            net.PacketConn
 	final                 int
 	finalLock             sync.Mutex
+	foundIPs              map[string]bool
 }
 
 func (t *ICMPTracer) GetConfig() *Config {
@@ -38,6 +39,7 @@ func (t *ICMPTracer) SetConfig(c Config) {
 }
 
 func (t *ICMPTracer) Execute() (*Result, error) {
+	t.foundIPs = make(map[string]bool)
 	t.inflightRequestRWLock.Lock()
 	t.inflightRequest = make(map[int]chan Hop)
 	t.inflightRequestRWLock.Unlock()
@@ -61,6 +63,11 @@ func (t *ICMPTracer) Execute() (*Result, error) {
 
 	go t.listenICMP()
 	for ttl := t.BeginHop; ttl <= t.MaxHops; ttl++ {
+		for _, plugin := range t.Plugins {
+			// if use Hook
+			//plgn.ExecuteHook(plugin, "OnTTLChange", ttl)
+			plugin.OnTTLChange(ttl)
+		}
 		t.inflightRequestRWLock.Lock()
 		t.inflightRequest[ttl] = make(chan Hop, t.NumMeasurements)
 		t.inflightRequestRWLock.Unlock()
@@ -72,6 +79,7 @@ func (t *ICMPTracer) Execute() (*Result, error) {
 			go t.send(ttl)
 			<-time.After(t.Config.PacketInterval)
 		}
+
 		<-time.After(t.Config.TTLInterval)
 	}
 
@@ -247,6 +255,14 @@ func (t *ICMPTracer) send(ttl int) error {
 		return nil
 	case h := <-t.inflightRequest[ttl]:
 		rtt := time.Since(start)
+		ipStr := h.Address.String()
+		if !t.foundIPs[ipStr] {
+			t.foundIPs[ipStr] = true
+			// Trigger 所有插件的 OnIPFound 方法
+			for _, plugin := range t.Plugins {
+				plugin.OnIPFound(h.Address)
+			}
+		}
 		if t.final != -1 && ttl > t.final {
 			return nil
 		}

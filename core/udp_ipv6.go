@@ -1,4 +1,4 @@
-package trace
+package core
 
 import (
 	"log"
@@ -15,7 +15,7 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-type UDPTracer struct {
+type UDPTracerv6 struct {
 	Config
 	wg                  sync.WaitGroup
 	res                 Result
@@ -31,21 +31,21 @@ type UDPTracer struct {
 	sem *semaphore.Weighted
 }
 
-func (t *UDPTracer) GetConfig() *Config {
+func (t *UDPTracerv6) GetConfig() *Config {
 	return &t.Config
 }
 
-func (t *UDPTracer) SetConfig(c Config) {
+func (t *UDPTracerv6) SetConfig(c Config) {
 	t.Config = c
 }
 
-func (t *UDPTracer) Execute() (*Result, error) {
+func (t *UDPTracerv6) Execute() (*Result, error) {
 	if len(t.res.Hops) > 0 {
 		return &t.res, ErrTracerouteExecuted
 	}
 
 	var err error
-	t.icmp, err = icmp.ListenPacket("ip4:icmp", t.SrcAddr)
+	t.icmp, err = icmp.ListenPacket("ip6:58", t.SrcAddr)
 	if err != nil {
 		return &t.res, err
 	}
@@ -57,7 +57,7 @@ func (t *UDPTracer) Execute() (*Result, error) {
 	t.inflightRequest = make(map[int]chan Hop)
 	t.final = -1
 
-	go t.listenICMP()
+	go t.listenICMPv6()
 
 	t.sem = semaphore.NewWeighted(int64(t.ParallelRequests))
 	for ttl := 1; ttl <= t.MaxHops; ttl++ {
@@ -77,7 +77,7 @@ func (t *UDPTracer) Execute() (*Result, error) {
 	return &t.res, nil
 }
 
-func (t *UDPTracer) listenICMP() {
+func (t *UDPTracerv6) listenICMPv6() {
 	lc := NewPacketListener(t.icmp, t.ctx)
 	go lc.Start()
 	for {
@@ -88,7 +88,7 @@ func (t *UDPTracer) listenICMP() {
 			if msg.N == nil {
 				continue
 			}
-			rm, err := icmp.ParseMessage(1, msg.Msg[:*msg.N])
+			rm, err := icmp.ParseMessage(58, msg.Msg[:*msg.N])
 			if err != nil {
 				log.Println(err)
 				continue
@@ -106,7 +106,7 @@ func (t *UDPTracer) listenICMP() {
 
 }
 
-func (t *UDPTracer) handleICMPMessage(msg ReceivedMessage, data []byte) {
+func (t *UDPTracerv6) handleICMPMessage(msg ReceivedMessage, data []byte) {
 	header, err := util.GetICMPResponsePayload(data)
 	if err != nil {
 		return
@@ -123,7 +123,7 @@ func (t *UDPTracer) handleICMPMessage(msg ReceivedMessage, data []byte) {
 	}
 }
 
-func (t *UDPTracer) getUDPConn(try int) (net.IP, int, net.PacketConn) {
+func (t *UDPTracerv6) getUDPConn(try int) (net.IP, int, net.PacketConn) {
 	srcIP, _ := util.LocalIPPort(t.DestIP)
 
 	var ipString string
@@ -133,7 +133,7 @@ func (t *UDPTracer) getUDPConn(try int) (net.IP, int, net.PacketConn) {
 		ipString = srcIP.String()
 	}
 
-	udpConn, err := net.ListenPacket("udp", ipString+":0")
+	udpConn, err := net.ListenPacket("udp", "["+ipString+"]:0")
 	if err != nil {
 		if try > 3 {
 			log.Fatal(err)
@@ -143,7 +143,7 @@ func (t *UDPTracer) getUDPConn(try int) (net.IP, int, net.PacketConn) {
 	return srcIP, udpConn.LocalAddr().(*net.UDPAddr).Port, udpConn
 }
 
-func (t *UDPTracer) send(ttl int) error {
+func (t *UDPTracerv6) send(ttl int) error {
 	err := t.sem.Acquire(context.Background(), 1)
 	if err != nil {
 		return err

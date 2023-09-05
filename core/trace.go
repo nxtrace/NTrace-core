@@ -1,4 +1,4 @@
-package trace
+package core
 
 import (
 	"errors"
@@ -7,6 +7,8 @@ import (
 	"net"
 	"sync"
 	"time"
+
+	"github.com/sjlleo/nexttrace-core/plgn"
 )
 
 var (
@@ -35,6 +37,7 @@ type Config struct {
 	Quic             bool
 	PacketInterval   time.Duration
 	TTLInterval      time.Duration
+	Plugins          []plgn.Plugin
 }
 
 const (
@@ -60,6 +63,32 @@ type Hop struct {
 	TTL      int
 	RTT      time.Duration
 	Error    error
+}
+
+func Traceroute(p []plgn.Plugin) {
+	var test_config = Config{
+		DestIP:           net.IPv4(1, 1, 1, 1),
+		DestPort:         443,
+		ParallelRequests: 30,
+		NumMeasurements:  1,
+		BeginHop:         1,
+		MaxHops:          30,
+		TTLInterval:      1 * time.Millisecond,
+		Timeout:          2 * time.Second,
+		TraceMethod:      ICMPTrace,
+		Plugins:          p,
+	}
+	traceInstance, err := NewTracer(test_config)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	res, err := traceInstance.Traceroute()
+	if err != nil {
+		log.Println(err)
+	}
+	log.Println(res)
 }
 
 func NewTracer(config Config) (*TraceInstance, error) {

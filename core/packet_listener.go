@@ -1,9 +1,10 @@
-package trace
+package core
 
 import (
-	"golang.org/x/net/context"
 	"net"
 	"time"
+
+	"golang.org/x/net/context"
 )
 
 type ReceivedMessage struct {

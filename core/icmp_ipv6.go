@@ -1,4 +1,4 @@
-package trace
+package core
 
 import (
 	"encoding/binary"
@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sjlleo/nexttrace-core/trace/internal"
+	"github.com/sjlleo/nexttrace-core/core/internal"
 	"golang.org/x/net/context"
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv6"
