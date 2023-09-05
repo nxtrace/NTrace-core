@@ -75,8 +75,18 @@ func PrintTraceRouteNav(ip net.IP, domain string, dataOrigin string, maxHops int
 
 func applyLangSetting(h *trace.Hop) {
 	if len(h.Geo.Country) <= 1 {
-		h.Geo.Country = "局域网"
-		h.Geo.CountryEn = "LAN Address"
+		//打印h.geo
+		if h.Geo.Whois != "" {
+			h.Geo.Country = h.Geo.Whois
+		} else {
+			if h.Geo.Source != "LeoMoeAPI" {
+				h.Geo.Country = "网络故障"
+				h.Geo.CountryEn = "Network Error"
+			} else {
+				h.Geo.Country = "未知"
+				h.Geo.CountryEn = "Unknown"
+			}
+		}
 	}
 
 	if h.Lang == "en" {

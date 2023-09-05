@@ -98,7 +98,12 @@ func RealtimePrinter(res *trace.Result, ttl int) {
 			}
 
 			if whoisFormat[0] != "" {
-				whoisFormat[0] = "[" + whoisFormat[0] + "]"
+				//如果以RFC开头那么为空
+				if !strings.HasPrefix(whoisFormat[0], "RFC") {
+					whoisFormat[0] = "[" + whoisFormat[0] + "]"
+				} else {
+					whoisFormat[0] = ""
+				}
 			}
 
 			// CMIN2, CUII, CN2, CUG 改为壕金色高亮
