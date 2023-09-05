@@ -36,7 +36,7 @@ func GetToken(fastIp string, host string, port string) (string, error) {
 	if err != nil {
 		fmt.Println(err)
 	}
-	fmt.Println("RetToken failed 3 times, exit")
+	fmt.Println("RetToken failed 3 times, please try again after a while, exit")
 	os.Exit(1)
 	return "", nil
 }
