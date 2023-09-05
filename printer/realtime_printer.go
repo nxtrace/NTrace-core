@@ -98,8 +98,9 @@ func RealtimePrinter(res *trace.Result, ttl int) {
 			}
 
 			if whoisFormat[0] != "" {
-				//如果以RFC开头那么为空
-				if !strings.HasPrefix(whoisFormat[0], "RFC") {
+				//如果以RFC或DOD开头那么为空
+				if !(strings.HasPrefix(whoisFormat[0], "RFC") ||
+					strings.HasPrefix(whoisFormat[0], "DOD")) {
 					whoisFormat[0] = "[" + whoisFormat[0] + "]"
 				} else {
 					whoisFormat[0] = ""
