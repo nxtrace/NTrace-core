@@ -26,6 +26,7 @@ type ICMPTracerv6 struct {
 	icmpListen            net.PacketConn
 	final                 int
 	finalLock             sync.Mutex
+	foundIPs              map[string]bool
 }
 
 func (t *ICMPTracerv6) GetConfig() *Config {
@@ -61,7 +62,11 @@ func (t *ICMPTracerv6) Execute() (*Result, error) {
 
 	go t.listenICMP()
 	for ttl := t.BeginHop; ttl <= t.MaxHops; ttl++ {
+		for _, plugin := range t.Plugins {
+			plugin.OnTTLChange(ttl)
+		}
 		t.inflightRequestRWLock.Lock()
+		t.foundIPs = make(map[string]bool)
 		t.inflightRequest[ttl] = make(chan Hop, t.NumMeasurements)
 		t.inflightRequestRWLock.Unlock()
 		if t.final != -1 && ttl > t.final {

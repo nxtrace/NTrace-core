@@ -7,8 +7,6 @@ import (
 	"net"
 	"sync"
 	"time"
-
-	"github.com/sjlleo/nexttrace-core/plgn"
 )
 
 var (
@@ -24,6 +22,13 @@ type TraceInstance struct {
 	ErrorStr string
 }
 
+type Plugin interface {
+	OnDNSResolve(domain string) (net.IP, error)
+	OnNewIPFound(ip net.Addr) error
+	OnTTLChange(ttl int) error
+	OnTTLCompleted(ttl int, hop []Hop) error
+}
+
 type Config struct {
 	TraceMethod      Method
 	SrcAddr          string
@@ -37,7 +42,7 @@ type Config struct {
 	Quic             bool
 	PacketInterval   time.Duration
 	TTLInterval      time.Duration
-	Plugins          []plgn.Plugin
+	Plugins          []Plugin
 }
 
 const (
@@ -65,12 +70,12 @@ type Hop struct {
 	Error    error
 }
 
-func Traceroute(p []plgn.Plugin) {
+func Traceroute(p []Plugin) {
 	var test_config = Config{
 		DestIP:           net.IPv4(1, 1, 1, 1),
 		DestPort:         443,
 		ParallelRequests: 30,
-		NumMeasurements:  1,
+		NumMeasurements:  3,
 		BeginHop:         1,
 		MaxHops:          30,
 		TTLInterval:      1 * time.Millisecond,

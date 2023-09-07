@@ -2,25 +2,20 @@ package plgn
 
 import (
 	"log"
-	"net"
 	"reflect"
 	"strings"
+
+	"github.com/sjlleo/nexttrace-core/core"
 )
 
-type Plugin interface {
-	OnDNSResolve(domain string) (net.IP, error)
-	OnIPFound(ip net.Addr) error
-	OnTTLChange(ttl int) error
-}
+var pluginRegistry = make(map[string]func(interface{}) core.Plugin)
 
-var pluginRegistry = make(map[string]func(interface{}) Plugin)
-
-func RegisterPlugin(name string, constructor func(interface{}) Plugin) {
+func RegisterPlugin(name string, constructor func(interface{}) core.Plugin) {
 	pluginRegistry[name] = constructor
 }
 
-func CreatePlugins(enabledPlugins string, params interface{}) []Plugin {
-	var plugins []Plugin
+func CreatePlugins(enabledPlugins string, params interface{}) []core.Plugin {
+	var plugins []core.Plugin
 	for _, name := range strings.Split(enabledPlugins, ",") {
 		if constructor, exists := pluginRegistry[name]; exists {
 			plugins = append(plugins, constructor(params))
@@ -29,7 +24,7 @@ func CreatePlugins(enabledPlugins string, params interface{}) []Plugin {
 	return plugins
 }
 
-func ExecuteHook(plugin Plugin, hookName string, args ...interface{}) {
+func ExecuteHook(plugin core.Plugin, hookName string, args ...interface{}) {
 	v := reflect.ValueOf(plugin)
 	method := v.MethodByName(hookName)
 

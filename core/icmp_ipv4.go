@@ -39,8 +39,9 @@ func (t *ICMPTracer) SetConfig(c Config) {
 }
 
 func (t *ICMPTracer) Execute() (*Result, error) {
-	t.foundIPs = make(map[string]bool)
+
 	t.inflightRequestRWLock.Lock()
+	t.foundIPs = make(map[string]bool)
 	t.inflightRequest = make(map[int]chan Hop)
 	t.inflightRequestRWLock.Unlock()
 
@@ -64,8 +65,6 @@ func (t *ICMPTracer) Execute() (*Result, error) {
 	go t.listenICMP()
 	for ttl := t.BeginHop; ttl <= t.MaxHops; ttl++ {
 		for _, plugin := range t.Plugins {
-			// if use Hook
-			//plgn.ExecuteHook(plugin, "OnTTLChange", ttl)
 			plugin.OnTTLChange(ttl)
 		}
 		t.inflightRequestRWLock.Lock()
@@ -79,7 +78,6 @@ func (t *ICMPTracer) Execute() (*Result, error) {
 			go t.send(ttl)
 			<-time.After(t.Config.PacketInterval)
 		}
-
 		<-time.After(t.Config.TTLInterval)
 	}
 
@@ -257,10 +255,12 @@ func (t *ICMPTracer) send(ttl int) error {
 		rtt := time.Since(start)
 		ipStr := h.Address.String()
 		if !t.foundIPs[ipStr] {
+			t.inflightRequestRWLock.Lock()
 			t.foundIPs[ipStr] = true
+			t.inflightRequestRWLock.Unlock()
 			// Trigger 所有插件的 OnIPFound 方法
 			for _, plugin := range t.Plugins {
-				plugin.OnIPFound(h.Address)
+				plugin.OnNewIPFound(h.Address)
 			}
 		}
 		if t.final != -1 && ttl > t.final {
@@ -299,5 +299,8 @@ func (t *ICMPTracer) send(ttl int) error {
 
 	}
 
+	for _, plugin := range t.Plugins {
+		plugin.OnTTLCompleted(len(t.res.Hops), t.res.Hops[len(t.res.Hops)-1])
+	}
 	return nil
 }
