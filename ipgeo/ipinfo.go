@@ -3,6 +3,7 @@ package ipgeo
 import (
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -286,6 +287,19 @@ func IPInfo(ip string, timeout time.Duration, _ string, _ bool) (*IPGeoData, err
 		"ZW": "Zimbabwe",
 	}
 	country = countryMap[country]
+
+	var prov = res.Get("region").String()
+	var city = res.Get("city").String()
+
+	var anycast = false
+	//"anycast": true,
+	if res.Get("anycast").String() == "true" {
+		country = "ANYCAST"
+		prov = "ANYCAST"
+		city = ""
+		anycast = true
+	}
+
 	i := strings.Index(res.Get("org").String(), " ")
 	var owner string
 	if i == -1 {
@@ -300,11 +314,23 @@ func IPInfo(ip string, timeout time.Duration, _ string, _ bool) (*IPGeoData, err
 		asnumber = strings.Fields(strings.TrimPrefix(res.Get("org").String(), "AS"))[0]
 	}
 
+	//"loc": "34.0522,-118.2437",
+	var lat, lng float64
+	if res.Get("loc").String() != "" {
+		lat, _ = strconv.ParseFloat(strings.Split(res.Get("loc").String(), ",")[0], 32)
+		lng, _ = strconv.ParseFloat(strings.Split(res.Get("loc").String(), ",")[1], 32)
+	}
+	if anycast {
+		lat, lng = 0, 0
+	}
+
 	return &IPGeoData{
 		Asnumber: asnumber,
 		Country:  country,
-		City:     res.Get("city").String(),
-		Prov:     res.Get("region").String(),
+		City:     city,
+		Prov:     prov,
 		Owner:    owner,
+		Lat:      lat,
+		Lng:      lng,
 	}, nil
 }

@@ -306,7 +306,7 @@ func Excute() {
 		fmt.Println(err)
 		return
 	}
-	if !*disableMaptrace && strings.ToUpper(*dataOrigin) == "LEOMOEAPI" {
+	if !*disableMaptrace && (strings.ToUpper(*dataOrigin) == "LEOMOEAPI" || strings.ToUpper(*dataOrigin) == "IPINFO") {
 		url, err := tracemap.GetMapUrl(string(r))
 		if err != nil {
 			log.Fatalln(err)
