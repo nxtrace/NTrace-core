@@ -210,3 +210,12 @@ func GetPowProvider() string {
 	}
 	return ""
 }
+
+func StringInSlice(val string, list []string) bool {
+	for _, v := range list {
+		if v == val {
+			return true
+		}
+	}
+	return false
+}
