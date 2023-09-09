@@ -20,6 +20,9 @@
   <a href="https://github.com/nxtrace/Ntrace-V1/releases">
     <img src="https://img.shields.io/github/release/nxtrace/Ntrace-V1/all.svg?style=flat-square">
   </a>
+  <a href="https://telegram.dog/sjprojects">
+    <img src="https://img.shields.io/endpoint?color=neon&style=flat-square&url=https%3A%2F%2Ftg.sumanjay.workers.dev%2Fnexttrace">
+  </a>
 </p>
 
 ## IAAS Sponsor
@@ -44,27 +47,7 @@ We are extremely grateful to [DMIT](https://dmit.io) and [Misaka](https://misaka
 
 Document Language: English | [简体中文](README_zh_CN.md)
 
-⚠️ This is the README for the V1 version of NextTrace.
-
-Differences between version v1.1.2 and v1.2.0:
-* Added and fixed support for some third-party GEOIP APIs
-    * ipinfo
-    * ipinfoLocal, which is the offline version of the ipinfo database
-    * chunzhen
-    * ipinsight
-    * (disable-geoip)
-* Added some parameters
-    * For use in secondary development by other projects
-        * JSON output
-        * raw output
-    * Parse only the IPv4/IPv6 addresses of the domain
-    * packet-size to set the ICMP packet size
-    * timeout to set the timeout period
-* Supports accessing APIs through socks5/http proxy
-* Supports more parameters in fasttrace mode
-* Added cache handling to speed up resolution
-* Fixed some bugs
-* Golang v1.21.0
+⚠️ This is the README for the V1 Enhanced version of NextTrace.
 
 ### Automated Install
 

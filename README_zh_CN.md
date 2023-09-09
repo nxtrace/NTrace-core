@@ -21,6 +21,9 @@
   <a href="https://github.com/nxtrace/Ntrace-V1/releases">
     <img src="https://img.shields.io/github/release/nxtrace/Ntrace-V1/all.svg?style=flat-square">
   </a>
+  <a href="https://telegram.dog/sjprojects">
+    <img src="https://img.shields.io/endpoint?color=neon&style=flat-square&url=https%3A%2F%2Ftg.sumanjay.workers.dev%2Fnexttrace">
+  </a>
 </p>
 
 ## IAAS Sponsor
@@ -47,35 +50,13 @@
 
 Document Language: [English](README.md) | 简体中文
 
-⚠️ 这是NextTrace V1 版本的README文件。
-
-关于 v1.1.2 与 v1.2.0 版本的区别:
-* 增加和修复了部分第三方GEOIP API的支持
-  * ipinfo
-  * ipinfoLocal 即ipinfo数据库离线版
-  * chunzhen
-  * ipinsight
-  * (disable-geoip)
-* 增加了部分参数
-  * 供其他项目二次开发调用
-    * json 输出
-    * raw 输出
-  * 仅解析域名的IPv4/IPv6地址
-  * packet-size 设置ICMP包大小
-  * timeout 设置超时时间
-* 支持使用socks5/http代理访问API
-* fasttrace模式下支持更多的参数
-* 增加缓存处理以加速解析
-* 修复了部分BUG
-* Golang v1.21.0
+⚠️ 这是NextTrace V1 增强版的README文件。
 
 ### Before Using
 
 使用 NextTrace 之前，我们建议您先阅读 [#IP 数据以及精准度说明](https://github.com/sjlleo/nexttrace/blob/main/README_zh_CN.md#ip-%E6%95%B0%E6%8D%AE%E4%BB%A5%E5%8F%8A%E7%B2%BE%E5%87%86%E5%BA%A6%E8%AF%B4%E6%98%8E)，在了解您自己的对数据精准度需求以后再进行抉择。
 
-NextTrace 的频道由项目成员负责，会传递一部分通知，也会发布一些成员自己分享的小工具。项目成员的意见可作为未来项目发展的可能方向，随着开发进度变化可能会有所改动，不代表未来一定会实装，正式定稿公告会发布于 Issue 中。
-
-目前项目重构中，1.0 版本将进入维护期，提供长达 2 年的 LTS 支持，新版本将启用 PoW 验证，届时内部 API 会有大幅的调整，会导致参数的大量变动，请知悉。
+[NextTrace 的Telegram频道](https://t.me/nexttrace)由项目成员负责，会传递一部分通知，也会发布一些成员自己分享的小工具。项目成员的意见可作为未来项目发展的可能方向，随着开发进度变化可能会有所改动，不代表未来一定会实装，正式定稿公告会发布于 Issue 中。
 
 ### Automated Install
 
