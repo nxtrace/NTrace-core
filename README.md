@@ -4,34 +4,76 @@
 
 </div>
 
-## NextTrace
+<h1 align="center">
+  <br>NextTrace<br>
+</h1>
 
-An open source visual routing tool that pursues light weight, developed using Golang.
+<h4 align="center">An open source visual routing tool that pursues light weight, developed using Golang.</h4>
 
-NextTrace is part of the [OwO Network](https://github.com/OwO-Network) project. The project is a joint initiative of Leo and Vincent.
+<p align="center">
+  <a href="https://github.com/nxtrace/Ntrace-V1/actions">
+    <img src="https://img.shields.io/github/actions/workflow/status/nxtrace/Ntrace-V1/build.yml?branch=main&style=flat-square" alt="Github Actions">
+  </a>
+  <a href="https://goreportcard.com/report/github.com/nxtrace/Ntrace-V1">
+    <img src="https://goreportcard.com/badge/github.com/nxtrace/Ntrace-V1?style=flat-square">
+  </a>
+  <a href="https://github.com/nxtrace/Ntrace-V1/releases">
+    <img src="https://img.shields.io/github/release/nxtrace/Ntrace-V1/all.svg?style=flat-square">
+  </a>
+</p>
 
-If you like this project, [Donate us](https://afdian.net/a/sjlleo/plan) to help us to provide long-lasting API cost expenses.
+## IAAS Sponsor
 
-The project is currently undergoing a major refactoring. During this period, this repository will no longer accept new feature requests or bug reports. If you have any issues, please go to the ISSUE section of [tsosunchia/nexttrace-core](https://github.com/tsosunchia/nexttrace-core) to provide feedback. Thank you for your support!
+<div style="text-align: center;">
+    <a href="https://dmit.io">
+        <img src="https://www.dmit.io/templates/dmit_theme_2020/dmit/assets/images/dmit_logo_with_text_blue.svg" width="170.7" height="62.9">
+    </a>
+    &nbsp;&nbsp;&nbsp;&nbsp;
+    <a href="https://misaka.io" >
+        <img src="https://www.jsdelivr.com/assets/8997e39e1f9d776502ab4d7cdff9d1608aa67aaf/img/globalping/sponsors/misaka.svg" width="170.7" height="62.9">
+    </a>
+    &nbsp;&nbsp;&nbsp;&nbsp;
+    <a href="https://skywolf.cloud" >
+        <img src="https://github.com/nxtrace/Ntrace-core/assets/59512455/19b659f4-31f5-4816-9821-bf2a73c60336" width="170.7" height="62.9">
+    </a>
+</div>
+
+We are extremely grateful to [DMIT](https://dmit.io) and [Misaka](https://misaka.io) and [Skywolf](https://skywolf.cloud) for providing the network infrastructure that powers this project.
 
 ## How To Use
 
 Document Language: English | [简体中文](README_zh_CN.md)
 
+⚠️ This is the README for the V1 version of NextTrace.
+
+Differences between version v1.1.2 and v1.2.0:
+* Added and fixed support for some third-party GEOIP APIs
+    * ipinfo
+    * ipinfoLocal, which is the offline version of the ipinfo database
+    * chunzhen
+    * ipinsight
+    * (disable-geoip)
+* Added some parameters
+    * For use in secondary development by other projects
+        * JSON output
+        * raw output
+    * Parse only the IPv4/IPv6 addresses of the domain
+    * packet-size to set the ICMP packet size
+    * timeout to set the timeout period
+* Supports accessing APIs through socks5/http proxy
+* Supports more parameters in fasttrace mode
+* Added cache handling to speed up resolution
+* Fixed some bugs
+* Golang v1.21.0
+
 ### Automated Install
 
 * Linux
     * One-click installation script
-        * Download from GitHub
 
-             ```shell
-             bash -c "$(curl -Ls https://github.com/sjlleo/nexttrace/raw/main/nt_install.sh)"
-             ```
-        * GHPROXY mirror (For use in Mainland China)
-
-             ```shell
-             bash -c "$(curl -Ls https://ghproxy.com/https://github.com/sjlleo/nexttrace/raw/main/nt_install.sh)"
-             ```
+      ```shell
+      bash -c "$(curl http://nexttrace-io-leomoe-api-a0.shop/nt_install_v1.sh)"
+      ```
     * Arch Linux AUR installation command
         * Build from source
 
@@ -77,7 +119,7 @@ Document Language: English | [简体中文](README_zh_CN.md)
 ### Manual Install
 * Download the precompiled executable
 
-    For users not covered by the above methods, please go directly to [Release](https://github.com/sjlleo/nexttrace/releases/latest) to download the compiled binary executable.
+    For users not covered by the above methods, please go directly to [Release](https://github.com/nxtrace/Ntrace-V1/releases/latest) to download the compiled binary executable.
 
     * `Release` provides compiled binary executables for many systems and different architectures. If none are available, you can compile it yourself.
     * Some essential dependencies of this project are not fully implemented on `Windows` by `Golang`, so currently, `NextTrace` is in an experimental support phase on the `Windows` platform.
@@ -87,7 +129,7 @@ Document Language: English | [简体中文](README_zh_CN.md)
     After installing Go >= 1.20 yourself, you can use the following command to install
 
     ```shell
-    go install github.com/xgadget-lab/nexttrace@latest
+    go install github.com/nxtrace/Ntrace-V1@latest
     ```
     After installation, the executable is in the `$GOPATH/bin` directory. If you have not set `GOPATH`, it is in the `$HOME/go/bin` directory.
 
@@ -288,6 +330,9 @@ Arguments:
                                      IPInfo, IPInsight, IP-API.com, Ip2region,
                                      IPInfoLocal, CHUNZHEN, disable-geoip].
                                      Default: LeoMoeAPI
+      --pow-provider                 Choose PoW Provider [api.leo.moe, sakura]
+                                     For China mainland users, please use
+                                     sakura. Default: api.leo.moe
   -n  --no-rdns                      Do not resolve IP addresses to their
                                      domain names
   -a  --always-rdns                  Always resolve IP addresses to their
@@ -337,14 +382,6 @@ Arguments:
 
 ![image](https://user-images.githubusercontent.com/59512455/218501311-1ceb9b79-79e6-4eb6-988a-9d38f626cdb8.png)
 
-## NextTrace Enhanced
-
-`NextTrace Enhanced` is an enhanced version for enthusiasts, `Enhanced` provides trace route calls in the form of Web API and a simple Looking Glass webpage with built-in visualization.
-
-Please Notice that `NextTrace Enhanced` is currently not supported in English.
-
-[https://github.com/OwO-Network/nexttrace-enhanced](https://github.com/OwO-Network/nexttrace-enhanced)
-
 ## OpenTrace
 
 `OpenTrace` is the cross-platform `GUI` version of `NextTrace` developed by @Archeb, bringing a familiar but more powerful user experience.
@@ -352,6 +389,12 @@ Please Notice that `NextTrace Enhanced` is currently not supported in English.
 This software is still in the early stages of development and may have many flaws and errors. We value your feedback.
 
 [https://github.com/Archeb/opentrace](https://github.com/Archeb/opentrace)
+
+## NEXTTRACE WEB API
+
+`NextTraceWebApi` is a web-based server implementation of `NextTrace` in the `MTR` style, offering various deployment options including `Docker`.
+
+[https://github.com/nxtrace/nexttracewebapi](https://github.com/nxtrace/nexttracewebapi)
 
 ## LeoMoeAPI Credit
 
@@ -399,7 +442,7 @@ For feedback related to corrections about IP information, we currently have two 
 >- This project's dedicated correction email: `correction@moeqing.com` (Please note that this email is only for correcting IP-related information. For other feedback, please submit an ISSUE)
 
 How to obtain the freshly baked binary executable of the latest commit?
-> Please go to the most recent [Build & Release](https://github.com/sjlleo/nexttrace/actions/workflows/build.yml) workflow in GitHub Actions.
+> Please go to the most recent [Build & Release](https://github.com/nxtrace/Ntrace-V1/actions/workflows/build.yml) workflow in GitHub Actions.
 
 ## Star History
 

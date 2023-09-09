@@ -19,6 +19,7 @@ var Uninterrupted = GetenvDefault("NEXTTRACE_UNINTERRUPTED", "")
 var EnvToken = GetenvDefault("NEXTTRACE_TOKEN", "")
 var UserAgent = fmt.Sprintf("NextTrace %s/%s/%s", config.Version, runtime.GOOS, runtime.GOARCH)
 var RdnsCache sync.Map
+var PowProviderParam = ""
 
 func LookupAddr(addr string) ([]string, error) {
 	// 如果在缓存中找到，直接返回
@@ -195,4 +196,26 @@ func GetProxy() *url.URL {
 		return nil
 	}
 	return proxyURL
+}
+
+func GetPowProvider() string {
+	var powProvider = ""
+	if PowProviderParam == "" {
+		powProvider = GetenvDefault("NEXTTRACE_POWPROVIDER", "api.leo.moe")
+	} else {
+		powProvider = PowProviderParam
+	}
+	if powProvider == "sakura" {
+		return "pow.nexttrace.owo.13a.com"
+	}
+	return ""
+}
+
+func StringInSlice(val string, list []string) bool {
+	for _, v := range list {
+		if v == val {
+			return true
+		}
+	}
+	return false
 }

@@ -41,6 +41,8 @@ func Excute() {
 	maxHops := parser.Int("m", "max-hops", &argparse.Options{Default: 30, Help: "Set the max number of hops (max TTL to be reached)"})
 	dataOrigin := parser.Selector("d", "data-provider", []string{"Ip2region", "ip2region", "IP.SB", "ip.sb", "IPInfo", "ipinfo", "IPInsight", "ipinsight", "IPAPI.com", "ip-api.com", "IPInfoLocal", "ipinfolocal", "chunzhen", "LeoMoeAPI", "leomoeapi", "disable-geoip"}, &argparse.Options{Default: "LeoMoeAPI",
 		Help: "Choose IP Geograph Data Provider [IP.SB, IPInfo, IPInsight, IP-API.com, Ip2region, IPInfoLocal, CHUNZHEN, disable-geoip]"})
+	powProvider := parser.Selector("", "pow-provider", []string{"api.leo.moe", "sakura"}, &argparse.Options{Default: "api.leo.moe",
+		Help: "Choose PoW Provider [api.leo.moe, sakura] For China mainland users, please use sakura"})
 	noRdns := parser.Flag("n", "no-rdns", &argparse.Options{Help: "Do not resolve IP addresses to their domain names"})
 	alwaysRdns := parser.Flag("a", "always-rdns", &argparse.Options{Help: "Always resolve IP addresses to their domain names"})
 	routePath := parser.Flag("P", "route-path", &argparse.Options{Help: "Print traceroute hop path by ASN and location"})
@@ -155,6 +157,9 @@ func Excute() {
 	//	defer wg.Done()
 	if strings.ToUpper(*dataOrigin) == "LEOMOEAPI" {
 		val, ok := os.LookupEnv("NEXTTRACE_DATAPROVIDER")
+		if strings.ToUpper(*powProvider) != "API.LEO.MOE" {
+			util.PowProviderParam = *powProvider
+		}
 		if ok {
 			*dataOrigin = val
 		} else {
@@ -191,11 +196,18 @@ func Excute() {
 
 	if *srcDev != "" {
 		dev, _ := net.InterfaceByName(*srcDev)
-
 		if addrs, err := dev.Addrs(); err == nil {
 			for _, addr := range addrs {
 				if (addr.(*net.IPNet).IP.To4() == nil) == (ip.To4() == nil) {
 					*srcAddr = addr.(*net.IPNet).IP.String()
+					// 检查是否是内网IP
+					if !(net.ParseIP(*srcAddr).IsPrivate() ||
+						net.ParseIP(*srcAddr).IsLoopback() ||
+						net.ParseIP(*srcAddr).IsLinkLocalUnicast() ||
+						net.ParseIP(*srcAddr).IsLinkLocalMulticast()) {
+						// 若不是则跳出
+						break
+					}
 				}
 			}
 		}
@@ -294,7 +306,8 @@ func Excute() {
 		fmt.Println(err)
 		return
 	}
-	if !*disableMaptrace && strings.ToUpper(*dataOrigin) == "LEOMOEAPI" {
+	if !*disableMaptrace &&
+		(util.StringInSlice(strings.ToUpper(*dataOrigin), []string{"LEOMOEAPI", "IPINFO", "IPINFO", "IP-API.COM", "IPAPI.COM"})) {
 		url, err := tracemap.GetMapUrl(string(r))
 		if err != nil {
 			log.Fatalln(err)

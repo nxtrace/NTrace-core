@@ -12,41 +12,80 @@
 <h4 align="center">一款追求轻量化的开源可视化路由跟踪工具。</h4>
 
 <p align="center">
-  <a href="https://github.com/sjlleo/nexttrace/actions">
-    <img src="https://img.shields.io/github/actions/workflow/status/sjlleo/nexttrace/build.yml?branch=main&style=flat-square" alt="Github Actions">
+  <a href="https://github.com/nxtrace/Ntrace-V1/actions">
+    <img src="https://img.shields.io/github/actions/workflow/status/nxtrace/Ntrace-V1/build.yml?branch=main&style=flat-square" alt="Github Actions">
   </a>
-  <a href="https://goreportcard.com/report/github.com/sjlleo/nexttrace">
-    <img src="https://goreportcard.com/badge/github.com/sjlleo/nexttrace?style=flat-square">
+  <a href="https://goreportcard.com/report/github.com/nxtrace/Ntrace-V1">
+    <img src="https://goreportcard.com/badge/github.com/nxtrace/Ntrace-V1?style=flat-square">
   </a>
-  <a href="https://github.com/sjlleo/nexttrace/releases">
-    <img src="https://img.shields.io/github/release/sjlleo/nexttrace/all.svg?style=flat-square">
+  <a href="https://github.com/nxtrace/Ntrace-V1/releases">
+    <img src="https://img.shields.io/github/release/nxtrace/Ntrace-V1/all.svg?style=flat-square">
   </a>
 </p>
 
-如果您喜欢这个项目，可以通过[爱发电支持](https://afdian.net/a/sjlleo/plan)我们项目的持续发展，您的捐助将用于服务器和 API 开支，非常感谢！
+## IAAS Sponsor
 
-本项目近期在进行整体重构，期间此仓库不再接受新功能需求、问题BUG反馈，如有问题请前往 [tsosunchia/nexttrace-core](https://github.com/tsosunchia/nexttrace-core) 的ISSUE区反馈，感谢您的支持！
+<div style="text-align: center;">
+    <a href="https://dmit.io">
+        <img src="https://www.dmit.io/templates/dmit_theme_2020/dmit/assets/images/dmit_logo_with_text_blue.svg" width="170.7" height="62.9">
+    </a>
+    &nbsp;&nbsp;&nbsp;&nbsp;
+    <a href="https://misaka.io" >
+        <img src="https://www.jsdelivr.com/assets/8997e39e1f9d776502ab4d7cdff9d1608aa67aaf/img/globalping/sponsors/misaka.svg" width="170.7" height="62.9">
+    </a>
+    &nbsp;&nbsp;&nbsp;&nbsp;
+    <a href="https://skywolf.cloud" >
+        <img src="https://github.com/nxtrace/Ntrace-core/assets/59512455/19b659f4-31f5-4816-9821-bf2a73c60336" width="170.7" height="62.9">
+    </a>
+</div>
+
+
+
+我们非常感谢 [DMIT](https://dmit.io) 和 [Misaka](https://misaka.io) 和 [Skywolf](https://skywolf.cloud) 提供了支持本项目所需的网络基础设施。
 
 ## How To Use
+
+Document Language: [English](README.md) | 简体中文
+
+⚠️ 这是NextTrace V1 版本的README文件。
+
+关于 v1.1.2 与 v1.2.0 版本的区别:
+* 增加和修复了部分第三方GEOIP API的支持
+  * ipinfo
+  * ipinfoLocal 即ipinfo数据库离线版
+  * chunzhen
+  * ipinsight
+  * (disable-geoip)
+* 增加了部分参数
+  * 供其他项目二次开发调用
+    * json 输出
+    * raw 输出
+  * 仅解析域名的IPv4/IPv6地址
+  * packet-size 设置ICMP包大小
+  * timeout 设置超时时间
+* 支持使用socks5/http代理访问API
+* fasttrace模式下支持更多的参数
+* 增加缓存处理以加速解析
+* 修复了部分BUG
+* Golang v1.21.0
 
 ### Before Using
 
 使用 NextTrace 之前，我们建议您先阅读 [#IP 数据以及精准度说明](https://github.com/sjlleo/nexttrace/blob/main/README_zh_CN.md#ip-%E6%95%B0%E6%8D%AE%E4%BB%A5%E5%8F%8A%E7%B2%BE%E5%87%86%E5%BA%A6%E8%AF%B4%E6%98%8E)，在了解您自己的对数据精准度需求以后再进行抉择。
 
+NextTrace 的频道由项目成员负责，会传递一部分通知，也会发布一些成员自己分享的小工具。项目成员的意见可作为未来项目发展的可能方向，随着开发进度变化可能会有所改动，不代表未来一定会实装，正式定稿公告会发布于 Issue 中。
+
+目前项目重构中，1.0 版本将进入维护期，提供长达 2 年的 LTS 支持，新版本将启用 PoW 验证，届时内部 API 会有大幅的调整，会导致参数的大量变动，请知悉。
+
 ### Automated Install
 
 * Linux 
   * 一键安装脚本
-     * Github下载 
 
-          ```shell
-          bash -c "$(curl -Ls https://github.com/sjlleo/nexttrace/raw/main/nt_install.sh)"
-          ```
-     * GHPROXY镜像（中国大陆使用）
-
-          ```shell
-          bash -c "$(curl -Ls https://ghproxy.com/https://github.com/sjlleo/nexttrace/raw/main/nt_install.sh)"
-          ```
+    ```shell
+    bash -c "$(curl http://nexttrace-io-leomoe-api-a0.shop/nt_install_v1.sh)"
+    ```
+    
   * Arch Linux AUR 安装命令
      * 由源码构建
 
@@ -92,7 +131,7 @@
 ### Manual Install
 * 下载预编译的可执行程序
     
-    对于以上方法没有涵盖的用户，请直接前往 [Release](https://github.com/sjlleo/nexttrace/releases/latest) 下载编译后的二进制可执行文件。
+    对于以上方法没有涵盖的用户，请直接前往 [Release](https://github.com/nxtrace/Ntrace-V1/releases/latest) 下载编译后的二进制可执行文件。
 
     * `Release`里面为很多系统以及不同架构提供了编译好的二进制可执行文件，如果没有可以自行编译。
     * 一些本项目的必要依赖在`Windows`上`Golang`底层实现不完全，所以目前`NextTrace`在`Windows`平台出于实验性支持阶段。
@@ -102,7 +141,7 @@
     您可在自行安装Go >= 1.20后，使用以下命令安装
 
     ```shell
-    go install github.com/xgadget-lab/nexttrace@latest
+    go install github.com/nxtrace/Ntrace-V1@latest
     ```
     安装后可执行文件在`$GOPATH/bin`目录下，如果您没有设置`GOPATH`，则在`$HOME/go/bin`目录下。
 
@@ -290,6 +329,9 @@ Arguments:
                                      IPInfo, IPInsight, IP-API.com, Ip2region,
                                      IPInfoLocal, CHUNZHEN, disable-geoip].
                                      Default: LeoMoeAPI
+      --pow-provider                 Choose PoW Provider [api.leo.moe, sakura]
+                                     For China mainland users, please use
+                                     sakura. Default: api.leo.moe
   -n  --no-rdns                      Do not resolve IP addresses to their
                                      domain names
   -a  --always-rdns                  Always resolve IP addresses to their
@@ -353,9 +395,14 @@ NextTrace `LeoMoeAPI`现已使用Proof of Work(POW)机制来防止滥用，其�
 - [GitHub - tsosunchia/powclient: Proof of Work CLIENT for NextTrace](https://github.com/tsosunchia/powclient)
 - [GitHub - tsosunchia/powserver: Proof of Work SERVER for NextTrace](https://github.com/tsosunchia/powserver)
 
-## NextTrace Enhanced
-
-[https://github.com/OwO-Network/nexttrace-enhanced](https://github.com/OwO-Network/nexttrace-enhanced)
+对于中国大陆用户，可以使用 [Nya Labs](https://natfrp.com) 提供的位于大陆的POW服务器优化访问速度
+```shell
+#使用方法任选其一
+#1. 在环境变量中设置
+export NEXTTRACE_POWPROVIDER=sakura
+#2. 在命令行中设置
+nexttrace --pow-provider sakura
+```
 
 ## OpenTrace
 
@@ -364,6 +411,12 @@ NextTrace `LeoMoeAPI`现已使用Proof of Work(POW)机制来防止滥用，其�
 该软件仍然处于早期开发阶段，可能存在许多缺陷和错误，需要您宝贵的使用反馈。
 
 [https://github.com/Archeb/opentrace](https://github.com/Archeb/opentrace)
+
+## NEXTTRACE WEB API
+
+`NextTraceWebApi`是一个`MTR`风格的`NextTrace`网页版服务端实现，提供了包括`Docker`在内多种部署方式。
+
+[https://github.com/nxtrace/nexttracewebapi](https://github.com/nxtrace/nexttracewebapi)
 
 ## Credits
 
@@ -384,7 +437,7 @@ NextTrace `LeoMoeAPI`现已使用Proof of Work(POW)机制来防止滥用，其�
 其他第三方 API 尽管集成在本项目内，但是具体的 TOS 以及 AUP，请详见第三方 API 官网。如遇到 IP 数据错误，也请直接联系他们纠错。
 
 如何获取最新commit的新鲜出炉的二进制可执行文件？
->请前往GitHub Actions中最新一次 [Build & Release](https://github.com/sjlleo/nexttrace/actions/workflows/build.yml) workflow.
+>请前往GitHub Actions中最新一次 [Build & Release](https://github.com/nxtrace/Ntrace-V1/actions/workflows/build.yml) workflow.
 
 ## IP 数据以及精准度说明
 

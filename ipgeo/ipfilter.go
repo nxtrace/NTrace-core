@@ -20,15 +20,39 @@ func Filter(ip string) (*IPGeoData, bool) {
 	whois := ""
 	isFiltered := false
 	switch {
-	//rfc1918
-	case net.ParseIP(ip).IsPrivate():
+	case cidrRangeContains("0.0.0.0/8", ip):
 		asn = ""
-		whois = "RFC1918"
+		whois = "RFC1122"
 		isFiltered = true
 	//IANA Reserved Address Space
 	case cidrRangeContains("100.64.0.0/10", ip):
 		asn = ""
 		whois = "RFC6598"
+		isFiltered = true
+	//127.0.0.0/8
+	case cidrRangeContains("127.0.0.0/8", ip):
+		asn = ""
+		whois = "RFC1122"
+		isFiltered = true
+	//169.254.0.0/16
+	case cidrRangeContains("169.254.0.0/16", ip):
+		asn = ""
+		whois = "RFC3927"
+		isFiltered = true
+	//192.0.0.0/24
+	case cidrRangeContains("192.0.0.0/24", ip):
+		asn = ""
+		whois = "RFC6890"
+		isFiltered = true
+	//192.0.2.0/24
+	case cidrRangeContains("192.0.2.0/24", ip):
+		asn = ""
+		whois = "RFC5737"
+		isFiltered = true
+	//192.88.99.0/24
+	case cidrRangeContains("192.88.99.0/24", ip):
+		asn = ""
+		whois = "RFC3068"
 		isFiltered = true
 	case cidrRangeContains("198.18.0.0/15", ip):
 		asn = ""
@@ -40,10 +64,32 @@ func Filter(ip string) (*IPGeoData, bool) {
 		asn = ""
 		whois = "RFC5737"
 		isFiltered = true
+	//224.0.0.0/4
+	case cidrRangeContains("224.0.0.0/4", ip):
+		asn = ""
+		whois = "RFC5771"
+		isFiltered = true
+	//255.255.255.255/32
+	case cidrRangeContains("255.255.255.255/32", ip):
+		asn = ""
+		whois = "RFC0919"
+		isFiltered = true
 	case cidrRangeContains("240.0.0.0/4", ip):
 		asn = ""
 		whois = "RFC1112"
 		isFiltered = true
+	case net.ParseIP(ip).IsPrivate():
+		//rfc4193
+		if cidrRangeContains("fc00::/7", ip) {
+			asn = ""
+			whois = "RFC4193"
+			isFiltered = true
+			//rfc1918
+		} else {
+			asn = ""
+			whois = "RFC1918"
+			isFiltered = true
+		}
 	//Defense Information System Network
 	case cidrRangeContains("6.0.0.0/8", ip):
 		fallthrough

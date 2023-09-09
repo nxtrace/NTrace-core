@@ -127,7 +127,11 @@ func (c *WsConn) recreateWsConn() {
 		// 无环境变量 token
 		if cacheToken == "" {
 			// 无cacheToken, 重新获取 token
-			jwtToken, err = pow.GetToken(fastIp, host, port)
+			if util.GetPowProvider() == "" {
+				jwtToken, err = pow.GetToken(fastIp, host, port)
+			} else {
+				jwtToken, err = pow.GetToken(util.GetPowProvider(), util.GetPowProvider(), port)
+			}
 			if err != nil {
 				log.Println(err)
 				os.Exit(1)
@@ -175,6 +179,7 @@ func (c *WsConn) recreateWsConn() {
 }
 
 func createWsConn() *WsConn {
+	proxyUrl := util.GetProxy()
 	//fmt.Println("正在连接 WS")
 	// 设置终端中断通道
 	interrupt := make(chan os.Signal, 1)
@@ -190,7 +195,11 @@ func createWsConn() *WsConn {
 	jwtToken, ua := envToken, []string{"Privileged Client"}
 	err := error(nil)
 	if envToken == "" {
-		jwtToken, err = pow.GetToken(fastIp, host, port)
+		if util.GetPowProvider() == "" {
+			jwtToken, err = pow.GetToken(fastIp, host, port)
+		} else {
+			jwtToken, err = pow.GetToken(util.GetPowProvider(), util.GetPowProvider(), port)
+		}
 		if err != nil {
 			log.Println(err)
 			os.Exit(1)
@@ -207,6 +216,9 @@ func createWsConn() *WsConn {
 	dialer := websocket.DefaultDialer
 	dialer.TLSClientConfig = &tls.Config{
 		ServerName: host,
+	}
+	if proxyUrl != nil {
+		dialer.Proxy = http.ProxyURL(proxyUrl)
 	}
 	u := url.URL{Scheme: "wss", Host: fastIp + ":" + port, Path: "/v3/ipGeoWs"}
 	// log.Printf("connecting to %s", u.String())

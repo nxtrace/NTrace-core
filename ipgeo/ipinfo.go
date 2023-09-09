@@ -1,8 +1,10 @@
 package ipgeo
 
 import (
+	"github.com/xgadget-lab/nexttrace/util"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -10,7 +12,7 @@ import (
 )
 
 func IPInfo(ip string, timeout time.Duration, _ string, _ bool) (*IPGeoData, error) {
-	url := "https://ipinfo.io/" + ip + "?token=" + token.ipinfo
+	url := "http://ipinfo.io/" + ip + "?token=" + token.ipinfo
 	client := &http.Client{
 		// 2 秒超时
 		Timeout: timeout,
@@ -28,11 +30,6 @@ func IPInfo(ip string, timeout time.Duration, _ string, _ bool) (*IPGeoData, err
 
 	res := gjson.ParseBytes(body)
 
-	var country string
-	country = res.Get("country").String()
-	if res.Get("country").String() == "HK" || res.Get("country").String() == "TW" {
-		country = "CN"
-	}
 	// ISO-3166 转换
 	var countryMap = map[string]string{
 		"AF": "Afghanistan",
@@ -285,7 +282,26 @@ func IPInfo(ip string, timeout time.Duration, _ string, _ bool) (*IPGeoData, err
 		"ZM": "Zambia",
 		"ZW": "Zimbabwe",
 	}
+	var country = res.Get("country").String()
+	var prov = res.Get("region").String()
+	var city = res.Get("city").String()
+	var district = ""
+	if util.StringInSlice(country, []string{"TW", "MO", "HK"}) {
+		district = prov + " " + city
+		city = countryMap[country]
+		prov = ""
+		country = "CN"
+	}
 	country = countryMap[country]
+
+	var anycast = false
+	if res.Get("anycast").String() == "true" {
+		country = "ANYCAST"
+		prov = "ANYCAST"
+		city = ""
+		anycast = true
+	}
+
 	i := strings.Index(res.Get("org").String(), " ")
 	var owner string
 	if i == -1 {
@@ -300,11 +316,24 @@ func IPInfo(ip string, timeout time.Duration, _ string, _ bool) (*IPGeoData, err
 		asnumber = strings.Fields(strings.TrimPrefix(res.Get("org").String(), "AS"))[0]
 	}
 
+	//"loc": "34.0522,-118.2437",
+	var lat, lng float64
+	if res.Get("loc").String() != "" {
+		lat, _ = strconv.ParseFloat(strings.Split(res.Get("loc").String(), ",")[0], 32)
+		lng, _ = strconv.ParseFloat(strings.Split(res.Get("loc").String(), ",")[1], 32)
+	}
+	if anycast {
+		lat, lng = 0, 0
+	}
+
 	return &IPGeoData{
 		Asnumber: asnumber,
 		Country:  country,
-		City:     res.Get("city").String(),
-		Prov:     res.Get("region").String(),
+		City:     city,
+		Prov:     prov,
+		District: district,
 		Owner:    owner,
+		Lat:      lat,
+		Lng:      lng,
 	}, nil
 }

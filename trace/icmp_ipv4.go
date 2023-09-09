@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/xgadget-lab/nexttrace/trace/internal"
 	"golang.org/x/net/context"
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv4"
@@ -65,7 +64,7 @@ func (t *ICMPTracer) Execute() (*Result, error) {
 
 	var err error
 
-	t.icmpListen, err = internal.ListenICMP("ip4:1", t.SrcAddr)
+	t.icmpListen, err = net.ListenPacket("ip4:1", t.SrcAddr)
 	if err != nil {
 		return &t.res, err
 	}
