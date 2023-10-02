@@ -37,6 +37,13 @@ func TestXxx(t *testing.T) {
 	log.Println(process_id, ttl_r)
 }
 
+func TestFilter(t *testing.T) {
+	res, err := Filter("::1")
+	//打印whois信息
+	fmt.Println(res.Whois)
+	print(err)
+}
+
 func reverseID(id string) (int64, int64, error) {
 	ttl, _ := strconv.ParseInt(id[9:15], 2, 32)
 	//process ID

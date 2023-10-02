@@ -78,6 +78,46 @@ func Filter(ip string) (*IPGeoData, bool) {
 		asn = ""
 		whois = "RFC1112"
 		isFiltered = true
+	case cidrRangeContains("fe80::/10", ip):
+		asn = ""
+		whois = "RFC4291"
+		isFiltered = true
+	case cidrRangeContains("ff00::/8", ip):
+		asn = ""
+		whois = "RFC4291"
+		isFiltered = true
+	case cidrRangeContains("fec0::/10", ip):
+		asn = ""
+		whois = "RFC3879"
+		isFiltered = true
+	case cidrRangeContains("fe00::/9", ip):
+		asn = ""
+		whois = "RFC4291"
+		isFiltered = true
+	case cidrRangeContains("::ffff:0:0/96", ip):
+		asn = ""
+		whois = "RFC4291"
+		isFiltered = true
+	case cidrRangeContains("64:ff9b::/96", ip):
+		asn = ""
+		whois = "RFC6052"
+		isFiltered = true
+	case cidrRangeContains("0::/96", ip):
+		asn = ""
+		whois = "RFC4291"
+		isFiltered = true
+	case cidrRangeContains("64:ff9b:1::/48", ip):
+		asn = ""
+		whois = "RFC6052"
+		isFiltered = true
+	case cidrRangeContains("2001:db8::/32", ip):
+		asn = ""
+		whois = "RFC3849"
+		isFiltered = true
+	case cidrRangeContains("2002::/16", ip):
+		asn = ""
+		whois = "RFC3056"
+		isFiltered = true
 	case net.ParseIP(ip).IsPrivate():
 		//rfc4193
 		if cidrRangeContains("fc00::/7", ip) {
@@ -120,6 +160,12 @@ func Filter(ip string) (*IPGeoData, bool) {
 		whois = "DOD"
 		isFiltered = true
 	default:
+	}
+	// 判断是否为v6 且不在2000::/3
+	if net.ParseIP(ip).To4() == nil && !cidrRangeContains("2000::/3", ip) {
+		asn = ""
+		whois = "INVALID"
+		isFiltered = true
 	}
 	if !isFiltered {
 		return nil, false
