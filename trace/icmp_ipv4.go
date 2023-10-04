@@ -175,6 +175,28 @@ func (t *ICMPTracer) listenICMP() {
 func (t *ICMPTracer) handleICMPMessage(msg ReceivedMessage, icmpType int8, data []byte, ttl int) {
 	t.inflightRequestRWLock.RLock()
 	defer t.inflightRequestRWLock.RUnlock()
+
+	extensionOffset := 20 + 8 + 52
+
+	if len(data) > extensionOffset {
+		extensionBody := data[extensionOffset:]
+
+		if len(extensionBody) >= 8 && len(extensionBody)%8 == 0 {
+			log.Println("ICMP Multi-Part Extensions detected for TTL:", ttl)
+			//TODO: Parse MPLS extensions
+			//for i := 0; i < len(extensionBody); i += 4 {
+			//	labelData := binary.BigEndian.Uint32(extensionBody[i : i+4])
+			//
+			//	label := (labelData & 0xFFFFF000) >> 12
+			//	tc := (labelData & 0x00000E00) >> 9
+			//	s := (labelData & 0x00000100) >> 8
+			//	mplsTTL := labelData & 0x000000FF
+			//
+			//	log.Printf("MPLS for TTL %d: Lbl %d TC %d S %d TTL %d\n", ttl, label, tc, s, mplsTTL)
+			//}
+		}
+	}
+
 	if _, ok := t.inflightRequest[ttl]; ok {
 		t.inflightRequest[ttl] <- Hop{
 			Success: true,
