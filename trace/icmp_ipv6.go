@@ -233,10 +233,13 @@ func (t *ICMPTracerv6) listenICMP() {
 func (t *ICMPTracerv6) handleICMPMessage(msg ReceivedMessage, icmpType int8, data []byte, ttl int) {
 	t.inflightRequestRWLock.RLock()
 	defer t.inflightRequestRWLock.RUnlock()
+
+	mpls := extractMPLS(msg, data)
 	if _, ok := t.inflightRequest[ttl]; ok {
 		t.inflightRequest[ttl] <- Hop{
 			Success: true,
 			Address: msg.Peer,
+			MPLS:    mpls,
 		}
 	}
 }

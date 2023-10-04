@@ -176,7 +176,7 @@ func (t *ICMPTracer) handleICMPMessage(msg ReceivedMessage, icmpType int8, data 
 	t.inflightRequestRWLock.RLock()
 	defer t.inflightRequestRWLock.RUnlock()
 
-	mpls := t.extractMPLS(msg, data)
+	mpls := extractMPLS(msg, data)
 	if _, ok := t.inflightRequest[ttl]; ok {
 		t.inflightRequest[ttl] <- Hop{
 			Success: true,
@@ -186,7 +186,7 @@ func (t *ICMPTracer) handleICMPMessage(msg ReceivedMessage, icmpType int8, data 
 	}
 }
 
-func (t *ICMPTracer) extractMPLS(msg ReceivedMessage, data []byte) string {
+func extractMPLS(msg ReceivedMessage, data []byte) string {
 	extensionOffset := 20 + 8 + 52
 
 	if len(data) <= extensionOffset {
