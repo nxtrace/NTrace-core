@@ -94,10 +94,6 @@ func Filter(ip string) (*IPGeoData, bool) {
 		asn = ""
 		whois = "RFC4291"
 		isFiltered = true
-	case cidrRangeContains("::ffff:0:0/96", ip):
-		asn = ""
-		whois = "RFC4291"
-		isFiltered = true
 	case cidrRangeContains("64:ff9b::/96", ip):
 		asn = ""
 		whois = "RFC6052"
