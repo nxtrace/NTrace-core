@@ -47,6 +47,10 @@ func HopPrinter(h trace.Hop, info HopInfo) {
 		if h.Geo != nil {
 			txt += " " + formatIpGeoData(h.Address.String(), h.Geo)
 		}
+
+		if len(h.MPLS) > 1 {
+			txt += " [MPLS: " + h.MPLS + "]"
+		}
 		switch info {
 		case IXP:
 			fmt.Print(CYAN_PREFIX)

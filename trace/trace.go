@@ -124,6 +124,7 @@ type Hop struct {
 	Error    error
 	Geo      *ipgeo.IPGeoData
 	Lang     string
+	MPLS     string
 }
 
 func (h *Hop) fetchIPData(c Config) (err error) {
