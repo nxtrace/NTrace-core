@@ -175,43 +175,8 @@ func (t *ICMPTracer) listenICMP() {
 func (t *ICMPTracer) handleICMPMessage(msg ReceivedMessage, icmpType int8, data []byte, ttl int) {
 	t.inflightRequestRWLock.RLock()
 	defer t.inflightRequestRWLock.RUnlock()
-	label, err := int64(0), error(nil)
-	tc, s, ttlMpls := int64(0), "", int64(0)
-	mpls := ""
 
-	extensionOffset := 20 + 8 + 52
-
-	if len(data) > extensionOffset {
-		extensionBody := data[extensionOffset:]
-
-		if len(extensionBody) >= 8 && len(extensionBody)%8 == 0 {
-			//log.Println("ICMP Multi-Part Extensions detected for TTL:", ttl)
-			//这里感觉会有问题，能力所限先这样吧，等有缘人来改
-			tmp := fmt.Sprintf("%x", msg.Msg[:*msg.N])
-			substring := tmp[len(tmp)-8 : len(tmp)-3]
-			label, err = strconv.ParseInt(substring, 16, 32)
-			if err != nil {
-				return
-			}
-			strSlice := []byte(tmp[len(tmp)-3 : len(tmp)-2])
-			charValue := int(strSlice[0] - '0')
-			binaryStr := fmt.Sprintf("%04b", charValue)
-			tc, err = strconv.ParseInt(binaryStr[:3], 2, 32)
-			if err != nil {
-				return
-			}
-			s = binaryStr[3:]
-
-			substring = tmp[len(tmp)-2:]
-			ttlMpls, err = strconv.ParseInt(substring, 16, 32)
-			if err != nil {
-				return
-			}
-			//fmt.Printf("MPLS for TTL %d: Lbl %d, TC %d, S %s, TTL %d\n", ttl, label, tc, s, ttlMpls)
-			mpls = fmt.Sprintf("Lbl %d, TC %d, S %s, TTL %d", label, tc, s, ttlMpls)
-		}
-	}
-
+	mpls := t.extractMPLS(msg, data)
 	if _, ok := t.inflightRequest[ttl]; ok {
 		t.inflightRequest[ttl] <- Hop{
 			Success: true,
@@ -219,6 +184,45 @@ func (t *ICMPTracer) handleICMPMessage(msg ReceivedMessage, icmpType int8, data 
 			MPLS:    mpls,
 		}
 	}
+}
+
+func (t *ICMPTracer) extractMPLS(msg ReceivedMessage, data []byte) string {
+	extensionOffset := 20 + 8 + 52
+
+	if len(data) <= extensionOffset {
+		return ""
+	}
+
+	extensionBody := data[extensionOffset:]
+	if len(extensionBody) < 8 || len(extensionBody)%8 != 0 {
+		return ""
+	}
+
+	tmp := fmt.Sprintf("%x", msg.Msg[:*msg.N])
+	if len(tmp) < 8 {
+		return ""
+	}
+
+	label, err := strconv.ParseInt(tmp[len(tmp)-8:len(tmp)-3], 16, 32)
+	if err != nil {
+		return ""
+	}
+
+	strSlice := []byte(tmp[len(tmp)-3 : len(tmp)-2])
+	charValue := int(strSlice[0] - '0')
+	binaryStr := fmt.Sprintf("%04b", charValue)
+	tc, err := strconv.ParseInt(binaryStr[:3], 2, 32)
+	if err != nil {
+		return ""
+	}
+	s := binaryStr[3:]
+
+	ttlMpls, err := strconv.ParseInt(tmp[len(tmp)-2:], 16, 32)
+	if err != nil {
+		return ""
+	}
+
+	return fmt.Sprintf("Lbl %d, TC %d, S %s, TTL %d", label, tc, s, ttlMpls)
 }
 
 func gernerateID(ttl_int int) int {
