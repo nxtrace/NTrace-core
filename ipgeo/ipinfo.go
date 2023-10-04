@@ -1,7 +1,7 @@
 package ipgeo
 
 import (
-	"github.com/xgadget-lab/nexttrace/util"
+	"github.com/nxtrace/NTrace-core/util"
 	"io"
 	"net/http"
 	"strconv"

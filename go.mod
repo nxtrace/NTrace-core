@@ -1,4 +1,4 @@
-module github.com/xgadget-lab/nexttrace
+module github.com/nxtrace/NTrace-core
 
 go 1.21
 

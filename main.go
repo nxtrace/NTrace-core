@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/xgadget-lab/nexttrace/cmd"
+	"github.com/nxtrace/NTrace-core/cmd"
 )
 
 func main() {

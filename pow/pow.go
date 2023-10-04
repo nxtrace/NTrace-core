@@ -2,8 +2,8 @@ package pow
 
 import (
 	"fmt"
+	"github.com/nxtrace/NTrace-core/util"
 	"github.com/tsosunchia/powclient"
-	"github.com/xgadget-lab/nexttrace/util"
 	"net/url"
 	"os"
 )

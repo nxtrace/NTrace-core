@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/xgadget-lab/nexttrace/trace"
+	"github.com/nxtrace/NTrace-core/trace"
 )
 
 func RealtimePrinter(res *trace.Result, ttl int) {

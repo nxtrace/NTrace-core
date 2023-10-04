@@ -2,8 +2,8 @@ package printer
 
 import (
 	"fmt"
-	"github.com/xgadget-lab/nexttrace/config"
-	"github.com/xgadget-lab/nexttrace/trace"
+	"github.com/nxtrace/NTrace-core/config"
+	"github.com/nxtrace/NTrace-core/trace"
 	"net"
 
 	"github.com/fatih/color"

@@ -2,7 +2,7 @@ package ipgeo
 
 import (
 	"encoding/json"
-	"github.com/xgadget-lab/nexttrace/util"
+	"github.com/nxtrace/NTrace-core/util"
 	"io"
 	"log"
 	"net/http"

@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/xgadget-lab/nexttrace/ipgeo"
-	"github.com/xgadget-lab/nexttrace/trace"
+	"github.com/nxtrace/NTrace-core/ipgeo"
+	"github.com/nxtrace/NTrace-core/trace"
 )
 
 var testResult = &trace.Result{

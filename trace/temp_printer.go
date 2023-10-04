@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/xgadget-lab/nexttrace/ipgeo"
+	"github.com/nxtrace/NTrace-core/ipgeo"
 )
 
 func HopPrinter(h Hop) {

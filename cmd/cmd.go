@@ -12,17 +12,17 @@ import (
 	"time"
 
 	"github.com/akamensky/argparse"
+	"github.com/nxtrace/NTrace-core/config"
+	fastTrace "github.com/nxtrace/NTrace-core/fast_trace"
+	"github.com/nxtrace/NTrace-core/ipgeo"
+	"github.com/nxtrace/NTrace-core/printer"
+	"github.com/nxtrace/NTrace-core/reporter"
+	"github.com/nxtrace/NTrace-core/trace"
+	"github.com/nxtrace/NTrace-core/tracelog"
+	"github.com/nxtrace/NTrace-core/tracemap"
+	"github.com/nxtrace/NTrace-core/util"
+	"github.com/nxtrace/NTrace-core/wshandle"
 	"github.com/syndtr/gocapability/capability"
-	"github.com/xgadget-lab/nexttrace/config"
-	fastTrace "github.com/xgadget-lab/nexttrace/fast_trace"
-	"github.com/xgadget-lab/nexttrace/ipgeo"
-	"github.com/xgadget-lab/nexttrace/printer"
-	"github.com/xgadget-lab/nexttrace/reporter"
-	"github.com/xgadget-lab/nexttrace/trace"
-	"github.com/xgadget-lab/nexttrace/tracelog"
-	"github.com/xgadget-lab/nexttrace/tracemap"
-	"github.com/xgadget-lab/nexttrace/util"
-	"github.com/xgadget-lab/nexttrace/wshandle"
 )
 
 func Excute() {

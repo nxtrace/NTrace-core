@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/xgadget-lab/nexttrace/ipgeo"
-	"github.com/xgadget-lab/nexttrace/util"
+	"github.com/nxtrace/NTrace-core/ipgeo"
+	"github.com/nxtrace/NTrace-core/util"
 )
 
 var (

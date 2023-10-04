@@ -131,9 +131,9 @@ jobs:
       - name: Build
         run: |
           go build -trimpath -o dist/${ASSET_NAME} \
-            -ldflags "-X 'github.com/xgadget-lab/nexttrace/config.Version=${BUILD_VERSION}' \
-                      -X 'github.com/xgadget-lab/nexttrace/config.BuildDate=${BUILD_DATE}' \
-                      -X 'github.com/xgadget-lab/nexttrace/config.CommitID=${COMMIT_SHA1}'\
+            -ldflags "-X 'github.com/nxtrace/NTrace-core/config.Version=${BUILD_VERSION}' \
+                      -X 'github.com/nxtrace/NTrace-core/config.BuildDate=${BUILD_DATE}' \
+                      -X 'github.com/nxtrace/NTrace-core/config.CommitID=${COMMIT_SHA1}'\
                       -w -s"
       - name: Upload files to Artifacts
         uses: actions/upload-artifact@v3

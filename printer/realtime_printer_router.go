@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
-	"github.com/xgadget-lab/nexttrace/trace"
+	"github.com/nxtrace/NTrace-core/trace"
 )
 
 func RealtimePrinterWithRouter(res *trace.Result, ttl int) {

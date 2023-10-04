@@ -2,8 +2,8 @@ package wshandle
 
 import (
 	"crypto/tls"
-	"github.com/xgadget-lab/nexttrace/pow"
-	"github.com/xgadget-lab/nexttrace/util"
+	"github.com/nxtrace/NTrace-core/pow"
+	"github.com/nxtrace/NTrace-core/util"
 	"log"
 	"net"
 	"net/http"

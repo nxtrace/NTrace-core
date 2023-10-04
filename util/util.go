@@ -3,7 +3,7 @@ package util
 import (
 	"context"
 	"fmt"
-	"github.com/xgadget-lab/nexttrace/config"
+	"github.com/nxtrace/NTrace-core/config"
 	"log"
 	"net"
 	"net/url"

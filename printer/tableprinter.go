@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/xgadget-lab/nexttrace/ipgeo"
+	"github.com/nxtrace/NTrace-core/ipgeo"
 
-	"github.com/xgadget-lab/nexttrace/trace"
+	"github.com/nxtrace/NTrace-core/trace"
 
 	"github.com/fatih/color"
 	"github.com/rodaine/table"

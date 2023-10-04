@@ -15,7 +15,7 @@ copyright: [v2fly](https://github.com/v2fly)
 
 <!--
 除非特殊情况，请完整填写所有问题。不按模板发的 issue 将直接被关闭。
-如果你遇到的问题不是 nexttrace 的 bug，比如你不清楚如何配置，请在 https://github.com/xgadget-lab/nexttrace/discussions 进行讨论。
+如果你遇到的问题不是 nexttrace 的 bug，比如你不清楚如何配置，请在 https://github.com/nxtrace/NTrace-core/discussions 进行讨论。
 -->
 
 ## 你正在使用哪个版本的 nexttrace？

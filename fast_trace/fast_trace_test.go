@@ -6,8 +6,8 @@ import (
 	"os/signal"
 	"testing"
 
-	"github.com/xgadget-lab/nexttrace/trace"
-	"github.com/xgadget-lab/nexttrace/wshandle"
+	"github.com/nxtrace/NTrace-core/trace"
+	"github.com/nxtrace/NTrace-core/wshandle"
 )
 
 func TestTrace(t *testing.T) {

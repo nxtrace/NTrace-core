@@ -3,7 +3,7 @@ package printer
 import (
 	"fmt"
 
-	"github.com/xgadget-lab/nexttrace/trace"
+	"github.com/nxtrace/NTrace-core/trace"
 )
 
 func EasyPrinter(res *trace.Result, ttl int) {
