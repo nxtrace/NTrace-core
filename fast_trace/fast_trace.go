@@ -112,7 +112,7 @@ func FastTest(tm bool, outEnable bool, paramsFastTrace ParamsFastTrace) {
 		}
 	}
 
-	fmt.Println("您想测试哪些ISP的路由？\n1. 国内四网\n2. 电信\n3. 联通\n4. 移动\n5. 教育网")
+	fmt.Println("您想测试哪些ISP的路由？\n1. 国内四网\n2. 电信\n3. 联通\n4. 移动\n5. 教育网\n6. 全部")
 	fmt.Print("请选择选项：")
 	_, err = fmt.Scanln(&c)
 	if err != nil {
@@ -140,7 +140,7 @@ func FastTest(tm bool, outEnable bool, paramsFastTrace ParamsFastTrace) {
 
 	switch c {
 	case "1":
-		ft.testAll()
+		ft.testFast()
 	case "2":
 		ft.testCT()
 	case "3":
@@ -149,8 +149,10 @@ func FastTest(tm bool, outEnable bool, paramsFastTrace ParamsFastTrace) {
 		ft.testCM()
 	case "5":
 		ft.testEDU()
-	default:
+	case "6":
 		ft.testAll()
+	default:
+		ft.testFast()
 	}
 }
 
@@ -196,4 +198,11 @@ func (f *FastTracer) testEDU() {
 	f.tracert(TestIPsCollection.Hangzhou.Location, TestIPsCollection.Hangzhou.EDU)
 	// 科技网暂时算在EDU里面，等拿到了足够多的数据再分离出去，单独用于测试
 	f.tracert(TestIPsCollection.Hefei.Location, TestIPsCollection.Hefei.CST)
+}
+
+func (f *FastTracer) testFast() {
+	f.tracert(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.CT163)
+	f.tracert(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.CU169)
+	f.tracert(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.CM)
+	f.tracert(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.EDU)
 }

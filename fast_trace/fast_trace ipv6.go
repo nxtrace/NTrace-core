@@ -103,13 +103,20 @@ func (f *FastTracer) testEDU_v6() {
 	f.tracert_v6(TestIPsCollection.Hangzhou.Location, TestIPsCollection.Hangzhou.EDU)
 }
 
+func (f *FastTracer) testFast_v6() {
+	f.tracert_v6(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.CT163)
+	f.tracert_v6(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.CU169)
+	f.tracert_v6(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.CM)
+	f.tracert_v6(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.EDU)
+}
+
 func FastTestv6(tm bool, outEnable bool, paramsFastTrace ParamsFastTrace) {
 	var c string
 
 	oe = outEnable
 	pFastTracer = paramsFastTrace
 
-	fmt.Println("您想测试哪些ISP的路由？\n1. 国内四网\n2. 电信\n3. 联通\n4. 移动\n5. 教育网")
+	fmt.Println("您想测试哪些ISP的路由？\n1. 国内四网\n2. 电信\n3. 联通\n4. 移动\n5. 教育网\n6. 全部")
 	fmt.Print("请选择选项：")
 	_, err := fmt.Scanln(&c)
 	if err != nil {
@@ -135,7 +142,7 @@ func FastTestv6(tm bool, outEnable bool, paramsFastTrace ParamsFastTrace) {
 
 	switch c {
 	case "1":
-		ft.testAll_v6()
+		ft.testFast_v6()
 	case "2":
 		ft.testCT_v6()
 	case "3":
@@ -144,7 +151,9 @@ func FastTestv6(tm bool, outEnable bool, paramsFastTrace ParamsFastTrace) {
 		ft.testCM_v6()
 	case "5":
 		ft.testEDU_v6()
-	default:
+	case "6":
 		ft.testAll_v6()
+	default:
+		ft.testFast_v6()
 	}
 }
