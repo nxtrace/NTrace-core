@@ -154,6 +154,10 @@ nexttrace 2606:4700:4700::1111
 # 禁用路径可视化 使用 --map / -M 参数
 nexttrace koreacentral.blob.core.windows.net
 # MapTrace URL: https://api.leo.moe/tracemap/html/c14e439e-3250-5310-8965-42a1e3545266.html
+
+# 禁用MPLS显示 使用 --disable-mpls / -e 参数 或 NEXTTRACE_DISABLEMPLS 环境变量
+nexttrace --disable-mpls example.com
+export NEXTTRACE_DISABLEMPLS=1
 ```
 
 PS: 路由可视化的绘制模块由 [@tsosunchia](https://github.com/tsosunchia) 同学编写，具体代码可在 [tsosunchia/traceMap](https://github.com/tsosunchia/traceMap) 查看
@@ -331,6 +335,7 @@ Arguments:
   -f  --first                        Start from the first_ttl hop (instead from
                                      1). Default: 1
   -M  --map                          Disable Print Trace Map
+  -e  --disable-mpls                 Disable MPLS
   -v  --version                      Print version info and exit
   -s  --source                       Use source src_addr for outgoing packets
   -D  --dev                          Use the following Network Devices as the
