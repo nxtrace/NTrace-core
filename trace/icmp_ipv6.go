@@ -137,6 +137,7 @@ func (t *ICMPTracerv6) Execute() (*Result, error) {
 
 func (t *ICMPTracerv6) listenICMP() {
 	lc := NewPacketListener(t.icmpListen, t.ctx)
+	psize = t.Config.PktSize
 	go lc.Start()
 	for {
 		select {
@@ -256,7 +257,7 @@ func (t *ICMPTracerv6) send(ttl int) error {
 		Body: &icmp.Echo{
 			ID: id,
 			//Data: []byte("HELLO-R-U-THERE"),
-			Data: bytes.Repeat([]byte{1}, t.Config.PktSize),
+			Data: append(bytes.Repeat([]byte{1}, t.Config.PktSize-4), 0x00, 0x00, 0x4f, 0xff),
 			Seq:  ttl,
 		},
 	}

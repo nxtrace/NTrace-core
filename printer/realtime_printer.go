@@ -166,6 +166,11 @@ func RealtimePrinter(res *trace.Result, ttl int) {
 				)
 			}
 		}
+		for _, v := range res.Hops[ttl][i].MPLS {
+			fmt.Fprintf(color.Output, "%s",
+				color.New(color.FgHiBlack, color.Bold).Sprintf("\n    %s", v),
+			)
+		}
 		fmt.Println()
 		blockDisplay = true
 	}

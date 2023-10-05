@@ -20,6 +20,7 @@ var EnvToken = GetenvDefault("NEXTTRACE_TOKEN", "")
 var UserAgent = fmt.Sprintf("NextTrace %s/%s/%s", config.Version, runtime.GOOS, runtime.GOARCH)
 var RdnsCache sync.Map
 var PowProviderParam = ""
+var DisableMPLS = GetenvDefault("NEXTTRACE_DISABLEMPLS", "")
 
 func LookupAddr(addr string) ([]string, error) {
 	// 如果在缓存中找到，直接返回

@@ -109,7 +109,4 @@ func applyLangSetting(h *trace.Hop) {
 		}
 	}
 
-	if len(h.MPLS) > 1 {
-		h.Hostname += " [MPLS: " + h.MPLS + "]"
-	}
 }

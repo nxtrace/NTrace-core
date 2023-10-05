@@ -30,6 +30,8 @@ type ICMPTracer struct {
 	fetchLock             sync.Mutex
 }
 
+var psize = 52
+
 func (t *ICMPTracer) PrintFunc() {
 	defer t.wg.Done()
 	var ttl = t.Config.BeginHop - 1
@@ -118,6 +120,7 @@ func (t *ICMPTracer) Execute() (*Result, error) {
 
 func (t *ICMPTracer) listenICMP() {
 	lc := NewPacketListener(t.icmpListen, t.ctx)
+	psize = t.Config.PktSize
 	go lc.Start()
 	for {
 		select {
@@ -184,45 +187,6 @@ func (t *ICMPTracer) handleICMPMessage(msg ReceivedMessage, icmpType int8, data 
 			MPLS:    mpls,
 		}
 	}
-}
-
-func extractMPLS(msg ReceivedMessage, data []byte) string {
-	extensionOffset := 20 + 8 + 52
-
-	if len(data) <= extensionOffset {
-		return ""
-	}
-
-	extensionBody := data[extensionOffset:]
-	if len(extensionBody) < 8 || len(extensionBody)%8 != 0 {
-		return ""
-	}
-
-	tmp := fmt.Sprintf("%x", msg.Msg[:*msg.N])
-	if len(tmp) < 8 {
-		return ""
-	}
-
-	label, err := strconv.ParseInt(tmp[len(tmp)-8:len(tmp)-3], 16, 32)
-	if err != nil {
-		return ""
-	}
-
-	strSlice := []byte(tmp[len(tmp)-3 : len(tmp)-2])
-	charValue := int(strSlice[0] - '0')
-	binaryStr := fmt.Sprintf("%04b", charValue)
-	tc, err := strconv.ParseInt(binaryStr[:3], 2, 32)
-	if err != nil {
-		return ""
-	}
-	s := binaryStr[3:]
-
-	ttlMpls, err := strconv.ParseInt(tmp[len(tmp)-2:], 16, 32)
-	if err != nil {
-		return ""
-	}
-
-	return fmt.Sprintf("Lbl %d, TC %d, S %s, TTL %d", label, tc, s, ttlMpls)
 }
 
 func gernerateID(ttl_int int) int {
@@ -298,7 +262,7 @@ func (t *ICMPTracer) send(ttl int) error {
 		Body: &icmp.Echo{
 			ID: id,
 			//Data: []byte("HELLO-R-U-THERE"),
-			Data: bytes.Repeat([]byte{1}, t.Config.PktSize),
+			Data: append(bytes.Repeat([]byte{1}, t.Config.PktSize-4), 0x00, 0x00, 0x4f, 0xff),
 			Seq:  ttl,
 		},
 	}

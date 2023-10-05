@@ -2,7 +2,10 @@ package trace
 
 import (
 	"errors"
+	"fmt"
 	"net"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -124,7 +127,7 @@ type Hop struct {
 	Error    error
 	Geo      *ipgeo.IPGeoData
 	Lang     string
-	MPLS     string
+	MPLS     []string
 }
 
 func (h *Hop) fetchIPData(c Config) (err error) {
@@ -225,4 +228,109 @@ func (h *Hop) fetchIPData(c Config) (err error) {
 	}
 
 	return
+}
+
+func extractMPLS(msg ReceivedMessage, data []byte) []string {
+	if util.DisableMPLS != "" {
+		return nil
+	}
+
+	if psize != 52 {
+		return nil
+	}
+
+	extensionOffset := 20 + 8 + psize
+
+	if len(data) <= extensionOffset {
+		return nil
+	}
+
+	extensionBody := data[extensionOffset:]
+	if len(extensionBody) < 8 || len(extensionBody)%8 != 0 {
+		return nil
+	}
+
+	tmp := fmt.Sprintf("%x", msg.Msg[:*msg.N])
+
+	index := strings.Index(tmp, strings.Repeat("01", psize-4)+"00004fff")
+	if index == -1 {
+		return nil
+	}
+	tmp = tmp[index+psize*2:]
+	//由于限制长度了
+	index1 := strings.Index(tmp, "00002000")
+	l := len(tmp[index1+4:])/8 - 2
+	//fmt.Printf("l:%d\n", l)
+
+	if l < 1 {
+		return nil
+	}
+	//去掉扩展头和MPLS头
+	tmp = tmp[index1+4+8*2:]
+	//fmt.Print(tmp)
+
+	var retStrList []string
+	for i := 0; i < l; i++ {
+		label, err := strconv.ParseInt(tmp[i*8+0:i*8+5], 16, 32)
+		if err != nil {
+			return nil
+		}
+
+		strSlice := fmt.Sprintf("%s", []byte(tmp[i*8+5:i*8+6]))
+		//fmt.Printf("\nstrSlice: %s\n", strSlice)
+
+		num, err := strconv.ParseUint(strSlice, 16, 64)
+		if err != nil {
+			return nil
+		}
+		binaryStr := fmt.Sprintf("%04s", strconv.FormatUint(num, 2))
+
+		//fmt.Printf("\nbinaryStr: %s\n", binaryStr)
+		tc, err := strconv.ParseInt(binaryStr[:3], 2, 32)
+		if err != nil {
+			return nil
+		}
+		s := binaryStr[3:]
+
+		ttlMpls, err := strconv.ParseInt(tmp[i*8+6:i*8+8], 16, 32)
+		if err != nil {
+			return nil
+		}
+
+		//if i > 0 {
+		//	retStr += "\n    "
+		//}
+
+		retStrList = append(retStrList, fmt.Sprintf("[MPLS: Lbl %d, TC %d, S %s, TTL %d]", label, tc, s, ttlMpls))
+	}
+
+	//label, err := strconv.ParseInt(tmp[len(tmp)-8:len(tmp)-3], 16, 32)
+	//if err != nil {
+	//	return ""
+	//}
+	//
+	//strSlice := fmt.Sprintf("%s", []byte(tmp[len(tmp)-3:len(tmp)-2]))
+	////fmt.Printf("\nstrSlice: %s\n", strSlice)
+	//
+	//num, err := strconv.ParseUint(strSlice, 16, 64)
+	//if err != nil {
+	//	return ""
+	//}
+	//binaryStr := fmt.Sprintf("%04s", strconv.FormatUint(num, 2))
+	//
+	////fmt.Printf("\nbinaryStr: %s\n", binaryStr)
+	//tc, err := strconv.ParseInt(binaryStr[:3], 2, 32)
+	//if err != nil {
+	//	return ""
+	//}
+	//s := binaryStr[3:]
+	//
+	//ttlMpls, err := strconv.ParseInt(tmp[len(tmp)-2:], 16, 32)
+	//if err != nil {
+	//	return ""
+	//}
+	//
+	//retStr := fmt.Sprintf("Lbl %d, TC %d, S %s, TTL %d", label, tc, s, ttlMpls)
+
+	return retStrList
 }

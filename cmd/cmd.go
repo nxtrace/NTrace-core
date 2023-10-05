@@ -55,6 +55,7 @@ func Excute() {
 	classicPrint := parser.Flag("c", "classic", &argparse.Options{Help: "Classic Output trace results like BestTrace"})
 	beginHop := parser.Int("f", "first", &argparse.Options{Default: 1, Help: "Start from the first_ttl hop (instead from 1)"})
 	disableMaptrace := parser.Flag("M", "map", &argparse.Options{Help: "Disable Print Trace Map"})
+	disableMPLS := parser.Flag("e", "disable-mpls", &argparse.Options{Help: "Disable MPLS"})
 	ver := parser.Flag("v", "version", &argparse.Options{Help: "Print version info and exit"})
 	srcAddr := parser.String("s", "source", &argparse.Options{Help: "Use source src_addr for outgoing packets"})
 	srcDev := parser.String("D", "dev", &argparse.Options{Help: "Use the following Network Devices as the source address in outgoing packets"})
@@ -284,6 +285,10 @@ func Excute() {
 				fmt.Println(err)
 			}
 		}
+	}
+
+	if *disableMPLS {
+		util.DisableMPLS = "1"
 	}
 
 	res, err := trace.Traceroute(m, conf)
