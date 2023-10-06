@@ -409,6 +409,8 @@ We hope you can give us as much feedback as possible on IP geolocation errors (s
 
 ## Credits
 
+[sjlleo](https://github.com/sjlleo) The perpetual leader, founder, and core contributors of the NextTrace Project
+
 [BGP.TOOLS](https://bgp.tools) provided some data support for this project. And we would like to express our sincere gratitude.
 
 [Vincent Young](https://github.com/missuo) (i@yyt.moe)

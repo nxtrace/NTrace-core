@@ -406,6 +406,8 @@ nexttrace --pow-provider sakura
 
 ## Credits
 
+[sjlleo](https://github.com/sjlleo) NextTrace 项目永远的领导者、创始人及核心贡献者
+
 [BGP.TOOLS](https://bgp.tools) 提供了本项目的一些数据支持，在此表示由衷地感谢。
 
 [Vincent Young](https://github.com/missuo) (i@yyt.moe)
