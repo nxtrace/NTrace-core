@@ -83,7 +83,7 @@ Document Language: English | [简体中文](README_zh_CN.md)
         * This repository's ACTIONS automatically built version (updates faster)
 
              ```shell
-             brew tap xgadget-lab/nexttrace && brew install xgadget-lab/nexttrace/nexttrace
+             brew tap nxtrace/nexttrace && brew install nxtrace/nexttrace/nexttrace
              ```
         * The homebrew-core build is maintained by chenrui333, please note that this version's updates may lag behind the repository Action automatically version
 

@@ -93,7 +93,7 @@ Document Language: [English](README.md) | 简体中文
      * 本仓库ACTIONS自动构建版(更新更快)
 
           ```shell
-          brew tap xgadget-lab/nexttrace && brew install xgadget-lab/nexttrace/nexttrace
+          brew tap nxtrace/nexttrace && brew install nxtrace/nexttrace/nexttrace
           ```
      * homebrew-core 构建由 chenrui333 维护，请注意该版本更新可能会落后仓库Action自动构建版本
 
