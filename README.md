@@ -151,6 +151,10 @@ nexttrace 2606:4700:4700::1111
 # Disable Path Visualization With the -M parameter
 nexttrace koreacentral.blob.core.windows.net
 # MapTrace URL: https://api.leo.moe/tracemap/html/c14e439e-3250-5310-8965-42a1e3545266.html
+
+# Disable MPLS display using the --disable-mpls / -e parameter or the NEXTTRACE_DISABLEMPLS environment variable
+nexttrace --disable-mpls example.com
+export NEXTTRACE_DISABLEMPLS=1
 ```
 
 PS: The routing visualization drawing module was written by [@tsosunchia](https://github.com/tsosunchia), and the specific code can be viewed at [tsosunchia/traceMap](https://github.com/tsosunchia/traceMap).
@@ -271,7 +275,7 @@ NextTrace `LeoMoeAPI` now utilizes the Proof of Work (POW) mechanism to prevent 
 - [GitHub - tsosunchia/powclient: Proof of Work CLIENT for NextTrace](https://github.com/tsosunchia/powclient)
 - [GitHub - tsosunchia/powserver: Proof of Work SERVER for NextTrace](https://github.com/tsosunchia/powserver)
 
-All NextTrace IP geolocation `API DEMO` can refer to [here](https://github.com/xgadget-lab/nexttrace/blob/main/ipgeo/)
+All NextTrace IP geolocation `API DEMO` can refer to [here](https://github.com/nxtrace/NTrace-core/blob/main/ipgeo/)
 
 ### For full usage list, please refer to the usage menu
 
@@ -341,6 +345,7 @@ Arguments:
   -f  --first                        Start from the first_ttl hop (instead from
                                      1). Default: 1
   -M  --map                          Disable Print Trace Map
+  -e  --disable-mpls                 Disable MPLS
   -v  --version                      Print version info and exit
   -s  --source                       Use source src_addr for outgoing packets
   -D  --dev                          Use the following Network Devices as the

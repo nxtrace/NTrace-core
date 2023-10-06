@@ -60,6 +60,12 @@ Document Language: [English](README.md) | 简体中文
 
 关于 **V1增强版本** 请转至 [nxtrace/Ntrace-V1](https://github.com/nxtrace/Ntrace-V1)。
 
+## How To Use
+
+Document Language: [English](README.md) | 简体中文
+
+⚠️ 这是NextTrace V1 增强版的README文件。
+
 ### Before Using
 
 使用 NextTrace 之前，我们建议您先阅读 [#IP 数据以及精准度说明](https://github.com/sjlleo/nexttrace/blob/main/README_zh_CN.md#ip-%E6%95%B0%E6%8D%AE%E4%BB%A5%E5%8F%8A%E7%B2%BE%E5%87%86%E5%BA%A6%E8%AF%B4%E6%98%8E)，在了解您自己的对数据精准度需求以后再进行抉择。
@@ -162,6 +168,10 @@ nexttrace 2606:4700:4700::1111
 # 禁用路径可视化 使用 --map / -M 参数
 nexttrace koreacentral.blob.core.windows.net
 # MapTrace URL: https://api.leo.moe/tracemap/html/c14e439e-3250-5310-8965-42a1e3545266.html
+
+# 禁用MPLS显示 使用 --disable-mpls / -e 参数 或 NEXTTRACE_DISABLEMPLS 环境变量
+nexttrace --disable-mpls example.com
+export NEXTTRACE_DISABLEMPLS=1
 ```
 
 PS: 路由可视化的绘制模块由 [@tsosunchia](https://github.com/tsosunchia) 同学编写，具体代码可在 [tsosunchia/traceMap](https://github.com/tsosunchia/traceMap) 查看
@@ -339,6 +349,7 @@ Arguments:
   -f  --first                        Start from the first_ttl hop (instead from
                                      1). Default: 1
   -M  --map                          Disable Print Trace Map
+  -e  --disable-mpls                 Disable MPLS
   -v  --version                      Print version info and exit
   -s  --source                       Use source src_addr for outgoing packets
   -D  --dev                          Use the following Network Devices as the

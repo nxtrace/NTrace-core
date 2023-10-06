@@ -1,7 +1,9 @@
 package main
 
-import "github.com/sjlleo/nexttrace-core/cmd"
+import (
+	"github.com/nxtrace/NTrace-core/cmd"
+)
 
 func main() {
-	cmd.Execute()
+	cmd.Excute()
 }
