@@ -10,7 +10,7 @@ require (
 	github.com/stretchr/testify v1.8.4
 	github.com/syndtr/gocapability v0.0.0-20200815063812-42c35b437635
 	github.com/tsosunchia/powclient v0.1.3
-	golang.org/x/net v0.15.0
+	golang.org/x/net v0.16.0
 	golang.org/x/sync v0.3.0
 )
 
@@ -41,6 +41,6 @@ require (
 	github.com/tidwall/gjson v1.17.0
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
-	golang.org/x/sys v0.12.0 // indirect
+	golang.org/x/sys v0.13.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
