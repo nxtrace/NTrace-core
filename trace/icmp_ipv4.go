@@ -207,7 +207,7 @@ func gernerateID(ttl_int int) int {
 		id += "0"
 	}
 
-	res, _ := strconv.ParseInt(id, 2, 64)
+	res, _ := strconv.ParseInt(id, 2, 32)
 	return int(res)
 }
 
