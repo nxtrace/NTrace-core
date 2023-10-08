@@ -50,7 +50,9 @@
 
 Document Language: [English](README.md) | 简体中文
 
-⚠️ 这是NextTrace V1 增强版的README文件。
+关于NTrace-V1和NTrace-core两个仓库的说明：<br>
+二者将大体上保持一致。所有的开发工作均在NTrace-V1仓库中进行。NTrace-V1仓库首先发布新版本，在稳定运行一段时间后（时长不定），我们会把版本同步至NTrace-core。这意味着NTrace-V1仓库充当了一个“测试版”的角色。<br>
+请注意，版本同步也存在例外。如果NTrace-V1的某个版本出现了严重的bug，NTrace-core会跳过这一有缺陷的版本，直接同步到下一个修复了该问题的版本。
 
 ### Before Using
 

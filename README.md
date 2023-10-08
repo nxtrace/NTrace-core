@@ -47,7 +47,9 @@ We are extremely grateful to [DMIT](https://dmit.io) and [Misaka](https://misaka
 
 Document Language: English | [简体中文](README_zh_CN.md)
 
-⚠️ This is the README for the V1 Enhanced version of NextTrace.
+Regarding the NTrace-V1 and NTrace-core repositories:<br>
+Both will largely remain consistent with each other. All development work is done within the NTrace-V1 repository. The NTrace-V1 repository releases new versions first. After running stably for an undetermined period, we will synchronize that version to NTrace-core. This means that the NTrace-V1 repository serves as a "beta" or "testing" version.<br>
+Please note, there are exceptions to this synchronization. If a version of NTrace-V1 encounters a serious bug, NTrace-core will skip that flawed version and synchronize directly to the next version that resolves the issue.
 
 ### Automated Install
 
