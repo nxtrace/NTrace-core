@@ -38,7 +38,7 @@
     </a>
     &nbsp;&nbsp;&nbsp;&nbsp;
     <a href="https://skywolf.cloud" >
-        <img src="https://github.com/nxtrace/Ntrace-core/assets/59512455/19b659f4-31f5-4816-9821-bf2a73c60336" width="170.7" height="62.9">
+        <img src="https://hk.skywolf.cloud/assets/img/skywolf.svg" width="170.7" height="62.9">
     </a>
 </div>
 
