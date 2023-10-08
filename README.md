@@ -43,19 +43,14 @@
 
 We are extremely grateful to [DMIT](https://dmit.io) and [Misaka](https://misaka.io) and [Skywolf](https://skywolf.cloud) for providing the network infrastructure that powers this project.
 
-## Announcement
-
-LeoMoeAPI v1 will end service support on September 1, 2024. Versions **v1.1.7** and below that rely on its service will become unusable. Please download from the [Ntrace-V1 repository](https://github.com/nxtrace/Ntrace-V1/releases) NextTrace.
-
-Because NextTrace V1 and V2 are branches with differing development philosophies, each is currently managed by an internal Owner focusing on different aspects. These branches cater to developers with varying needs. Now, the [V1](https://github.com/nxtrace/Ntrace-V1/) and [V2](https://github.com/sjlleo/MoeTrace) branch has established its own separate repository. For a considerably long period in the future, we plan to maintain the development and upkeep of both branches simultaneously.
-
 ## How To Use
 
 Document Language: English | [简体中文](README_zh_CN.md)
 
-Currently, **V2 version** is a completely redesigned project and is recruiting beta testers for this revamped version. If you are interested, please check out [sjlleo/MoeTrace](https://github.com/sjlleo/MoeTrace).
+Regarding the NTrace-V1 and NTrace-core repositories:<br>
+Both will largely remain consistent with each other. All development work is done within the NTrace-V1 repository. The NTrace-V1 repository releases new versions first. After running stably for an undetermined period, we will synchronize that version to NTrace-core. This means that the NTrace-V1 repository serves as a "beta" or "testing" version.<br>
+Please note, there are exceptions to this synchronization. If a version of NTrace-V1 encounters a serious bug, NTrace-core will skip that flawed version and synchronize directly to the next version that resolves the issue.
 
-For the **enhanced version of V1**, please visit [nxtrace/Ntrace-V1](https://github.com/nxtrace/Ntrace-V1).
 ### Automated Install
 
 * Linux
@@ -435,7 +430,7 @@ We hope you can give us as much feedback as possible on IP geolocation errors (s
 Although other third-party APIs are integrated in this project, please refer to the official website of the third-party APIs for specific TOS and AUP. If you encounter IP data errors, please contact them directly to correct them.
 
 For feedback related to corrections about IP information, we currently have two channels available:
->- [IP 错误报告汇总帖](https://github.com/sjlleo/nexttrace/issues/41) in the GITHUB ISSUES section of this project (Recommended)
+>- [IP 错误报告汇总帖](https://github.com/nxtrace/NTrace-core/issues/41) in the GITHUB ISSUES section of this project (Recommended)
 >- This project's dedicated correction email: `correction@moeqing.com` (Please note that this email is only for correcting IP-related information. For other feedback, please submit an ISSUE)
 
 How to obtain the freshly baked binary executable of the latest commit?
@@ -443,4 +438,4 @@ How to obtain the freshly baked binary executable of the latest commit?
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=sjlleo/nexttrace&type=Date)](https://star-history.com/#sjlleo/nexttrace&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=nxtrace/NTrace-core&type=Date)](https://star-history.com/#nxtrace/NTrace-core&Date)

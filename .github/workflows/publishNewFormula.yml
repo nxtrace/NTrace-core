@@ -21,7 +21,7 @@ jobs:
           git config --global user.name "${{ secrets.git_name }}"
       - name: Clone repo
         run: |
-          git clone https://github.com/xgadget-lab/homebrew-nexttrace.git
+          git clone https://github.com/nxtrace/homebrew-nexttrace.git
       - name: Exec scipt
         run: |
           cd homebrew-nexttrace
@@ -38,7 +38,7 @@ jobs:
         run: |
           cd homebrew-nexttrace
           git commit -am 'Publish a new version with Formula' || true
-          git remote set-url origin https://${{ secrets.gt_token }}@github.com/xgadget-lab/homebrew-nexttrace.git
+          git remote set-url origin https://${{ secrets.gt_token }}@github.com/nxtrace/homebrew-nexttrace.git
           git push
         # env:
         #   SSH_AUTH_SOCK: /tmp/ssh_agent.sock

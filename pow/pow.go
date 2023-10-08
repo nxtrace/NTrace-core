@@ -23,10 +23,13 @@ func GetToken(fastIp string, host string, port string) (string, error) {
 	if proxyUrl != nil {
 		getTokenParams.Proxy = proxyUrl
 	}
-	var err error
+	var (
+		token string
+		err   error
+	)
 	// 尝试三次RetToken，如果都失败了，异常退出
 	for i := 0; i < 3; i++ {
-		token, err := powclient.RetToken(getTokenParams)
+		token, err = powclient.RetToken(getTokenParams)
 		if err != nil {
 			continue
 		}
@@ -38,5 +41,5 @@ func GetToken(fastIp string, host string, port string) (string, error) {
 	}
 	fmt.Println("RetToken failed 3 times, please try again after a while, exit")
 	os.Exit(1)
-	return "", nil
+	return "", err
 }

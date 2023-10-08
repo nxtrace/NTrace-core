@@ -46,27 +46,17 @@
 
 我们非常感谢 [DMIT](https://dmit.io) 和 [Misaka](https://misaka.io) 和 [Skywolf](https://skywolf.cloud) 提供了支持本项目所需的网络基础设施。
 
-## Announcement
-
-LeoMoeAPI v1 将于2024 年 9 月 1 日结束服务支持，届时依赖其提供服务的 **v1.1.7** 以下的版本将无法使用。请至 [Ntrace-V1 仓库下载](https://github.com/nxtrace/Ntrace-V1/releases) NextTrace。
-
-由于 NextTrace V1 与 V2 分支是两个开发方向理念不完全相同的分支，目前由内部分别有一名 Owner 负责，各有其侧重点，面向不同需求的开发者，现 [V1](https://github.com/nxtrace/Ntrace-V1/) 和 [V2](https://github.com/sjlleo/MoeTrace) 分支分别已建立独立仓库，在未来相当长的一段时间里，我们会同时维护两个分支的开发与维护。
-
 ## How To Use
 
 Document Language: [English](README.md) | 简体中文
 
-目前 **V2版本** 为全新的重构项目，其正在招募内测该重构版本的用户，若有意请查看 [sjlleo/MoeTrace](https://github.com/sjlleo/MoeTrace)。
-
-关于 **V1增强版本** 请转至 [nxtrace/Ntrace-V1](https://github.com/nxtrace/Ntrace-V1)。
-
-## How To Use
-
-Document Language: [English](README.md) | 简体中文
+关于NTrace-V1和NTrace-core两个仓库的说明：<br>
+二者将大体上保持一致。所有的开发工作均在NTrace-V1仓库中进行。NTrace-V1仓库首先发布新版本，在稳定运行一段时间后（时长不定），我们会把版本同步至NTrace-core。这意味着NTrace-V1仓库充当了一个“测试版”的角色。<br>
+请注意，版本同步也存在例外。如果NTrace-V1的某个版本出现了严重的bug，NTrace-core会跳过这一有缺陷的版本，直接同步到下一个修复了该问题的版本。
 
 ### Before Using
 
-使用 NextTrace 之前，我们建议您先阅读 [#IP 数据以及精准度说明](https://github.com/sjlleo/nexttrace/blob/main/README_zh_CN.md#ip-%E6%95%B0%E6%8D%AE%E4%BB%A5%E5%8F%8A%E7%B2%BE%E5%87%86%E5%BA%A6%E8%AF%B4%E6%98%8E)，在了解您自己的对数据精准度需求以后再进行抉择。
+使用 NextTrace 之前，我们建议您先阅读 [#IP 数据以及精准度说明](https://github.com/nxtrace/NTrace-core/blob/main/README_zh_CN.md#ip-%E6%95%B0%E6%8D%AE%E4%BB%A5%E5%8F%8A%E7%B2%BE%E5%87%86%E5%BA%A6%E8%AF%B4%E6%98%8E)，在了解您自己的对数据精准度需求以后再进行抉择。
 
 [NextTrace 的Telegram频道](https://t.me/nexttrace)由项目成员负责，会传递一部分通知，也会发布一些成员自己分享的小工具。项目成员的意见可作为未来项目发展的可能方向，随着开发进度变化可能会有所改动，不代表未来一定会实装，正式定稿公告会发布于 Issue 中。
 
@@ -381,7 +371,7 @@ Arguments:
 
 ## 第三方 IP 数据库 API 开发接口
 
-NextTrace 所有的的 IP 地理位置 `API DEMO` 可以参考[这里](https://github.com/sjlleo/nexttrace/blob/main/ipgeo/)
+NextTrace 所有的的 IP 地理位置 `API DEMO` 可以参考[这里](https://github.com/nxtrace/NTrace-core/blob/main/ipgeo/)
 
 你可以在这里添加你自己的 API 接口，为了 NextTrace 能够正确显示你接口中的内容，请参考 `leo.go` 中所需要的信息
 
@@ -442,7 +432,7 @@ nexttrace --pow-provider sakura
 ## IP 数据以及精准度说明
 
 对于IP相关信息的纠错反馈，我们目前开放了两个渠道：
->- 本项目的GITHUB ISSUES区中的[IP 错误报告汇总帖](https://github.com/sjlleo/nexttrace/issues/41)
+>- 本项目的GITHUB ISSUES区中的[IP 错误报告汇总帖](https://github.com/nxtrace/NTrace-core/issues/41)
 >- 本项目的纠错专用邮箱: `correction@moeqing.com` （请注意此邮箱仅供IP相关信息纠错专用，其他反馈请发送ISSUE）
 
 NextTrace 有多个数据源可以选择，目前默认使用的 LeoMoeAPI 为我们项目维护的数据源。
@@ -500,3 +490,9 @@ LAX,US,California,Los Anegles
 ```
 
 需要注意的是，NextTrace 支持自动匹配 CSV 中的城市名，如果您的 PTR 记录中有 `losangeles`，您可以只添加上面一条记录就可以正常识别并读取。
+
+rkflow in GitHub Actions.
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=nxtrace/NTrace-core&type=Date)](https://star-history.com/#nxtrace/NTrace-core&Date)

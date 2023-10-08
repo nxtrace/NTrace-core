@@ -1,18 +1,26 @@
 package util
 
 import (
+	"crypto/tls"
 	"fmt"
+	"io"
 	"log"
 	"net"
+	"net/http"
 	"strings"
 	"time"
 
 	"github.com/fatih/color"
 )
 
+type ResponseInfo struct {
+	IP      string
+	Latency string
+	Content string
+}
+
 var (
-	result  string
-	results = make(chan string)
+	results = make(chan ResponseInfo)
 )
 var FastIpCache = ""
 
@@ -31,49 +39,75 @@ func GetFastIP(domain string, port string, enableOutput bool) string {
 	}
 
 	for _, ip := range ips {
-		go checkLatency(ip.String(), port)
+		go checkLatency(domain, ip.String(), port)
 	}
+
+	var result ResponseInfo
 
 	select {
 	case result = <-results:
 	case <-time.After(1 * time.Second):
-	}
-	if result == "" {
 		log.Fatal("IP connection has been timeout, please check your network")
-	}
-	res := strings.Split(result, "-")
 
-	if len(ips) > 1 {
+	}
+
+	if len(ips) > 0 {
 		if enableOutput {
-			_, _ = fmt.Fprintf(color.Output, "%s prefered API IP - %s - %s\n",
+			_, _ = fmt.Fprintf(color.Output, "%s prefered API IP - %s - %s - %s",
 				color.New(color.FgWhite, color.Bold).Sprintf("[NextTrace API]"),
-				color.New(color.FgGreen, color.Bold).Sprintf("%s", res[0]),
-				color.New(color.FgCyan, color.Bold).Sprintf("%sms", res[1]),
+				color.New(color.FgGreen, color.Bold).Sprintf("%s", result.IP),
+				color.New(color.FgCyan, color.Bold).Sprintf("%sms", result.Latency),
+				color.New(color.FgGreen, color.Bold).Sprintf("%s", result.Content),
 			)
 		}
 	}
-	FastIpCache = res[0]
-	return res[0]
+	FastIpCache = result.IP
+	return result.IP
 }
 
-func checkLatency(ip string, port string) {
+func checkLatency(domain string, ip string, port string) {
 	start := time.Now()
 	if !strings.Contains(ip, ".") {
 		ip = "[" + ip + "]"
 	}
-	conn, err := net.DialTimeout("tcp", ip+":"+port, time.Second*1)
+
+	// 自定义DialContext以使用指定的IP连接
+	transport := &http.Transport{
+		//DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+		//	return net.DialTimeout(network, addr, 1*time.Second)
+		//},
+		TLSClientConfig: &tls.Config{
+			ServerName: domain,
+		},
+		TLSHandshakeTimeout: 1 * time.Second,
+	}
+
+	client := &http.Client{
+		Transport: transport,
+		Timeout:   2 * time.Second,
+	}
+
+	//此处虽然是 https://domain/ 但是实际上会使用指定的IP连接
+	req, err := http.NewRequest("GET", "https://"+ip+":"+port+"/", nil)
 	if err != nil {
+		results <- ResponseInfo{IP: ip, Latency: "error", Content: ""}
 		return
 	}
-	defer func(conn net.Conn) {
-		err := conn.Close()
-		if err != nil {
-			return
-		}
-	}(conn)
-	if result == "" {
-		result = fmt.Sprintf("%s-%.2f", ip, float64(time.Since(start))/float64(time.Millisecond))
-		results <- result
+	req.Host = domain
+	resp, err := client.Do(req)
+	if err != nil {
+		results <- ResponseInfo{IP: ip, Latency: "error", Content: ""}
 		return
 	}
+	defer resp.Body.Close()
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		results <- ResponseInfo{IP: ip, Latency: "error", Content: ""}
+		return
+	}
+	bodyString := string(bodyBytes)
+
+	latency := fmt.Sprintf("%.2f", float64(time.Since(start))/float64(time.Millisecond))
+	results <- ResponseInfo{IP: ip, Latency: latency, Content: bodyString}
 }

@@ -154,6 +154,10 @@ func DomainLookUp(host string, ipVersion string, dotServer string, disableOutput
 func GetenvDefault(key, defVal string) string {
 	val, ok := os.LookupEnv(key)
 	if ok {
+		_, ok := os.LookupEnv("NEXTTRACE_DEBUG")
+		if ok {
+			fmt.Println("ENV", key, "detected as", val)
+		}
 		return val
 	}
 	return defVal
