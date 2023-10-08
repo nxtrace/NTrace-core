@@ -41,13 +41,14 @@ func CopyRight() {
 		color.New(color.FgHiBlack, color.Bold).Sprintf("%s", "zhshch@athorx.com"),
 	)
 
-	MoeQingOrgCopyRight()
-	PluginCopyRight()
+	moeQingOrgCopyRight()
+	sponsor()
+	//PluginCopyRight()
 }
 
-func MoeQingOrgCopyRight() {
+func moeQingOrgCopyRight() {
 	fmt.Fprintf(color.Output, "%s\n%s %s\n%s %s\n\n",
-		color.New(color.FgHiYellow, color.Bold).Sprintf("%s", "MoeQing Network"),
+		color.New(color.FgGreen, color.Bold).Sprintf("%s", "Supported by MoeQing Network"),
 		color.New(color.FgWhite, color.Bold).Sprintf("%s", "YekongTAT"),
 		color.New(color.FgHiBlack, color.Bold).Sprintf("%s", "yekongtat@gmail.com"),
 		color.New(color.FgWhite, color.Bold).Sprintf("%s", "Haima"),
@@ -55,13 +56,22 @@ func MoeQingOrgCopyRight() {
 	)
 }
 
-func PluginCopyRight() {
-	fmt.Fprintf(color.Output, "%s\n%s %s\n\n",
-		color.New(color.FgGreen, color.Bold).Sprintf("%s", "NextTrace Map Plugin Author"),
-		color.New(color.FgWhite, color.Bold).Sprintf("%s", "Tso"),
-		color.New(color.FgHiBlack, color.Bold).Sprintf("%s", "tsosunchia@gmail.com"),
+func sponsor() {
+	fmt.Fprintf(color.Output, "%s\n%s\n%s\n%s\n",
+		color.New(color.FgGreen, color.Bold).Sprintf("%s", "Sponsored by the following entities"),
+		color.New(color.FgWhite, color.Bold).Sprintf("%s", "DMIT.io"),
+		color.New(color.FgWhite, color.Bold).Sprintf("%s", "Misaka.io"),
+		color.New(color.FgWhite, color.Bold).Sprintf("%s", "Skywolf.cloud"),
 	)
 }
+
+//func PluginCopyRight() {
+//	fmt.Fprintf(color.Output, "%s\n%s %s\n\n",
+//		color.New(color.FgGreen, color.Bold).Sprintf("%s", "NextTrace Map Plugin Author"),
+//		color.New(color.FgWhite, color.Bold).Sprintf("%s", "Tso"),
+//		color.New(color.FgHiBlack, color.Bold).Sprintf("%s", "tsosunchia@gmail.com"),
+//	)
+//}
 
 func PrintTraceRouteNav(ip net.IP, domain string, dataOrigin string, maxHops int, packetSize int) {
 	fmt.Println("IP Geo Data Provider: " + dataOrigin)
