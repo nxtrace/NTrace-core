@@ -38,7 +38,7 @@
     </a>
     &nbsp;&nbsp;&nbsp;&nbsp;
     <a href="https://skywolf.cloud" >
-        <img src="https://github.com/nxtrace/Ntrace-core/assets/59512455/19b659f4-31f5-4816-9821-bf2a73c60336" width="170.7" height="62.9">
+        <img src="https://hk.skywolf.cloud/assets/img/skywolf.svg" width="170.7" height="62.9">
     </a>
 </div>
 
@@ -70,20 +70,26 @@ Document Language: [English](README.md) | 简体中文
     ```
     
   * Arch Linux AUR 安装命令
-     * 由源码构建
-
-          ```shell
-          yay -S nexttrace
-          ```
      * 直接下载bin包(仅支持amd64)
 
           ```shell
           yay -S nexttrace-bin`
           ```
-     * AUR 的2种构建分别由 huyz 和 ouuan 维护
+     * AUR 的构建分别由 ouuan 维护
   * Linuxbrew 安装命令
 
      同macOS Homebrew安装方法(homebrew-core版仅支持amd64)
+  * Deepin 安装命令
+
+     ```shell
+     apt install nexttrace
+     ```
+  * Termux 安装命令
+    
+     ```shell
+     pkg install nexttrace-enhanced
+     ```
+      
      
 * macOS
   * macOS Homebrew 安装命令

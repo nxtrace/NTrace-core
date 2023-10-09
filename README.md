@@ -37,7 +37,7 @@
     </a>
     &nbsp;&nbsp;&nbsp;&nbsp;
     <a href="https://skywolf.cloud" >
-        <img src="https://github.com/nxtrace/Ntrace-core/assets/59512455/19b659f4-31f5-4816-9821-bf2a73c60336" width="170.7" height="62.9">
+        <img src="https://hk.skywolf.cloud/assets/img/skywolf.svg" width="170.7" height="62.9">
     </a>
 </div>
 
@@ -60,20 +60,25 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
       bash -c "$(curl http://nexttrace-io-leomoe-api-a0.shop/nt_install_v1.sh)"
       ```
     * Arch Linux AUR installation command
-        * Build from source
-
-             ```shell
-             yay -S nexttrace
-             ```
         * Directly download bin package (only supports amd64)
 
              ```shell
              yay -S nexttrace-bin
              ```
-        * The two types of AUR builds are maintained by huyz and ouuan, respectively
+        * The AUR builds are maintained by ouuan
     * Linuxbrew's installation command
 
         Same as the macOS Homebrew's installation method (homebrew-core version only supports amd64)
+    * Deepin installation command
+
+      ```shell
+      apt install nexttrace
+      ```
+    * Termux installation command
+
+      ```shell
+      pkg install nexttrace-enhanced
+      ```
 
 * macOS
     * macOS Homebrew's installation command
