@@ -70,20 +70,26 @@ Document Language: [English](README.md) | 简体中文
     ```
     
   * Arch Linux AUR 安装命令
-     * 由源码构建
-
-          ```shell
-          yay -S nexttrace
-          ```
      * 直接下载bin包(仅支持amd64)
 
           ```shell
           yay -S nexttrace-bin`
           ```
-     * AUR 的2种构建分别由 huyz 和 ouuan 维护
+     * AUR 的构建分别由 ouuan 维护
   * Linuxbrew 安装命令
 
      同macOS Homebrew安装方法(homebrew-core版仅支持amd64)
+  * Deepin 安装命令
+
+     ```shell
+     apt install nexttrace
+     ```
+  * Termux 安装命令
+    
+     ```shell
+     pkg install nexttrace-enhanced
+     ```
+      
      
 * macOS
   * macOS Homebrew 安装命令
