@@ -38,7 +38,7 @@ func TestXxx(t *testing.T) {
 }
 
 func TestFilter(t *testing.T) {
-	res, err := Filter("::1")
+	res, err := Filter("fd11::1")
 	//打印whois信息
 	fmt.Println(res.Whois)
 	print(err)

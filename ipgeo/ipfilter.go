@@ -158,7 +158,7 @@ func Filter(ip string) (*IPGeoData, bool) {
 	default:
 	}
 	// 判断是否为v6 且不在2000::/3
-	if net.ParseIP(ip).To4() == nil && !cidrRangeContains("2000::/3", ip) {
+	if net.ParseIP(ip).To4() == nil && !cidrRangeContains("2000::/3", ip) && !isFiltered {
 		asn = ""
 		whois = "INVALID"
 		isFiltered = true
