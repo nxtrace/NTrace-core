@@ -50,6 +50,7 @@
 
 Document Language: [English](README.md) | 简体中文
 
+⚠️ 请注意：我们欢迎来自社区的PR提交，但是请将您的PR提交至 [NTrace-V1](https://github.com/nxtrace/NTrace-V1) 仓库，而不是 [NTrace-core](https://github.com/nxtrace/NTrace-core) 仓库。<br>
 关于NTrace-V1和NTrace-core两个仓库的说明：<br>
 二者将大体上保持一致。所有的开发工作均在NTrace-V1仓库中进行。NTrace-V1仓库首先发布新版本，在稳定运行一段时间后（时长不定），我们会把版本同步至NTrace-core。这意味着NTrace-V1仓库充当了一个“测试版”的角色。<br>
 请注意，版本同步也存在例外。如果NTrace-V1的某个版本出现了严重的bug，NTrace-core会跳过这一有缺陷的版本，直接同步到下一个修复了该问题的版本。
