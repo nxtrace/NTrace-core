@@ -75,6 +75,12 @@ jobs:
             goarch: mipsle
           - goos: linux
             goarch: mips
+          - goos: linux
+            goarch: mipsle
+            gomips: softfloat
+          - goos: linux
+            goarch: mips
+            gomips: softfloat
           # END MIPS
           # BEGIN PPC
           - goos: linux
@@ -104,6 +110,7 @@ jobs:
       GOOS: ${{ matrix.goos }}
       GOARCH: ${{ matrix.goarch }}
       GOARM: ${{ matrix.goarm }}
+      GOMIPS: ${{ matrix.gomips }}
       CGO_ENABLED: 0
     steps:
       - name: Checkout codebase
@@ -117,7 +124,10 @@ jobs:
           if [ "$GOOS" == "windows" ]; then
             export _NAME="$_NAME.exe"
           fi
-          echo "GOOS: $GOOS, GOARCH: $GOARCH, GOARM: $GOARM, RELEASE_NAME: $_NAME"
+          if [ "$GOMIPS" == "softfloat" ]; then
+            export _NAME="${_NAME}_softfolat"
+          fi
+          echo "GOOS: $GOOS, GOARCH: $GOARCH, GOARM: $GOARM, GOMIPS: $GOMIPS, RELEASE_NAME: $_NAME"
           echo "ASSET_NAME=$_NAME" >> $GITHUB_ENV
           echo "BUILD_VERSION=$(git describe --tags --always)" >> $GITHUB_ENV
           echo "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_ENV
