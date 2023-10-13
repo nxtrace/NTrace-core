@@ -257,7 +257,7 @@ func (t *TCPTracer) send(ttl int) error {
 	t.inflightRequest[int(sequenceNumber)] = hopCh
 	t.inflightRequestLock.Unlock()
 	/*
-		// 这里属于 2个Sender，N个Reciever的情况，在哪里关闭Channel都容易导致Panic
+		// 这里属于 2个Sender，N个Receiver的情况，在哪里关闭Channel都容易导致Panic
 		defer func() {
 			t.inflightRequestLock.Lock()
 			close(hopCh)

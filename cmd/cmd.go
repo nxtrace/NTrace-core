@@ -218,7 +218,7 @@ func Excute() {
 		printer.PrintTraceRouteNav(ip, domain, *dataOrigin, *maxHops, *packetSize)
 	}
 
-	var m trace.Method = ""
+	var m trace.Method
 
 	switch {
 	case *tcp:

@@ -141,7 +141,7 @@ func (h *Hop) fetchIPData(c Config) (err error) {
 			h.Hostname = r[0][:len(r[0])-1]
 			ip = h.Address.String() + "," + h.Hostname
 		}
-		h.Geo, err = c.IPGeoSource(ip, c.Timeout, c.Lang, c.Maptrace)
+		h.Geo, _ = c.IPGeoSource(ip, c.Timeout, c.Lang, c.Maptrace)
 		return nil
 	}
 
@@ -221,9 +221,9 @@ func (h *Hop) fetchIPData(c Config) (err error) {
 		selectClose = true
 	}
 
-	// When Select Close, fetchDoneChan Reciever will also be closed
+	// When Select Close, fetchDoneChan Received will also be closed
 	if selectClose {
-		// New a reciever to prevent channel congestion
+		// New a receiver to prevent channel congestion
 		<-fetchDoneChan
 	}
 
