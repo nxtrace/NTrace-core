@@ -23,45 +23,56 @@ func Version() {
 }
 
 func CopyRight() {
-	fmt.Fprintf(color.Output, "\n%s\n%s\n%s %s\n\n%s\n%s %s\n%s %s\n%s %s\n\n%s\n%s\n%s %s\n\n",
+	sponsor()
+	fmt.Fprintf(color.Output, "\n%s\n%s %s\n%s %s, %s, %s, %s\n%s %s\n\n",
 		color.New(color.FgCyan, color.Bold).Sprintf("%s", "NextTrace CopyRight"),
-		color.New(color.FgGreen, color.Bold).Sprintf("%s", "NextTrace Project Creator"),
-		color.New(color.FgWhite, color.Bold).Sprintf("%s", "Leo"),
-		color.New(color.FgHiBlack, color.Bold).Sprintf("%s", "i@leo.moe"),
-		color.New(color.FgGreen, color.Bold).Sprintf("%s", "NextTrace Project Maintainer"),
-		color.New(color.FgWhite, color.Bold).Sprintf("%s", "Tso"),
-		color.New(color.FgHiBlack, color.Bold).Sprintf("%s", "tsosunchia@gmail.com"),
-		color.New(color.FgWhite, color.Bold).Sprintf("%s", "Vincent"),
-		color.New(color.FgHiBlack, color.Bold).Sprintf("%s", "i@vincent.moe"),
-		color.New(color.FgWhite, color.Bold).Sprintf("%s", "Leo"),
-		color.New(color.FgHiBlack, color.Bold).Sprintf("%s", "i@leo.moe"),
-		color.New(color.FgCyan, color.Bold).Sprintf("%s", "Special Acknowledgement List"),
-		color.New(color.FgGreen, color.Bold).Sprintf("%s", "NextTrace Major Contributor"),
-		color.New(color.FgWhite, color.Bold).Sprintf("%s", "zhshch"),
-		color.New(color.FgHiBlack, color.Bold).Sprintf("%s", "zhshch@athorx.com"),
+		//color.New(color.FgGreen, color.Bold).Sprintf("%s", "Contact Us"),
+		//color.New(color.FgWhite, color.Bold).Sprintf("%s", "Feedback Email:"),
+		//color.New(color.FgHiBlack, color.Bold).Sprintf("%s", "nt@moeqing.com"),
+		//color.New(color.FgWhite, color.Bold).Sprintf("%s", "HomePage:"),
+		//color.New(color.FgHiBlack, color.Bold).Sprintf("%s", "github.com/nxtrace"),
+		color.New(color.FgWhite, color.Bold).Sprintf("%s", "Creator:"),
+		color.New(color.FgHiBlue, color.Bold).Sprintf("%s", "Leo"),
+		//color.New(color.FgHiBlack, color.Bold).Sprintf("%s", "i@leo.moe"),
+		color.New(color.FgWhite, color.Bold).Sprintf("%s", "Core-Developer:"),
+		color.New(color.FgHiBlue, color.Bold).Sprintf("%s", "Leo"),
+		//color.New(color.FgHiBlack, color.Bold).Sprintf("%s", "i@leo.moe"),
+		color.New(color.FgHiBlue, color.Bold).Sprintf("%s", "Vincent"),
+		//color.New(color.FgHiBlack, color.Bold).Sprintf("%s", "i@vincent.moe"),
+		color.New(color.FgHiBlue, color.Bold).Sprintf("%s", "zhshch"),
+		//color.New(color.FgHiBlack, color.Bold).Sprintf("%s", "zhshch@athorx.com"),
+		color.New(color.FgHiBlue, color.Bold).Sprintf("%s", "Tso"),
+		//color.New(color.FgHiBlack, color.Bold).Sprintf("%s", "tsosunchia@gmail.com"),
+		color.New(color.FgWhite, color.Bold).Sprintf("%s", "Maintainer:"),
+		color.New(color.FgHiBlue, color.Bold).Sprintf("%s", "Tso"),
+		//color.New(color.FgHiBlack, color.Bold).Sprintf("%s", "tsosunchia@gmail.com"),
 	)
 
 	moeQingOrgCopyRight()
-	sponsor()
 	//PluginCopyRight()
 }
 
 func moeQingOrgCopyRight() {
-	fmt.Fprintf(color.Output, "%s\n%s %s\n%s %s\n\n",
-		color.New(color.FgGreen, color.Bold).Sprintf("%s", "Supported by MoeQing Network"),
-		color.New(color.FgWhite, color.Bold).Sprintf("%s", "YekongTAT"),
-		color.New(color.FgHiBlack, color.Bold).Sprintf("%s", "yekongtat@gmail.com"),
-		color.New(color.FgWhite, color.Bold).Sprintf("%s", "Haima"),
-		color.New(color.FgHiBlack, color.Bold).Sprintf("%s", "haima@peers.cloud"),
+	fmt.Fprintf(color.Output, "%s\n%s %s, %s\n\n",
+		color.New(color.FgCyan, color.Bold).Sprintf("%s", "NextTrace Project NOC"),
+		color.New(color.FgWhite, color.Bold).Sprintf("%s", "MoeQing.io:"),
+		color.New(color.FgHiBlue, color.Bold).Sprintf("%s", "YekongTAT"),
+		//color.New(color.FgHiBlack, color.Bold).Sprintf("%s", "yekongtat@gmail.com"),
+		color.New(color.FgHiBlue, color.Bold).Sprintf("%s", "Haima"),
+		//color.New(color.FgHiBlack, color.Bold).Sprintf("%s", "haima@peers.cloud"),
 	)
 }
 
 func sponsor() {
-	fmt.Fprintf(color.Output, "%s\n%s\n%s\n%s\n",
-		color.New(color.FgGreen, color.Bold).Sprintf("%s", "Sponsored by the following entities"),
-		color.New(color.FgWhite, color.Bold).Sprintf("%s", "DMIT.io"),
-		color.New(color.FgWhite, color.Bold).Sprintf("%s", "Misaka.io"),
-		color.New(color.FgWhite, color.Bold).Sprintf("%s", "Skywolf.cloud"),
+	italic := "\x1b[3m%s\x1b[0m"
+	formatted := fmt.Sprintf(italic, "(Listed in no particular order)")
+
+	fmt.Fprintf(color.Output, "%s\n%s\n%s\n%s\n%s\n",
+		color.New(color.FgCyan, color.Bold).Sprintf("%s", "NextTrace Sponsored by"),
+		color.New(color.FgHiYellow, color.Bold).Sprintf("%s", "· DMIT.io"),
+		color.New(color.FgHiYellow, color.Bold).Sprintf("%s", "· Misaka.io"),
+		color.New(color.FgHiYellow, color.Bold).Sprintf("%s", "· Skywolf.cloud"),
+		color.New(color.FgHiBlack, color.Bold).Sprintf("%s", formatted),
 	)
 }
 
