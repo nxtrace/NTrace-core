@@ -2,6 +2,7 @@ package util
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/nxtrace/NTrace-core/config"
 	"log"
@@ -75,7 +76,7 @@ func LocalIPPortv6(dstip net.IP) (net.IP, int) {
 	return nil, -1
 }
 
-func DomainLookUp(host string, ipVersion string, dotServer string, disableOutput bool) net.IP {
+func DomainLookUp(host string, ipVersion string, dotServer string, disableOutput bool) (net.IP, error) {
 	// ipVersion: 4, 6, all
 	var (
 		r   *net.Resolver
@@ -101,8 +102,7 @@ func DomainLookUp(host string, ipVersion string, dotServer string, disableOutput
 		ips = append(ips, net.ParseIP(v))
 	}
 	if err != nil {
-		fmt.Println("Domain " + host + " Lookup Fail.")
-		os.Exit(1)
+		return nil, errors.New("DNS lookup failed")
 	}
 
 	//var ipv6Flag = false
@@ -128,7 +128,7 @@ func DomainLookUp(host string, ipVersion string, dotServer string, disableOutput
 	}
 
 	if (len(ips) == 1) || (disableOutput) {
-		return ips[0]
+		return ips[0], nil
 	} else {
 		fmt.Println("Please Choose the IP You Want To TraceRoute")
 		for i, ip := range ips {
@@ -147,7 +147,7 @@ func DomainLookUp(host string, ipVersion string, dotServer string, disableOutput
 			fmt.Println("Your Option is invalid")
 			os.Exit(3)
 		}
-		return ips[index]
+		return ips[index], nil
 	}
 }
 
