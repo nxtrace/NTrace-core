@@ -13,8 +13,8 @@ func TestDNS(t *testing.T) {
 }
 
 func TestDomainLookUp(t *testing.T) {
-	ips := DomainLookUp("pek-4134.nexttrace-io-fasttrace-endpoint.win.", "all", "", false)
+	ips, _ := DomainLookUp("pek-4134.nexttrace-io-fasttrace-endpoint.win.", "all", "", false)
 	fmt.Println(ips)
-	ips = DomainLookUp("pek-4134.nexttrace-io-fasttrace-endpoint.win.", "4", "", false)
+	ips, _ = DomainLookUp("pek-4134.nexttrace-io-fasttrace-endpoint.win.", "4", "", false)
 	fmt.Println(ips)
 }

@@ -172,6 +172,17 @@ nexttrace --fast-trace
 
 # You can also use TCP SYN for testing
 nexttrace --fast-trace --tcp
+
+# You can also quickly test through a customized IP/DOMAIN list file
+nexttrace --file /path/to/your/iplist.txt
+# CUSTOMIZED IP DOMAIN LIST FILE FORMAT
+## One IP/DOMAIN per line + space + description information (optional)
+## forExample:
+## 106.37.67.1 BEIJING-TELECOM
+## 240e:928:101:31a::1 BEIJING-TELECOM
+## bj.10086.cn BEIJING-MOBILE
+## 2409:8080:0:1::1
+## 223.5.5.5
 ```
 
 `NextTrace` already supports route tracing for specified Network Devices
@@ -370,6 +381,7 @@ Arguments:
                                      aliyun, dnspod, google, cloudflare]
   -g  --language                     Choose the language for displaying [en,
                                      cn]. Default: cn
+      --file                         Read IP Address or domain name from file
 ```
 
 ## Project screenshot

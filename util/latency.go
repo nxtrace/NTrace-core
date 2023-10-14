@@ -60,7 +60,7 @@ func GetFastIP(domain string, port string, enableOutput bool) string {
 
 	//if len(ips) > 0 {
 	if enableOutput {
-		_, _ = fmt.Fprintf(color.Output, "%s prefered API IP - %s - %s - %s",
+		_, _ = fmt.Fprintf(color.Output, "%s preferred API IP - %s - %s - %s",
 			color.New(color.FgWhite, color.Bold).Sprintf("[NextTrace API]"),
 			color.New(color.FgGreen, color.Bold).Sprintf("%s", result.IP),
 			color.New(color.FgCyan, color.Bold).Sprintf("%sms", result.Latency),

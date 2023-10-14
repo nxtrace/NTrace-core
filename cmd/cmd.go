@@ -69,6 +69,7 @@ func Excute() {
 		Help: "Use DoT Server for DNS Parse [dnssb, aliyun, dnspod, google, cloudflare]"})
 	lang := parser.Selector("g", "language", []string{"en", "cn"}, &argparse.Options{Default: "cn",
 		Help: "Choose the language for displaying [en, cn]"})
+	file := parser.String("", "file", &argparse.Options{Help: "Read IP Address or domain name from file"})
 
 	err := parser.Parse(os.Args)
 	if err != nil {
@@ -91,7 +92,7 @@ func Excute() {
 		*port = 80
 	}
 
-	if *fast_trace {
+	if *fast_trace || *file != "" {
 		var paramsFastTrace = fastTrace.ParamsFastTrace{
 			SrcDev:         *srcDev,
 			SrcAddr:        *srcAddr,
@@ -102,6 +103,7 @@ func Excute() {
 			Lang:           *lang,
 			PktSize:        *packetSize,
 			Timeout:        time.Duration(*timeout) * time.Millisecond,
+			File:           *file,
 		}
 
 		fastTrace.FastTest(*tcp, *output, paramsFastTrace)
@@ -176,20 +178,25 @@ func Excute() {
 	//
 	//go func() {
 	//	defer wg.Done()
+	err = nil
 	if *udp {
 		if *ipv6Only {
 			fmt.Println("[Info] IPv6 UDP Traceroute is not supported right now.")
 			os.Exit(0)
 		}
-		ip = util.DomainLookUp(domain, "4", *dot, *jsonPrint)
+		ip, err = util.DomainLookUp(domain, "4", *dot, *jsonPrint)
 	} else {
 		if *ipv6Only {
-			ip = util.DomainLookUp(domain, "6", *dot, *jsonPrint)
+			ip, err = util.DomainLookUp(domain, "6", *dot, *jsonPrint)
 		} else if *ipv4Only {
-			ip = util.DomainLookUp(domain, "4", *dot, *jsonPrint)
+			ip, err = util.DomainLookUp(domain, "4", *dot, *jsonPrint)
 		} else {
-			ip = util.DomainLookUp(domain, "all", *dot, *jsonPrint)
+			ip, err = util.DomainLookUp(domain, "all", *dot, *jsonPrint)
 		}
+	}
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
 	}
 	//}()
 	//
@@ -218,7 +225,7 @@ func Excute() {
 		printer.PrintTraceRouteNav(ip, domain, *dataOrigin, *maxHops, *packetSize)
 	}
 
-	var m trace.Method = ""
+	var m trace.Method
 
 	switch {
 	case *tcp:
