@@ -183,6 +183,17 @@ nexttrace --fast-trace
 
 # 也可以使用 TCP SYN 而非 ICMP 进行测试
 nexttrace --fast-trace --tcp
+
+# 也可以通过自定义的IP/DOMAIN列表文件进行快速测试
+nexttrace --file /path/to/your/iplist.txt
+# 自定义的IP/DOMAIN列表文件格式
+## 一行一个IP/DOMAIN + 空格 + 描述信息（可选）
+## 例如：
+## 106.37.67.1 北京电信
+## 240e:928:101:31a::1 北京电信
+## bj.10086.cn 北京移动
+## 2409:8080:0:1::1
+## 223.5.5.5
 ```
 
 `NextTrace` 已支持指定网卡进行路由跟踪
@@ -368,6 +379,7 @@ Arguments:
                                      aliyun, dnspod, google, cloudflare]
   -g  --language                     Choose the language for displaying [en,
                                      cn]. Default: cn
+      --file                         Read IP Address or domain name from file
 ```
 
 ## 项目截图
