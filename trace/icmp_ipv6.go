@@ -189,6 +189,8 @@ func (t *ICMPTracerv6) listenICMP() {
 							t.handleICMPMessage(msg, 0, rm.Body.(*icmp.TimeExceeded).Data, int(ttl))
 						case ipv6.ICMPTypeEchoReply:
 							t.handleICMPMessage(msg, 1, rm.Body.(*icmp.Echo).Data, int(ttl))
+						case ipv6.ICMPTypeDestinationUnreachable:
+							t.handleICMPMessage(msg, 2, rm.Body.(*icmp.DstUnreach).Data, int(ttl))
 						default:
 							// log.Println("received icmp message of unknown type", rm.Type)
 						}
@@ -232,6 +234,11 @@ func (t *ICMPTracerv6) listenICMP() {
 }
 
 func (t *ICMPTracerv6) handleICMPMessage(msg ReceivedMessage, icmpType int8, data []byte, ttl int) {
+	if icmpType == 2 {
+		if t.DestIP.String() != msg.Peer.String() {
+			return
+		}
+	}
 	t.inflightRequestRWLock.RLock()
 	defer t.inflightRequestRWLock.RUnlock()
 
