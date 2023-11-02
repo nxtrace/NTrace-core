@@ -153,7 +153,7 @@ nexttrace --table 1.0.0.1
 nexttrace --raw 1.0.0.1
 nexttrace --json 1.0.0.1
 
-# 只进行IPv4/IPv6解析
+# 只进行IPv4/IPv6解析，且当多个IP时自动选择第一个IP
 nexttrace --ipv4 g.co
 nexttrace --ipv6 g.co
 
