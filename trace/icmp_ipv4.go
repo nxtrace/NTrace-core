@@ -39,6 +39,7 @@ func (t *ICMPTracer) PrintFunc() {
 		if t.AsyncPrinter != nil {
 			t.AsyncPrinter(&t.res)
 		}
+		// 接收的时候检查一下是不是 3 跳都齐了
 		if len(t.res.Hops)-1 > ttl {
 			if len(t.res.Hops[ttl]) == t.NumMeasurements {
 				if t.RealtimePrinter != nil {

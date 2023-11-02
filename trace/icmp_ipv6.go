@@ -30,7 +30,7 @@ type ICMPTracerv6 struct {
 }
 
 func (t *ICMPTracerv6) PrintFunc() {
-	// defer t.wg.Done()
+	defer t.wg.Done()
 	var ttl = t.Config.BeginHop - 1
 	for {
 		if t.AsyncPrinter != nil {
@@ -44,12 +44,12 @@ func (t *ICMPTracerv6) PrintFunc() {
 					t.RealtimePrinter(&t.res, ttl)
 				}
 				ttl++
-				if ttl == t.final {
+
+				if ttl == t.final-1 || ttl >= t.MaxHops-1 {
 					return
 				}
 			}
 		}
-
 		<-time.After(200 * time.Millisecond)
 	}
 }
@@ -78,6 +78,7 @@ func (t *ICMPTracerv6) Execute() (*Result, error) {
 	t.final = -1
 
 	go t.listenICMP()
+	t.wg.Add(1)
 	go t.PrintFunc()
 	for ttl := t.BeginHop; ttl <= t.MaxHops; ttl++ {
 		t.inflightRequestRWLock.Lock()
