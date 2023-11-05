@@ -121,7 +121,12 @@ func Excute() {
 	}
 
 	if strings.Contains(domain, "/") {
-		domain = strings.Split(domain, "/")[2]
+		parts := strings.Split(domain, "/")
+		if len(parts) < 3 {
+			fmt.Println("Invalid input")
+			return
+		}
+		domain = parts[2]
 	}
 
 	if strings.Contains(domain, "]") {
