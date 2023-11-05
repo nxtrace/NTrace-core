@@ -142,7 +142,7 @@ nexttrace --table 1.0.0.1
 nexttrace --raw 1.0.0.1
 nexttrace --json 1.0.0.1
 
-# IPv4/IPv6 Resolve Only
+# IPv4/IPv6 Resolve Only, and automatically select the first IP when there are multiple IPs
 nexttrace --ipv4 g.co
 nexttrace --ipv6 g.co
 

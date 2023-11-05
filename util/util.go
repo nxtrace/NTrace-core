@@ -119,9 +119,11 @@ func DomainLookUp(host string, ipVersion string, dotServer string, disableOutput
 		var filteredIPs []net.IP
 		for _, ip := range ips {
 			if ipVersion == "4" && ip.To4() != nil {
-				filteredIPs = append(filteredIPs, ip)
+				filteredIPs = []net.IP{ip}
+				break
 			} else if ipVersion == "6" && strings.Contains(ip.String(), ":") {
-				filteredIPs = append(filteredIPs, ip)
+				filteredIPs = []net.IP{ip}
+				break
 			}
 		}
 		ips = filteredIPs

@@ -19,6 +19,10 @@ func GetMapUrl(r string) (string, error) {
 	fastIp := "api.leo.moe"
 	// 如果 host 是一个 IP 使用默认域名
 	if valid := net.ParseIP(host); valid != nil {
+		fastIp = host
+		if len(strings.Split(fastIp, ":")) > 1 {
+			fastIp = "[" + fastIp + "]"
+		}
 		host = "api.leo.moe"
 	} else {
 		// 默认配置完成，开始寻找最优 IP
