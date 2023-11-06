@@ -39,7 +39,7 @@ require (
 
 require (
 	github.com/fatih/color v1.15.0
-	github.com/gorilla/websocket v1.5.0
+	github.com/gorilla/websocket v1.5.1
 	github.com/lionsoul2014/ip2region v2.11.2+incompatible
 	github.com/rodaine/table v1.1.0
 	github.com/tidwall/gjson v1.17.0
