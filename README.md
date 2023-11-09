@@ -120,10 +120,15 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
     After installing Go >= 1.20 yourself, you can use the following command to install
 
     ```shell
-    go install github.com/nxtrace/Ntrace-V1@latest
+    go install github.com/nxtrace/NTrace-core@latest
     ```
+    *because of the version constraints conflict, you can not install  `NTrace-V1` by this*
     After installation, the executable is in the `$GOPATH/bin` directory. If you have not set `GOPATH`, it is in the `$HOME/go/bin` directory.
-
+    The binary file name is consistent with the project name. You need to replace the `nexttrace` command below with `NTrace-core`.
+     If you want to be consistent with the commands below, you can rename the binary after executing the `go install` command
+    ```shell
+    mv  $GOPATH/bin/NTrace-core $GOPATH/bin/nexttrace
+    ``` 
 
 ### Get Started
 
