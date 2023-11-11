@@ -12,13 +12,14 @@ import (
 )
 
 //go:linkname internetSocket net.internetSocket
-func internetSocket(ctx context.Context, net string, laddr, raddr interface{}, sotype, proto int, mode string, ctrlCtxFn func(context.Context, string, string, syscall.RawConn) error) (fd unsafe.Pointer, err error)
+func internetSocket(ctx context.Context, net string, laddr, raddr any, sotype, proto int, mode string, ctrlCtxFn func(context.Context, string, string, syscall.RawConn) error) (fd unsafe.Pointer, err error)
 
 //go:linkname newIPConn net.newIPConn
 func newIPConn(fd unsafe.Pointer) *net.IPConn
 
 var (
 	errUnknownNetwork = errors.New("unknown network type")
+	errUnknownIface   = errors.New("unknown network interface")
 
 	networkMap = map[string]string{
 		"ip4:icmp": "udp4",
@@ -28,7 +29,6 @@ var (
 	}
 )
 
-// ListenICMP 会造成指定出口IP功能不可使用
 func ListenICMP(network string, laddr string) (net.PacketConn, error) {
 	if os.Getuid() == 0 { // root
 		return net.ListenPacket(network, laddr)
@@ -38,7 +38,48 @@ func ListenICMP(network string, laddr string) (net.PacketConn, error) {
 			if nw == "udp6" {
 				proto = syscall.IPPROTO_ICMPV6
 			}
-			isock, err := internetSocket(context.Background(), nw, nil, nil, syscall.SOCK_DGRAM, proto, "listen", nil)
+
+			var ifIndex int = -1
+			if laddr != "" {
+				la := net.ParseIP(laddr)
+				if ifaces, err := net.Interfaces(); err == nil {
+					for _, iface := range ifaces {
+						addrs, err := iface.Addrs()
+						if err != nil {
+							continue
+						}
+						for _, addr := range addrs {
+							if ipnet, ok := addr.(*net.IPNet); ok {
+								if ipnet.IP.Equal(la) {
+									ifIndex = iface.Index
+									break
+								}
+							}
+						}
+					}
+					if ifIndex == -1 {
+						return nil, errUnknownIface
+					}
+				} else {
+					return nil, err
+				}
+			}
+
+			isock, err := internetSocket(context.Background(), nw, nil, nil, syscall.SOCK_DGRAM, proto, "listen",
+				func(ctx context.Context, network, address string, c syscall.RawConn) error {
+					if ifIndex != -1 {
+						if proto == syscall.IPPROTO_ICMP {
+							return c.Control(func(fd uintptr) {
+								syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IP, syscall.IP_BOUND_IF, ifIndex)
+							})
+						} else {
+							return c.Control(func(fd uintptr) {
+								syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IPV6, syscall.IPV6_BOUND_IF, ifIndex)
+							})
+						}
+					}
+					return nil
+				})
 			if err != nil {
 				panic(err)
 			}
