@@ -13,6 +13,8 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv6"
+
+	"github.com/nxtrace/NTrace-core/trace/internal"
 )
 
 type ICMPTracerv6 struct {
@@ -65,7 +67,7 @@ func (t *ICMPTracerv6) Execute() (*Result, error) {
 
 	var err error
 
-	t.icmpListen, err = net.ListenPacket("ip6:58", t.SrcAddr)
+	t.icmpListen, err = internal.ListenICMP("ip6:58", t.SrcAddr)
 	if err != nil {
 		return &t.res, err
 	}

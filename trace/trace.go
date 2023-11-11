@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/nxtrace/NTrace-core/ipgeo"
@@ -92,7 +93,11 @@ func Traceroute(method Method, config Config) (*Result, error) {
 	default:
 		return &Result{}, ErrInvalidMethod
 	}
-	return tracer.Execute()
+	result, err := tracer.Execute()
+	if err != nil && errors.Is(err, syscall.EPERM) {
+		err = fmt.Errorf("%w, please run as root", err)
+	}
+	return result, err
 }
 
 type Result struct {
