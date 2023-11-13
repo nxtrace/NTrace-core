@@ -243,6 +243,8 @@ nexttrace --parallel-requests 1 www.hkix.net
 
 # 从TTL为5开始发送探测包，直到TTL为10结束
 nexttrace --first 5 --max-hops 10 www.decix.net
+# 此外还提供了一个ENV，可以设置是否隐匿目的IP
+export NEXTTRACE_ENABLEHIDDENDSTIP=1
 
 # 关闭IP反向解析功能
 nexttrace --no-rdns www.bbix.net

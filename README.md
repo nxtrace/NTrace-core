@@ -227,6 +227,8 @@ nexttrace --parallel-requests 1 www.hkix.net
 
 # Start Trace with TTL of 5, end at TTL of 10
 nexttrace --first 5 --max-hops 10 www.decix.net
+# In addition, an ENV is provided to set whether to hide the destination IP
+export NEXTTRACE_ENABLEHIDDENDSTIP=1
 
 # Turn off the IP reverse parsing function
 nexttrace --no-rdns www.bbix.net

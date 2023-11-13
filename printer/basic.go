@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/nxtrace/NTrace-core/config"
 	"github.com/nxtrace/NTrace-core/trace"
+	"github.com/nxtrace/NTrace-core/util"
 	"net"
 
 	"github.com/fatih/color"
@@ -78,11 +79,14 @@ func sponsor() {
 
 func PrintTraceRouteNav(ip net.IP, domain string, dataOrigin string, maxHops int, packetSize int) {
 	fmt.Println("IP Geo Data Provider: " + dataOrigin)
-
-	if ip.String() == domain {
-		fmt.Printf("traceroute to %s, %d hops max, %d bytes packets\n", ip.String(), maxHops, packetSize)
+	if util.EnableHidDstIP == "" {
+		if ip.String() == domain {
+			fmt.Printf("traceroute to %s, %d hops max, %d bytes packets\n", ip.String(), maxHops, packetSize)
+		} else {
+			fmt.Printf("traceroute to %s (%s), %d hops max, %d bytes packets\n", ip.String(), domain, maxHops, packetSize)
+		}
 	} else {
-		fmt.Printf("traceroute to %s (%s), %d hops max, %d bytes packets\n", ip.String(), domain, maxHops, packetSize)
+		fmt.Printf("traceroute to %s, %d hops max, %d bytes packets\n", util.HideIPPart(ip.String()), maxHops, packetSize)
 	}
 }
 

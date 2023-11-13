@@ -245,6 +245,7 @@ func Excute() {
 		*port = 53
 	}
 
+	util.DestIP = ip.String()
 	var conf = trace.Config{
 		DN42:             *dn42,
 		SrcAddr:          *srcAddr,

@@ -2,6 +2,7 @@ package printer
 
 import (
 	"fmt"
+	"github.com/nxtrace/NTrace-core/util"
 	"net"
 	"strconv"
 	"strings"
@@ -12,7 +13,6 @@ import (
 
 func RealtimePrinter(res *trace.Result, ttl int) {
 	fmt.Printf("%s  ", color.New(color.FgHiYellow, color.Bold).Sprintf("%-2d", ttl+1))
-
 	// 去重
 	var latestIP string
 	tmpMap := make(map[string][]string)
@@ -51,13 +51,25 @@ func RealtimePrinter(res *trace.Result, ttl int) {
 			fmt.Printf("%4s", "")
 		}
 		if net.ParseIP(ip).To4() == nil {
-			fmt.Fprintf(color.Output, "%s",
-				color.New(color.FgWhite, color.Bold).Sprintf("%-25s", ip),
-			)
+			if util.EnableHidDstIP == "" || ip != util.DestIP {
+				fmt.Fprintf(color.Output, "%s",
+					color.New(color.FgWhite, color.Bold).Sprintf("%-25s", ip),
+				)
+			} else {
+				fmt.Fprintf(color.Output, "%s",
+					color.New(color.FgWhite, color.Bold).Sprintf("%-25s", util.HideIPPart(ip)),
+				)
+			}
 		} else {
-			fmt.Fprintf(color.Output, "%s",
-				color.New(color.FgWhite, color.Bold).Sprintf("%-15s", ip),
-			)
+			if util.EnableHidDstIP == "" || ip != util.DestIP {
+				fmt.Fprintf(color.Output, "%s",
+					color.New(color.FgWhite, color.Bold).Sprintf("%-15s", ip),
+				)
+			} else {
+				fmt.Fprintf(color.Output, "%s",
+					color.New(color.FgWhite, color.Bold).Sprintf("%-15s", util.HideIPPart(ip)),
+				)
+			}
 		}
 
 		i, _ := strconv.Atoi(v[0])
