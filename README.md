@@ -277,8 +277,8 @@ nexttrace --data-provider IPAPI.com --max-hops 20 --tcp --port 443 --queries 5 -
 nexttrace -tcp --queries 2 --parallel-requests 1 --table --route-path 2001:4860:4860::8888
 
 Equivalent to:
-nexttrace -d IPAPI.com -m 20 -T -p 443 -q 5 -n 1.1.1.1
-nexttrace -T -q 2 --parallel-requests 1 -t -R 2001:4860:4860::8888
+nexttrace -d ip-api.com -m 20 -T -p 443 -q 5 -n 1.1.1.1
+nexttrace -T -q 2 --parallel-requests 1 -t -P 2001:4860:4860::8888
 ```
 
 ### IP Database
@@ -304,15 +304,16 @@ Usage: nexttrace [-h|--help] [-4|--ipv4] [-6|--ipv6] [-T|--tcp] [-U|--udp]
                  <integer>] [--parallel-requests <integer>] [-m|--max-hops
                  <integer>] [-d|--data-provider
                  (Ip2region|ip2region|IP.SB|ip.sb|IPInfo|ipinfo|IPInsight|ipinsight|IPAPI.com|ip-api.com|IPInfoLocal|ipinfolocal|chunzhen|LeoMoeAPI|leomoeapi|disable-geoip)]
-                 [-n|--no-rdns] [-a|--always-rdns] [-P|--route-path]
-                 [-r|--report] [--dn42] [-o|--output] [-t|--table] [--raw]
-                 [-j|--json] [-c|--classic] [-f|--first <integer>] [-M|--map]
+                 [--pow-provider (api.leo.moe|sakura)] [-n|--no-rdns]
+                 [-a|--always-rdns] [-P|--route-path] [-r|--report] [--dn42]
+                 [-o|--output] [-t|--table] [--raw] [-j|--json] [-c|--classic]
+                 [-f|--first <integer>] [-M|--map] [-e|--disable-mpls]
                  [-v|--version] [-s|--source "<value>"] [-D|--dev "<value>"]
-                 [-R|--route] [-z|--send-time <integer>] [-i|--ttl-time
-                 <integer>] [--timeout <integer>] [--psize <integer>]
-                 [_positionalArg_nexttrace_31 "<value>"] [--dot-server
+                 [-z|--send-time <integer>] [-i|--ttl-time <integer>]
+                 [--timeout <integer>] [--psize <integer>]
+                 [_positionalArg_nexttrace_32 "<value>"] [--dot-server
                  (dnssb|aliyun|dnspod|google|cloudflare)] [-g|--language
-                 (en|cn)]
+                 (en|cn)] [--file "<value>"]
 
 Arguments:
 
@@ -369,7 +370,6 @@ Arguments:
   -s  --source                       Use source src_addr for outgoing packets
   -D  --dev                          Use the following Network Devices as the
                                      source address in outgoing packets
-  -R  --route                        Show Routing Table [Provided By BGP.Tools]
   -z  --send-time                    Set how many [milliseconds] between
                                      sending each packet.. Useful when some
                                      routers use rate-limit for ICMP messages.
@@ -383,7 +383,7 @@ Arguments:
                                      connection.. Default: 1000
       --psize                        Set the packet size (payload size).
                                      Default: 52
-      --_positionalArg_nexttrace_31  IP Address or domain name
+      --_positionalArg_nexttrace_32  IP Address or domain name
       --dot-server                   Use DoT Server for DNS Parse [dnssb,
                                      aliyun, dnspod, google, cloudflare]
   -g  --language                     Choose the language for displaying [en,
