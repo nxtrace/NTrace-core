@@ -22,6 +22,8 @@ var UserAgent = fmt.Sprintf("NextTrace %s/%s/%s", config.Version, runtime.GOOS, 
 var RdnsCache sync.Map
 var PowProviderParam = ""
 var DisableMPLS = GetenvDefault("NEXTTRACE_DISABLEMPLS", "")
+var EnableHidDstIP = GetenvDefault("NEXTTRACE_ENABLEHIDDENDSTIP", "")
+var DestIP string
 
 func LookupAddr(addr string) ([]string, error) {
 	// 如果在缓存中找到，直接返回
@@ -225,4 +227,18 @@ func StringInSlice(val string, list []string) bool {
 		}
 	}
 	return false
+}
+
+func HideIPPart(ip string) string {
+	parsedIP := net.ParseIP(ip)
+	if parsedIP == nil {
+		return ""
+	}
+
+	if parsedIP.To4() != nil {
+		// IPv4: 隐藏后16位
+		return strings.Join(strings.Split(ip, ".")[:2], ".") + ".0.0/16"
+	}
+	// IPv6: 隐藏后96位
+	return parsedIP.Mask(net.CIDRMask(32, 128)).String() + "/32"
 }
