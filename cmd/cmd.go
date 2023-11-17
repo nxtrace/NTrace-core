@@ -266,7 +266,7 @@ func Excute() {
 	}
 
 	// 暂时弃用
-	var router *bool
+	router := new(bool)
 	*router = false
 	if !*tablePrint {
 		if *classicPrint {
