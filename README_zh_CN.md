@@ -40,11 +40,15 @@
     <a href="https://skywolf.cloud" >
         <img src="https://hk.skywolf.cloud/assets/img/skywolf.svg" width="170.7" height="62.9">
     </a>
+    &nbsp;&nbsp;&nbsp;&nbsp;
+    <a href="https://portal.saltyfish.io" >
+        <img src="https://snapstack-static.vnc.xyz/static/logo.svg" width="170.7" height="62.9">
+    </a>
 </div>
 
 
 
-我们非常感谢 [DMIT](https://dmit.io) 和 [Misaka](https://misaka.io) 和 [Skywolf](https://skywolf.cloud) 提供了支持本项目所需的网络基础设施。
+我们非常感谢 [DMIT](https://dmit.io)、 [Misaka](https://misaka.io)、 [Skywolf](https://skywolf.cloud) 和 [SnapStack](https://portal.saltyfish.io) 提供了支持本项目所需的网络基础设施。
 
 ## How To Use
 

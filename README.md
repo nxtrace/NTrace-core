@@ -39,9 +39,13 @@
     <a href="https://skywolf.cloud" >
         <img src="https://hk.skywolf.cloud/assets/img/skywolf.svg" width="170.7" height="62.9">
     </a>
+    &nbsp;&nbsp;&nbsp;&nbsp;
+    <a href="https://portal.saltyfish.io" >
+        <img src="https://snapstack-static.vnc.xyz/static/logo.svg" width="170.7" height="62.9">
+    </a>
 </div>
 
-We are extremely grateful to [DMIT](https://dmit.io) and [Misaka](https://misaka.io) and [Skywolf](https://skywolf.cloud) for providing the network infrastructure that powers this project.
+We are extremely grateful to [DMIT](https://dmit.io), [Misaka](https://misaka.io), [Skywolf](https://skywolf.cloud) and [SnapStack](https://portal.saltyfish.io) for providing the network infrastructure that powers this project.
 
 ## How To Use
 
