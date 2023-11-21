@@ -64,7 +64,7 @@ func sponsor() {
 		color.New(color.FgHiYellow, color.Bold).Sprintf("%s", "· DMIT.io"),
 		color.New(color.FgHiYellow, color.Bold).Sprintf("%s", "· Misaka.io"),
 		color.New(color.FgHiYellow, color.Bold).Sprintf("%s", "· Skywolf.cloud"),
-		color.New(color.FgHiYellow, color.Bold).Sprintf("%s", "· MoeQing.io"),
+		color.New(color.FgHiYellow, color.Bold).Sprintf("%s", "· Saltyfish.io"),
 		color.New(color.FgHiBlack, color.Bold).Sprintf("%s", formatted),
 	)
 }
