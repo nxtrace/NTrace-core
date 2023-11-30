@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/fatih/color"
 	"log"
 	"net"
 	"os"
@@ -70,6 +71,7 @@ func Excute() {
 	lang := parser.Selector("g", "language", []string{"en", "cn"}, &argparse.Options{Default: "cn",
 		Help: "Choose the language for displaying [en, cn]"})
 	file := parser.String("", "file", &argparse.Options{Help: "Read IP Address or domain name from file"})
+	nocolor := parser.Flag("C", "nocolor", &argparse.Options{Help: "Disable Colorful Output"})
 
 	err := parser.Parse(os.Args)
 	if err != nil {
@@ -84,6 +86,12 @@ func Excute() {
 	if *ver {
 		printer.CopyRight()
 		os.Exit(0)
+	}
+
+	if *nocolor {
+		color.NoColor = true
+	} else {
+		color.NoColor = false
 	}
 
 	domain := *str
