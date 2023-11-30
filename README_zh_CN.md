@@ -266,6 +266,10 @@ nexttrace --psize 1024 example.com
 #  ╭╯
 #  ╰AS37963 阿里云「ALIDNS.COM『ALIDNS.COM』」
 nexttrace --route-path www.time.com.my
+# 禁止色彩输出
+nexttrace --nocolor 1.1.1.1
+# 或者使用环境变量
+export NO_COLOR=1
 ```
 
 `NextTrace`支持用户自主选择 IP 数据库（目前支持：`LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`, `Ip2region`, `IPInfoLocal`, `CHUNZHEN`)
@@ -317,7 +321,7 @@ Usage: nexttrace [-h|--help] [-4|--ipv4] [-6|--ipv6] [-T|--tcp] [-U|--udp]
                  [--timeout <integer>] [--psize <integer>]
                  [_positionalArg_nexttrace_32 "<value>"] [--dot-server
                  (dnssb|aliyun|dnspod|google|cloudflare)] [-g|--language
-                 (en|cn)] [--file "<value>"]
+                 (en|cn)] [--file "<value>"] [-C|--nocolor]
 
 Arguments:
 
@@ -393,6 +397,7 @@ Arguments:
   -g  --language                     Choose the language for displaying [en,
                                      cn]. Default: cn
       --file                         Read IP Address or domain name from file
+  -C  --nocolor                      Disable Colorful Output
 ```
 
 ## 项目截图
