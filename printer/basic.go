@@ -25,7 +25,7 @@ func Version() {
 
 func CopyRight() {
 	sponsor()
-	fmt.Fprintf(color.Output, "\n%s\n%s %s\n%s %s\n%s %s, %s, %s, %s\n%s %s\n%s %s\n",
+	fmt.Fprintf(color.Output, "\n%s\n%s %s\n%s %s\n%s %s, %s, %s, %s\n%s %s\n",
 		color.New(color.FgCyan, color.Bold).Sprintf("%s", "NextTrace CopyRight"),
 		//color.New(color.FgGreen, color.Bold).Sprintf("%s", "Contact Us"),
 		//color.New(color.FgWhite, color.Bold).Sprintf("%s", "Feedback Email:"),
@@ -48,8 +48,8 @@ func CopyRight() {
 		//color.New(color.FgHiBlack, color.Bold).Sprintf("%s", "tsosunchia@gmail.com"),
 		color.New(color.FgWhite, color.Bold).Sprintf("%s", "Infra Maintainer:"),
 		color.New(color.FgHiBlue, color.Bold).Sprintf("%s", "Tso"),
-		color.New(color.FgWhite, color.Bold).Sprintf("%s", "NOC Manager:"),
-		color.New(color.FgHiBlue, color.Bold).Sprintf("%s", "YekongTAT"),
+		//color.New(color.FgWhite, color.Bold).Sprintf("%s", "NOC Manager:"),
+		//color.New(color.FgHiBlue, color.Bold).Sprintf("%s", "YekongTAT"),
 		//color.New(color.FgHiBlack, color.Bold).Sprintf("%s", "tsosunchia@gmail.com"),
 	)
 	//PluginCopyRight()
