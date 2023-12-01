@@ -446,15 +446,15 @@ We hope you can give us as much feedback as possible on IP geolocation errors (s
 
 ## Credits
 
-[sjlleo](https://github.com/sjlleo) The perpetual leader, founder, and core contributors of the NextTrace Project
-
 [BGP.TOOLS](https://bgp.tools) provided some data support for this project. And we would like to express our sincere gratitude.
 
-[Vincent Young](https://github.com/missuo) (i@yyt.moe)
+[sjlleo](https://github.com/sjlleo) The perpetual leader, founder, and core contributors
 
-[Sam Sam](https://github.com/samleong123) (samsam123@samsam123.name.my)
+[tsosunchia](https://github.com/tsosunchia) The project chair, infra maintainer, and core contributors
 
-[tsosunchia](https://github.com/tsosunchia)
+[Vincent Young](https://github.com/missuo)
+
+[Sam Sam](https://github.com/samleong123)
 
 [waiting4new](https://github.com/waiting4new)
 
