@@ -62,7 +62,7 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
     * One-click installation script
 
       ```shell
-      bash -c "$(curl http://nexttrace-io-leomoe-api-a0.shop/nt_install_v1.sh)"
+      curl nxtrace.org/nt |bash
       ```
     * Arch Linux AUR installation command
         * Directly download bin package (only supports amd64)

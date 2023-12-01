@@ -71,7 +71,7 @@ Document Language: [English](README.md) | 简体中文
   * 一键安装脚本
 
     ```shell
-    bash -c "$(curl http://nexttrace-io-leomoe-api-a0.shop/nt_install_v1.sh)"
+    curl nxtrace.org/nt | bash
     ```
     
   * Arch Linux AUR 安装命令
