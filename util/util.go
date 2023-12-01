@@ -168,7 +168,7 @@ func GetenvDefault(key, defVal string) string {
 }
 
 func GetHostAndPort() (host string, port string) {
-	var hostP = GetenvDefault("NEXTTRACE_HOSTPORT", "api.leo.moe")
+	var hostP = GetenvDefault("NEXTTRACE_HOSTPORT", "origin-fallback.nxtrace.org")
 	// 解析域名
 	hostArr := strings.Split(hostP, ":")
 	// 判断是否有指定端口
@@ -210,7 +210,7 @@ func GetProxy() *url.URL {
 func GetPowProvider() string {
 	var powProvider = ""
 	if PowProviderParam == "" {
-		powProvider = GetenvDefault("NEXTTRACE_POWPROVIDER", "api.leo.moe")
+		powProvider = GetenvDefault("NEXTTRACE_POWPROVIDER", "api.nxtrace.org")
 	} else {
 		powProvider = PowProviderParam
 	}

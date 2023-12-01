@@ -49,36 +49,36 @@ var Beijing = BackBoneCollection{
 	Location: "北京",
 	CT163: ISPCollection{
 		ISPName: CT163,
-		IP:      "ipv4.pek-4134.nexttrace-io-fasttrace-endpoint.win.",
-		IPv6:    "ipv6.pek-4134.nexttrace-io-fasttrace-endpoint.win.",
+		IP:      "ipv4.pek-4134.endpoint.nxtrace.org.",
+		IPv6:    "ipv6.pek-4134.endpoint.nxtrace.org.",
 	},
 
 	CU169: ISPCollection{
 		ISPName: CU169,
-		IP:      "ipv4.pek-4837.nexttrace-io-fasttrace-endpoint.win.",
-		IPv6:    "ipv6.pek-4837.nexttrace-io-fasttrace-endpoint.win.",
+		IP:      "ipv4.pek-4837.endpoint.nxtrace.org.",
+		IPv6:    "ipv6.pek-4837.endpoint.nxtrace.org.",
 	},
 
 	CU9929: ISPCollection{
 		ISPName: CU9929,
-		IP:      "ipv4.pek-9929.nexttrace-io-fasttrace-endpoint.win.",
+		IP:      "ipv4.pek-9929.endpoint.nxtrace.org.",
 	},
 
 	CM: ISPCollection{
 		ISPName: CM,
-		IP:      "ipv4.pek-9808.nexttrace-io-fasttrace-endpoint.win.",
-		IPv6:    "ipv6.pek-9808.nexttrace-io-fasttrace-endpoint.win.",
+		IP:      "ipv4.pek-9808.endpoint.nxtrace.org.",
+		IPv6:    "ipv6.pek-9808.endpoint.nxtrace.org.",
 	},
 
 	CMIN2: ISPCollection{
 		ISPName: CMIN2,
-		IP:      "ipv4.pek-58807.nexttrace-io-fasttrace-endpoint.win.",
+		IP:      "ipv4.pek-58807.endpoint.nxtrace.org.",
 	},
 
 	EDU: ISPCollection{
 		ISPName: EDU,
-		IP:      "ipv4.pek-4538.nexttrace-io-fasttrace-endpoint.win.",
-		IPv6:    "ipv6.pek-4538.nexttrace-io-fasttrace-endpoint.win.",
+		IP:      "ipv4.pek-4538.endpoint.nxtrace.org.",
+		IPv6:    "ipv6.pek-4538.endpoint.nxtrace.org.",
 	},
 }
 
@@ -86,42 +86,42 @@ var Shanghai = BackBoneCollection{
 	Location: "上海",
 	CT163: ISPCollection{
 		ISPName: CT163,
-		IP:      "ipv4.sha-4134.nexttrace-io-fasttrace-endpoint.win.",
-		IPv6:    "ipv6.sha-4134.nexttrace-io-fasttrace-endpoint.win.",
+		IP:      "ipv4.sha-4134.endpoint.nxtrace.org.",
+		IPv6:    "ipv6.sha-4134.endpoint.nxtrace.org.",
 	},
 
 	CTCN2: ISPCollection{
 		ISPName: CTCN2,
-		IP:      "ipv4.sha-4809.nexttrace-io-fasttrace-endpoint.win.",
+		IP:      "ipv4.sha-4809.endpoint.nxtrace.org.",
 	},
 
 	CU169: ISPCollection{
 		ISPName: CU169,
-		IP:      "ipv4.sha-4837.nexttrace-io-fasttrace-endpoint.win.",
-		IPv6:    "ipv6.sha-4837.nexttrace-io-fasttrace-endpoint.win.",
+		IP:      "ipv4.sha-4837.endpoint.nxtrace.org.",
+		IPv6:    "ipv6.sha-4837.endpoint.nxtrace.org.",
 	},
 
 	CU9929: ISPCollection{
 		ISPName: CU9929,
-		IP:      "ipv4.sha-9929.nexttrace-io-fasttrace-endpoint.win.",
-		IPv6:    "ipv6.sha-9929.nexttrace-io-fasttrace-endpoint.win.",
+		IP:      "ipv4.sha-9929.endpoint.nxtrace.org.",
+		IPv6:    "ipv6.sha-9929.endpoint.nxtrace.org.",
 	},
 
 	CM: ISPCollection{
 		ISPName: CM,
-		IP:      "ipv4.sha-9808.nexttrace-io-fasttrace-endpoint.win.",
-		IPv6:    "ipv6.sha-9808.nexttrace-io-fasttrace-endpoint.win.",
+		IP:      "ipv4.sha-9808.endpoint.nxtrace.org.",
+		IPv6:    "ipv6.sha-9808.endpoint.nxtrace.org.",
 	},
 
 	CMIN2: ISPCollection{
 		ISPName: CMIN2,
-		IP:      "ipv4.sha-58807.nexttrace-io-fasttrace-endpoint.win.",
+		IP:      "ipv4.sha-58807.endpoint.nxtrace.org.",
 	},
 
 	EDU: ISPCollection{
 		ISPName: EDU,
-		IP:      "ipv4.sha-4538.nexttrace-io-fasttrace-endpoint.win.",
-		IPv6:    "ipv6.sha-4538.nexttrace-io-fasttrace-endpoint.win.",
+		IP:      "ipv4.sha-4538.endpoint.nxtrace.org.",
+		IPv6:    "ipv6.sha-4538.endpoint.nxtrace.org.",
 	},
 }
 
@@ -129,20 +129,20 @@ var Guangzhou = BackBoneCollection{
 	Location: "广州",
 	CT163: ISPCollection{
 		ISPName: CT163,
-		IP:      "ipv4.can-4134.nexttrace-io-fasttrace-endpoint.win.",
-		IPv6:    "ipv6.can-4134.nexttrace-io-fasttrace-endpoint.win.",
+		IP:      "ipv4.can-4134.endpoint.nxtrace.org.",
+		IPv6:    "ipv6.can-4134.endpoint.nxtrace.org.",
 	},
 
 	CU169: ISPCollection{
 		ISPName: CU169,
-		IP:      "ipv4.can-4837.nexttrace-io-fasttrace-endpoint.win.",
-		IPv6:    "ipv6.can-4837.nexttrace-io-fasttrace-endpoint.win.",
+		IP:      "ipv4.can-4837.endpoint.nxtrace.org.",
+		IPv6:    "ipv6.can-4837.endpoint.nxtrace.org.",
 	},
 
 	CM: ISPCollection{
 		ISPName: CM,
-		IP:      "ipv4.can-9808.nexttrace-io-fasttrace-endpoint.win.",
-		IPv6:    "ipv6.can-9808.nexttrace-io-fasttrace-endpoint.win.",
+		IP:      "ipv4.can-9808.endpoint.nxtrace.org.",
+		IPv6:    "ipv6.can-9808.endpoint.nxtrace.org.",
 	},
 }
 
@@ -150,23 +150,23 @@ var Hangzhou = BackBoneCollection{
 	Location: "杭州",
 	CT163: ISPCollection{
 		ISPName: CT163,
-		IP:      "ipv4.hgh-4134.nexttrace-io-fasttrace-endpoint.win.",
-		IPv6:    "ipv6.hgh-4134.nexttrace-io-fasttrace-endpoint.win.",
+		IP:      "ipv4.hgh-4134.endpoint.nxtrace.org.",
+		IPv6:    "ipv6.hgh-4134.endpoint.nxtrace.org.",
 	},
 	CU169: ISPCollection{
 		ISPName: CU169,
-		IP:      "ipv4.hgh-4837.nexttrace-io-fasttrace-endpoint.win.",
+		IP:      "ipv4.hgh-4837.endpoint.nxtrace.org.",
 	},
 	CM: ISPCollection{
 		ISPName: CM,
-		IP:      "ipv4.hgh-9808.nexttrace-io-fasttrace-endpoint.win.",
-		IPv6:    "ipv6.hgh-9808.nexttrace-io-fasttrace-endpoint.win.",
+		IP:      "ipv4.hgh-9808.endpoint.nxtrace.org.",
+		IPv6:    "ipv6.hgh-9808.endpoint.nxtrace.org.",
 	},
 	// 浙江大学 教育网
 	EDU: ISPCollection{
 		ISPName: EDU,
-		IP:      "ipv4.hgh-4538.nexttrace-io-fasttrace-endpoint.win.",
-		IPv6:    "ipv6.hgh-4538.nexttrace-io-fasttrace-endpoint.win.",
+		IP:      "ipv4.hgh-4538.endpoint.nxtrace.org.",
+		IPv6:    "ipv6.hgh-4538.endpoint.nxtrace.org.",
 	},
 }
 
@@ -175,12 +175,12 @@ var Hefei = BackBoneCollection{
 	// 中国科学技术大学 教育网
 	EDU: ISPCollection{
 		ISPName: EDU,
-		IP:      "ipv4.hfe-4538.nexttrace-io-fasttrace-endpoint.win.",
-		IPv6:    "ipv6.hfe-4538.nexttrace-io-fasttrace-endpoint.win.",
+		IP:      "ipv4.hfe-4538.endpoint.nxtrace.org.",
+		IPv6:    "ipv6.hfe-4538.endpoint.nxtrace.org.",
 	},
 	// 中国科学技术大学 科技网
 	CST: ISPCollection{
 		ISPName: "中国科学技术大学 科技网 AS7497",
-		IP:      "ipv4.hfe-7497.nexttrace-io-fasttrace-endpoint.win.",
+		IP:      "ipv4.hfe-7497.endpoint.nxtrace.org.",
 	},
 }

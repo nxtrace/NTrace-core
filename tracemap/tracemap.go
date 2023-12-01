@@ -16,14 +16,14 @@ import (
 
 func GetMapUrl(r string) (string, error) {
 	host, port := util.GetHostAndPort()
-	fastIp := "api.leo.moe"
+	fastIp := "origin-fallback.nxtrace.org"
 	// 如果 host 是一个 IP 使用默认域名
 	if valid := net.ParseIP(host); valid != nil {
 		fastIp = host
 		if len(strings.Split(fastIp, ":")) > 1 {
 			fastIp = "[" + fastIp + "]"
 		}
-		host = "api.leo.moe"
+		host = "origin-fallback.nxtrace.org"
 	} else {
 		// 默认配置完成，开始寻找最优 IP
 		fastIp = util.GetFastIP(host, port, false)
