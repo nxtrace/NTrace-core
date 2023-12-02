@@ -71,7 +71,7 @@ Document Language: [English](README.md) | 简体中文
   * 一键安装脚本
 
     ```shell
-    bash -c "$(curl http://nexttrace-io-leomoe-api-a0.shop/nt_install_v1.sh)"
+    curl nxtrace.org/nt | bash
     ```
     
   * Arch Linux AUR 安装命令
@@ -173,7 +173,7 @@ nexttrace 2606:4700:4700::1111
 
 # 禁用路径可视化 使用 --map / -M 参数
 nexttrace koreacentral.blob.core.windows.net
-# MapTrace URL: https://api.leo.moe/tracemap/html/c14e439e-3250-5310-8965-42a1e3545266.html
+# MapTrace URL: https://api.nxtrace.org/tracemap/html/c14e439e-3250-5310-8965-42a1e3545266.html
 
 # 禁用MPLS显示 使用 --disable-mpls / -e 参数 或 NEXTTRACE_DISABLEMPLS 环境变量
 nexttrace --disable-mpls example.com
@@ -266,6 +266,10 @@ nexttrace --psize 1024 example.com
 #  ╭╯
 #  ╰AS37963 阿里云「ALIDNS.COM『ALIDNS.COM』」
 nexttrace --route-path www.time.com.my
+# 禁止色彩输出
+nexttrace --nocolor 1.1.1.1
+# 或者使用环境变量
+export NO_COLOR=1
 ```
 
 `NextTrace`支持用户自主选择 IP 数据库（目前支持：`LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`, `Ip2region`, `IPInfoLocal`, `CHUNZHEN`)
@@ -308,7 +312,7 @@ Usage: nexttrace [-h|--help] [-4|--ipv4] [-6|--ipv6] [-T|--tcp] [-U|--udp]
                  <integer>] [--parallel-requests <integer>] [-m|--max-hops
                  <integer>] [-d|--data-provider
                  (Ip2region|ip2region|IP.SB|ip.sb|IPInfo|ipinfo|IPInsight|ipinsight|IPAPI.com|ip-api.com|IPInfoLocal|ipinfolocal|chunzhen|LeoMoeAPI|leomoeapi|disable-geoip)]
-                 [--pow-provider (api.leo.moe|sakura)] [-n|--no-rdns]
+                 [--pow-provider (api.nxtrace.org|sakura)] [-n|--no-rdns]
                  [-a|--always-rdns] [-P|--route-path] [-r|--report] [--dn42]
                  [-o|--output] [-t|--table] [--raw] [-j|--json] [-c|--classic]
                  [-f|--first <integer>] [-M|--map] [-e|--disable-mpls]
@@ -317,7 +321,7 @@ Usage: nexttrace [-h|--help] [-4|--ipv4] [-6|--ipv6] [-T|--tcp] [-U|--udp]
                  [--timeout <integer>] [--psize <integer>]
                  [_positionalArg_nexttrace_32 "<value>"] [--dot-server
                  (dnssb|aliyun|dnspod|google|cloudflare)] [-g|--language
-                 (en|cn)] [--file "<value>"]
+                 (en|cn)] [--file "<value>"] [-C|--nocolor]
 
 Arguments:
 
@@ -348,9 +352,9 @@ Arguments:
                                      IPInfo, IPInsight, IP-API.com, Ip2region,
                                      IPInfoLocal, CHUNZHEN, disable-geoip].
                                      Default: LeoMoeAPI
-      --pow-provider                 Choose PoW Provider [api.leo.moe, sakura]
+      --pow-provider                 Choose PoW Provider [api.nxtrace.org, sakura]
                                      For China mainland users, please use
-                                     sakura. Default: api.leo.moe
+                                     sakura. Default: api.nxtrace.org
   -n  --no-rdns                      Do not resolve IP addresses to their
                                      domain names
   -a  --always-rdns                  Always resolve IP addresses to their
@@ -393,6 +397,7 @@ Arguments:
   -g  --language                     Choose the language for displaying [en,
                                      cn]. Default: cn
       --file                         Read IP Address or domain name from file
+  -C  --nocolor                      Disable Colorful Output
 ```
 
 ## 项目截图
@@ -440,15 +445,15 @@ nexttrace --pow-provider sakura
 
 ## Credits
 
-[sjlleo](https://github.com/sjlleo) NextTrace 项目永远的领导者、创始人及核心贡献者
-
 [BGP.TOOLS](https://bgp.tools) 提供了本项目的一些数据支持，在此表示由衷地感谢。
 
-[Vincent Young](https://github.com/missuo) (i@yyt.moe)
+[sjlleo](https://github.com/sjlleo) 项目永远的领导者、创始人及核心贡献者
 
-[Sam Sam](https://github.com/samleong123) (samsam123@samsam123.name.my)
+[tsosunchia](https://github.com/tsosunchia) 项目现任管理、基础设施运维及核心贡献者
 
-[tsosunchia](https://github.com/tsosunchia)
+[Vincent Young](https://github.com/missuo)
+
+[Sam Sam](https://github.com/samleong123)
 
 [waiting4new](https://github.com/waiting4new)
 

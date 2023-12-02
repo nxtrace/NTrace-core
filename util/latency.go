@@ -28,13 +28,20 @@ var FastIpCache = ""
 func GetFastIP(domain string, port string, enableOutput bool) string {
 	proxyUrl := GetProxy()
 	if proxyUrl != nil {
-		return "api.leo.moe"
+		return "origin-fallback.nxtrace.org"
 	}
 	if FastIpCache != "" {
 		return FastIpCache
 	}
 
-	ips, err := net.LookupIP(domain)
+	var ips []net.IP
+	var err error
+	if domain == "origin-fallback.nxtrace.org" {
+		ips, err = net.LookupIP("api.nxtrace.org")
+	} else {
+		ips, err = net.LookupIP(domain)
+	}
+
 	if err != nil {
 		log.Fatal("DNS resolution failed, please check your system DNS Settings")
 	}
