@@ -18,7 +18,7 @@
   <a href="https://goreportcard.com/report/github.com/nxtrace/Ntrace-V1">
     <img src="https://goreportcard.com/badge/github.com/nxtrace/Ntrace-V1?style=flat-square">
   </a>
-  <a href="https://github.com/nxtrace/Ntrace-V1/releases">
+  <a href="https://www.nxtrace.org/downloads">
     <img src="https://img.shields.io/github/release/nxtrace/Ntrace-V1/all.svg?style=flat-square">
   </a>
   <a href="https://telegram.dog/sjprojects">
@@ -121,7 +121,7 @@ Document Language: [English](README.md) | 简体中文
 ### Manual Install
 * 下载预编译的可执行程序
     
-    对于以上方法没有涵盖的用户，请直接前往 [Release](https://github.com/nxtrace/Ntrace-V1/releases/latest) 下载编译后的二进制可执行文件。
+    对于以上方法没有涵盖的用户，请直接前往 [Release](https://www.nxtrace.org/downloads) 下载编译后的二进制可执行文件。
 
     * `Release`里面为很多系统以及不同架构提供了编译好的二进制可执行文件，如果没有可以自行编译。
     * 一些本项目的必要依赖在`Windows`上`Golang`底层实现不完全，所以目前`NextTrace`在`Windows`平台出于实验性支持阶段。

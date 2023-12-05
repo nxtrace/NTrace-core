@@ -17,7 +17,7 @@
   <a href="https://goreportcard.com/report/github.com/nxtrace/Ntrace-V1">
     <img src="https://goreportcard.com/badge/github.com/nxtrace/Ntrace-V1?style=flat-square">
   </a>
-  <a href="https://github.com/nxtrace/Ntrace-V1/releases">
+  <a href="https://www.nxtrace.org/downloads">
     <img src="https://img.shields.io/github/release/nxtrace/Ntrace-V1/all.svg?style=flat-square">
   </a>
   <a href="https://telegram.dog/sjprojects">
@@ -110,7 +110,7 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
 ### Manual Install
 * Download the precompiled executable
 
-    For users not covered by the above methods, please go directly to [Release](https://github.com/nxtrace/Ntrace-V1/releases/latest) to download the compiled binary executable.
+    For users not covered by the above methods, please go directly to [Release](https://www.nxtrace.org/downloads) to download the compiled binary executable.
 
     * `Release` provides compiled binary executables for many systems and different architectures. If none are available, you can compile it yourself.
     * Some essential dependencies of this project are not fully implemented on `Windows` by `Golang`, so currently, `NextTrace` is in an experimental support phase on the `Windows` platform.
