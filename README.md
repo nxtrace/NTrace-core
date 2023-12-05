@@ -10,6 +10,10 @@
 
 <h4 align="center">An open source visual routing tool that pursues light weight, developed using Golang.</h4>
 
+---------------------------------------
+
+<h6 align="center">HomePage: www.nxtrace.org</h6>
+
 <p align="center">
   <a href="https://github.com/nxtrace/Ntrace-V1/actions">
     <img src="https://img.shields.io/github/actions/workflow/status/nxtrace/Ntrace-V1/build.yml?branch=main&style=flat-square" alt="Github Actions">
@@ -17,7 +21,7 @@
   <a href="https://goreportcard.com/report/github.com/nxtrace/Ntrace-V1">
     <img src="https://goreportcard.com/badge/github.com/nxtrace/Ntrace-V1?style=flat-square">
   </a>
-  <a href="https://github.com/nxtrace/Ntrace-V1/releases">
+  <a href="https://www.nxtrace.org/downloads">
     <img src="https://img.shields.io/github/release/nxtrace/Ntrace-V1/all.svg?style=flat-square">
   </a>
   <a href="https://telegram.dog/sjprojects">
@@ -36,16 +40,12 @@
         <img src="https://www.jsdelivr.com/assets/8997e39e1f9d776502ab4d7cdff9d1608aa67aaf/img/globalping/sponsors/misaka.svg" width="170.7" height="62.9">
     </a>
     &nbsp;&nbsp;&nbsp;&nbsp;
-    <a href="https://skywolf.cloud" >
-        <img src="https://hk.skywolf.cloud/assets/img/skywolf.svg" width="170.7" height="62.9">
-    </a>
-    &nbsp;&nbsp;&nbsp;&nbsp;
     <a href="https://portal.saltyfish.io" >
         <img src="https://snapstack-static.vnc.xyz/static/logo.svg" width="170.7" height="62.9">
     </a>
 </div>
 
-We are extremely grateful to [DMIT](https://dmit.io), [Misaka](https://misaka.io), [Skywolf](https://skywolf.cloud) and [SnapStack](https://portal.saltyfish.io) for providing the network infrastructure that powers this project.
+We are extremely grateful to [DMIT](https://dmit.io), [Misaka](https://misaka.io) and [SnapStack](https://portal.saltyfish.io) for providing the network infrastructure that powers this project.
 
 ## How To Use
 
@@ -114,7 +114,7 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
 ### Manual Install
 * Download the precompiled executable
 
-    For users not covered by the above methods, please go directly to [Release](https://github.com/nxtrace/Ntrace-V1/releases/latest) to download the compiled binary executable.
+    For users not covered by the above methods, please go directly to [Release](https://www.nxtrace.org/downloads) to download the compiled binary executable.
 
     * `Release` provides compiled binary executables for many systems and different architectures. If none are available, you can compile it yourself.
     * Some essential dependencies of this project are not fully implemented on `Windows` by `Golang`, so currently, `NextTrace` is in an experimental support phase on the `Windows` platform.

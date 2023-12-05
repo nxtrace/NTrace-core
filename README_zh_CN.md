@@ -11,6 +11,10 @@
 
 <h4 align="center">一款追求轻量化的开源可视化路由跟踪工具。</h4>
 
+---------------------------------------
+
+<h6 align="center">主页：www.nxtrace.org</h6>
+
 <p align="center">
   <a href="https://github.com/nxtrace/Ntrace-V1/actions">
     <img src="https://img.shields.io/github/actions/workflow/status/nxtrace/Ntrace-V1/build.yml?branch=main&style=flat-square" alt="Github Actions">
@@ -18,7 +22,7 @@
   <a href="https://goreportcard.com/report/github.com/nxtrace/Ntrace-V1">
     <img src="https://goreportcard.com/badge/github.com/nxtrace/Ntrace-V1?style=flat-square">
   </a>
-  <a href="https://github.com/nxtrace/Ntrace-V1/releases">
+  <a href="https://www.nxtrace.org/downloads">
     <img src="https://img.shields.io/github/release/nxtrace/Ntrace-V1/all.svg?style=flat-square">
   </a>
   <a href="https://telegram.dog/sjprojects">
@@ -37,10 +41,6 @@
         <img src="https://www.jsdelivr.com/assets/8997e39e1f9d776502ab4d7cdff9d1608aa67aaf/img/globalping/sponsors/misaka.svg" width="170.7" height="62.9">
     </a>
     &nbsp;&nbsp;&nbsp;&nbsp;
-    <a href="https://skywolf.cloud" >
-        <img src="https://hk.skywolf.cloud/assets/img/skywolf.svg" width="170.7" height="62.9">
-    </a>
-    &nbsp;&nbsp;&nbsp;&nbsp;
     <a href="https://portal.saltyfish.io" >
         <img src="https://snapstack-static.vnc.xyz/static/logo.svg" width="170.7" height="62.9">
     </a>
@@ -48,7 +48,7 @@
 
 
 
-我们非常感谢 [DMIT](https://dmit.io)、 [Misaka](https://misaka.io)、 [Skywolf](https://skywolf.cloud) 和 [SnapStack](https://portal.saltyfish.io) 提供了支持本项目所需的网络基础设施。
+我们非常感谢 [DMIT](https://dmit.io)、 [Misaka](https://misaka.io) 和 [SnapStack](https://portal.saltyfish.io) 提供了支持本项目所需的网络基础设施。
 
 ## How To Use
 
@@ -125,7 +125,7 @@ Document Language: [English](README.md) | 简体中文
 ### Manual Install
 * 下载预编译的可执行程序
     
-    对于以上方法没有涵盖的用户，请直接前往 [Release](https://github.com/nxtrace/Ntrace-V1/releases/latest) 下载编译后的二进制可执行文件。
+    对于以上方法没有涵盖的用户，请直接前往 [Release](https://www.nxtrace.org/downloads) 下载编译后的二进制可执行文件。
 
     * `Release`里面为很多系统以及不同架构提供了编译好的二进制可执行文件，如果没有可以自行编译。
     * 一些本项目的必要依赖在`Windows`上`Golang`底层实现不完全，所以目前`NextTrace`在`Windows`平台出于实验性支持阶段。
