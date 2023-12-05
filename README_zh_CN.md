@@ -13,7 +13,7 @@
 
 ---------------------------------------
 
-<h6 align="center">主页：www.nxtrace.org</h6>
+<h6 align="center">主页：[www.nxtrace.org](https://www.nxtrace.org)</h6>
 
 <p align="center">
   <a href="https://github.com/nxtrace/Ntrace-V1/actions">
