@@ -445,7 +445,11 @@ nexttrace --pow-provider sakura
 
 ## Credits
 
-[BGP.TOOLS](https://bgp.tools) 提供了本项目的一些数据支持，在此表示由衷地感谢。
+[IPInfo](https://ipinfo.io) 无偿提供了本项目大部分数据支持
+
+[BGP.TOOLS](https://bgp.tools) 无偿提供了本项目的一些数据支持
+
+[PeeringDB](https://www.peeringdb.com) 无偿提供了本项目的一些数据支持
 
 [sjlleo](https://github.com/sjlleo) 项目永远的领导者、创始人及核心贡献者
 
@@ -453,11 +457,17 @@ nexttrace --pow-provider sakura
 
 [Vincent Young](https://github.com/missuo)
 
+[zhshch2002](https://github.com/zhshch2002)
+
 [Sam Sam](https://github.com/samleong123)
 
 [waiting4new](https://github.com/waiting4new)
 
 [FFEE_CO](https://github.com/fkx4-p)
+
+[bobo liu](https://github.com/fakeboboliu)
+
+[YekongTAT](https://github.com/isyekong)
 
 ## Others
 
@@ -470,11 +480,11 @@ nexttrace --pow-provider sakura
 
 对于IP相关信息的纠错反馈，我们目前开放了两个渠道：
 >- 本项目的GITHUB ISSUES区中的[IP 错误报告汇总帖](https://github.com/nxtrace/NTrace-core/issues/41)
->- 本项目的纠错专用邮箱: `correction@moeqing.com` （请注意此邮箱仅供IP相关信息纠错专用，其他反馈请发送ISSUE）
+>- 本项目的纠错专用邮箱: `correction@nxtrace.org` （请注意此邮箱仅供IP相关信息纠错专用，其他反馈请发送ISSUE）
 
 NextTrace 有多个数据源可以选择，目前默认使用的 LeoMoeAPI 为我们项目维护的数据源。
 
-该项目由 OwO Network 的 [Missuo](https://github.com/missuo) && [Leo](https://github.com/sjlleo) 发起，由 [Zhshch](https://github.com/zhshch2002/) 完成最早期架构的编写和指导，后由 Leo 完成了大部分开发工作，现主要交由 [tsosunchia](https://github.com/tsosunchia) 以及 MoeQing Network 完成后续的二开和维护工作。
+该项目由 OwO Network 的 [Missuo](https://github.com/missuo) && [Leo](https://github.com/sjlleo) 发起，由 [Zhshch](https://github.com/zhshch2002/) 完成最早期架构的编写和指导，后由 Leo 完成了大部分开发工作，现主要交由 [tsosunchia](https://github.com/tsosunchia) 完成后续的二开和维护工作。
 
 LeoMoeAPI 是 [Leo](https://github.com/sjlleo) 的作品，归属于 Leo Network，由 [Leo](https://github.com/sjlleo) 完成整套后端 API 编写，该接口未经允许不可用于任何第三方用途。
 
@@ -527,8 +537,6 @@ LAX,US,California,Los Anegles
 ```
 
 需要注意的是，NextTrace 支持自动匹配 CSV 中的城市名，如果您的 PTR 记录中有 `losangeles`，您可以只添加上面一条记录就可以正常识别并读取。
-
-rkflow in GitHub Actions.
 
 ## Star History
 

@@ -421,7 +421,7 @@ This software is still in the early stages of development and may have many flaw
 
 [https://github.com/nxtrace/nexttracewebapi](https://github.com/nxtrace/nexttracewebapi)
 
-## LeoMoeAPI Credit
+## LeoMoeAPI Credits
 
 NextTrace focuses on Golang Traceroute implementations, and its LeoMoeAPI geolocation information is not supported by raw data, so a commercial version is not possible.
 
@@ -433,7 +433,7 @@ The LeoMoeAPI data is subject to copyright restrictions from multiple data sourc
 
 3. In terms of development, I would like to credit missuo and zhshch for their help with Go cross-compilation, design concepts and TCP/UDP Traceroute refactoring, and tsosunchia for their support on TraceMap.
 
-4. I would also like to credit FFEE_CO, TheresaQWQ, stydxm and others for their help. leoMoeAPI has received a lot of support since its first release, so I would like to credit them all!
+4. I would also like to credit FFEE_CO, TheresaQWQ, stydxm and others for their help. LeoMoeAPI has received a lot of support since its first release, so I would like to credit them all!
 
 We hope you can give us as much feedback as possible on IP geolocation errors (see issue) so that it can be calibrated in the first place and others can benefit from it.
 
@@ -446,7 +446,11 @@ We hope you can give us as much feedback as possible on IP geolocation errors (s
 
 ## Credits
 
-[BGP.TOOLS](https://bgp.tools) provided some data support for this project. And we would like to express our sincere gratitude.
+[IPInfo](https://ipinfo.io) Provided most of the data support for this project free of charge
+
+[BGP.TOOLS](https://bgp.tools) Provided some data support for this project free of charge
+
+[PeeringDB](https://www.peeringdb.com) Provided some data support for this project free of charge
 
 [sjlleo](https://github.com/sjlleo) The perpetual leader, founder, and core contributors
 
@@ -454,11 +458,17 @@ We hope you can give us as much feedback as possible on IP geolocation errors (s
 
 [Vincent Young](https://github.com/missuo)
 
+[zhshch2002](https://github.com/zhshch2002)
+
 [Sam Sam](https://github.com/samleong123)
 
 [waiting4new](https://github.com/waiting4new)
 
 [FFEE_CO](https://github.com/fkx4-p)
+
+[bobo liu](https://github.com/fakeboboliu)
+
+[YekongTAT](https://github.com/isyekong)
 
 ### Others
 
@@ -466,7 +476,7 @@ Although other third-party APIs are integrated in this project, please refer to 
 
 For feedback related to corrections about IP information, we currently have two channels available:
 >- [IP 错误报告汇总帖](https://github.com/nxtrace/NTrace-core/issues/41) in the GITHUB ISSUES section of this project (Recommended)
->- This project's dedicated correction email: `correction@moeqing.com` (Please note that this email is only for correcting IP-related information. For other feedback, please submit an ISSUE)
+>- This project's dedicated correction email: `correction@nxtrace.org` (Please note that this email is only for correcting IP-related information. For other feedback, please submit an ISSUE)
 
 How to obtain the freshly baked binary executable of the latest commit?
 > Please go to the most recent [Build & Release](https://github.com/nxtrace/Ntrace-V1/actions/workflows/build.yml) workflow in GitHub Actions.
