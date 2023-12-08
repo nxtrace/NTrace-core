@@ -191,7 +191,6 @@ func Excute() {
 	//
 	//go func() {
 	//	defer wg.Done()
-	err = nil
 	if *udp {
 		if *ipv6Only {
 			fmt.Println("[Info] IPv6 UDP Traceroute is not supported right now.")

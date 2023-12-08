@@ -208,7 +208,7 @@ func GetProxy() *url.URL {
 }
 
 func GetPowProvider() string {
-	var powProvider = ""
+	var powProvider string
 	if PowProviderParam == "" {
 		powProvider = GetenvDefault("NEXTTRACE_POWPROVIDER", "api.nxtrace.org")
 	} else {
