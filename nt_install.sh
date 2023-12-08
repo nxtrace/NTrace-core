@@ -26,6 +26,8 @@ checkSystemArch() {
     archParam="amd64"
     elif [[ $arch == "i386" ]]; then
     archParam="386"
+    elif [[ $arch == "i686" ]]; then
+    archParam="386"
     elif [[ $arch == "aarch64" ]]; then
     archParam="arm64"
     elif [[ $arch == "armv7l" ]] || [[ $arch == "armv7ml" ]]; then
@@ -37,13 +39,13 @@ checkSystemArch() {
 
 checkSystemDistribution() {
     case "$OSTYPE" in
-    linux*)   
+    linux*)
     osDistribution="linux"
-    
-    if [ ! -d "/usr/local" ]; 
-    then 
+
+    if [ ! -d "/usr/local" ];
+    then
     downPath="/usr/bin/nexttrace"
-    else 
+    else
     downPath="/usr/local/bin/nexttrace"
     fi
 
