@@ -133,7 +133,7 @@ jobs:
           echo "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_ENV
           echo "COMMIT_SHA1=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: '1.21'
       - name: Get project dependencies
