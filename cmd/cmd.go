@@ -80,18 +80,20 @@ func Excute() {
 		fmt.Print(parser.Usage(err))
 		return
 	}
-	if !*jsonPrint {
-		printer.Version()
-	}
-	if *ver {
-		printer.CopyRight()
-		os.Exit(0)
-	}
 
 	if *nocolor {
 		color.NoColor = true
 	} else {
 		color.NoColor = false
+	}
+
+	if !*jsonPrint {
+		printer.Version()
+	}
+
+	if *ver {
+		printer.CopyRight()
+		os.Exit(0)
 	}
 
 	domain := *str
