@@ -80,18 +80,20 @@ func Excute() {
 		fmt.Print(parser.Usage(err))
 		return
 	}
-	if !*jsonPrint {
-		printer.Version()
-	}
-	if *ver {
-		printer.CopyRight()
-		os.Exit(0)
-	}
 
 	if *nocolor {
 		color.NoColor = true
 	} else {
 		color.NoColor = false
+	}
+
+	if !*jsonPrint {
+		printer.Version()
+	}
+
+	if *ver {
+		printer.CopyRight()
+		os.Exit(0)
 	}
 
 	domain := *str
@@ -191,7 +193,6 @@ func Excute() {
 	//
 	//go func() {
 	//	defer wg.Done()
-	err = nil
 	if *udp {
 		if *ipv6Only {
 			fmt.Println("[Info] IPv6 UDP Traceroute is not supported right now.")

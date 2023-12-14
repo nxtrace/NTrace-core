@@ -1,5 +1,12 @@
 #!/bin/bash
 
+if [ "$1" = "http" ]; then
+    protocol="http"
+else
+    protocol="https"
+fi
+
+
 Green_font="\033[32m"
 Yellow_font="\033[33m"
 Red_font="\033[31m"
@@ -19,6 +26,8 @@ checkSystemArch() {
     archParam="amd64"
     elif [[ $arch == "i386" ]]; then
     archParam="386"
+    elif [[ $arch == "i686" ]]; then
+    archParam="386"
     elif [[ $arch == "aarch64" ]]; then
     archParam="arm64"
     elif [[ $arch == "armv7l" ]] || [[ $arch == "armv7ml" ]]; then
@@ -30,13 +39,13 @@ checkSystemArch() {
 
 checkSystemDistribution() {
     case "$OSTYPE" in
-    linux*)   
+    linux*)
     osDistribution="linux"
-    
-    if [ ! -d "/usr/local" ]; 
-    then 
+
+    if [ ! -d "/usr/local" ];
+    then
     downPath="/usr/bin/nexttrace"
-    else 
+    else
     downPath="/usr/local/bin/nexttrace"
     fi
 
@@ -48,63 +57,46 @@ checkSystemDistribution() {
     esac
 }
 
-getLocation() {
-    countryCode=$(curl -s "http://ip-api.com/line/?fields=countryCode")
-}
-
-installWgetPackage() {
-    echo -e "${Info} wget 正在安装中..."
-    # try apt
-    apt -h &> /dev/null
-    if [ $? -eq 0 ]; then
-    # 先更新一下数据源，有些机器数据源比较老可能会404
-    apt update -y &> /dev/null
-    apt install wget -y &> /dev/null
-    fi
-
-    # try yum
-    yum -h &> /dev/null
-    if [ $? -eq 0 ]; then
-    yum install wget -y &> /dev/null
-    fi
-
-    # try dnf
-    dnf -h &> /dev/null
-    if [ $? -eq 0 ]; then
-    dnf install wget -y &> /dev/null
-    fi
-
-    # try pacman
-    pacman -h &> /dev/null
-    if [ $? -eq 0 ]; then
-    pacman -Sy
-    pacman -S wget
-    fi
-
-}
-
-checkWgetPackage() {
-    wget -h &> /dev/null
-    if [ $? -ne 0 ]; then
-		installWgetPackage
-    fi
-}
-
 downloadBinrayFile() {
     echo -e "${Info} 获取最新版的 NextTrace 发行版文件信息"
-    # 简单说明一下，Github提供了一个API，可以获取最新发行版本的二进制文件下载地址（对应的是browser_download_url），根据刚刚测得的osDistribution、archParam，获取对应的下载地址
-    latestURL=$(curl -sL http://nexttrace-io-leomoe-api-a0.shop/latest_v1.json | grep -i "browser_download_url.*${osDistribution}.*${archParam}" | awk -F '"' '{print $4}')
-    
-    echo -e "${Info} 正在下载 NextTrace 二进制文件..."
-    wget -O ${Temp_path} ${latestURL} &> /dev/null
-    if [ $? -eq 0 ];
-    then
-    changeMode
-    mv ${Temp_path} ${downPath}
-    echo -e "${Info} NextTrace 现在已经在您的系统中可用"
+    for i in {1..3}; do
+        downloadUrls=$(curl -sL ${protocol}://www.nxtrace.org/api/dist/core/nexttrace_${osDistribution}_${archParam} --connect-timeout 1.5)
+        if [ $? -eq 0 ]; then
+            break
+        fi
+    done
+    if [ $? -eq 0 ]; then
+        primaryUrl=$(echo ${downloadUrls} | awk -F '|' '{print $1}')
+        backupUrl=$(echo ${downloadUrls} | awk -F '|' '{print $2}')
+        echo -e "${Info} 正在尝试从 Primary 节点下载 NextTrace"
+        for i in {1..3}; do
+            curl -sL ${primaryUrl} -o ${Temp_path} --connect-timeout 1.5
+            if [ $? -eq 0 ]; then
+                changeMode
+                mv ${Temp_path} ${downPath}
+                echo -e "${Info} NextTrace 现在已经在您的系统中可用"
+                return
+            fi
+        done
+        if [ -z ${backupUrl} ]; then
+            echo -e "${Error} 从 Primary 节点下载失败，且 Backup 节点为空，无法下载 NextTrace"
+            exit 1
+        fi
+        echo -e "${Error} 从 Primary 节点下载失败，正在尝试从 Backup 节点下载 NextTrace"
+        for i in {1..3}; do
+            curl -sL ${backupUrl} -o ${Temp_path} --connect-timeout 1.5
+            if [ $? -eq 0 ]; then
+                changeMode
+                mv ${Temp_path} ${downPath}
+                echo -e "${Info} NextTrace 现在已经在您的系统中可用"
+                return
+            fi
+        done
+        echo -e "${Error} NextTrace 下载失败，请检查您的网络是否正常"
+        exit 1
     else
-    echo -e "${Error} NextTrace 下载失败，请检查您的网络是否正常"
-    exit 1
+        echo -e "${Error} 获取下载地址失败，请检查您的网络是否正常"
+        exit 1
     fi
 }
 
@@ -123,9 +115,10 @@ runBinrayFileHelp() {
 checkRootPermit
 checkSystemDistribution
 checkSystemArch
-checkWgetPackage
 
+# Download Procedure
 downloadBinrayFile
 
 # Run Procedure
 runBinrayFileHelp
+

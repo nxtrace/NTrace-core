@@ -205,7 +205,7 @@ func (h *Hop) fetchIPData(c Config) (err error) {
 	if !c.AlwaysWaitRDNS {
 		select {
 		case <-fetchDoneChan:
-			// When fetch done signal recieved, stop waiting PTR record
+			// When fetch done signal received, stop waiting PTR record
 		case ptr := <-rDNSChan:
 			// process result
 			if err == nil && len(ptr) > 0 {

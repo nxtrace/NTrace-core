@@ -34,15 +34,15 @@
 
 <div style="text-align: center;">
     <a href="https://dmit.io">
-        <img src="https://www.dmit.io/templates/dmit_theme_2020/dmit/assets/images/dmit_logo_with_text_blue.svg" width="170.7" height="62.9">
+        <img src="https://assets.nxtrace.org/dmit.svg" width="170.7" height="62.9">
     </a>
     &nbsp;&nbsp;&nbsp;&nbsp;
     <a href="https://misaka.io" >
-        <img src="https://www.jsdelivr.com/assets/8997e39e1f9d776502ab4d7cdff9d1608aa67aaf/img/globalping/sponsors/misaka.svg" width="170.7" height="62.9">
+        <img src="https://assets.nxtrace.org/misaka.svg" width="170.7" height="62.9">
     </a>
     &nbsp;&nbsp;&nbsp;&nbsp;
     <a href="https://portal.saltyfish.io" >
-        <img src="https://snapstack-static.vnc.xyz/static/logo.svg" width="170.7" height="62.9">
+        <img src="https://assets.nxtrace.org/snapstack.svg" width="170.7" height="62.9">
     </a>
 </div>
 

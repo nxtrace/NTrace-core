@@ -340,18 +340,15 @@ func testFile(paramsFastTrace ParamsFastTrace, tm bool) {
 			if err != nil {
 				return
 			}
-			defer func(fp *os.File) {
-				err := fp.Close()
-				if err != nil {
-					log.Fatal(err)
-				}
-			}(fp)
-
 			log.SetOutput(fp)
 			log.SetFlags(0)
 			log.Printf("『%s』\n", ip.Desc)
 			log.Printf("traceroute to %s, %d hops max, %d byte packets\n", ip.Ip, paramsFastTrace.MaxHops, paramsFastTrace.PktSize)
 			conf.RealtimePrinter = tracelog.RealtimePrinter
+			err = fp.Close()
+			if err != nil {
+				log.Fatal(err)
+			}
 		} else {
 			conf.RealtimePrinter = printer.RealtimePrinter
 		}
