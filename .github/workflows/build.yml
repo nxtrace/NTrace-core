@@ -146,7 +146,7 @@ jobs:
                       -X 'github.com/nxtrace/NTrace-core/config.CommitID=${COMMIT_SHA1}'\
                       -w -s"
       - name: Upload files to Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ env.ASSET_NAME }}
           path: |
