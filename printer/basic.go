@@ -59,11 +59,10 @@ func sponsor() {
 	italic := "\x1b[3m%s\x1b[0m"
 	formatted := fmt.Sprintf(italic, "(Listed in no particular order)")
 
-	fmt.Fprintf(color.Output, "%s\n%s\n%s\n%s\n%s\n%s\n",
+	fmt.Fprintf(color.Output, "%s\n%s\n%s\n%s\n%s\n",
 		color.New(color.FgCyan, color.Bold).Sprintf("%s", "NextTrace Sponsored by"),
 		color.New(color.FgHiYellow, color.Bold).Sprintf("%s", "· DMIT.io"),
 		color.New(color.FgHiYellow, color.Bold).Sprintf("%s", "· Misaka.io"),
-		color.New(color.FgHiYellow, color.Bold).Sprintf("%s", "· Skywolf.cloud"),
 		color.New(color.FgHiYellow, color.Bold).Sprintf("%s", "· Saltyfish.io"),
 		color.New(color.FgHiBlack, color.Bold).Sprintf("%s", formatted),
 	)
