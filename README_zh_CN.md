@@ -479,7 +479,7 @@ nexttrace --pow-provider sakura
 ## IP 数据以及精准度说明
 
 对于IP相关信息的纠错反馈，我们目前开放了两个渠道：
->- 本项目的GITHUB ISSUES区中的[IP 错误报告汇总帖](https://github.com/nxtrace/NTrace-core/issues/41)
+>- 本项目的GITHUB ISSUES区中的[IP 错误报告汇总帖](https://github.com/orgs/nxtrace/discussions/222)
 >- 本项目的纠错专用邮箱: `correction@nxtrace.org` （请注意此邮箱仅供IP相关信息纠错专用，其他反馈请发送ISSUE）
 
 NextTrace 有多个数据源可以选择，目前默认使用的 LeoMoeAPI 为我们项目维护的数据源。
