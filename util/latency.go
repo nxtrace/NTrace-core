@@ -75,6 +75,12 @@ func GetFastIP(domain string, port string, enableOutput bool) string {
 		)
 	}
 	//}
+
+	//有些时候真的啥都不通，还是挑一个顶上吧
+	if result.IP == "" {
+		result.IP = "45.88.195.154"
+	}
+
 	FastIpCache = result.IP
 	return result.IP
 }

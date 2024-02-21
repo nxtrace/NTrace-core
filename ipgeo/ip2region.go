@@ -14,7 +14,7 @@ import (
 const (
 	ipDataBasePath = "./ip2region.db"
 	defaultDownURL = "1"
-	originURL      = "https://ghproxy.com/?q=https://github.com/bqf9979/ip2region/blob/master/data/ip2region.db?raw=true"
+	originURL      = "https://mirror.ghproxy.com/?q=https://github.com/bqf9979/ip2region/blob/master/data/ip2region.db?raw=true"
 )
 
 func downloadDataBase() error {
