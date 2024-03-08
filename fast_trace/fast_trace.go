@@ -45,10 +45,7 @@ type IpListElement struct {
 var oe = false
 
 func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
-	//fmt.Printf("%s『%s %s 』%s\n", printer.YELLOW_PREFIX, location, ispCollection.ISPName, printer.RESET_PREFIX)
-	fmt.Fprintf(color.Output, "%s\n",
-		color.New(color.FgYellow, color.Bold).Sprint("『 "+location+ispCollection.ISPName+" 』"),
-	)
+	fmt.Fprintf(color.Output, "%s\n", color.New(color.FgYellow, color.Bold).Sprintf("『%s %s 』", location, ispCollection.ISPName))
 	fmt.Printf("traceroute to %s, %d hops max, %d byte packets\n", ispCollection.IP, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize)
 
 	ip, err := util.DomainLookUp(ispCollection.IP, "4", "", true)
