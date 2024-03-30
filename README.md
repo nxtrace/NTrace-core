@@ -24,9 +24,6 @@
   <a href="https://www.nxtrace.org/downloads">
     <img src="https://img.shields.io/github/release/nxtrace/Ntrace-V1/all.svg?style=flat-square">
   </a>
-  <a href="https://telegram.dog/sjprojects">
-    <img src="https://img.shields.io/endpoint?color=neon&style=flat-square&url=https%3A%2F%2Ftg.sumanjay.workers.dev%2Fnexttrace">
-  </a>
 </p>
 
 ## IAAS Sponsor
