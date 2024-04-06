@@ -150,8 +150,9 @@ func (t *ICMPTracer) listenICMP() {
 				}
 				continue
 			}
+			ttl := int(msg.Msg[36])
 			packet_id := strconv.FormatInt(int64(binary.BigEndian.Uint16(msg.Msg[32:34])), 2)
-			if process_id, ttl, err := reverseID(packet_id); err == nil {
+			if process_id, _, err := reverseID(packet_id); err == nil {
 				if process_id == int64(os.Getpid()&0x7f) {
 					dstip := net.IP(msg.Msg[24:28])
 					if dstip.Equal(t.DestIP) || dstip.Equal(net.IPv4zero) {
@@ -266,15 +267,20 @@ func (t *ICMPTracer) send(ttl int) error {
 		return nil
 	}
 
-	id := gernerateID(ttl)
+	//id := gernerateID(ttl)
+	id := gernerateID(0)
 	// log.Println("发送的", id)
+
+	data := []byte{byte(ttl)}
+	data = append(data, bytes.Repeat([]byte{1}, t.Config.PktSize-5)...)
+	data = append(data, 0x00, 0x00, 0x4f, 0xff)
 
 	icmpHeader := icmp.Message{
 		Type: ipv4.ICMPTypeEcho, Code: 0,
 		Body: &icmp.Echo{
 			ID: id,
 			//Data: []byte("HELLO-R-U-THERE"),
-			Data: append(bytes.Repeat([]byte{1}, t.Config.PktSize-4), 0x00, 0x00, 0x4f, 0xff),
+			Data: data,
 			Seq:  ttl,
 		},
 	}
