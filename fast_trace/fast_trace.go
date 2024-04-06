@@ -3,6 +3,7 @@ package fastTrace
 import (
 	"bufio"
 	"fmt"
+	"github.com/fatih/color"
 	"github.com/nxtrace/NTrace-core/ipgeo"
 	"github.com/nxtrace/NTrace-core/printer"
 	"github.com/nxtrace/NTrace-core/trace"
@@ -44,7 +45,7 @@ type IpListElement struct {
 var oe = false
 
 func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
-	fmt.Printf("%s『%s %s 』%s\n", printer.YELLOW_PREFIX, location, ispCollection.ISPName, printer.RESET_PREFIX)
+	fmt.Fprintf(color.Output, "%s\n", color.New(color.FgYellow, color.Bold).Sprintf("『%s %s 』", location, ispCollection.ISPName))
 	fmt.Printf("traceroute to %s, %d hops max, %d byte packets\n", ispCollection.IP, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize)
 
 	ip, err := util.DomainLookUp(ispCollection.IP, "4", "", true)
@@ -274,8 +275,14 @@ func testFile(paramsFastTrace ParamsFastTrace, tm bool) {
 	}
 
 	for _, ip := range ipList {
-		fmt.Printf("%s『%s』%s\n", printer.YELLOW_PREFIX, ip.Desc, printer.RESET_PREFIX)
-		fmt.Printf("traceroute to %s, %d hops max, %d byte packets\n", ip.Ip, paramsFastTrace.MaxHops, paramsFastTrace.PktSize)
+		fmt.Fprintf(color.Output, "%s\n",
+			color.New(color.FgYellow, color.Bold).Sprint("『 "+ip.Desc+"』"),
+		)
+		if util.EnableHidDstIP == "" {
+			fmt.Printf("traceroute to %s, %d hops max, %d bytes packets\n", ip.Ip, paramsFastTrace.MaxHops, paramsFastTrace.PktSize)
+		} else {
+			fmt.Printf("traceroute to %s, %d hops max, %d bytes packets\n", util.HideIPPart(ip.Ip), paramsFastTrace.MaxHops, paramsFastTrace.PktSize)
+		}
 		var srcAddr string
 		if ip.Version4 {
 			if paramsFastTrace.SrcDev != "" {
