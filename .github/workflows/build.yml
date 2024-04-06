@@ -153,7 +153,7 @@ jobs:
             dist/${{ env.ASSET_NAME }}
       - name: Release
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with: # 将下述可执行文件 release 上去
           draft: true # Release草稿
           files: |
