@@ -150,7 +150,7 @@ func (t *ICMPTracer) listenICMP() {
 				}
 				continue
 			}
-			ttl := int(msg.Msg[36])
+			ttl := int64(binary.BigEndian.Uint16(msg.Msg[34:36]))
 			packet_id := strconv.FormatInt(int64(binary.BigEndian.Uint16(msg.Msg[32:34])), 2)
 			if process_id, _, err := reverseID(packet_id); err == nil {
 				if process_id == int64(os.Getpid()&0x7f) {
@@ -271,7 +271,8 @@ func (t *ICMPTracer) send(ttl int) error {
 	id := gernerateID(0)
 	// log.Println("发送的", id)
 
-	data := []byte{byte(ttl)}
+	//data := []byte{byte(ttl)}
+	data := []byte{byte(0)}
 	data = append(data, bytes.Repeat([]byte{1}, t.Config.PktSize-5)...)
 	data = append(data, 0x00, 0x00, 0x4f, 0xff)
 
