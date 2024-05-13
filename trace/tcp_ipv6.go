@@ -233,7 +233,7 @@ func (t *TCPTracerv6) send(ttl int) error {
 		return err
 	}
 
-	err := ipv6.NewPacketConn(t.tcp).SetHopLimit(ttl)
+	err = ipv6.NewPacketConn(t.tcp).SetHopLimit(ttl)
 	if err != nil {
 		return err
 	}
