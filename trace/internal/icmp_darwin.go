@@ -39,7 +39,7 @@ func ListenICMP(network string, laddr string) (net.PacketConn, error) {
 				proto = syscall.IPPROTO_ICMPV6
 			}
 
-			var ifIndex int = -1
+			var ifIndex = -1
 			if laddr != "" {
 				la := net.ParseIP(laddr)
 				if ifaces, err := net.Interfaces(); err == nil {

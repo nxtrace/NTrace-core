@@ -172,9 +172,9 @@ func (t *ICMPTracerv6) listenICMP() {
 
 			}
 			ttl := int64(binary.BigEndian.Uint16(msg.Msg[54:56]))
-			packet_id := strconv.FormatInt(int64(binary.BigEndian.Uint16(msg.Msg[52:54])), 2)
-			if process_id, _, err := reverseID(packet_id); err == nil {
-				if process_id == int64(os.Getpid()&0x7f) {
+			packetId := strconv.FormatInt(int64(binary.BigEndian.Uint16(msg.Msg[52:54])), 2)
+			if processId, _, err := reverseID(packetId); err == nil {
+				if processId == int64(os.Getpid()&0x7f) {
 					dstip := net.IP(msg.Msg[32:48])
 					// 无效包本地环回包
 					if dstip.String() == "::" {

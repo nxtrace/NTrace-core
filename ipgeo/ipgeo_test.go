@@ -16,13 +16,13 @@ import (
 // )
 
 func TestXxx(t *testing.T) {
-	const ID_FIXED_HEADER = "10"
+	const IdFixedHeader = "10"
 	var processID = fmt.Sprintf("%07b", os.Getpid()&0x7f) //取进程ID的前7位
 	var ttl = fmt.Sprintf("%06b", 95)                     //取TTL的后6位
 	fmt.Println(os.Getpid()&0x7f, 95)
 
 	var parity int
-	id := ID_FIXED_HEADER + processID + ttl
+	id := IdFixedHeader + processID + ttl
 	for _, c := range id {
 		if c == '1' {
 			parity++
@@ -33,8 +33,8 @@ func TestXxx(t *testing.T) {
 	} else {
 		id += "0"
 	}
-	process_id, ttl_r, _ := reverseID(id)
-	log.Println(process_id, ttl_r)
+	processId, ttlR, _ := reverseID(id)
+	log.Println(processId, ttlR)
 }
 
 func TestFilter(t *testing.T) {

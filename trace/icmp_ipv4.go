@@ -151,9 +151,9 @@ func (t *ICMPTracer) listenICMP() {
 				continue
 			}
 			ttl := int64(binary.BigEndian.Uint16(msg.Msg[34:36]))
-			packet_id := strconv.FormatInt(int64(binary.BigEndian.Uint16(msg.Msg[32:34])), 2)
-			if process_id, _, err := reverseID(packet_id); err == nil {
-				if process_id == int64(os.Getpid()&0x7f) {
+			packetId := strconv.FormatInt(int64(binary.BigEndian.Uint16(msg.Msg[32:34])), 2)
+			if processId, _, err := reverseID(packetId); err == nil {
+				if processId == int64(os.Getpid()&0x7f) {
 					dstip := net.IP(msg.Msg[24:28])
 					if dstip.Equal(t.DestIP) || dstip.Equal(net.IPv4zero) {
 						// 匹配再继续解析包，否则直接丢弃
@@ -202,13 +202,13 @@ func (t *ICMPTracer) handleICMPMessage(msg ReceivedMessage, icmpType int8, data 
 	}
 }
 
-func gernerateID(ttl_int int) int {
-	const ID_FIXED_HEADER = "10"
+func gernerateID(ttlInt int) int {
+	const IdFixedHeader = "10"
 	var processID = fmt.Sprintf("%07b", os.Getpid()&0x7f) //取进程ID的前7位
-	var ttl = fmt.Sprintf("%06b", ttl_int)                //取TTL的后6位
+	var ttl = fmt.Sprintf("%06b", ttlInt)                 //取TTL的后6位
 
 	var parity int
-	id := ID_FIXED_HEADER + processID + ttl
+	id := IdFixedHeader + processID + ttl
 	for _, c := range id {
 		if c == '1' {
 			parity++
