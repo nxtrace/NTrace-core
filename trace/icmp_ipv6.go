@@ -172,9 +172,9 @@ func (t *ICMPTracerv6) listenICMP() {
 
 			}
 			ttl := int64(binary.BigEndian.Uint16(msg.Msg[54:56]))
-			packet_id := strconv.FormatInt(int64(binary.BigEndian.Uint16(msg.Msg[52:54])), 2)
-			if process_id, _, err := reverseID(packet_id); err == nil {
-				if process_id == int64(os.Getpid()&0x7f) {
+			packetId := strconv.FormatInt(int64(binary.BigEndian.Uint16(msg.Msg[52:54])), 2)
+			if processId, _, err := reverseID(packetId); err == nil {
+				if processId == int64(os.Getpid()&0x7f) {
 					dstip := net.IP(msg.Msg[32:48])
 					// 无效包本地环回包
 					if dstip.String() == "::" {
@@ -282,7 +282,10 @@ func (t *ICMPTracerv6) send(ttl int) error {
 	p := ipv6.NewPacketConn(t.icmpListen)
 
 	icmpHeader.Body.(*icmp.Echo).Seq = ttl
-	p.SetHopLimit(ttl)
+	err := p.SetHopLimit(ttl)
+	if err != nil {
+		return err
+	}
 
 	wb, err := icmpHeader.Marshal(nil)
 	if err != nil {
@@ -324,7 +327,10 @@ func (t *ICMPTracerv6) send(ttl int) error {
 
 		t.fetchLock.Lock()
 		defer t.fetchLock.Unlock()
-		h.fetchIPData(t.Config)
+		err := h.fetchIPData(t.Config)
+		if err != nil {
+			return err
+		}
 
 		t.res.add(h)
 

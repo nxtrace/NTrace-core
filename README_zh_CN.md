@@ -440,6 +440,12 @@ nexttrace --pow-provider sakura
 
 [https://github.com/nxtrace/nexttracewebapi](https://github.com/nxtrace/nexttracewebapi)
 
+## NextTraceroute
+
+`NextTraceroute`，一款默认使用`NextTrace API`的免`root`安卓版路由跟踪应用，由 @surfaceocean 开发。
+
+[https://github.com/nxtrace/NextTraceroute](https://github.com/nxtrace/NextTraceroute)
+
 ## Credits
 
 [IPInfo](https://ipinfo.io) 无偿提供了本项目大部分数据支持

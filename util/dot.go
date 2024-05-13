@@ -14,7 +14,7 @@ func newDoTResolver(serverName string, addrs string) *net.Resolver {
 		Timeout: 1000 * time.Millisecond,
 	}
 
-	tls_config := &tls.Config{
+	tlsConfig := &tls.Config{
 		// 设置 TLS Server Name 以确保证书能和域名对应
 		ServerName: serverName,
 	}
@@ -26,7 +26,7 @@ func newDoTResolver(serverName string, addrs string) *net.Resolver {
 			if err != nil {
 				return nil, err
 			}
-			return tls.Client(conn, tls_config), nil
+			return tls.Client(conn, tlsConfig), nil
 		},
 	}
 }

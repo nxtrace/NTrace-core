@@ -293,7 +293,10 @@ func (t *TCPTracer) send(ttl int) error {
 
 		t.fetchLock.Lock()
 		defer t.fetchLock.Unlock()
-		h.fetchIPData(t.Config)
+		err := h.fetchIPData(t.Config)
+		if err != nil {
+			return err
+		}
 
 		t.res.add(h)
 

@@ -33,19 +33,19 @@ func IPInfoLocal(ip string, _ time.Duration, _ string, _ bool) (*IPGeoData, erro
 		return &IPGeoData{}, errors.New("no results")
 	}
 	recordMap := record.(map[string]interface{})
-	country_name := recordMap["country_name"].(string)
+	countryName := recordMap["country_name"].(string)
 	prov := ""
 	if recordMap["country"].(string) == "HK" {
-		country_name = "China"
+		countryName = "China"
 		prov = "Hong Kong"
 	}
 	if recordMap["country"].(string) == "TW" {
-		country_name = "China"
+		countryName = "China"
 		prov = "Taiwan"
 	}
 	return &IPGeoData{
 		Asnumber: strings.TrimPrefix(recordMap["asn"].(string), "AS"),
-		Country:  country_name,
+		Country:  countryName,
 		City:     "",
 		Prov:     prov,
 		Owner:    recordMap["as_name"].(string),

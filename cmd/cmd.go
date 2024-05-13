@@ -148,7 +148,7 @@ func Excute() {
 	}
 	// DOMAIN处理结束
 
-	capabilities_check()
+	capabilitiesCheck()
 	// return
 
 	var ip net.IP
@@ -357,7 +357,7 @@ func Excute() {
 	}
 }
 
-func capabilities_check() {
+func capabilitiesCheck() {
 
 	// Windows 判断放在前面，防止遇到一些奇奇怪怪的问题
 	if runtime.GOOS == "windows" {
