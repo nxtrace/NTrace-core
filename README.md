@@ -418,6 +418,12 @@ This software is still in the early stages of development and may have many flaw
 
 [https://github.com/nxtrace/nexttracewebapi](https://github.com/nxtrace/nexttracewebapi)
 
+## NextTraceroute
+
+`NextTraceroute` is a root-free Android route tracing application that defaults to using the `NextTrace API`, developed by @surfaceocean.
+
+[https://github.com/nxtrace/NextTraceroute](https://github.com/nxtrace/NextTraceroute)
+
 ## LeoMoeAPI Credits
 
 NextTrace focuses on Golang Traceroute implementations, and its LeoMoeAPI geolocation information is not supported by raw data, so a commercial version is not possible.
