@@ -286,7 +286,10 @@ func (t *ICMPTracer) send(ttl int) error {
 		},
 	}
 
-	ipv4.NewPacketConn(t.icmpListen).SetTTL(ttl)
+	err := ipv4.NewPacketConn(t.icmpListen).SetTTL(ttl)
+	if err != nil {
+		return err
+	}
 
 	wb, err := icmpHeader.Marshal(nil)
 	if err != nil {
@@ -328,7 +331,10 @@ func (t *ICMPTracer) send(ttl int) error {
 
 		t.fetchLock.Lock()
 		defer t.fetchLock.Unlock()
-		h.fetchIPData(t.Config)
+		err := h.fetchIPData(t.Config)
+		if err != nil {
+			return err
+		}
 
 		t.res.add(h)
 	case <-time.After(t.Timeout):

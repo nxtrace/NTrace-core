@@ -282,7 +282,10 @@ func (t *ICMPTracerv6) send(ttl int) error {
 	p := ipv6.NewPacketConn(t.icmpListen)
 
 	icmpHeader.Body.(*icmp.Echo).Seq = ttl
-	p.SetHopLimit(ttl)
+	err := p.SetHopLimit(ttl)
+	if err != nil {
+		return err
+	}
 
 	wb, err := icmpHeader.Marshal(nil)
 	if err != nil {
@@ -324,7 +327,10 @@ func (t *ICMPTracerv6) send(ttl int) error {
 
 		t.fetchLock.Lock()
 		defer t.fetchLock.Unlock()
-		h.fetchIPData(t.Config)
+		err := h.fetchIPData(t.Config)
+		if err != nil {
+			return err
+		}
 
 		t.res.add(h)
 

@@ -70,11 +70,17 @@ func ListenICMP(network string, laddr string) (net.PacketConn, error) {
 					if ifIndex != -1 {
 						if proto == syscall.IPPROTO_ICMP {
 							return c.Control(func(fd uintptr) {
-								syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IP, syscall.IP_BOUND_IF, ifIndex)
+								err := syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IP, syscall.IP_BOUND_IF, ifIndex)
+								if err != nil {
+									return
+								}
 							})
 						} else {
 							return c.Control(func(fd uintptr) {
-								syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IPV6, syscall.IPV6_BOUND_IF, ifIndex)
+								err := syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IPV6, syscall.IPV6_BOUND_IF, ifIndex)
+								if err != nil {
+									return
+								}
 							})
 						}
 					}
