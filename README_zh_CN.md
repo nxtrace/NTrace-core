@@ -428,8 +428,7 @@ nexttrace --pow-provider sakura
 
 ## OpenTrace
 
-`OpenTrace`是 @Archeb 开发的`NextTrace`的跨平台`GUI`版本，带来您熟悉但更强大的用户体验。
-
+`OpenTrace`是 @Archeb 开发的`NextTrace`的跨平台`GUI`版本，带来您熟悉但更强大的用户体验。  
 该软件仍然处于早期开发阶段，可能存在许多缺陷和错误，需要您宝贵的使用反馈。
 
 [https://github.com/Archeb/opentrace](https://github.com/Archeb/opentrace)
@@ -442,9 +441,11 @@ nexttrace --pow-provider sakura
 
 ## NextTraceroute
 
-`NextTraceroute`，一款默认使用`NextTrace API`的免`root`安卓版路由跟踪应用，由 @surfaceocean 开发。
+`NextTraceroute`，一款默认使用`NextTrace API`的免`root`安卓版路由跟踪应用，由 @surfaceocean 开发。  
+感谢所有测试用户的热情支持，本应用已经通过封闭测试，正式进入 Google Play 商店。
 
-[https://github.com/nxtrace/NextTraceroute](https://github.com/nxtrace/NextTraceroute)
+[https://github.com/nxtrace/NextTraceroute](https://github.com/nxtrace/NextTraceroute)  
+<a href='https://play.google.com/store/apps/details?id=com.surfaceocean.nexttraceroute&pcampaignid=pcampaignidMKT-Other-global-all-co-prtnr-py-PartBadge-Mar2515-1'><img alt='Get it on Google Play' width="128" height="48" src='https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png'/></a>
 
 ## Credits
 
