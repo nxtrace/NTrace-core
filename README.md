@@ -420,9 +420,11 @@ This software is still in the early stages of development and may have many flaw
 
 ## NextTraceroute
 
-`NextTraceroute` is a root-free Android route tracing application that defaults to using the `NextTrace API`, developed by @surfaceocean.
+`NextTraceroute` is a root-free Android route tracing application that defaults to using the `NextTrace API`, developed by @surfaceocean.  
+Thank you to all the test users for your enthusiastic support. This app has successfully passed the closed testing phase and is now officially available on the Google Play Store.
 
-[https://github.com/nxtrace/NextTraceroute](https://github.com/nxtrace/NextTraceroute)
+[https://github.com/nxtrace/NextTraceroute](https://github.com/nxtrace/NextTraceroute)  
+<a href='https://play.google.com/store/apps/details?id=com.surfaceocean.nexttraceroute&pcampaignid=pcampaignidMKT-Other-global-all-co-prtnr-py-PartBadge-Mar2515-1'><img alt='Get it on Google Play' width="128" height="48" src='https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png'/></a>
 
 ## LeoMoeAPI Credits
 
