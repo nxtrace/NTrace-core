@@ -2,6 +2,7 @@ package trace
 
 import (
 	"log"
+	"math/rand"
 	"net"
 	"sync"
 	"time"
@@ -169,38 +170,45 @@ func (t *UDPTracer) send(ttl int) error {
 	srcIP, srcPort, udpConn := t.getUDPConn(0)
 	defer udpConn.Close()
 
-	var payload []byte
-	if t.Quic {
-		payload = GenerateQuicPayloadWithRandomIds()
-	} else {
-		ipHeader := &layers.IPv4{
-			SrcIP:    srcIP,
-			DstIP:    t.DestIP,
-			Protocol: layers.IPProtocolUDP,
-			TTL:      uint8(ttl),
-		}
-
-		udpHeader := &layers.UDP{
-			SrcPort: layers.UDPPort(srcPort),
-			DstPort: layers.UDPPort(t.DestPort),
-		}
-		_ = udpHeader.SetNetworkLayerForChecksum(ipHeader)
-		buf := gopacket.NewSerializeBuffer()
-		opts := gopacket.SerializeOptions{
-			ComputeChecksums: true,
-			FixLengths:       true,
-		}
-
-		desiredPayloadSize := t.Config.PktSize
-		payload := make([]byte, desiredPayloadSize)
-		copy(buf.Bytes(), payload)
-
-		if err := gopacket.SerializeLayers(buf, opts, udpHeader); err != nil {
-			return err
-		}
-
-		payload = buf.Bytes()
+	//var payload []byte
+	//if t.Quic {
+	//	payload = GenerateQuicPayloadWithRandomIds()
+	//} else {
+	ipHeader := &layers.IPv4{
+		SrcIP:    srcIP,
+		DstIP:    t.DestIP,
+		Protocol: layers.IPProtocolUDP,
+		TTL:      uint8(ttl),
 	}
+
+	udpHeader := &layers.UDP{
+		SrcPort: layers.UDPPort(srcPort),
+		DstPort: layers.UDPPort(t.DestPort),
+	}
+	_ = udpHeader.SetNetworkLayerForChecksum(ipHeader)
+	buf := gopacket.NewSerializeBuffer()
+	opts := gopacket.SerializeOptions{
+		ComputeChecksums: true,
+		FixLengths:       true,
+	}
+
+	desiredPayloadSize := t.Config.PktSize
+	payload := make([]byte, desiredPayloadSize)
+	// 设置随机种子
+	rand.Seed(time.Now().UnixNano())
+
+	// 填充随机数
+	for i := range payload {
+		payload[i] = byte(rand.Intn(256))
+	}
+	//copy(buf.Bytes(), payload)
+
+	if err := gopacket.SerializeLayers(buf, opts, udpHeader, gopacket.Payload(payload)); err != nil {
+		return err
+	}
+
+	//payload = buf.Bytes()
+	//}
 
 	err = ipv4.NewPacketConn(udpConn).SetTTL(ttl)
 	if err != nil {
@@ -208,7 +216,7 @@ func (t *UDPTracer) send(ttl int) error {
 	}
 
 	start := time.Now()
-	if _, err := udpConn.WriteTo(payload, &net.UDPAddr{IP: t.DestIP, Port: t.DestPort}); err != nil {
+	if _, err := udpConn.WriteTo(buf.Bytes(), &net.UDPAddr{IP: t.DestIP, Port: t.DestPort}); err != nil {
 		return err
 	}
 
