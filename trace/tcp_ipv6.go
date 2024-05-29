@@ -227,16 +227,20 @@ func (t *TCPTracerv6) send(ttl int) error {
 
 	desiredPayloadSize := t.Config.PktSize
 	payload := make([]byte, desiredPayloadSize)
-	copy(buf.Bytes(), payload)
+	// 设置随机种子
+	rand.Seed(time.Now().UnixNano())
 
-	if err := gopacket.SerializeLayers(buf, opts, tcpHeader); err != nil {
+	// 填充随机数
+	for i := range payload {
+		payload[i] = byte(rand.Intn(256))
+	}
+	//copy(buf.Bytes(), payload)
+
+	if err := gopacket.SerializeLayers(buf, opts, tcpHeader, gopacket.Payload(payload)); err != nil {
 		return err
 	}
 
 	err = ipv6.NewPacketConn(t.tcp).SetHopLimit(ttl)
-	if err != nil {
-		return err
-	}
 	if err != nil {
 		return err
 	}

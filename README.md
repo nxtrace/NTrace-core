@@ -329,16 +329,10 @@ Arguments:
   -T  --tcp                          Use TCP SYN for tracerouting (default port
                                      is 80)
   -U  --udp                          Use UDP SYN for tracerouting (default port
-                                     is 53)
+                                     is 33494)
   -F  --fast-trace                   One-Key Fast Trace to China ISPs
-  -p  --port                         Set the destination port to use. It is
-                                     either initial udp port value for
-                                     "default"method (incremented by each
-                                     probe, default is 33434), or initial seq
-                                     for "icmp" (incremented as well, default
-                                     from 1), or some constantdestination port
-                                     for other methods (with default of 80 for
-                                     "tcp", 53 for "udp", etc.)
+  -p  --port                         Set the destination port to use. With
+                                     default of 80 for "tcp", 33494 for "udp"
   -q  --queries                      Set the number of probes per each hop.
                                      Default: 3
       --parallel-requests            Set ParallelRequests number. It should be
@@ -350,9 +344,9 @@ Arguments:
                                      IPInfo, IPInsight, IP-API.com, Ip2region,
                                      IPInfoLocal, CHUNZHEN, disable-geoip].
                                      Default: LeoMoeAPI
-      --pow-provider                 Choose PoW Provider [api.nxtrace.org, sakura]
-                                     For China mainland users, please use
-                                     sakura. Default: api.nxtrace.org
+      --pow-provider                 Choose PoW Provider [api.nxtrace.org,
+                                     sakura] For China mainland users, please
+                                     use sakura. Default: api.nxtrace.org
   -n  --no-rdns                      Do not resolve IP addresses to their
                                      domain names
   -a  --always-rdns                  Always resolve IP addresses to their
@@ -379,16 +373,15 @@ Arguments:
   -z  --send-time                    Set how many [milliseconds] between
                                      sending each packet.. Useful when some
                                      routers use rate-limit for ICMP messages.
-                                     Default: 100
+                                     Default: 50
   -i  --ttl-time                     Set how many [milliseconds] between
                                      sending packets groups by TTL. Useful when
                                      some routers use rate-limit for ICMP
-                                     messages. Default: 500
+                                     messages. Default: 50
       --timeout                      The number of [milliseconds] to keep probe
                                      sockets open before giving up on the
                                      connection.. Default: 1000
-      --psize                        Set the packet size (payload size).
-                                     Default: 52
+      --psize                        Set the payload size. Default: 52
       --_positionalArg_nexttrace_32  IP Address or domain name
       --dot-server                   Use DoT Server for DNS Parse [dnssb,
                                      aliyun, dnspod, google, cloudflare]

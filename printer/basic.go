@@ -80,12 +80,12 @@ func PrintTraceRouteNav(ip net.IP, domain string, dataOrigin string, maxHops int
 	fmt.Println("IP Geo Data Provider: " + dataOrigin)
 	if util.EnableHidDstIP == "" {
 		if ip.String() == domain {
-			fmt.Printf("traceroute to %s, %d hops max, %d bytes packets\n", ip.String(), maxHops, packetSize)
+			fmt.Printf("traceroute to %s, %d hops max, %d bytes payload\n", ip.String(), maxHops, packetSize)
 		} else {
-			fmt.Printf("traceroute to %s (%s), %d hops max, %d bytes packets\n", ip.String(), domain, maxHops, packetSize)
+			fmt.Printf("traceroute to %s (%s), %d hops max, %d bytes payload\n", ip.String(), domain, maxHops, packetSize)
 		}
 	} else {
-		fmt.Printf("traceroute to %s, %d hops max, %d bytes packets\n", util.HideIPPart(ip.String()), maxHops, packetSize)
+		fmt.Printf("traceroute to %s, %d hops max, %d bytes payload\n", util.HideIPPart(ip.String()), maxHops, packetSize)
 	}
 }
 
