@@ -176,7 +176,7 @@ func (t *UDPTracer) send(ttl int) error {
 		ipHeader := &layers.IPv4{
 			SrcIP:    srcIP,
 			DstIP:    t.DestIP,
-			Protocol: layers.IPProtocolTCP,
+			Protocol: layers.IPProtocolUDP,
 			TTL:      uint8(ttl),
 		}
 
