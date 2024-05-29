@@ -34,9 +34,7 @@ func Excute() {
 	tcp := parser.Flag("T", "tcp", &argparse.Options{Help: "Use TCP SYN for tracerouting (default port is 80)"})
 	udp := parser.Flag("U", "udp", &argparse.Options{Help: "Use UDP SYN for tracerouting (default port is 53)"})
 	fast_trace := parser.Flag("F", "fast-trace", &argparse.Options{Help: "One-Key Fast Trace to China ISPs"})
-	port := parser.Int("p", "port", &argparse.Options{Help: "Set the destination port to use. It is either initial udp port value for \"default\"" +
-		"method (incremented by each probe, default is 33434), or initial seq for \"icmp\" (incremented as well, default from 1), or some constant" +
-		"destination port for other methods (with default of 80 for \"tcp\", 53 for \"udp\", etc.)"})
+	port := parser.Int("p", "port", &argparse.Options{Help: "Set the destination port to use. With default of 80 for \"tcp\", 33494 for \"udp\""})
 	numMeasurements := parser.Int("q", "queries", &argparse.Options{Default: 3, Help: "Set the number of probes per each hop"})
 	parallelRequests := parser.Int("", "parallel-requests", &argparse.Options{Default: 18, Help: "Set ParallelRequests number. It should be 1 when there is a multi-routing"})
 	maxHops := parser.Int("m", "max-hops", &argparse.Options{Default: 30, Help: "Set the max number of hops (max TTL to be reached)"})
@@ -251,7 +249,7 @@ func Excute() {
 	}
 
 	if !*tcp && *port == 80 {
-		*port = 53
+		*port = 33494
 	}
 
 	util.DestIP = ip.String()
