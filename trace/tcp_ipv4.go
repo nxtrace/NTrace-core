@@ -217,6 +217,7 @@ func (t *TCPTracer) send(ttl int) error {
 		DstIP:    t.DestIP,
 		Protocol: layers.IPProtocolTCP,
 		TTL:      uint8(ttl),
+		Flags:    layers.IPv4DontFragment,
 	}
 	// 使用Uint16兼容32位系统，防止在rand的时候因使用int32而溢出
 	sequenceNumber := uint32(r.Intn(math.MaxUint16))
@@ -237,9 +238,16 @@ func (t *TCPTracer) send(ttl int) error {
 
 	desiredPayloadSize := t.Config.PktSize
 	payload := make([]byte, desiredPayloadSize)
-	copy(buf.Bytes(), payload)
+	// 设置随机种子
+	rand.Seed(time.Now().UnixNano())
 
-	if err := gopacket.SerializeLayers(buf, opts, tcpHeader); err != nil {
+	// 填充随机数
+	for i := range payload {
+		payload[i] = byte(rand.Intn(256))
+	}
+	//copy(buf.Bytes(), payload)
+
+	if err := gopacket.SerializeLayers(buf, opts, tcpHeader, gopacket.Payload(payload)); err != nil {
 		return err
 	}
 
