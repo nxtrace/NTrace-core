@@ -193,6 +193,9 @@ func (t *UDPTracer) send(ttl int) error {
 	}
 
 	desiredPayloadSize := t.Config.PktSize
+	if desiredPayloadSize-8 > 0 {
+		desiredPayloadSize -= 8
+	}
 	payload := make([]byte, desiredPayloadSize)
 	// 设置随机种子
 	rand.Seed(time.Now().UnixNano())

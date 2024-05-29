@@ -32,7 +32,7 @@ func Excute() {
 	ipv4Only := parser.Flag("4", "ipv4", &argparse.Options{Help: "Use IPv4 only"})
 	ipv6Only := parser.Flag("6", "ipv6", &argparse.Options{Help: "Use IPv6 only"})
 	tcp := parser.Flag("T", "tcp", &argparse.Options{Help: "Use TCP SYN for tracerouting (default port is 80)"})
-	udp := parser.Flag("U", "udp", &argparse.Options{Help: "Use UDP SYN for tracerouting (default port is 53)"})
+	udp := parser.Flag("U", "udp", &argparse.Options{Help: "Use UDP SYN for tracerouting (default port is 33494)"})
 	fast_trace := parser.Flag("F", "fast-trace", &argparse.Options{Help: "One-Key Fast Trace to China ISPs"})
 	port := parser.Int("p", "port", &argparse.Options{Help: "Set the destination port to use. With default of 80 for \"tcp\", 33494 for \"udp\""})
 	numMeasurements := parser.Int("q", "queries", &argparse.Options{Default: 3, Help: "Set the number of probes per each hop"})
@@ -62,7 +62,7 @@ func Excute() {
 	packetInterval := parser.Int("z", "send-time", &argparse.Options{Default: 50, Help: "Set how many [milliseconds] between sending each packet.. Useful when some routers use rate-limit for ICMP messages"})
 	ttlInterval := parser.Int("i", "ttl-time", &argparse.Options{Default: 50, Help: "Set how many [milliseconds] between sending packets groups by TTL. Useful when some routers use rate-limit for ICMP messages"})
 	timeout := parser.Int("", "timeout", &argparse.Options{Default: 1000, Help: "The number of [milliseconds] to keep probe sockets open before giving up on the connection."})
-	packetSize := parser.Int("", "psize", &argparse.Options{Default: 52, Help: "Set the packet size (payload size)"})
+	packetSize := parser.Int("", "psize", &argparse.Options{Default: 52, Help: "Set the payload size"})
 	str := parser.StringPositional(&argparse.Options{Help: "IP Address or domain name"})
 	dot := parser.Selector("", "dot-server", []string{"dnssb", "aliyun", "dnspod", "google", "cloudflare"}, &argparse.Options{
 		Help: "Use DoT Server for DNS Parse [dnssb, aliyun, dnspod, google, cloudflare]"})
