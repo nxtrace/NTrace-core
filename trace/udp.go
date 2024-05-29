@@ -167,6 +167,7 @@ func (t *UDPTracer) send(ttl int) error {
 	}
 
 	srcIP, srcPort, udpConn := t.getUDPConn(0)
+	defer udpConn.Close()
 
 	var payload []byte
 	if t.Quic {
