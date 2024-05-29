@@ -217,7 +217,7 @@ func (t *TCPTracer) send(ttl int) error {
 		DstIP:    t.DestIP,
 		Protocol: layers.IPProtocolTCP,
 		TTL:      uint8(ttl),
-		Flags:    layers.IPv4DontFragment,
+		//Flags:    layers.IPv4DontFragment, // 我感觉没必要
 	}
 	// 使用Uint16兼容32位系统，防止在rand的时候因使用int32而溢出
 	sequenceNumber := uint32(r.Intn(math.MaxUint16))
