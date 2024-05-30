@@ -219,6 +219,9 @@ func (t *TCPTracer) send(ttl int) error {
 		TTL:      uint8(ttl),
 		//Flags:    layers.IPv4DontFragment, // 我感觉没必要
 	}
+	if t.DontFragment {
+		ipHeader.Flags = layers.IPv4DontFragment
+	}
 	// 使用Uint16兼容32位系统，防止在rand的时候因使用int32而溢出
 	sequenceNumber := uint32(r.Intn(math.MaxUint16))
 	tcpHeader := &layers.TCP{

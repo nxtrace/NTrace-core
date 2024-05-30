@@ -70,6 +70,7 @@ func Excute() {
 		Help: "Choose the language for displaying [en, cn]"})
 	file := parser.String("", "file", &argparse.Options{Help: "Read IP Address or domain name from file"})
 	nocolor := parser.Flag("C", "nocolor", &argparse.Options{Help: "Disable Colorful Output"})
+	dontFragment := parser.Flag("", "dont-fragment", &argparse.Options{Default: false, Help: "Set the Don't Fragment bit (IPv4 TCP only)"})
 
 	err := parser.Parse(os.Args)
 	if err != nil {
@@ -112,6 +113,7 @@ func Excute() {
 			PktSize:        *packetSize,
 			Timeout:        time.Duration(*timeout) * time.Millisecond,
 			File:           *file,
+			DontFragment:   *dontFragment,
 		}
 
 		fastTrace.FastTest(*tcp, *output, paramsFastTrace)
@@ -270,6 +272,7 @@ func Excute() {
 		IPGeoSource:      ipgeo.GetSource(*dataOrigin),
 		Timeout:          time.Duration(*timeout) * time.Millisecond,
 		PktSize:          *packetSize,
+		DontFragment:     *dontFragment,
 	}
 
 	// 暂时弃用
