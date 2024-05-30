@@ -34,6 +34,7 @@ type ParamsFastTrace struct {
 	PktSize        int
 	Timeout        time.Duration
 	File           string
+	DontFragment   bool
 }
 
 type IpListElement struct {
@@ -68,6 +69,7 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 		SrcAddr:          f.ParamsFastTrace.SrcAddr,
 		PktSize:          f.ParamsFastTrace.PktSize,
 		Lang:             f.ParamsFastTrace.Lang,
+		DontFragment:     f.ParamsFastTrace.DontFragment,
 	}
 
 	if oe {

@@ -39,6 +39,7 @@ func (f *FastTracer) tracert_v6(location string, ispCollection ISPCollection) {
 		SrcAddr:          f.ParamsFastTrace.SrcAddr,
 		PktSize:          f.ParamsFastTrace.PktSize,
 		Lang:             f.ParamsFastTrace.Lang,
+		DontFragment:     f.ParamsFastTrace.DontFragment,
 	}
 
 	if oe {

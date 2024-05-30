@@ -42,6 +42,7 @@ type Config struct {
 	AsyncPrinter     func(res *Result)
 	PktSize          int
 	Maptrace         bool
+	DontFragment	 bool
 }
 
 type Method string
@@ -81,6 +82,7 @@ func Traceroute(method Method, config Config) (*Result, error) {
 		if config.DestIP.To4() != nil {
 			tracer = &UDPTracer{Config: config}
 		} else {
+			//TODO: IPv6 UDP trace 在做了，指新建文件夹（
 			return nil, errors.New("IPv6 UDP Traceroute is not supported")
 		}
 	case TCPTrace:
