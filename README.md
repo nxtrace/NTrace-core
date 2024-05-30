@@ -237,6 +237,9 @@ nexttrace --no-rdns www.bbix.net
 # Set the payload size to 1024 bytes
 nexttrace --psize 1024 example.com
 
+# Set the payload size and DF flag for TCP Trace
+nexttrace --psize 1024 --dont-fragment --tcp example.com
+
 # Feature: print Route-Path diagram
 # Route-Path diagram example:
 # AS6453 Tata Communication「Singapore『Singapore』」
@@ -389,6 +392,8 @@ Arguments:
                                      cn]. Default: cn
       --file                         Read IP Address or domain name from file
   -C  --nocolor                      Disable Colorful Output
+      --dont-fragment                Set the Don't Fragment bit (IPv4 TCP
+                                     only). Default: false
 ```
 
 ## Project screenshot

@@ -253,6 +253,9 @@ nexttrace --no-rdns www.bbix.net
 # 设置载荷大小为1024字节
 nexttrace --psize 1024 example.com
 
+# 设置载荷大小以及DF标志进行TCP Trace
+nexttrace --psize 1024 --dont-fragment --tcp example.com
+
 # 特色功能：打印Route-Path图
 # Route-Path图示例：
 # AS6453 塔塔通信「Singapore『Singapore』」
@@ -388,6 +391,8 @@ Arguments:
                                      cn]. Default: cn
       --file                         Read IP Address or domain name from file
   -C  --nocolor                      Disable Colorful Output
+      --dont-fragment                Set the Don't Fragment bit (IPv4 TCP
+                                     only). Default: false
 ```
 
 ## 项目截图
