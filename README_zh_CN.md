@@ -445,7 +445,15 @@ nexttrace --pow-provider sakura
 [https://github.com/nxtrace/NextTraceroute](https://github.com/nxtrace/NextTraceroute)  
 <a href='https://play.google.com/store/apps/details?id=com.surfaceocean.nexttraceroute&pcampaignid=pcampaignidMKT-Other-global-all-co-prtnr-py-PartBadge-Mar2515-1'><img alt='Get it on Google Play' width="128" height="48" src='https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png'/></a>
 
+## JetBrain Support
+
+本项目受 [JetBrain Open-Source Project License](https://jb.gg/OpenSourceSupport) 支持。 很高兴使用`Goland`作为我们的开发工具。
+
+<img src="https://resources.jetbrains.com/storage/products/company/brand/logos/GoLand.png" title="" alt="GoLand logo" width="331">
+
 ## Credits
+
+[Gubo](https://www.gubo.org) 靠谱主机推荐
 
 [IPInfo](https://ipinfo.io) 无偿提供了本项目大部分数据支持
 
