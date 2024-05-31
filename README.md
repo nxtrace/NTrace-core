@@ -292,7 +292,7 @@ nexttrace -T -q 2 --parallel-requests 1 -t -P 2001:4860:4860::8888
 
 ### IP Database
 
-#### We use [bgp.tools](https://bgp.tools) as a data provider for routing tables.
+We use [bgp.tools](https://bgp.tools) as a data provider for routing tables.
 
 NextTrace BackEnd is now open-source.
 
@@ -443,11 +443,13 @@ We hope you can give us as much feedback as possible on IP geolocation errors (s
 
 ## JetBrain Support
 
-#### This Project uses [JetBrain Open-Source Project License](https://jb.gg/OpenSourceSupport). We Proudly Develop By Goland.
+This Project uses [JetBrain Open-Source Project License](https://jb.gg/OpenSourceSupport). We Proudly Develop By `Goland`.
 
 <img src="https://resources.jetbrains.com/storage/products/company/brand/logos/GoLand.png" title="" alt="GoLand logo" width="331">
 
 ## Credits
+
+[Gubo](https://www.gubo.org) Reliable Host Recommendation Website
 
 [IPInfo](https://ipinfo.io) Provided most of the data support for this project free of charge
 
