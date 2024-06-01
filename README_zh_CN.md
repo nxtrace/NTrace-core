@@ -75,7 +75,7 @@ Document Language: [English](README.md) | 简体中文
      * 直接下载bin包(仅支持amd64)
 
           ```shell
-          yay -S nexttrace-bin`
+          yay -S nexttrace-bin
           ```
      * AUR 的构建分别由 ouuan 维护
   * Linuxbrew 安装命令
