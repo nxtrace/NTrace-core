@@ -67,7 +67,12 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
              ```shell
              yay -S nexttrace-bin
              ```
-        * The AUR builds are maintained by ouuan
+        * Build from source (only supports amd64)
+
+             ```shell
+             yay -S nexttrace
+             ```
+        * The AUR builds are maintained by ouuan, huyz
     * Linuxbrew's installation command
 
         Same as the macOS Homebrew's installation method (homebrew-core version only supports amd64)
