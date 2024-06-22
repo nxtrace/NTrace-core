@@ -14,7 +14,7 @@ import (
 )
 
 func IPApiCom(ip string, timeout time.Duration, _ string, _ bool) (*IPGeoData, error) {
-	url := "http://ip-api.com/json/" + ip + "?fields=status,message,country,regionName,city,isp,district,as,lat,lon"
+	url := token.BaseOrDefault("http://ip-api.com/json/") + ip + "?fields=status,message,country,regionName,city,isp,district,as,lat,lon"
 	client := &http.Client{
 		// 2 秒超时
 		Timeout: timeout,
