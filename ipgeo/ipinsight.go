@@ -13,7 +13,7 @@ func IPInSight(ip string, timeout time.Duration, _ string, _ bool) (*IPGeoData, 
 		// 2 秒超时
 		Timeout: timeout,
 	}
-	resp, err := client.Get("https://api.ipinsight.io/ip/" + ip + "?token=" + token.ipinsight)
+	resp, err := client.Get(token.BaseOrDefault("https://api.ipinsight.io/ip/") + ip + "?token=" + token.ipinsight)
 	if err != nil {
 		return nil, err
 	}
