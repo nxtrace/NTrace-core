@@ -264,7 +264,7 @@ func (t *TCPTracer) send(ttl int) error {
 		return err
 	}
 	t.inflightRequestLock.Lock()
-	hopCh := make(chan Hop)
+	hopCh := make(chan Hop, 1)
 	t.inflightRequest[int(sequenceNumber)] = hopCh
 	t.inflightRequestLock.Unlock()
 	/*

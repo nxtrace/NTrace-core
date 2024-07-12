@@ -225,7 +225,7 @@ func (t *UDPTracer) send(ttl int) error {
 
 	// 在对inflightRequest进行写操作的时候应该加锁保护，以免多个goroutine协程试图同时写入造成panic
 	t.inflightRequestLock.Lock()
-	hopCh := make(chan Hop)
+	hopCh := make(chan Hop, 1)
 	t.inflightRequest[srcPort] = hopCh
 	t.inflightRequestLock.Unlock()
 	defer func() {
