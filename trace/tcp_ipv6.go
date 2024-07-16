@@ -251,7 +251,7 @@ func (t *TCPTracerv6) send(ttl int) error {
 	}
 	// log.Println(ttl, sequenceNumber)
 	t.inflightRequestLock.Lock()
-	hopCh := make(chan Hop)
+	hopCh := make(chan Hop, 1)
 	t.inflightRequest[int(sequenceNumber)] = hopCh
 	t.inflightRequestLock.Unlock()
 

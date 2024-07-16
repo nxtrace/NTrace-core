@@ -12,7 +12,7 @@ import (
 )
 
 func IPInfo(ip string, timeout time.Duration, _ string, _ bool) (*IPGeoData, error) {
-	url := "http://ipinfo.io/" + ip + "?token=" + token.ipinfo
+	url := token.BaseOrDefault("http://ipinfo.io/") + ip + "?token=" + token.ipinfo
 	client := &http.Client{
 		// 2 秒超时
 		Timeout: timeout,

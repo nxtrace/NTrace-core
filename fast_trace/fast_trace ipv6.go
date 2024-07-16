@@ -2,6 +2,7 @@ package fastTrace
 
 import (
 	"fmt"
+	"github.com/fatih/color"
 	"github.com/nxtrace/NTrace-core/ipgeo"
 	"github.com/nxtrace/NTrace-core/printer"
 	"github.com/nxtrace/NTrace-core/trace"
@@ -16,7 +17,7 @@ import (
 //var pFastTracer ParamsFastTrace
 
 func (f *FastTracer) tracert_v6(location string, ispCollection ISPCollection) {
-	fmt.Printf("%s『%s %s 』%s\n", printer.YELLOW_PREFIX, location, ispCollection.ISPName, printer.RESET_PREFIX)
+	fmt.Fprintf(color.Output, "%s\n", color.New(color.FgYellow, color.Bold).Sprintf("『%s %s 』", location, ispCollection.ISPName))
 	fmt.Printf("traceroute to %s, %d hops max, %d byte packets\n", ispCollection.IPv6, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize)
 
 	ip, err := util.DomainLookUp(ispCollection.IPv6, "6", "", true)

@@ -54,7 +54,7 @@ func (t *UDPTracer) Execute() (*Result, error) {
 	go t.listenICMP()
 
 	t.sem = semaphore.NewWeighted(int64(t.ParallelRequests))
-	for ttl := 1; ttl <= t.MaxHops; ttl++ {
+	for ttl := t.BeginHop; ttl <= t.MaxHops; ttl++ {
 		// 如果到达最终跳，则退出
 		if t.final != -1 && ttl > t.final {
 			break
@@ -225,7 +225,7 @@ func (t *UDPTracer) send(ttl int) error {
 
 	// 在对inflightRequest进行写操作的时候应该加锁保护，以免多个goroutine协程试图同时写入造成panic
 	t.inflightRequestLock.Lock()
-	hopCh := make(chan Hop)
+	hopCh := make(chan Hop, 1)
 	t.inflightRequest[srcPort] = hopCh
 	t.inflightRequestLock.Unlock()
 	defer func() {

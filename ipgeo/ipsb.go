@@ -11,7 +11,7 @@ import (
 )
 
 func IPSB(ip string, timeout time.Duration, _ string, _ bool) (*IPGeoData, error) {
-	url := "https://api.ip.sb/geoip/" + ip
+	url := token.BaseOrDefault("https://api.ip.sb/geoip/") + ip
 	client := &http.Client{
 		// 2 秒超时
 		Timeout: timeout,
