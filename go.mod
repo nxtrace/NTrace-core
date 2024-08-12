@@ -11,7 +11,7 @@ require (
 	github.com/syndtr/gocapability v0.0.0-20200815063812-42c35b437635
 	github.com/tsosunchia/powclient v0.1.5
 	golang.org/x/net v0.27.0
-	golang.org/x/sync v0.7.0
+	golang.org/x/sync v0.8.0
 )
 
 require (
@@ -41,8 +41,8 @@ require (
 	github.com/fatih/color v1.17.0
 	github.com/gorilla/websocket v1.5.2
 	github.com/lionsoul2014/ip2region v2.11.2+incompatible
-	github.com/rodaine/table v1.2.0
 	github.com/tidwall/gjson v1.17.3
+	github.com/rodaine/table v1.3.0
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	golang.org/x/sys v0.22.0 // indirect
