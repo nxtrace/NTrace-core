@@ -282,11 +282,15 @@ export NO_COLOR=1
 nexttrace --data-provider ip-api.com
 ## 特别的: 其中 ipinfo 和 IPInsight API 对于免费版查询有频率限制，可从这些服务商自行购买服务以解除限制，如有需要可以 clone 本项目添加其提供的 token 自行编译
 ##        TOKEN填写路径：ipgeo/tokens.go
-## 特别的: 对于离线库 IPInfoLocal，请自行下载并命名为 ipinfoLocal.mmdb (可以从这里下载：https://ipinfo.io/signup?ref=free-database-downloads)
+
+## 特别的: 对于离线库 IPInfoLocal，请自行下载并命名为 ipinfoLocal.mmdb
+##        (可以从这里下载：https://ipinfo.io/signup?ref=free-database-downloads)，
+##        默认搜索用户当前路径、程序所在路径、和 FHS 路径（Unix-like）
+##        如果需要自定义路径，请设置环境变量
+export NEXTTRACE_IPINFOLOCALPATH=/xxx/yyy.mmdb
 ##        对于离线库 Ip2region 可NextTrace自动下载，也可自行下载并命名为 ip2region.db
 ## 另外：由于IP.SB被滥用比较严重，会经常出现无法查询的问题，请知悉。
 ##      IP-API.com限制调用较为严格，如有查询不到的情况，请几分钟后再试。
-
 # 纯真IP数据库默认使用 http://127.0.0.1:2060 作为查询接口，如需自定义请使用环境变量
 export NEXTTRACE_CHUNZHENURL=http://127.0.0.1:2060
 ## 可使用 https://github.com/freshcn/qqwry 自行搭建纯真IP数据库服务
