@@ -60,7 +60,7 @@ checkSystemDistribution() {
 downloadBinrayFile() {
     echo -e "${Info} 获取最新版的 NextTrace 发行版文件信息"
     for i in {1..3}; do
-        downloadUrls=$(curl -sL ${protocol}://www.nxtrace.org/api/dist/core/nexttrace_${osDistribution}_${archParam} --connect-timeout 1.5)
+        downloadUrls=$(curl -sLf ${protocol}://www.nxtrace.org/api/dist/core/nexttrace_${osDistribution}_${archParam} --connect-timeout 1.5)
         if [ $? -eq 0 ]; then
             break
         fi
@@ -70,7 +70,7 @@ downloadBinrayFile() {
         backupUrl=$(echo ${downloadUrls} | awk -F '|' '{print $2}')
         echo -e "${Info} 正在尝试从 Primary 节点下载 NextTrace"
         for i in {1..3}; do
-            curl -sL ${primaryUrl} -o ${Temp_path} --connect-timeout 1.5
+            curl -sLf ${primaryUrl} -o ${Temp_path} --connect-timeout 1.5
             if [ $? -eq 0 ]; then
                 changeMode
                 mv ${Temp_path} ${downPath}
@@ -84,7 +84,7 @@ downloadBinrayFile() {
         fi
         echo -e "${Error} 从 Primary 节点下载失败，正在尝试从 Backup 节点下载 NextTrace"
         for i in {1..3}; do
-            curl -sL ${backupUrl} -o ${Temp_path} --connect-timeout 1.5
+            curl -sLf ${backupUrl} -o ${Temp_path} --connect-timeout 1.5
             if [ $? -eq 0 ]; then
                 changeMode
                 mv ${Temp_path} ${downPath}

@@ -18,6 +18,7 @@ import (
 
 var Uninterrupted = GetenvDefault("NEXTTRACE_UNINTERRUPTED", "")
 var EnvToken = GetenvDefault("NEXTTRACE_TOKEN", "")
+var EnvIPInfoLocalPath = GetenvDefault("NEXTTRACE_IPINFOLOCALPATH", "")
 var UserAgent = fmt.Sprintf("NextTrace %s/%s/%s", config.Version, runtime.GOOS, runtime.GOARCH)
 var RdnsCache sync.Map
 var PowProviderParam = ""

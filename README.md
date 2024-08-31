@@ -111,7 +111,7 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
 
         * Scoop-extra is maintained by soenggam
 
-    Please note, the repositories for all of the above installation methods are maintained by open source enthusiasts. Availability and timely updates are not guaranteed. If you encounter problems, please contact the repository maintainer to solve them, or use the binary packages provided by the official build of this project.
+Please note, the repositories for all of the above installation methods are maintained by open source enthusiasts. Availability and timely updates are not guaranteed. If you encounter problems, please contact the repository maintainer to solve them, or use the binary packages provided by the official build of this project.
 
 ### Manual Install
 * Download the precompiled executable
@@ -269,9 +269,13 @@ export NO_COLOR=1
 nexttrace --data-provider ip-api.com
 ## Note There are frequency limits for free queries of the ipinfo and IPInsight APIs. You can purchase services from these providers to remove the limits
 ##      If necessary, you can clone this project, add the token provided by ipinfo or IPInsight and compile it yourself
+##      Fill the token to: ipgeo/tokens.go
+
 ## Note For the offline database IPInfoLocal, please download it manually and rename it to ipinfoLocal.mmdb. (You can download it from here: https://ipinfo.io/signup?ref=free-database-downloads)
+##      Current directory, nexttrace binary directory and FHS directories (Unix-like) will be searched.
+##      To customize it, please use environment variables,
+export NEXTTRACE_IPINFOLOCALPATH=/xxx/yyy.mmdb
 ##      For the offline database Ip2region, you can download it manually and rename it to ip2region.db, or let NextTrace download it automatically
-## Fill the token to: ipgeo/tokens.go
 ## Please be aware: Due to the serious abuse of IP.SB, you will often be not able to query IP data from this source
 ## IP-API.com has a stricter restiction on API calls, if you can't query IP data from this source, please try again in a few minutes
 
