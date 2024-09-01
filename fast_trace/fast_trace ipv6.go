@@ -107,13 +107,18 @@ func (f *FastTracer) testEDU_v6() {
 	f.tracert_v6(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.EDU)
 	f.tracert_v6(TestIPsCollection.Shanghai.Location, TestIPsCollection.Shanghai.EDU)
 	f.tracert_v6(TestIPsCollection.Hangzhou.Location, TestIPsCollection.Hangzhou.EDU)
+	f.tracert_v6(TestIPsCollection.Hefei.Location, TestIPsCollection.Hefei.EDU)
+	f.tracert_v6(TestIPsCollection.Guangzhou.Location, TestIPsCollection.Guangzhou.EDU)
+	// 科技网暂时算在EDU里面，等拿到了足够多的数据再分离出去，单独用于测试
+	f.tracert_v6(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.CST)
 }
 
 func (f *FastTracer) testFast_v6() {
 	f.tracert_v6(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.CT163)
 	f.tracert_v6(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.CU169)
 	f.tracert_v6(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.CM)
-	f.tracert_v6(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.EDU)
+	//f.tracert_v6(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.EDU)
+	//f.tracert_v6(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.CST)
 }
 
 func FastTestv6(tm bool, outEnable bool, paramsFastTrace ParamsFastTrace) {

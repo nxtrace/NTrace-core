@@ -411,7 +411,10 @@ func (f *FastTracer) testEDU() {
 	f.tracert(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.EDU)
 	f.tracert(TestIPsCollection.Shanghai.Location, TestIPsCollection.Shanghai.EDU)
 	f.tracert(TestIPsCollection.Hangzhou.Location, TestIPsCollection.Hangzhou.EDU)
+	f.tracert(TestIPsCollection.Hefei.Location, TestIPsCollection.Hefei.EDU)
+	f.tracert(TestIPsCollection.Guangzhou.Location, TestIPsCollection.Guangzhou.EDU)
 	// 科技网暂时算在EDU里面，等拿到了足够多的数据再分离出去，单独用于测试
+	f.tracert(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.CST)
 	f.tracert(TestIPsCollection.Hefei.Location, TestIPsCollection.Hefei.CST)
 }
 
@@ -419,5 +422,6 @@ func (f *FastTracer) testFast() {
 	f.tracert(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.CT163)
 	f.tracert(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.CU169)
 	f.tracert(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.CM)
-	f.tracert(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.EDU)
+	//f.tracert(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.EDU)
+	//f.tracert(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.CST)
 }
