@@ -94,6 +94,7 @@ func (f *FastTracer) testCU_v6() {
 	f.tracert_v6(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.CU169)
 	f.tracert_v6(TestIPsCollection.Shanghai.Location, TestIPsCollection.Shanghai.CU169)
 	f.tracert_v6(TestIPsCollection.Shanghai.Location, TestIPsCollection.Shanghai.CU9929)
+	f.tracert_v6(TestIPsCollection.Hangzhou.Location, TestIPsCollection.Hangzhou.CU169)
 	f.tracert_v6(TestIPsCollection.Guangzhou.Location, TestIPsCollection.Guangzhou.CU169)
 }
 
