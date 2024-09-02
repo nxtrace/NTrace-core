@@ -171,6 +171,7 @@ var Hangzhou = BackBoneCollection{
 	CU169: ISPCollection{
 		ISPName: CU169,
 		IP:      "ipv4.hgh-4837.endpoint.nxtrace.org.",
+		IPv6:    "ipv6.hgh-4837.endpoint.nxtrace.org.",
 	},
 	CM: ISPCollection{
 		ISPName: CM,

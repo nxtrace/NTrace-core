@@ -20,7 +20,8 @@ func (f *FastTracer) tracert_v6(location string, ispCollection ISPCollection) {
 	fmt.Fprintf(color.Output, "%s\n", color.New(color.FgYellow, color.Bold).Sprintf("『%s %s 』", location, ispCollection.ISPName))
 	fmt.Printf("traceroute to %s, %d hops max, %d byte packets\n", ispCollection.IPv6, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize)
 
-	ip, err := util.DomainLookUp(ispCollection.IPv6, "6", "", true)
+	// ip, err := util.DomainLookUp(ispCollection.IPv6, "6", "", true)
+	ip, err := util.DomainLookUp(ispCollection.IPv6, "6", f.ParamsFastTrace.Dot, true)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -93,6 +94,7 @@ func (f *FastTracer) testCU_v6() {
 	f.tracert_v6(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.CU169)
 	f.tracert_v6(TestIPsCollection.Shanghai.Location, TestIPsCollection.Shanghai.CU169)
 	f.tracert_v6(TestIPsCollection.Shanghai.Location, TestIPsCollection.Shanghai.CU9929)
+	f.tracert_v6(TestIPsCollection.Hangzhou.Location, TestIPsCollection.Hangzhou.CU169)
 	f.tracert_v6(TestIPsCollection.Guangzhou.Location, TestIPsCollection.Guangzhou.CU169)
 }
 
@@ -126,7 +128,7 @@ func FastTestv6(tm bool, outEnable bool, paramsFastTrace ParamsFastTrace) {
 
 	oe = outEnable
 
-	fmt.Println("您想测试哪些ISP的路由？\n1. 国内四网\n2. 电信\n3. 联通\n4. 移动\n5. 教育网\n6. 全部")
+	fmt.Println("您想测试哪些ISP的路由？\n1. 北京三网快速测试\n2. 全国电信\n3. 全国联通\n4. 全国移动\n5. 全国教育网\n6. 全国五网")
 	fmt.Print("请选择选项：")
 	_, err := fmt.Scanln(&c)
 	if err != nil {
