@@ -35,6 +35,7 @@ type ParamsFastTrace struct {
 	Timeout        time.Duration
 	File           string
 	DontFragment   bool
+	Dot			   string
 }
 
 type IpListElement struct {
@@ -49,7 +50,8 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 	fmt.Fprintf(color.Output, "%s\n", color.New(color.FgYellow, color.Bold).Sprintf("『%s %s 』", location, ispCollection.ISPName))
 	fmt.Printf("traceroute to %s, %d hops max, %d byte packets\n", ispCollection.IP, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize)
 
-	ip, err := util.DomainLookUp(ispCollection.IP, "4", "", true)
+	// ip, err := util.DomainLookUp(ispCollection.IP, "4", "", true)
+	ip, err := util.DomainLookUp(ispCollection.IP, "4", f.ParamsFastTrace.Dot, true)
 	if err != nil {
 		log.Fatal(err)
 	}

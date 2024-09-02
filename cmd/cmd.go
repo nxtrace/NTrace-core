@@ -114,6 +114,7 @@ func Excute() {
 			Timeout:        time.Duration(*timeout) * time.Millisecond,
 			File:           *file,
 			DontFragment:   *dontFragment,
+			Dot:			*dot,
 		}
 
 		fastTrace.FastTest(*tcp, *output, paramsFastTrace)
