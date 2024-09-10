@@ -54,6 +54,11 @@ var Beijing = BackBoneCollection{
 		IPv6:    "ipv6.pek-4134.endpoint.nxtrace.org.",
 	},
 
+	CTCN2: ISPCollection{
+		ISPName: CTCN2,
+		IP:      "ipv4.pek-4809.endpoint.nxtrace.org.",
+	},
+
 	CU169: ISPCollection{
 		ISPName: CU169,
 		IP:      "ipv4.pek-4837.endpoint.nxtrace.org.",
@@ -141,16 +146,31 @@ var Guangzhou = BackBoneCollection{
 		IPv6:    "ipv6.can-4134.endpoint.nxtrace.org.",
 	},
 
+	CTCN2: ISPCollection{
+		ISPName: CTCN2,
+		IP:      "ipv4.can-4809.endpoint.nxtrace.org.",
+	},
+
 	CU169: ISPCollection{
 		ISPName: CU169,
 		IP:      "ipv4.can-4837.endpoint.nxtrace.org.",
 		IPv6:    "ipv6.can-4837.endpoint.nxtrace.org.",
 	},
 
+	CU9929: ISPCollection{
+		ISPName: CU9929,
+		IP:      "ipv4.can-9929.endpoint.nxtrace.org.",
+	},
+
 	CM: ISPCollection{
 		ISPName: CM,
 		IP:      "ipv4.can-9808.endpoint.nxtrace.org.",
 		IPv6:    "ipv6.can-9808.endpoint.nxtrace.org.",
+	},
+
+	CMIN2: ISPCollection{
+		ISPName: CMIN2,
+		IP:      "ipv4.can-58807.endpoint.nxtrace.org.",
 	},
 
 	// 中山大学
