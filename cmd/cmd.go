@@ -3,7 +3,6 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/fatih/color"
 	"log"
 	"net"
 	"os"
@@ -11,6 +10,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/fatih/color"
 
 	"github.com/akamensky/argparse"
 	"github.com/nxtrace/NTrace-core/config"
@@ -114,7 +115,7 @@ func Excute() {
 			Timeout:        time.Duration(*timeout) * time.Millisecond,
 			File:           *file,
 			DontFragment:   *dontFragment,
-			Dot:			*dot,
+			Dot:            *dot,
 		}
 
 		fastTrace.FastTest(*tcp, *output, paramsFastTrace)
@@ -186,7 +187,9 @@ func Excute() {
 			w.Interrupt = make(chan os.Signal, 1)
 			signal.Notify(w.Interrupt, os.Interrupt)
 			defer func() {
-				w.Conn.Close()
+				if w.Conn != nil {
+					w.Conn.Close()
+				}
 			}()
 		}
 	}
