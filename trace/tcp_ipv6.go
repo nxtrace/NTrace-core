@@ -47,7 +47,7 @@ func (t *TCPTracerv6) Execute() (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	t.icmp, err = icmp.ListenPacket("ip6:58", "::")
+	t.icmp, err = icmp.ListenPacket("ip6:ipv6-icmp", "::")
 	if err != nil {
 		return &t.res, err
 	}
