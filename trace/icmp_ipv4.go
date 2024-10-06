@@ -69,7 +69,7 @@ func (t *ICMPTracer) Execute() (*Result, error) {
 
 	var err error
 
-	t.icmpListen, err = internal.ListenICMP("ip4:1", t.SrcAddr)
+	t.icmpListen, err = internal.ListenICMP("ip4:icmp", t.SrcAddr)
 	if err != nil {
 		return &t.res, err
 	}
