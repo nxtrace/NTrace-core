@@ -120,6 +120,14 @@ Document Language: [English](README.md) | 简体中文
 
      * scoop-extra 由 soenggam 维护
 
+* X-CMD
+  * [x-cmd](https://cn.x-cmd.com) 是一个使用 posix shell 实现的轻量级跨平台包管理器。使用单个命令快速下载并执行 `nexttrace` ： `x nexttrace`
+     * 您还可以在用户级安装 `nexttrace`，且不需要 root 权限
+
+          ```shell
+          x env use nexttrace
+          ```
+
 请注意，以上多种安装方式的仓库均由开源爱好者自行维护，不保证可用性和及时更新，如遇到问题请联系仓库维护者解决，或使用本项目官方编译提供的二进制包。
 
 ### Manual Install
