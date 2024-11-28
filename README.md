@@ -112,13 +112,13 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
         * Scoop-extra is maintained by soenggam
 
 * X-CMD
-  * [x-cmd](https://x-cmd.com) is a lightweight cross-platform package manager implemented in posix shell. Quickly download and execute `nexttrace` with a single command: [`x nexttrace`](https://x-cmd.com/pkg/nexttrace)
+    * [x-cmd](https://x-cmd.com) is a lightweight cross-platform package manager implemented in posix shell. Quickly download and execute `nexttrace` with a single command: [`x nexttrace`](https://x-cmd.com/pkg/nexttrace)
 
-    * You can also install `nexttrace` in the user level without requiring root privileges.
+        * You can also install `nexttrace` in the user level without requiring root privileges.
 
-        ```bash
-        $ x env use nexttrace
-        ```
+             ```shell
+             x env use nexttrace
+             ```
 
 
 Please note, the repositories for all of the above installation methods are maintained by open source enthusiasts. Availability and timely updates are not guaranteed. If you encounter problems, please contact the repository maintainer to solve them, or use the binary packages provided by the official build of this project.
