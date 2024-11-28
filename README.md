@@ -112,12 +112,12 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
         * Scoop-extra is maintained by soenggam
 
 * X-CMD
-  * [x-cmd](https://x-cmd.com) is a lightweight cross-platform package manager implemented in posix shell. Quickly download and execute `ezcheck` with a single command: [`x ezcheck`](https://x-cmd.com/pkg/ezcheck)
+  * [x-cmd](https://x-cmd.com) is a lightweight cross-platform package manager implemented in posix shell. Quickly download and execute `nexttrace` with a single command: [`x nexttrace`](https://x-cmd.com/pkg/nexttrace)
 
-    * You can also install `ezcheck` in the user level without requiring root privileges.
+    * You can also install `nexttrace` in the user level without requiring root privileges.
 
         ```bash
-        $ x env use ezcheck
+        $ x env use nexttrace
         ```
 
 
