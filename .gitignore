@@ -163,3 +163,5 @@ Temporary Items
 
 # compile target directory
 dist/
+
+NTrace-core

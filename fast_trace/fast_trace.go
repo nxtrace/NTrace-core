@@ -48,7 +48,7 @@ var oe = false
 
 func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 	fmt.Fprintf(color.Output, "%s\n", color.New(color.FgYellow, color.Bold).Sprintf("『%s %s 』", location, ispCollection.ISPName))
-	fmt.Printf("traceroute to %s, %d hops max, %d byte packets\n", ispCollection.IP, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize)
+	fmt.Printf("traceroute to %s, %d hops max, %d byte packets, %s mode\n", ispCollection.IP, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize, strings.ToUpper(string(f.TracerouteMethod)))
 
 	// ip, err := util.DomainLookUp(ispCollection.IP, "4", "", true)
 	ip, err := util.DomainLookUp(ispCollection.IP, "4", f.ParamsFastTrace.Dot, true)
@@ -89,7 +89,7 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 		log.SetOutput(fp)
 		log.SetFlags(0)
 		log.Printf("『%s %s 』\n", location, ispCollection.ISPName)
-		log.Printf("traceroute to %s, %d hops max, %d byte packets\n", ispCollection.IP, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize)
+		log.Printf("traceroute to %s, %d hops max, %d byte packets, %s mode\n", ispCollection.IP, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize, strings.ToUpper(string(f.TracerouteMethod)))
 		conf.RealtimePrinter = tracelog.RealtimePrinter
 	} else {
 		conf.RealtimePrinter = printer.RealtimePrinter
@@ -283,9 +283,9 @@ func testFile(paramsFastTrace ParamsFastTrace, tm bool) {
 			color.New(color.FgYellow, color.Bold).Sprint("『 "+ip.Desc+"』"),
 		)
 		if util.EnableHidDstIP == "" {
-			fmt.Printf("traceroute to %s, %d hops max, %d bytes payload\n", ip.Ip, paramsFastTrace.MaxHops, paramsFastTrace.PktSize)
+			fmt.Printf("traceroute to %s, %d hops max, %d bytes payload, %s mode\n", ip.Ip, paramsFastTrace.MaxHops, paramsFastTrace.PktSize, strings.ToUpper(string(tracerouteMethod)))
 		} else {
-			fmt.Printf("traceroute to %s, %d hops max, %d bytes payload\n", util.HideIPPart(ip.Ip), paramsFastTrace.MaxHops, paramsFastTrace.PktSize)
+			fmt.Printf("traceroute to %s, %d hops max, %d bytes payload, %s mode\n", util.HideIPPart(ip.Ip), paramsFastTrace.MaxHops, paramsFastTrace.PktSize, strings.ToUpper(string(tracerouteMethod)))
 		}
 		var srcAddr string
 		if ip.Version4 {
@@ -354,7 +354,7 @@ func testFile(paramsFastTrace ParamsFastTrace, tm bool) {
 			log.SetOutput(fp)
 			log.SetFlags(0)
 			log.Printf("『%s』\n", ip.Desc)
-			log.Printf("traceroute to %s, %d hops max, %d byte packets\n", ip.Ip, paramsFastTrace.MaxHops, paramsFastTrace.PktSize)
+			log.Printf("traceroute to %s, %d hops max, %d byte packets, %s mode\n", ip.Ip, paramsFastTrace.MaxHops, paramsFastTrace.PktSize, strings.ToUpper(string(tracerouteMethod)))
 			conf.RealtimePrinter = tracelog.RealtimePrinter
 			err = fp.Close()
 			if err != nil {

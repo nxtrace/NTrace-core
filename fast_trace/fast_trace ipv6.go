@@ -12,13 +12,14 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 )
 
 //var pFastTracer ParamsFastTrace
 
 func (f *FastTracer) tracert_v6(location string, ispCollection ISPCollection) {
 	fmt.Fprintf(color.Output, "%s\n", color.New(color.FgYellow, color.Bold).Sprintf("『%s %s 』", location, ispCollection.ISPName))
-	fmt.Printf("traceroute to %s, %d hops max, %d byte packets\n", ispCollection.IPv6, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize)
+	fmt.Printf("traceroute to %s, %d hops max, %d byte packets, %s mode\n", ispCollection.IPv6, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize, strings.ToUpper(string(f.TracerouteMethod)))
 
 	// ip, err := util.DomainLookUp(ispCollection.IPv6, "6", "", true)
 	ip, err := util.DomainLookUp(ispCollection.IPv6, "6", f.ParamsFastTrace.Dot, true)
@@ -58,7 +59,7 @@ func (f *FastTracer) tracert_v6(location string, ispCollection ISPCollection) {
 		log.SetOutput(fp)
 		log.SetFlags(0)
 		log.Printf("『%s %s 』\n", location, ispCollection.ISPName)
-		log.Printf("traceroute to %s, %d hops max, %d byte packets\n", ispCollection.IPv6, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize)
+		log.Printf("traceroute to %s, %d hops max, %d byte packets, %s mode\n", ispCollection.IPv6, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize, strings.ToUpper(string(f.TracerouteMethod)))
 		conf.RealtimePrinter = tracelog.RealtimePrinter
 	} else {
 		conf.RealtimePrinter = printer.RealtimePrinter

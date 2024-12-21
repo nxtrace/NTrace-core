@@ -133,6 +133,7 @@ func Excute() {
 	}
 
 	if strings.Contains(domain, "/") {
+		domain = "n" + domain
 		parts := strings.Split(domain, "/")
 		if len(parts) < 3 {
 			fmt.Println("Invalid input")
@@ -239,10 +240,6 @@ func Excute() {
 		}
 	}
 
-	if !*jsonPrint {
-		printer.PrintTraceRouteNav(ip, domain, *dataOrigin, *maxHops, *packetSize)
-	}
-
 	var m trace.Method
 
 	switch {
@@ -252,6 +249,10 @@ func Excute() {
 		m = trace.UDPTrace
 	default:
 		m = trace.ICMPTrace
+	}
+
+	if !*jsonPrint {
+		printer.PrintTraceRouteNav(ip, domain, *dataOrigin, *maxHops, *packetSize, *srcAddr, string(m))
 	}
 
 	if !*tcp && *port == 80 {

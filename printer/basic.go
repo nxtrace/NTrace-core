@@ -6,6 +6,7 @@ import (
 	"github.com/nxtrace/NTrace-core/trace"
 	"github.com/nxtrace/NTrace-core/util"
 	"net"
+	"strings"
 
 	"github.com/fatih/color"
 )
@@ -76,16 +77,21 @@ func sponsor() {
 //	)
 //}
 
-func PrintTraceRouteNav(ip net.IP, domain string, dataOrigin string, maxHops int, packetSize int) {
+func PrintTraceRouteNav(ip net.IP, domain string, dataOrigin string, maxHops int, packetSize int, srcAddr string, mode string) {
 	fmt.Println("IP Geo Data Provider: " + dataOrigin)
+	if srcAddr == "" {
+		srcAddr = "traceroute to"
+	} else {
+		srcAddr += " ->"
+	}
 	if util.EnableHidDstIP == "" {
 		if ip.String() == domain {
-			fmt.Printf("traceroute to %s, %d hops max, %d bytes payload\n", ip.String(), maxHops, packetSize)
+			fmt.Printf("%s %s, %d hops max, %d bytes payload, %s mode\n", srcAddr, ip.String(), maxHops, packetSize, strings.ToUpper(mode))
 		} else {
-			fmt.Printf("traceroute to %s (%s), %d hops max, %d bytes payload\n", ip.String(), domain, maxHops, packetSize)
+			fmt.Printf("%s %s (%s), %d hops max, %d bytes payload, %s mode\n", srcAddr, ip.String(), domain, maxHops, packetSize, strings.ToUpper(mode))
 		}
 	} else {
-		fmt.Printf("traceroute to %s, %d hops max, %d bytes payload\n", util.HideIPPart(ip.String()), maxHops, packetSize)
+		fmt.Printf("%s %s, %d hops max, %d bytes payload, %s mode\n", srcAddr, util.HideIPPart(ip.String()), maxHops, packetSize, strings.ToUpper(mode))
 	}
 }
 
