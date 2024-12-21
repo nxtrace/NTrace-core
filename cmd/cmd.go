@@ -35,7 +35,7 @@ func Excute() {
 	tcp := parser.Flag("T", "tcp", &argparse.Options{Help: "Use TCP SYN for tracerouting (default port is 80)"})
 	udp := parser.Flag("U", "udp", &argparse.Options{Help: "Use UDP SYN for tracerouting (default port is 33494)"})
 	fast_trace := parser.Flag("F", "fast-trace", &argparse.Options{Help: "One-Key Fast Trace to China ISPs"})
-	port := parser.Int("p", "port", &argparse.Options{Help: "Set the destination port to use. With default of 80 for \"tcp\", 33494 for \"udp\""})
+	port := parser.Int("p", "port", &argparse.Options{Help: "Set the destination port to use. With default of 80 for \"tcp\", 33494 for \"udp\"", Default: 80})
 	numMeasurements := parser.Int("q", "queries", &argparse.Options{Default: 3, Help: "Set the number of probes per each hop"})
 	parallelRequests := parser.Int("", "parallel-requests", &argparse.Options{Default: 18, Help: "Set ParallelRequests number. It should be 1 when there is a multi-routing"})
 	maxHops := parser.Int("m", "max-hops", &argparse.Options{Default: 30, Help: "Set the max number of hops (max TTL to be reached)"})
@@ -96,16 +96,28 @@ func Excute() {
 		os.Exit(0)
 	}
 
+	if !*tcp && *port == 80 {
+		*port = 33494
+	}
+
 	domain := *str
 
-	if *port == 0 {
-		*port = 80
+	var m trace.Method
+
+	switch {
+	case *tcp:
+		m = trace.TCPTrace
+	case *udp:
+		m = trace.UDPTrace
+	default:
+		m = trace.ICMPTrace
 	}
 
 	if *fast_trace || *file != "" {
 		var paramsFastTrace = fastTrace.ParamsFastTrace{
 			SrcDev:         *srcDev,
 			SrcAddr:        *srcAddr,
+			DestPort:       *port,
 			BeginHop:       *beginHop,
 			MaxHops:        *maxHops,
 			RDns:           !*noRdns,
@@ -118,7 +130,7 @@ func Excute() {
 			Dot:            *dot,
 		}
 
-		fastTrace.FastTest(*tcp, *output, paramsFastTrace)
+		fastTrace.FastTest(m, *output, paramsFastTrace)
 		if *output {
 			fmt.Println("您的追踪日志已经存放在 /tmp/trace.log 中")
 		}
@@ -133,6 +145,7 @@ func Excute() {
 	}
 
 	if strings.Contains(domain, "/") {
+		domain = "n" + domain
 		parts := strings.Split(domain, "/")
 		if len(parts) < 3 {
 			fmt.Println("Invalid input")
@@ -240,22 +253,7 @@ func Excute() {
 	}
 
 	if !*jsonPrint {
-		printer.PrintTraceRouteNav(ip, domain, *dataOrigin, *maxHops, *packetSize)
-	}
-
-	var m trace.Method
-
-	switch {
-	case *tcp:
-		m = trace.TCPTrace
-	case *udp:
-		m = trace.UDPTrace
-	default:
-		m = trace.ICMPTrace
-	}
-
-	if !*tcp && *port == 80 {
-		*port = 33494
+		printer.PrintTraceRouteNav(ip, domain, *dataOrigin, *maxHops, *packetSize, *srcAddr, string(m))
 	}
 
 	util.DestIP = ip.String()

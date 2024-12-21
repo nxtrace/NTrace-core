@@ -26,6 +26,7 @@ type FastTracer struct {
 type ParamsFastTrace struct {
 	SrcDev         string
 	SrcAddr        string
+	DestPort       int
 	BeginHop       int
 	MaxHops        int
 	RDns           bool
@@ -48,7 +49,7 @@ var oe = false
 
 func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 	fmt.Fprintf(color.Output, "%s\n", color.New(color.FgYellow, color.Bold).Sprintf("『%s %s 』", location, ispCollection.ISPName))
-	fmt.Printf("traceroute to %s, %d hops max, %d byte packets\n", ispCollection.IP, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize)
+	fmt.Printf("traceroute to %s, %d hops max, %d byte packets, %s mode\n", ispCollection.IP, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize, strings.ToUpper(string(f.TracerouteMethod)))
 
 	// ip, err := util.DomainLookUp(ispCollection.IP, "4", "", true)
 	ip, err := util.DomainLookUp(ispCollection.IP, "4", f.ParamsFastTrace.Dot, true)
@@ -58,7 +59,7 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 	var conf = trace.Config{
 		BeginHop:         f.ParamsFastTrace.BeginHop,
 		DestIP:           ip,
-		DestPort:         80,
+		DestPort:         f.ParamsFastTrace.DestPort,
 		MaxHops:          f.ParamsFastTrace.MaxHops,
 		NumMeasurements:  3,
 		ParallelRequests: 18,
@@ -89,7 +90,7 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 		log.SetOutput(fp)
 		log.SetFlags(0)
 		log.Printf("『%s %s 』\n", location, ispCollection.ISPName)
-		log.Printf("traceroute to %s, %d hops max, %d byte packets\n", ispCollection.IP, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize)
+		log.Printf("traceroute to %s, %d hops max, %d byte packets, %s mode\n", ispCollection.IP, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize, strings.ToUpper(string(f.TracerouteMethod)))
 		conf.RealtimePrinter = tracelog.RealtimePrinter
 	} else {
 		conf.RealtimePrinter = printer.RealtimePrinter
@@ -103,13 +104,13 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 	fmt.Println()
 }
 
-func FastTest(tm bool, outEnable bool, paramsFastTrace ParamsFastTrace) {
+func FastTest(traceMode trace.Method, outEnable bool, paramsFastTrace ParamsFastTrace) {
 	// tm means tcp mode
 	var c string
 	oe = outEnable
 
 	if paramsFastTrace.File != "" {
-		testFile(paramsFastTrace, tm)
+		testFile(paramsFastTrace, traceMode)
 		return
 	}
 
@@ -139,7 +140,7 @@ func FastTest(tm bool, outEnable bool, paramsFastTrace ParamsFastTrace) {
 				}
 			}
 		}
-		FastTestv6(tm, outEnable, paramsFastTrace)
+		FastTestv6(traceMode, outEnable, paramsFastTrace)
 		return
 	}
 	if paramsFastTrace.SrcDev != "" {
@@ -180,11 +181,13 @@ func FastTest(tm bool, outEnable bool, paramsFastTrace ParamsFastTrace) {
 		w.Conn.Close()
 	}()
 
-	if !tm {
+	switch traceMode {
+	case trace.ICMPTrace:
 		ft.TracerouteMethod = trace.ICMPTrace
-		fmt.Println("您将默认使用ICMP协议进行路由跟踪，如果您想使用TCP SYN进行路由跟踪，可以加入 -T 参数")
-	} else {
+	case trace.TCPTrace:
 		ft.TracerouteMethod = trace.TCPTrace
+	case trace.UDPTrace:
+		ft.TracerouteMethod = trace.UDPTrace
 	}
 
 	switch c {
@@ -205,7 +208,7 @@ func FastTest(tm bool, outEnable bool, paramsFastTrace ParamsFastTrace) {
 	}
 }
 
-func testFile(paramsFastTrace ParamsFastTrace, tm bool) {
+func testFile(paramsFastTrace ParamsFastTrace, traceMode trace.Method) {
 	// 建立 WebSocket 连接
 	w := wshandle.New()
 	w.Interrupt = make(chan os.Signal, 1)
@@ -215,11 +218,13 @@ func testFile(paramsFastTrace ParamsFastTrace, tm bool) {
 	}()
 
 	var tracerouteMethod trace.Method
-	if !tm {
+	switch traceMode {
+	case trace.ICMPTrace:
 		tracerouteMethod = trace.ICMPTrace
-		fmt.Println("您将默认使用ICMP协议进行路由跟踪，如果您想使用TCP SYN进行路由跟踪，可以加入 -T 参数")
-	} else {
+	case trace.TCPTrace:
 		tracerouteMethod = trace.TCPTrace
+	case trace.UDPTrace:
+		tracerouteMethod = trace.UDPTrace
 	}
 
 	filePath := paramsFastTrace.File
@@ -283,9 +288,9 @@ func testFile(paramsFastTrace ParamsFastTrace, tm bool) {
 			color.New(color.FgYellow, color.Bold).Sprint("『 "+ip.Desc+"』"),
 		)
 		if util.EnableHidDstIP == "" {
-			fmt.Printf("traceroute to %s, %d hops max, %d bytes payload\n", ip.Ip, paramsFastTrace.MaxHops, paramsFastTrace.PktSize)
+			fmt.Printf("traceroute to %s, %d hops max, %d bytes payload, %s mode\n", ip.Ip, paramsFastTrace.MaxHops, paramsFastTrace.PktSize, strings.ToUpper(string(tracerouteMethod)))
 		} else {
-			fmt.Printf("traceroute to %s, %d hops max, %d bytes payload\n", util.HideIPPart(ip.Ip), paramsFastTrace.MaxHops, paramsFastTrace.PktSize)
+			fmt.Printf("traceroute to %s, %d hops max, %d bytes payload, %s mode\n", util.HideIPPart(ip.Ip), paramsFastTrace.MaxHops, paramsFastTrace.PktSize, strings.ToUpper(string(tracerouteMethod)))
 		}
 		var srcAddr string
 		if ip.Version4 {
@@ -331,7 +336,7 @@ func testFile(paramsFastTrace ParamsFastTrace, tm bool) {
 		var conf = trace.Config{
 			BeginHop:         paramsFastTrace.BeginHop,
 			DestIP:           net.ParseIP(ip.Ip),
-			DestPort:         80,
+			DestPort:         paramsFastTrace.DestPort,
 			MaxHops:          paramsFastTrace.MaxHops,
 			NumMeasurements:  3,
 			ParallelRequests: 18,
@@ -354,7 +359,7 @@ func testFile(paramsFastTrace ParamsFastTrace, tm bool) {
 			log.SetOutput(fp)
 			log.SetFlags(0)
 			log.Printf("『%s』\n", ip.Desc)
-			log.Printf("traceroute to %s, %d hops max, %d byte packets\n", ip.Ip, paramsFastTrace.MaxHops, paramsFastTrace.PktSize)
+			log.Printf("traceroute to %s, %d hops max, %d byte packets, %s mode\n", ip.Ip, paramsFastTrace.MaxHops, paramsFastTrace.PktSize, strings.ToUpper(string(tracerouteMethod)))
 			conf.RealtimePrinter = tracelog.RealtimePrinter
 			err = fp.Close()
 			if err != nil {

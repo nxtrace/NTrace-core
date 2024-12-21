@@ -12,13 +12,14 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 )
 
 //var pFastTracer ParamsFastTrace
 
 func (f *FastTracer) tracert_v6(location string, ispCollection ISPCollection) {
 	fmt.Fprintf(color.Output, "%s\n", color.New(color.FgYellow, color.Bold).Sprintf("『%s %s 』", location, ispCollection.ISPName))
-	fmt.Printf("traceroute to %s, %d hops max, %d byte packets\n", ispCollection.IPv6, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize)
+	fmt.Printf("traceroute to %s, %d hops max, %d byte packets, %s mode\n", ispCollection.IPv6, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize, strings.ToUpper(string(f.TracerouteMethod)))
 
 	// ip, err := util.DomainLookUp(ispCollection.IPv6, "6", "", true)
 	ip, err := util.DomainLookUp(ispCollection.IPv6, "6", f.ParamsFastTrace.Dot, true)
@@ -28,7 +29,7 @@ func (f *FastTracer) tracert_v6(location string, ispCollection ISPCollection) {
 	var conf = trace.Config{
 		BeginHop:         f.ParamsFastTrace.BeginHop,
 		DestIP:           ip,
-		DestPort:         80,
+		DestPort:         f.ParamsFastTrace.DestPort,
 		MaxHops:          f.ParamsFastTrace.MaxHops,
 		NumMeasurements:  3,
 		ParallelRequests: 18,
@@ -58,7 +59,7 @@ func (f *FastTracer) tracert_v6(location string, ispCollection ISPCollection) {
 		log.SetOutput(fp)
 		log.SetFlags(0)
 		log.Printf("『%s %s 』\n", location, ispCollection.ISPName)
-		log.Printf("traceroute to %s, %d hops max, %d byte packets\n", ispCollection.IPv6, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize)
+		log.Printf("traceroute to %s, %d hops max, %d byte packets, %s mode\n", ispCollection.IPv6, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize, strings.ToUpper(string(f.TracerouteMethod)))
 		conf.RealtimePrinter = tracelog.RealtimePrinter
 	} else {
 		conf.RealtimePrinter = printer.RealtimePrinter
@@ -123,7 +124,7 @@ func (f *FastTracer) testFast_v6() {
 	//f.tracert_v6(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.CST)
 }
 
-func FastTestv6(tm bool, outEnable bool, paramsFastTrace ParamsFastTrace) {
+func FastTestv6(traceMode trace.Method, outEnable bool, paramsFastTrace ParamsFastTrace) {
 	var c string
 
 	oe = outEnable
@@ -147,11 +148,14 @@ func FastTestv6(tm bool, outEnable bool, paramsFastTrace ParamsFastTrace) {
 		w.Conn.Close()
 	}()
 
-	if !tm {
+	switch traceMode {
+	case trace.ICMPTrace:
 		ft.TracerouteMethod = trace.ICMPTrace
-		fmt.Println("您将默认使用ICMP协议进行路由跟踪，如果您想使用TCP SYN进行路由跟踪，可以加入 -T 参数")
-	} else {
+	case trace.TCPTrace:
 		ft.TracerouteMethod = trace.TCPTrace
+	case trace.UDPTrace:
+		fmt.Println("[Info] IPv6 UDP Traceroute is not supported right now.")
+		os.Exit(0)
 	}
 
 	switch c {
