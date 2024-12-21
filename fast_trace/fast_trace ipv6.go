@@ -29,7 +29,7 @@ func (f *FastTracer) tracert_v6(location string, ispCollection ISPCollection) {
 	var conf = trace.Config{
 		BeginHop:         f.ParamsFastTrace.BeginHop,
 		DestIP:           ip,
-		DestPort:         80,
+		DestPort:         f.ParamsFastTrace.DestPort,
 		MaxHops:          f.ParamsFastTrace.MaxHops,
 		NumMeasurements:  3,
 		ParallelRequests: 18,
@@ -124,7 +124,7 @@ func (f *FastTracer) testFast_v6() {
 	//f.tracert_v6(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.CST)
 }
 
-func FastTestv6(tm bool, outEnable bool, paramsFastTrace ParamsFastTrace) {
+func FastTestv6(traceMode trace.Method, outEnable bool, paramsFastTrace ParamsFastTrace) {
 	var c string
 
 	oe = outEnable
@@ -148,11 +148,14 @@ func FastTestv6(tm bool, outEnable bool, paramsFastTrace ParamsFastTrace) {
 		w.Conn.Close()
 	}()
 
-	if !tm {
+	switch traceMode {
+	case trace.ICMPTrace:
 		ft.TracerouteMethod = trace.ICMPTrace
-		fmt.Println("您将默认使用ICMP协议进行路由跟踪，如果您想使用TCP SYN进行路由跟踪，可以加入 -T 参数")
-	} else {
+	case trace.TCPTrace:
 		ft.TracerouteMethod = trace.TCPTrace
+	case trace.UDPTrace:
+		fmt.Println("[Info] IPv6 UDP Traceroute is not supported right now.")
+		os.Exit(0)
 	}
 
 	switch c {
