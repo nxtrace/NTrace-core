@@ -7,6 +7,8 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
+	"os/signal"
 	"strings"
 	"time"
 
@@ -57,12 +59,17 @@ func GetFastIP(domain string, port string, enableOutput bool) string {
 
 	var result ResponseInfo
 
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt)
+
 	select {
 	case result = <-results:
-	//等待5s没有结果 视为连不上API了
+		// 正常返回结果
 	case <-time.After(timeout):
-		log.Println("IP connection has been timeout, please check your network")
-
+		log.Println("IP connection has been timeout(5s), please check your network")
+	case <-sigChan: // 响应中断信号
+		log.Println("Program interrupted by user")
+		os.Exit(0)
 	}
 
 	//if len(ips) > 0 {
