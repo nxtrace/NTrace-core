@@ -135,7 +135,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.23'
       - name: Get project dependencies
         run: go mod download
       - name: Build
@@ -144,7 +144,7 @@ jobs:
             -ldflags "-X 'github.com/nxtrace/NTrace-core/config.Version=${BUILD_VERSION}' \
                       -X 'github.com/nxtrace/NTrace-core/config.BuildDate=${BUILD_DATE}' \
                       -X 'github.com/nxtrace/NTrace-core/config.CommitID=${COMMIT_SHA1}'\
-                      -w -s"
+                      -checklinkname=0 -w -s"
       - name: Upload files to Artifacts
         uses: actions/upload-artifact@v4
         with:

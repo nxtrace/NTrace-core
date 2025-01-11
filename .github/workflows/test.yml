@@ -31,12 +31,12 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.23'
       - name: Checkout codebase
         uses: actions/checkout@v4
       - name: Test with unix
         if: ${{ matrix.os != 'windows-latest' }}
-        run: sudo go test -v -coverprofile='coverage.out' -covermode=count ./...
+        run: sudo go test -v -ldflags=-checklinkname=0 -coverprofile='coverage.out' -covermode=count ./...
       - name: Test with windows
         if: ${{ matrix.os == 'windows-latest' }}
-        run: go test -v -coverprofile='coverage.out' -covermode=count ./...
+        run: go test -v -ldflags=-checklinkname=0 -coverprofile='coverage.out' -covermode=count ./...
