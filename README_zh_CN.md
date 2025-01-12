@@ -138,23 +138,6 @@ Document Language: [English](README.md) | 简体中文
     * `Release`里面为很多系统以及不同架构提供了编译好的二进制可执行文件，如果没有可以自行编译。
     * 一些本项目的必要依赖在`Windows`上`Golang`底层实现不完全，所以目前`NextTrace`在`Windows`平台出于实验性支持阶段。
 
-* 从源码安装
-
-    您可在自行安装Go >= 1.20后，使用以下命令安装
-
-    ```shell
-    go install github.com/nxtrace/NTrace-core@latest
-    ```
-    *由于go.mod文件声明和文件目录冲突的问题，你不能用go install命令安装  `NTrace-V1` 版本*
-    安装后可执行文件在`$GOPATH/bin`目录下，如果您没有设置`GOPATH`，则在`$HOME/go/bin`目录下。 
-    安装后二进制文件名称与项目名称保持一致，你需要将下文中的 `nexttrace` 命令替换为 `NTrace-core` 使用
-    如果你希望与下文命令保持一致，可以在执行 `go install` 命令后重命名二进制文件
-
-    ```shell
-    mv  $GOPATH/bin/NTrace-core $GOPATH/bin/nexttrace
-    ``` 
-
-
 ### Get Started
 
 `NextTrace` 默认使用`ICMP`协议发起`TraceRoute`请求，该协议同时支持`IPv4`和`IPv6`

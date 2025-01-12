@@ -29,13 +29,13 @@ for pl in ${PLATFORMS}; do
             -ldflags    "-X 'github.com/nxtrace/NTrace-core/config.Version=${BUILD_VERSION}' \
                         -X 'github.com/nxtrace/NTrace-core/config.BuildDate=${BUILD_DATE}' \
                         -X 'github.com/nxtrace/NTrace-core/config.CommitID=${COMMIT_SHA1}'\
-                        -w -s"
+                        -w -s -checklinkname=0"
     else
         go build -trimpath -o ${TARGET} \
             -ldflags    "-X 'github.com/nxtrace/NTrace-core/config.Version=${BUILD_VERSION}' \
                         -X 'github.com/nxtrace/NTrace-core/config.BuildDate=${BUILD_DATE}' \
                         -X 'github.com/nxtrace/NTrace-core/config.CommitID=${COMMIT_SHA1}'\
-                        -w -s"
+                        -w -s -checklinkname=0"
     fi
 done
     export CGO_ENABLED=0
@@ -49,13 +49,13 @@ done
             -ldflags    "-X 'github.com/nxtrace/NTrace-core/config.Version=${BUILD_VERSION}' \
                         -X 'github.com/nxtrace/NTrace-core/config.BuildDate=${BUILD_DATE}' \
                         -X 'github.com/nxtrace/NTrace-core/config.CommitID=${COMMIT_SHA1}'\
-                        -w -s"
+                        -w -s -checklinkname=0"
     else
         go build -trimpath -o ${TARGET} \
             -ldflags    "-X 'github.com/nxtrace/NTrace-core/config.Version=${BUILD_VERSION}' \
                         -X 'github.com/nxtrace/NTrace-core/config.BuildDate=${BUILD_DATE}' \
                         -X 'github.com/nxtrace/NTrace-core/config.CommitID=${COMMIT_SHA1}'\
-                        -w -s"
+                        -w -s -checklinkname=0"
     fi
 
 

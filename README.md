@@ -128,21 +128,6 @@ Please note, the repositories for all of the above installation methods are main
     * `Release` provides compiled binary executables for many systems and different architectures. If none are available, you can compile it yourself.
     * Some essential dependencies of this project are not fully implemented on `Windows` by `Golang`, so currently, `NextTrace` is in an experimental support phase on the `Windows` platform.
 
-* Install from source
-
-    After installing Go >= 1.20 yourself, you can use the following command to install
-
-    ```shell
-    go install github.com/nxtrace/NTrace-core@latest
-    ```
-    *because of the version constraints conflict, you can not install  `NTrace-V1` by this*
-    After installation, the executable is in the `$GOPATH/bin` directory. If you have not set `GOPATH`, it is in the `$HOME/go/bin` directory.
-    The binary file name is consistent with the project name. You need to replace the `nexttrace` command below with `NTrace-core`.
-     If you want to be consistent with the commands below, you can rename the binary after executing the `go install` command
-    ```shell
-    mv  $GOPATH/bin/NTrace-core $GOPATH/bin/nexttrace
-    ``` 
-
 ### Get Started
 
 `NextTrace` uses the `ICMP` protocol to perform TraceRoute requests by default, which supports both `IPv4` and `IPv6`
