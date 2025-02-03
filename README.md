@@ -57,32 +57,46 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
 
 * Linux
     * One-click installation script
-
       ```shell
       curl nxtrace.org/nt |bash
       ```
+
+    * Install nxtrace from the APT repository
+        * Supports AMD64/ARM64 architectures
+          ```shell
+          echo "deb [trusted=yes] https://github.com/nxtrace/nexttrace-debs/releases/latest/download ./" |
+          sudo tee /etc/apt/sources.list.d/nexttrace.list
+          sudo apt update
+          sudo apt install nexttrace
+          ```
+        * APT repository maintained by wcbing and nxtrace
+
     * Arch Linux AUR installation command
         * Directly download bin package (only supports amd64)
-
-             ```shell
-             yay -S nexttrace-bin
-             ```
+          ```shell
+          yay -S nexttrace-bin
+          ```
         * Build from source (only supports amd64)
-
-             ```shell
-             yay -S nexttrace
-             ```
+          ```shell
+          yay -S nexttrace
+          ```
         * The AUR builds are maintained by ouuan, huyz
-    * Linuxbrew's installation command
 
-        Same as the macOS Homebrew's installation method (homebrew-core version only supports amd64)
+    * Linuxbrew's installation command  
+
+      Same as the macOS Homebrew's installation method (homebrew-core version only supports amd64)
+
     * Deepin installation command
-
       ```shell
       apt install nexttrace
       ```
-    * Termux installation command
+    
+    * [x-cmd](https://www.x-cmd.com/pkg/nexttrace) installation command
+      ```shell
+      x env use nexttrace
+      ```
 
+    * Termux installation command
       ```shell
       pkg install nexttrace-enhanced
       ```
@@ -90,33 +104,29 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
 * macOS
     * macOS Homebrew's installation command
         * Homebrew-core version
-
-             ```shell
-             brew install nexttrace
-             ```
+          ```shell
+          brew install nexttrace
+          ```
         * This repository's ACTIONS automatically built version (updates faster)
-
-             ```shell
-             brew tap nxtrace/nexttrace && brew install nxtrace/nexttrace/nexttrace
-             ```
+          ```shell
+          brew tap nxtrace/nexttrace && brew install nxtrace/nexttrace/nexttrace
+          ```
         * The homebrew-core build is maintained by chenrui333, please note that this version's updates may lag behind the repository Action automatically version
 
 * Windows
+    * Windows WinGet installation command
+        * WinGet version
+          ```powershell
+          winget install nexttrace
+          ```
+        * WinGet build maintained by Dragon1573
+
     * Windows Scoop installation command
         * Scoop-extras version
-
-             ```powershell
-             scoop bucket add extras && scoop install extras/nexttrace
-             ```
-
+          ```powershell
+          scoop bucket add extras && scoop install extras/nexttrace
+          ```
         * Scoop-extra is maintained by soenggam
-
-* X-CMD
-    * [x-cmd](https://x-cmd.com) is a lightweight cross-platform package manager implemented in posix shell. Quickly download and execute `nexttrace` with a single command: [`x nexttrace`](https://x-cmd.com/pkg/nexttrace)
-        * You can also install `nexttrace` in the user level without requiring root privileges.
-             ```shell
-             x env use nexttrace
-             ```
 
 Please note, the repositories for all of the above installation methods are maintained by open source enthusiasts. Availability and timely updates are not guaranteed. If you encounter problems, please contact the repository maintainer to solve them, or use the binary packages provided by the official build of this project.
 
