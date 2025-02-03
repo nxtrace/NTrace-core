@@ -90,6 +90,11 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
       ```shell
       apt install nexttrace
       ```
+    
+    * [x-cmd](https://www.x-cmd.com/pkg/nexttrace) installation command
+      ```shell
+      x env use nexttrace
+      ```
 
     * Termux installation command
       ```shell
@@ -122,12 +127,6 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
           scoop bucket add extras && scoop install extras/nexttrace
           ```
         * Scoop-extra is maintained by soenggam
-
-* X-CMD
-    * [x-cmd](https://www.x-cmd.com/pkg/nexttrace) installation command
-      ```shell
-      x env use nexttrace
-      ```
 
 Please note, the repositories for all of the above installation methods are maintained by open source enthusiasts. Availability and timely updates are not guaranteed. If you encounter problems, please contact the repository maintainer to solve them, or use the binary packages provided by the official build of this project.
 

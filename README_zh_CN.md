@@ -98,6 +98,11 @@ Document Language: [English](README.md) | 简体中文
     apt install nexttrace
     ```
 
+  * [x-cmd](https://cn.x-cmd.com/pkg/nexttrace) 安装命令
+    ```shell
+    x env use nexttrace
+    ```
+
   * Termux 安装命令
     ```shell
     pkg install nexttrace-enhanced
@@ -130,12 +135,6 @@ Document Language: [English](README.md) | 简体中文
     scoop bucket add extras && scoop install extras/nexttrace
     ```
     * scoop-extra 由 soenggam 维护
-
-* X-CMD
-  * [x-cmd](https://cn.x-cmd.com/pkg/nexttrace) 安装命令
-    ```shell
-    x env use nexttrace
-    ```
 
 请注意，以上多种安装方式的仓库均由开源爱好者自行维护，不保证可用性和及时更新，如遇到问题请联系仓库维护者解决，或使用本项目官方编译提供的二进制包。
 
