@@ -64,69 +64,78 @@ Document Language: [English](README.md) | 简体中文
 
 * Linux 
   * 一键安装脚本
-
     ```shell
     curl nxtrace.org/nt | bash
     ```
-    
-  * Arch Linux AUR 安装命令
-     * 直接下载bin包(仅支持amd64)
+  
+  * 从 nxtrace的APT源安装
+    * 支持 AMD64/ARM64 架构
+      ```shell
+      echo "deb [trusted=yes] https://github.com/nxtrace/nexttrace-debs/releases/latest/download ./" |
+      sudo tee /etc/apt/sources.list.d/nexttrace.list
+      sudo apt update
+      sudo apt install nexttrace
+      ```
+    * APT源由 wcbing, nxtrace 维护
 
-          ```shell
-          yay -S nexttrace-bin
-          ```
-     * 从源码构建(仅支持amd64)
-    
-          ```shell
-          yay -S nexttrace
-          ```
-     * AUR 的构建分别由 ouuan, huyz 维护
+  * Arch Linux AUR 安装命令
+    * 直接下载bin包(仅支持amd64)
+      ```shell
+      yay -S nexttrace-bin
+      ```
+    * 从源码构建(仅支持amd64)
+      ```shell
+      yay -S nexttrace
+      ```
+    * AUR 的构建分别由 ouuan, huyz 维护
+
   * Linuxbrew 安装命令
 
      同macOS Homebrew安装方法(homebrew-core版仅支持amd64)
-  * Deepin 安装命令
 
-     ```shell
-     apt install nexttrace
-     ```
+  * Deepin 安装命令
+    ```shell
+    apt install nexttrace
+    ```
+
   * Termux 安装命令
-    
-     ```shell
-     pkg install nexttrace-enhanced
-     ```
+    ```shell
+    pkg install nexttrace-enhanced
+    ```
       
      
 * macOS
   * macOS Homebrew 安装命令
-     * homebrew-core版
-
-          ```shell
-          brew install nexttrace
-          ```
-     * 本仓库ACTIONS自动构建版(更新更快)
-
-          ```shell
-          brew tap nxtrace/nexttrace && brew install nxtrace/nexttrace/nexttrace
-          ```
-     * homebrew-core 构建由 chenrui333 维护，请注意该版本更新可能会落后仓库Action自动构建版本
+    * homebrew-core版
+      ```shell
+      brew install nexttrace
+      ```
+    * 本仓库ACTIONS自动构建版(更新更快)
+      ```shell
+      brew tap nxtrace/nexttrace && brew install nxtrace/nexttrace/nexttrace
+      ```
+    * homebrew-core 构建由 chenrui333 维护，请注意该版本更新可能会落后仓库Action自动构建版本
 
 * Windows
+  * Windows WinGet 安装命令
+    * WinGet 版
+      ```powershell
+      winget install nexttrace
+      ```
+    * WinGet 构建由 Dragon1573 维护
+
   * Windows Scoop 安装命令
-     * scoop-extras版
-
-          ```powershell
-          scoop bucket add extras && scoop install extras/nexttrace
-          ```
-
-     * scoop-extra 由 soenggam 维护
+    * scoop-extras 版
+    ```powershell
+    scoop bucket add extras && scoop install extras/nexttrace
+    ```
+    * scoop-extra 由 soenggam 维护
 
 * X-CMD
-  * [x-cmd](https://cn.x-cmd.com) 是一个使用 posix shell 实现的轻量级跨平台包管理器。使用单个命令快速下载并执行 `nexttrace` ： [`x nexttrace`](https://cn.x-cmd.com/pkg/nexttrace)
-     * 您还可以在用户级安装 `nexttrace`，且不需要 root 权限
-
-          ```shell
-          x env use nexttrace
-          ```
+  * [x-cmd](https://cn.x-cmd.com/pkg/nexttrace) 安装命令
+    ```shell
+    x env use nexttrace
+    ```
 
 请注意，以上多种安装方式的仓库均由开源爱好者自行维护，不保证可用性和及时更新，如遇到问题请联系仓库维护者解决，或使用本项目官方编译提供的二进制包。
 
