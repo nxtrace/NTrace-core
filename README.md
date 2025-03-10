@@ -98,7 +98,7 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
 
     * Termux installation command
       ```shell
-      pkg install nexttrace-enhanced
+      pkg install nexttrace
       ```
 
 * macOS
