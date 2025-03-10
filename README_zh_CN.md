@@ -105,7 +105,7 @@ Document Language: [English](README.md) | 简体中文
 
   * Termux 安装命令
     ```shell
-    pkg install nexttrace-enhanced
+    pkg install nexttrace
     ```
       
      
