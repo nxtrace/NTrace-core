@@ -104,7 +104,8 @@ func (c *WsConn) messageSendHandler() {
 			err := c.Conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 			if err != nil {
 				// log.Println("write close:", err)
-				os.Exit(1)
+				//os.Exit(1)
+				panic(err)
 			}
 			select {
 			// 等到了结果，直接退出
@@ -112,7 +113,8 @@ func (c *WsConn) messageSendHandler() {
 			// 如果等待 1s 还是拿不到结果，不再等待，超时退出
 			case <-time.After(time.Second):
 			}
-			os.Exit(1)
+			//os.Exit(1)
+			panic("请求超时退出")
 			// return
 		}
 	}
@@ -134,8 +136,9 @@ func (c *WsConn) recreateWsConn() {
 				jwtToken, err = pow.GetToken(util.GetPowProvider(), util.GetPowProvider(), port)
 			}
 			if err != nil {
-				log.Println(err)
-				os.Exit(1)
+				//log.Println(err)
+				//os.Exit(1)
+				panic(err)
 			}
 		} else {
 			// 使用 cacheToken
@@ -206,8 +209,9 @@ func createWsConn() *WsConn {
 			jwtToken, err = pow.GetToken(util.GetPowProvider(), util.GetPowProvider(), port)
 		}
 		if err != nil {
-			log.Println(err)
-			os.Exit(1)
+			//log.Println(err)
+			//os.Exit(1)
+			panic(err)
 		}
 		ua = []string{util.UserAgent}
 	}
