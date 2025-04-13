@@ -111,11 +111,9 @@ func (c *WsConn) messageSendHandler() {
 			// 等到了结果，直接退出
 			case <-c.Done:
 			// 如果等待 1s 还是拿不到结果，不再等待，超时退出
-			case <-time.After(time.Second):
+			case <-time.After(1 * time.Second):
 			}
-			//os.Exit(1)
-			panic("请求超时退出")
-			// return
+			os.Exit(0)
 		}
 	}
 }
