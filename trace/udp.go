@@ -4,6 +4,7 @@ import (
 	"log"
 	"math/rand"
 	"net"
+	"strconv"
 	"sync"
 	"time"
 
@@ -23,8 +24,8 @@ type UDPTracer struct {
 	ctx                 context.Context
 	inflightRequest     map[int]chan Hop
 	inflightRequestLock sync.Mutex
-
-	icmp net.PacketConn
+	SrcIP               net.IP
+	icmp                net.PacketConn
 
 	final     int
 	finalLock sync.Mutex
@@ -38,6 +39,8 @@ func (t *UDPTracer) Execute() (*Result, error) {
 		return &t.res, ErrTracerouteExecuted
 	}
 
+	t.SrcIP, _ = util.LocalIPPort(t.DestIP)
+
 	var err error
 	t.icmp, err = icmp.ListenPacket("ip4:icmp", t.SrcAddr)
 	if err != nil {
@@ -48,7 +51,10 @@ func (t *UDPTracer) Execute() (*Result, error) {
 	var cancel context.CancelFunc
 	t.ctx, cancel = context.WithCancel(context.Background())
 	defer cancel()
+	t.inflightRequestLock.Lock()
 	t.inflightRequest = make(map[int]chan Hop)
+	t.inflightRequestLock.Unlock()
+
 	t.final = -1
 
 	go t.listenICMP()
@@ -135,24 +141,36 @@ func (t *UDPTracer) handleICMPMessage(msg ReceivedMessage, data []byte) {
 	}
 }
 
-func (t *UDPTracer) getUDPConn(try int) (net.IP, int, net.PacketConn) {
-	srcIP, _ := util.LocalIPPort(t.DestIP)
+func (t *UDPTracer) getUDPConn(try int) (net.PacketConn, error) {
+	ipString := t.SrcIP.String()
 
-	var ipString string
-	if srcIP == nil {
-		ipString = ""
-	} else {
-		ipString = srcIP.String()
+	var addr string
+	if !t.SrcPortSet {
+		if t.SrcPort == 0 {
+			// 先建立一个临时连接以获取系统分配的端口
+			tempConn, err := net.ListenPacket("udp", ipString+":0")
+			if err != nil {
+				if try > 3 {
+					log.Fatal(err)
+				}
+				return t.getUDPConn(try + 1)
+			}
+			t.SrcPort = tempConn.LocalAddr().(*net.UDPAddr).Port
+			// 关闭临时连接，释放该端口，使其可以被后续新建连接占用
+			tempConn.Close()
+		}
+		t.SrcPortSet = true
 	}
-
-	udpConn, err := net.ListenPacket("udp", ipString+":0")
+	addr = ipString + ":" + strconv.Itoa(t.SrcPort)
+	// 每次新建连接，绑定固定端口
+	udpConn, err := net.ListenPacket("udp", addr)
 	if err != nil {
 		if try > 3 {
-			log.Fatal(err)
+			return nil, err
 		}
 		return t.getUDPConn(try + 1)
 	}
-	return srcIP, udpConn.LocalAddr().(*net.UDPAddr).Port, udpConn
+	return udpConn, nil
 }
 
 func (t *UDPTracer) send(ttl int) error {
@@ -167,22 +185,25 @@ func (t *UDPTracer) send(ttl int) error {
 		return nil
 	}
 
-	srcIP, srcPort, udpConn := t.getUDPConn(0)
-	defer udpConn.Close()
+	udpConn, err := t.getUDPConn(0)
+	if err != nil {
+		return err
+	}
+	defer udpConn.Close() // 确保每次发送完成后关闭连接
 
 	//var payload []byte
 	//if t.Quic {
 	//	payload = GenerateQuicPayloadWithRandomIds()
 	//} else {
 	ipHeader := &layers.IPv4{
-		SrcIP:    srcIP,
+		SrcIP:    t.SrcIP,
 		DstIP:    t.DestIP,
 		Protocol: layers.IPProtocolUDP,
 		TTL:      uint8(ttl),
 	}
 
 	udpHeader := &layers.UDP{
-		SrcPort: layers.UDPPort(srcPort),
+		SrcPort: layers.UDPPort(t.SrcPort),
 		DstPort: layers.UDPPort(t.DestPort),
 	}
 	_ = udpHeader.SetNetworkLayerForChecksum(ipHeader)
@@ -226,15 +247,17 @@ func (t *UDPTracer) send(ttl int) error {
 	// 在对inflightRequest进行写操作的时候应该加锁保护，以免多个goroutine协程试图同时写入造成panic
 	t.inflightRequestLock.Lock()
 	hopCh := make(chan Hop, 1)
-	t.inflightRequest[srcPort] = hopCh
+	t.inflightRequest[t.SrcPort] = hopCh
 	t.inflightRequestLock.Unlock()
-	defer func() {
-		t.inflightRequestLock.Lock()
-		close(hopCh)
-		delete(t.inflightRequest, srcPort)
-		t.inflightRequestLock.Unlock()
-	}()
-
+	/*
+		// 这里属于 2个Sender，N个Receiver的情况，在哪里关闭Channel都容易导致Panic
+		defer func() {
+			t.inflightRequestLock.Lock()
+			close(hopCh)
+			delete(t.inflightRequest, srcPort)
+			t.inflightRequestLock.Unlock()
+		}()
+	*/
 	go func() {
 		reply := make([]byte, 1500)
 		_, peer, err := udpConn.ReadFrom(reply)

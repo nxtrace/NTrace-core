@@ -200,7 +200,12 @@ func (t *TCPTracerv6) send(ttl int) error {
 	}
 	// 随机种子
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	_, srcPort := util.LocalIPPortv6(t.DestIP)
+	if !t.SrcPortSet {
+		if t.SrcPort == 0 {
+			_, t.SrcPort = util.LocalIPPortv6(t.DestIP)
+		}
+		t.SrcPortSet = true
+	}
 	ipHeader := &layers.IPv6{
 		SrcIP:      t.SrcIP,
 		DstIP:      t.DestIP,
@@ -211,7 +216,7 @@ func (t *TCPTracerv6) send(ttl int) error {
 	sequenceNumber := uint32(r.Intn(math.MaxUint16))
 
 	tcpHeader := &layers.TCP{
-		SrcPort: layers.TCPPort(srcPort),
+		SrcPort: layers.TCPPort(t.SrcPort),
 		DstPort: layers.TCPPort(t.DestPort),
 		Seq:     sequenceNumber,
 		SYN:     true,

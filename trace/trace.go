@@ -23,6 +23,7 @@ var (
 
 type Config struct {
 	SrcAddr          string
+	SrcPort          int
 	BeginHop         int
 	MaxHops          int
 	NumMeasurements  int
@@ -32,6 +33,7 @@ type Config struct {
 	DestPort         int
 	Quic             bool
 	IPGeoSource      ipgeo.Source
+	SrcPortSet       bool
 	RDns             bool
 	AlwaysWaitRDNS   bool
 	PacketInterval   int

@@ -211,7 +211,12 @@ func (t *TCPTracer) send(ttl int) error {
 	}
 	// 随机种子
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	_, srcPort := util.LocalIPPort(t.DestIP)
+	if !t.SrcPortSet {
+		if t.SrcPort == 0 {
+			_, t.SrcPort = util.LocalIPPort(t.DestIP)
+		}
+		t.SrcPortSet = true
+	}
 	ipHeader := &layers.IPv4{
 		SrcIP:    t.SrcIP,
 		DstIP:    t.DestIP,
@@ -225,7 +230,7 @@ func (t *TCPTracer) send(ttl int) error {
 	// 使用Uint16兼容32位系统，防止在rand的时候因使用int32而溢出
 	sequenceNumber := uint32(r.Intn(math.MaxUint16))
 	tcpHeader := &layers.TCP{
-		SrcPort: layers.TCPPort(srcPort),
+		SrcPort: layers.TCPPort(t.SrcPort),
 		DstPort: layers.TCPPort(t.DestPort),
 		Seq:     sequenceNumber,
 		SYN:     true,
