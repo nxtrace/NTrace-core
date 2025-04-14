@@ -154,8 +154,7 @@ func FastTestv6(traceMode trace.Method, outEnable bool, paramsFastTrace ParamsFa
 	case trace.TCPTrace:
 		ft.TracerouteMethod = trace.TCPTrace
 	case trace.UDPTrace:
-		fmt.Println("[Info] IPv6 UDP Traceroute is not supported right now.")
-		os.Exit(0)
+		ft.TracerouteMethod = trace.UDPTrace
 	}
 
 	switch c {

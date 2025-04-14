@@ -82,15 +82,13 @@ func Traceroute(method Method, config Config) (*Result, error) {
 		if config.DestIP.To4() != nil {
 			tracer = &UDPTracer{Config: config}
 		} else {
-			//TODO: IPv6 UDP trace 在做了，指新建文件夹（
-			return nil, errors.New("IPv6 UDP Traceroute is not supported")
+			tracer = &UDPTracerIPv6{Config: config}
 		}
 	case TCPTrace:
 		if config.DestIP.To4() != nil {
 			tracer = &TCPTracer{Config: config}
 		} else {
-			tracer = &TCPTracerv6{Config: config}
-			// return nil, errors.New("IPv6 TCP Traceroute is not supported")
+			tracer = &TCPTracerIPv6{Config: config}
 		}
 	default:
 		return &Result{}, ErrInvalidMethod
