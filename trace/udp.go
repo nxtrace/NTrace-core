@@ -137,7 +137,6 @@ func (t *UDPTracer) handleICMPMessage(msg ReceivedMessage, data []byte) {
 }
 
 var cachedLocalPort int
-var localPortOnce sync.Once
 
 func (t *UDPTracer) getUDPConn(try int) (net.IP, int, net.PacketConn, error) {
 	srcIP, _ := util.LocalIPPort(t.DestIP)
@@ -273,7 +272,7 @@ func (t *UDPTracer) send(ttl int) error {
 		}
 		hopCh <- Hop{
 			Success: true,
-			Address: peer,
+			Address: &net.IPAddr{IP: peer.(*net.UDPAddr).IP},
 		}
 	}()
 
@@ -285,7 +284,6 @@ func (t *UDPTracer) send(ttl int) error {
 		if t.final != -1 && ttl > t.final {
 			return nil
 		}
-
 		if addr, ok := h.Address.(*net.IPAddr); ok && addr.IP.Equal(t.DestIP) {
 			t.finalLock.Lock()
 			if t.final == -1 || ttl < t.final {
