@@ -220,7 +220,7 @@ nexttrace --dev eth0 2606:4700:4700::1111
 nexttrace --source 204.98.134.56 9.9.9.9
 ```
 
-`NextTrace` 也可以使用`TCP`和`UDP`协议发起`Traceroute`请求，不过目前`UDP`只支持`IPv4`
+`NextTrace` 也可以使用`TCP`和`UDP`协议发起`Traceroute`请求
 
 ```bash
 # TCP SYN Trace
