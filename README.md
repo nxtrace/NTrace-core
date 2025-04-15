@@ -210,7 +210,7 @@ nexttrace --dev eth0 2606:4700:4700::1111
 nexttrace --source 204.98.134.56 9.9.9.9
 ```
 
-`NextTrace` can also use `TCP` and `UDP` protocols to perform `Traceroute` requests, but `UDP` protocols only supports `IPv4` now
+`NextTrace` can also use `TCP` and `UDP` protocols to perform `Traceroute` requests
 
 ```bash
 # TCP SYN Trace
