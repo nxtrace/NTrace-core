@@ -25,6 +25,12 @@ var PowProviderParam = ""
 var DisableMPLS = GetenvDefault("NEXTTRACE_DISABLEMPLS", "")
 var EnableHidDstIP = GetenvDefault("NEXTTRACE_ENABLEHIDDENDSTIP", "")
 var DestIP string
+var cachedLocalIP net.IP
+var cachedLocalPort int
+var localIPOnce sync.Once
+var cachedLocalIPv6 net.IP
+var cachedLocalPort6 int
+var localIPv6Once sync.Once
 
 func LookupAddr(addr string) ([]string, error) {
 	// 如果在缓存中找到，直接返回
@@ -44,37 +50,70 @@ func LookupAddr(addr string) ([]string, error) {
 	return names, nil
 }
 
-// LocalIPPort get the local ip and port based on our destination ip
-func LocalIPPort(dstip net.IP) (net.IP, int) {
+// getLocalIPPort encapsulates the logic to get local IP and port via a UDP connection
+func getLocalIPPort(dstip net.IP) (net.IP, int) {
 	serverAddr, err := net.ResolveUDPAddr("udp", dstip.String()+":12345")
 	if err != nil {
 		log.Fatal(err)
 	}
+	con, err := net.DialUDP("udp", nil, serverAddr)
+	if err != nil {
+		return nil, -1
+	}
+	defer con.Close()
+	if udpaddr, ok := con.LocalAddr().(*net.UDPAddr); ok {
+		return udpaddr.IP, udpaddr.Port
+	}
+	return nil, -1
+}
 
-	// We don't actually connect to anything, but we can determine
-	// based on our destination ip what source ip we should use.
-	if con, err := net.DialUDP("udp", nil, serverAddr); err == nil {
-		defer con.Close()
-		if udpaddr, ok := con.LocalAddr().(*net.UDPAddr); ok {
-			return udpaddr.IP, udpaddr.Port
-		}
+// getLocalIPPortv6 encapsulates the logic to get local IPv6 and port via a UDP connection
+func getLocalIPPortv6(dstip net.IP) (net.IP, int) {
+	serverAddr, err := net.ResolveUDPAddr("udp", "["+dstip.String()+"]:12345")
+	if err != nil {
+		log.Fatal(err)
+	}
+	con, err := net.DialUDP("udp", nil, serverAddr)
+	if err != nil {
+		return nil, -1
+	}
+	defer con.Close()
+	if udpaddr, ok := con.LocalAddr().(*net.UDPAddr); ok {
+		return udpaddr.IP, udpaddr.Port
+	}
+	return nil, -1
+}
+
+// LocalIPPort returns the local IP and port based on our destination IP, with caching unless NEXTTRACE_RANDOMPORT is set.
+func LocalIPPort(dstip net.IP) (net.IP, int) {
+	// If NEXTTRACE_RANDOMPORT is set, bypass caching and return a new port every time.
+	if GetenvDefault("NEXTTRACE_RANDOMPORT", "") != "" {
+		return getLocalIPPort(dstip)
+	}
+
+	// Otherwise, use the cached value (computed only once).
+	localIPOnce.Do(func() {
+		cachedLocalIP, cachedLocalPort = getLocalIPPort(dstip)
+	})
+	if cachedLocalIP != nil {
+		return cachedLocalIP, cachedLocalPort
 	}
 	return nil, -1
 }
 
 func LocalIPPortv6(dstip net.IP) (net.IP, int) {
-	serverAddr, err := net.ResolveUDPAddr("udp", "["+dstip.String()+"]:12345")
-	if err != nil {
-		log.Fatal(err)
+	// If NEXTTRACE_RANDOMPORT is set, bypass caching and return a new port every time.
+	// 该ENV仅对TCP Mode有效，UDP Mode暂无办法固定Port
+	if GetenvDefault("NEXTTRACE_RANDOMPORT", "") != "" {
+		return getLocalIPPortv6(dstip)
 	}
 
-	// We don't actually connect to anything, but we can determine
-	// based on our destination ip what source ip we should use.
-	if con, err := net.DialUDP("udp", nil, serverAddr); err == nil {
-		defer con.Close()
-		if udpaddr, ok := con.LocalAddr().(*net.UDPAddr); ok {
-			return udpaddr.IP, udpaddr.Port
-		}
+	// Otherwise, use the cached value (computed only once).
+	localIPv6Once.Do(func() {
+		cachedLocalIPv6, cachedLocalPort6 = getLocalIPPortv6(dstip)
+	})
+	if cachedLocalIPv6 != nil {
+		return cachedLocalIPv6, cachedLocalPort6
 	}
 	return nil, -1
 }

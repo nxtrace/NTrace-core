@@ -17,7 +17,7 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-type TCPTracerv6 struct {
+type TCPTracerIPv6 struct {
 	Config
 	wg                  sync.WaitGroup
 	res                 Result
@@ -35,7 +35,7 @@ type TCPTracerv6 struct {
 	fetchLock sync.Mutex
 }
 
-func (t *TCPTracerv6) Execute() (*Result, error) {
+func (t *TCPTracerIPv6) Execute() (*Result, error) {
 	if len(t.res.Hops) > 0 {
 		return &t.res, ErrTracerouteExecuted
 	}
@@ -100,7 +100,7 @@ func (t *TCPTracerv6) Execute() (*Result, error) {
 	return &t.res, nil
 }
 
-func (t *TCPTracerv6) listenICMP() {
+func (t *TCPTracerIPv6) listenICMP() {
 	lc := NewPacketListener(t.icmp, t.ctx)
 	go lc.Start()
 	for {
@@ -133,7 +133,7 @@ func (t *TCPTracerv6) listenICMP() {
 
 // @title    listenTCP
 // @description   监听TCP的响应数据包
-func (t *TCPTracerv6) listenTCP() {
+func (t *TCPTracerIPv6) listenTCP() {
 	lc := NewPacketListener(t.tcp, t.ctx)
 	go lc.Start()
 
@@ -170,7 +170,7 @@ func (t *TCPTracerv6) listenTCP() {
 	}
 }
 
-func (t *TCPTracerv6) handleICMPMessage(msg ReceivedMessage) {
+func (t *TCPTracerIPv6) handleICMPMessage(msg ReceivedMessage) {
 	var sequenceNumber = binary.BigEndian.Uint32(msg.Msg[52:56])
 
 	t.inflightRequestLock.Lock()
@@ -187,7 +187,7 @@ func (t *TCPTracerv6) handleICMPMessage(msg ReceivedMessage) {
 	// log.Println("发送成功")
 }
 
-func (t *TCPTracerv6) send(ttl int) error {
+func (t *TCPTracerIPv6) send(ttl int) error {
 	err := t.sem.Acquire(context.Background(), 1)
 	if err != nil {
 		return err

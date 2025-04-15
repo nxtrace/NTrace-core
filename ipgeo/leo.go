@@ -83,6 +83,11 @@ func receiveParse() {
 	}
 }
 
+// 当前的实现中，每次调用 receiveParse() 都会锁定 WebSocket 连接
+// 当前为单例模式，只启动一个 receiveParse 协程
+
+var receiveParseOnce sync.Once
+
 func LeoIP(ip string, timeout time.Duration, lang string, maptrace bool) (*IPGeoData, error) {
 	// TODO: 根据lang的值请求中文/英文API
 	// TODO: 根据maptrace的值决定是否请求经纬度信息
@@ -100,7 +105,10 @@ func LeoIP(ip string, timeout time.Duration, lang string, maptrace bool) (*IPGeo
 	// 发送请求
 	sendIPRequest(ip)
 	// 同步开启监听
-	go receiveParse()
+	// 确保 receiveParse 只启动一次
+	receiveParseOnce.Do(func() {
+		go receiveParse()
+	})
 
 	// 拥塞，等待数据返回
 	select {

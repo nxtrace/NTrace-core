@@ -210,24 +210,19 @@ func Excute() {
 	//
 	//go func() {
 	//	defer wg.Done()
-	if *udp {
-		if *ipv6Only {
-			fmt.Println("[Info] IPv6 UDP Traceroute is not supported right now.")
-			os.Exit(0)
-		}
+
+	if *ipv6Only {
+		ip, err = util.DomainLookUp(domain, "6", *dot, *jsonPrint)
+	} else if *ipv4Only {
 		ip, err = util.DomainLookUp(domain, "4", *dot, *jsonPrint)
 	} else {
-		if *ipv6Only {
-			ip, err = util.DomainLookUp(domain, "6", *dot, *jsonPrint)
-		} else if *ipv4Only {
-			ip, err = util.DomainLookUp(domain, "4", *dot, *jsonPrint)
-		} else {
-			ip, err = util.DomainLookUp(domain, "all", *dot, *jsonPrint)
-		}
+		ip, err = util.DomainLookUp(domain, "all", *dot, *jsonPrint)
 	}
+
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		//fmt.Println(err)
+		//os.Exit(1)
+		panic(err)
 	}
 	//}()
 	//

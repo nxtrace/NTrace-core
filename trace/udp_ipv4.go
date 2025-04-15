@@ -4,6 +4,7 @@ import (
 	"log"
 	"math/rand"
 	"net"
+	"strconv"
 	"sync"
 	"time"
 
@@ -31,6 +32,7 @@ type UDPTracer struct {
 
 	sem       *semaphore.Weighted
 	fetchLock sync.Mutex
+	udpMutex  sync.Mutex
 }
 
 func (t *UDPTracer) Execute() (*Result, error) {
@@ -135,9 +137,10 @@ func (t *UDPTracer) handleICMPMessage(msg ReceivedMessage, data []byte) {
 	}
 }
 
-func (t *UDPTracer) getUDPConn(try int) (net.IP, int, net.PacketConn) {
-	srcIP, _ := util.LocalIPPort(t.DestIP)
+var cachedLocalPort int
 
+func (t *UDPTracer) getUDPConn(try int) (net.IP, int, net.PacketConn, error) {
+	srcIP, _ := util.LocalIPPort(t.DestIP)
 	var ipString string
 	if srcIP == nil {
 		ipString = ""
@@ -145,14 +148,37 @@ func (t *UDPTracer) getUDPConn(try int) (net.IP, int, net.PacketConn) {
 		ipString = srcIP.String()
 	}
 
-	udpConn, err := net.ListenPacket("udp", ipString+":0")
-	if err != nil {
-		if try > 3 {
-			log.Fatal(err)
+	// Check environment variable to decide caching behavior
+	if util.GetenvDefault("NEXTTRACE_RANDOMPORT", "") == "" {
+		// Use cached random port logic
+		if cachedLocalPort == 0 {
+			// First time: listen on a random port
+			udpConn, err := net.ListenPacket("udp", ipString+":0")
+			if err != nil {
+				if try > 3 {
+					log.Fatal(err)
+				}
+				return srcIP, 0, nil, err
+			}
+			cachedLocalPort = udpConn.LocalAddr().(*net.UDPAddr).Port
+			// Close the initial connection after obtaining the port
+			udpConn.Close()
 		}
-		return t.getUDPConn(try + 1)
+		// Use the cached local port to establish a new connection
+		udpConn, err := net.ListenPacket("udp", ipString+":"+strconv.Itoa(cachedLocalPort))
+		if err != nil {
+			return srcIP, cachedLocalPort, nil, err
+		}
+		return srcIP, cachedLocalPort, udpConn, nil
+	} else {
+		// Without caching: create a new connection each time using a new random port
+		udpConn, err := net.ListenPacket("udp", ipString+":0")
+		if err != nil {
+			return srcIP, 0, nil, err
+		}
+		localPort := udpConn.LocalAddr().(*net.UDPAddr).Port
+		return srcIP, localPort, udpConn, nil
 	}
-	return srcIP, udpConn.LocalAddr().(*net.UDPAddr).Port, udpConn
 }
 
 func (t *UDPTracer) send(ttl int) error {
@@ -167,7 +193,15 @@ func (t *UDPTracer) send(ttl int) error {
 		return nil
 	}
 
-	srcIP, srcPort, udpConn := t.getUDPConn(0)
+	if util.GetenvDefault("NEXTTRACE_RANDOMPORT", "") == "" {
+		t.udpMutex.Lock()
+		defer t.udpMutex.Unlock()
+	}
+
+	srcIP, srcPort, udpConn, err := t.getUDPConn(0)
+	if err != nil {
+		return err
+	}
 	defer udpConn.Close()
 
 	//var payload []byte
@@ -244,7 +278,7 @@ func (t *UDPTracer) send(ttl int) error {
 		}
 		hopCh <- Hop{
 			Success: true,
-			Address: peer,
+			Address: &net.IPAddr{IP: peer.(*net.UDPAddr).IP},
 		}
 	}()
 
@@ -256,7 +290,6 @@ func (t *UDPTracer) send(ttl int) error {
 		if t.final != -1 && ttl > t.final {
 			return nil
 		}
-
 		if addr, ok := h.Address.(*net.IPAddr); ok && addr.IP.Equal(t.DestIP) {
 			t.finalLock.Lock()
 			if t.final == -1 || ttl < t.final {

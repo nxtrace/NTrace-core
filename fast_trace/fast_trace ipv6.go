@@ -116,7 +116,7 @@ func (f *FastTracer) testEDU_v6() {
 	f.tracert_v6(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.CST)
 }
 
-func (f *FastTracer) testFast_v6() {
+func (f *FastTracer) testFastBJ_v6() {
 	f.tracert_v6(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.CT163)
 	f.tracert_v6(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.CU169)
 	f.tracert_v6(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.CM)
@@ -124,12 +124,24 @@ func (f *FastTracer) testFast_v6() {
 	//f.tracert_v6(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.CST)
 }
 
+func (f *FastTracer) testFastSH_v6() {
+	f.tracert_v6(TestIPsCollection.Shanghai.Location, TestIPsCollection.Beijing.CT163)
+	f.tracert_v6(TestIPsCollection.Shanghai.Location, TestIPsCollection.Beijing.CU169)
+	f.tracert_v6(TestIPsCollection.Shanghai.Location, TestIPsCollection.Beijing.CM)
+}
+
+func (f *FastTracer) testFastGZ_v6() {
+	f.tracert_v6(TestIPsCollection.Guangzhou.Location, TestIPsCollection.Beijing.CT163)
+	f.tracert_v6(TestIPsCollection.Guangzhou.Location, TestIPsCollection.Beijing.CU169)
+	f.tracert_v6(TestIPsCollection.Guangzhou.Location, TestIPsCollection.Beijing.CM)
+}
+
 func FastTestv6(traceMode trace.Method, outEnable bool, paramsFastTrace ParamsFastTrace) {
 	var c string
 
 	oe = outEnable
 
-	fmt.Println("您想测试哪些ISP的路由？\n1. 北京三网快速测试\n2. 全国电信\n3. 全国联通\n4. 全国移动\n5. 全国教育网\n6. 全国五网")
+	fmt.Println("您想测试哪些ISP的路由？\n1. 北京三网快速测试\n2. 上海三网快速测试\n3. 广州三网快速测试\n4. 全国电信\n5. 全国联通\n6. 全国移动\n7. 全国教育网\n8. 全国五网")
 	fmt.Print("请选择选项：")
 	_, err := fmt.Scanln(&c)
 	if err != nil {
@@ -154,24 +166,27 @@ func FastTestv6(traceMode trace.Method, outEnable bool, paramsFastTrace ParamsFa
 	case trace.TCPTrace:
 		ft.TracerouteMethod = trace.TCPTrace
 	case trace.UDPTrace:
-		fmt.Println("[Info] IPv6 UDP Traceroute is not supported right now.")
-		os.Exit(0)
+		ft.TracerouteMethod = trace.UDPTrace
 	}
 
 	switch c {
 	case "1":
-		ft.testFast_v6()
+		ft.testFastBJ_v6()
 	case "2":
-		ft.testCT_v6()
+		ft.testFastSH_v6()
 	case "3":
-		ft.testCU_v6()
+		ft.testFastGZ_v6()
 	case "4":
-		ft.testCM_v6()
+		ft.testCT_v6()
 	case "5":
-		ft.testEDU_v6()
+		ft.testCU_v6()
 	case "6":
+		ft.testCM_v6()
+	case "7":
+		ft.testEDU_v6()
+	case "8":
 		ft.testAll_v6()
 	default:
-		ft.testFast_v6()
+		ft.testFastBJ_v6()
 	}
 }
