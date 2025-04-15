@@ -162,7 +162,7 @@ func FastTest(traceMode trace.Method, outEnable bool, paramsFastTrace ParamsFast
 		}
 	}
 
-	fmt.Println("您想测试哪些ISP的路由？\n1. 北京三网快速测试\n2. 全国电信\n3. 全国联通\n4. 全国移动\n5. 全国教育网\n6. 全国五网")
+	fmt.Println("您想测试哪些ISP的路由？\n1. 北京三网快速测试\n2. 上海三网快速测试\n3. 广州三网快速测试\n4. 全国电信\n5. 全国联通\n6. 全国移动\n7. 全国教育网\n8. 全国五网")
 	fmt.Print("请选择选项：")
 	_, err = fmt.Scanln(&c)
 	if err != nil {
@@ -192,19 +192,23 @@ func FastTest(traceMode trace.Method, outEnable bool, paramsFastTrace ParamsFast
 
 	switch c {
 	case "1":
-		ft.testFast()
+		ft.testFastBJ()
 	case "2":
-		ft.testCT()
+		ft.testFastSH()
 	case "3":
-		ft.testCU()
+		ft.testFastGZ()
 	case "4":
-		ft.testCM()
+		ft.testCT()
 	case "5":
-		ft.testEDU()
+		ft.testCU()
 	case "6":
+		ft.testCM()
+	case "7":
+		ft.testEDU()
+	case "8":
 		ft.testAll()
 	default:
-		ft.testFast()
+		ft.testFastBJ()
 	}
 }
 
@@ -430,10 +434,22 @@ func (f *FastTracer) testEDU() {
 	f.tracert(TestIPsCollection.Hefei.Location, TestIPsCollection.Hefei.CST)
 }
 
-func (f *FastTracer) testFast() {
+func (f *FastTracer) testFastBJ() {
 	f.tracert(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.CT163)
 	f.tracert(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.CU169)
 	f.tracert(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.CM)
 	//f.tracert(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.EDU)
 	//f.tracert(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.CST)
+}
+
+func (f *FastTracer) testFastSH() {
+	f.tracert(TestIPsCollection.Shanghai.Location, TestIPsCollection.Beijing.CT163)
+	f.tracert(TestIPsCollection.Shanghai.Location, TestIPsCollection.Beijing.CU169)
+	f.tracert(TestIPsCollection.Shanghai.Location, TestIPsCollection.Beijing.CM)
+}
+
+func (f *FastTracer) testFastGZ() {
+	f.tracert(TestIPsCollection.Guangzhou.Location, TestIPsCollection.Beijing.CT163)
+	f.tracert(TestIPsCollection.Guangzhou.Location, TestIPsCollection.Beijing.CU169)
+	f.tracert(TestIPsCollection.Guangzhou.Location, TestIPsCollection.Beijing.CM)
 }
