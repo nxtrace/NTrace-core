@@ -32,6 +32,7 @@ type UDPTracer struct {
 
 	sem       *semaphore.Weighted
 	fetchLock sync.Mutex
+	udpMutex  sync.Mutex
 }
 
 func (t *UDPTracer) Execute() (*Result, error) {
@@ -190,6 +191,11 @@ func (t *UDPTracer) send(ttl int) error {
 	defer t.wg.Done()
 	if t.final != -1 && ttl > t.final {
 		return nil
+	}
+
+	if util.GetenvDefault("NEXTTRACE_RANDOMPORT", "") == "" {
+		t.udpMutex.Lock()
+		defer t.udpMutex.Unlock()
 	}
 
 	srcIP, srcPort, udpConn, err := t.getUDPConn(0)

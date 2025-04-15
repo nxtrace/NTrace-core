@@ -32,6 +32,7 @@ type UDPTracerIPv6 struct {
 
 	sem       *semaphore.Weighted
 	fetchLock sync.Mutex
+	udpMutex  sync.Mutex
 }
 
 func (t *UDPTracerIPv6) Execute() (*Result, error) {
@@ -118,7 +119,7 @@ func (t *UDPTracerIPv6) listenICMP() {
 }
 
 // handleICMPMessage 处理 ICMPv6 消息并提取 UDP 源端口
-// 
+//
 // ICMPv6 错误消息格式:
 // - ICMPv6 头部 (8 字节)
 // - 原始 IPv6 包 (包含 IPv6 头部和 UDP 头部)
@@ -131,74 +132,74 @@ func (t *UDPTracerIPv6) listenICMP() {
 // 5. 提取 UDP 源端口
 // 6. 发送结果到对应通道
 func (t *UDPTracerIPv6) handleICMPMessage(msg ReceivedMessage) {
-    // ICMPv6 错误消息至少需要包含 IPv6 头部(40字节)和部分 UDP 头部
-    if len(msg.Msg) < 48 {
-        return
-    }
+	// ICMPv6 错误消息至少需要包含 IPv6 头部(40字节)和部分 UDP 头部
+	if len(msg.Msg) < 48 {
+		return
+	}
 
-    // 尝试解析 ICMPv6 消息中包含的原始数据包
-    var offset int = 8 // ICMPv6 头部长度
-    
-    // 检查剩余长度是否足够包含 IPv6 头部
-    if len(msg.Msg) < offset+40 {
-        return
-    }
-    
-    // 验证 IPv6 版本 (前4位应该是6)
-    if (msg.Msg[offset] >> 4) != 6 {
-        return
-    }
-    
-    // 获取下一个头部类型
-    nextHeader := msg.Msg[offset+6]
-    
-    // 跳过 IPv6 基本头部
-    offset += 40
-    
-    // 处理可能的扩展头部
-    for nextHeader != 17 && offset+2 < len(msg.Msg) { // 17 是 UDP 协议号
-        switch nextHeader {
-        case 0:  // Hop-by-Hop Options
-        case 43: // Routing
-        case 44: // Fragment
-        case 50: // ESP
-        case 51: // AH
-        case 60: // Destination Options
-            if offset+2 >= len(msg.Msg) {
-                return // 不够长，无法读取扩展头部长度
-            }
-            nextHeader = msg.Msg[offset]
-            headerLen := int(msg.Msg[offset+1])*8 + 8
-            offset += headerLen
-        default:
-            // 未知或不支持的扩展头部类型
-            return
-        }
-    }
-    
-    // 确认下一个头部是 UDP (17)
-    if nextHeader != 17 {
-        return
-    }
-    
-    // 确保有足够的数据来读取 UDP 源端口
-    if offset+2 > len(msg.Msg) {
-        return
-    }
-    
-    // 从 UDP 头部提取源端口(前2字节)
-    srcPort := int(uint16(msg.Msg[offset])<<8 | uint16(msg.Msg[offset+1]))
-    
-    t.inflightRequestLock.Lock()
-    defer t.inflightRequestLock.Unlock()
-    ch, ok := t.inflightRequest[srcPort]
-    if !ok {
-        return
-    }
-    ch <- Hop{
-        Success: true,
-        Address: msg.Peer,
-    }
+	// 尝试解析 ICMPv6 消息中包含的原始数据包
+	var offset int = 8 // ICMPv6 头部长度
+
+	// 检查剩余长度是否足够包含 IPv6 头部
+	if len(msg.Msg) < offset+40 {
+		return
+	}
+
+	// 验证 IPv6 版本 (前4位应该是6)
+	if (msg.Msg[offset] >> 4) != 6 {
+		return
+	}
+
+	// 获取下一个头部类型
+	nextHeader := msg.Msg[offset+6]
+
+	// 跳过 IPv6 基本头部
+	offset += 40
+
+	// 处理可能的扩展头部
+	for nextHeader != 17 && offset+2 < len(msg.Msg) { // 17 是 UDP 协议号
+		switch nextHeader {
+		case 0: // Hop-by-Hop Options
+		case 43: // Routing
+		case 44: // Fragment
+		case 50: // ESP
+		case 51: // AH
+		case 60: // Destination Options
+			if offset+2 >= len(msg.Msg) {
+				return // 不够长，无法读取扩展头部长度
+			}
+			nextHeader = msg.Msg[offset]
+			headerLen := int(msg.Msg[offset+1])*8 + 8
+			offset += headerLen
+		default:
+			// 未知或不支持的扩展头部类型
+			return
+		}
+	}
+
+	// 确认下一个头部是 UDP (17)
+	if nextHeader != 17 {
+		return
+	}
+
+	// 确保有足够的数据来读取 UDP 源端口
+	if offset+2 > len(msg.Msg) {
+		return
+	}
+
+	// 从 UDP 头部提取源端口(前2字节)
+	srcPort := int(uint16(msg.Msg[offset])<<8 | uint16(msg.Msg[offset+1]))
+
+	t.inflightRequestLock.Lock()
+	defer t.inflightRequestLock.Unlock()
+	ch, ok := t.inflightRequest[srcPort]
+	if !ok {
+		return
+	}
+	ch <- Hop{
+		Success: true,
+		Address: msg.Peer,
+	}
 }
 
 var cachedLocalPortv6 int
@@ -255,6 +256,11 @@ func (t *UDPTracerIPv6) send(ttl int) error {
 	defer t.wg.Done()
 	if t.final != -1 && ttl > t.final {
 		return nil
+	}
+
+	if util.GetenvDefault("NEXTTRACE_RANDOMPORT", "") == "" {
+		t.udpMutex.Lock()
+		defer t.udpMutex.Unlock()
 	}
 
 	srcIP, srcPort, udpConn, err := t.getUDPConn(0)
