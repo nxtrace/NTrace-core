@@ -13,12 +13,17 @@ type ReceivedMessage struct {
 	Err  error
 }
 
+// PacketListener 负责监听网络数据包并通过通道传递接收到的消息
 type PacketListener struct {
 	ctx      context.Context
 	Conn     net.PacketConn
 	Messages chan ReceivedMessage
 }
 
+// NewPacketListener 创建一个新的数据包监听器
+// conn: 用于接收数据包的连接
+// ctx: 用于控制监听器生命周期的上下文
+// 返回初始化好的 PacketListener 实例
 func NewPacketListener(conn net.PacketConn, ctx context.Context) *PacketListener {
 	results := make(chan ReceivedMessage, 50)
 
