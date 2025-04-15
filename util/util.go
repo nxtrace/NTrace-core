@@ -16,15 +16,16 @@ import (
 	"github.com/fatih/color"
 )
 
-var Uninterrupted = GetenvDefault("NEXTTRACE_UNINTERRUPTED", "")
-var EnvToken = GetenvDefault("NEXTTRACE_TOKEN", "")
-var EnvIPInfoLocalPath = GetenvDefault("NEXTTRACE_IPINFOLOCALPATH", "")
-var UserAgent = fmt.Sprintf("NextTrace %s/%s/%s", config.Version, runtime.GOOS, runtime.GOARCH)
-var RdnsCache sync.Map
-var PowProviderParam = ""
 var DisableMPLS = GetenvDefault("NEXTTRACE_DISABLEMPLS", "")
 var EnableHidDstIP = GetenvDefault("NEXTTRACE_ENABLEHIDDENDSTIP", "")
+var EnvIPInfoLocalPath = GetenvDefault("NEXTTRACE_IPINFOLOCALPATH", "")
+var EnvRandomPort = GetenvDefault("NEXTTRACE_RANDOMPORT", "")
+var EnvToken = GetenvDefault("NEXTTRACE_TOKEN", "")
+var Uninterrupted = GetenvDefault("NEXTTRACE_UNINTERRUPTED", "")
 var DestIP string
+var PowProviderParam = ""
+var RdnsCache sync.Map
+var UserAgent = fmt.Sprintf("NextTrace %s/%s/%s", config.Version, runtime.GOOS, runtime.GOARCH)
 var cachedLocalIP net.IP
 var cachedLocalPort int
 var localIPOnce sync.Once
@@ -84,10 +85,10 @@ func getLocalIPPortv6(dstip net.IP) (net.IP, int) {
 	return nil, -1
 }
 
-// LocalIPPort returns the local IP and port based on our destination IP, with caching unless NEXTTRACE_RANDOMPORT is set.
+// LocalIPPort returns the local IP and port based on our destination IP, with caching unless EnvRandomPort is set.
 func LocalIPPort(dstip net.IP) (net.IP, int) {
-	// If NEXTTRACE_RANDOMPORT is set, bypass caching and return a new port every time.
-	if GetenvDefault("NEXTTRACE_RANDOMPORT", "") != "" {
+	// If EnvRandomPort is set, bypass caching and return a new port every time.
+	if EnvRandomPort != "" {
 		return getLocalIPPort(dstip)
 	}
 
@@ -102,9 +103,8 @@ func LocalIPPort(dstip net.IP) (net.IP, int) {
 }
 
 func LocalIPPortv6(dstip net.IP) (net.IP, int) {
-	// If NEXTTRACE_RANDOMPORT is set, bypass caching and return a new port every time.
-	// 该ENV仅对TCP Mode有效，UDP Mode暂无办法固定Port
-	if GetenvDefault("NEXTTRACE_RANDOMPORT", "") != "" {
+	// If EnvRandomPort is set, bypass caching and return a new port every time.
+	if EnvRandomPort != "" {
 		return getLocalIPPortv6(dstip)
 	}
 

@@ -149,7 +149,10 @@ func (t *UDPTracer) getUDPConn(try int) (net.IP, int, net.PacketConn, error) {
 	}
 
 	// Check environment variable to decide caching behavior
-	if util.GetenvDefault("NEXTTRACE_RANDOMPORT", "") == "" {
+	if util.EnvRandomPort == "" {
+		if t.SrcPort != 0 {
+			cachedLocalPort = t.SrcPort
+		}
 		// Use cached random port logic
 		if cachedLocalPort == 0 {
 			// First time: listen on a random port
@@ -193,7 +196,7 @@ func (t *UDPTracer) send(ttl int) error {
 		return nil
 	}
 
-	if util.GetenvDefault("NEXTTRACE_RANDOMPORT", "") == "" {
+	if util.EnvRandomPort == "" {
 		t.udpMutex.Lock()
 		defer t.udpMutex.Unlock()
 	}
