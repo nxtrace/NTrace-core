@@ -58,7 +58,7 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
 * Linux
     * One-click installation script
       ```shell
-      curl nxtrace.org/nt |bash
+      curl -sL nxtrace.org/nt |bash
       ```
 
     * Install nxtrace from the APT repository
