@@ -23,6 +23,7 @@ var (
 
 type Config struct {
 	SrcAddr          string
+	SrcPort          int
 	BeginHop         int
 	MaxHops          int
 	NumMeasurements  int

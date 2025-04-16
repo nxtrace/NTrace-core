@@ -211,7 +211,12 @@ func (t *TCPTracer) send(ttl int) error {
 	}
 	// 随机种子
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	_, srcPort := util.LocalIPPort(t.DestIP)
+	_, srcPort := func() (net.IP, int) {
+		if util.EnvRandomPort == "" && t.SrcPort != 0 {
+			return nil, t.SrcPort
+		}
+		return util.LocalIPPort(t.DestIP)
+	}()
 	ipHeader := &layers.IPv4{
 		SrcIP:    t.SrcIP,
 		DstIP:    t.DestIP,

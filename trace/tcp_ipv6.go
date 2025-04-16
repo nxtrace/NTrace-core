@@ -200,7 +200,12 @@ func (t *TCPTracerIPv6) send(ttl int) error {
 	}
 	// 随机种子
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	_, srcPort := util.LocalIPPortv6(t.DestIP)
+	_, srcPort := func() (net.IP, int) {
+		if util.EnvRandomPort == "" && t.SrcPort != 0 {
+			return nil, t.SrcPort
+		}
+		return util.LocalIPPortv6(t.DestIP)
+	}()
 	ipHeader := &layers.IPv6{
 		SrcIP:      t.SrcIP,
 		DstIP:      t.DestIP,
