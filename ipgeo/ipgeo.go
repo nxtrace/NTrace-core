@@ -52,6 +52,8 @@ func GetSource(s string) Source {
 		return Chunzhen
 	case "DISABLE-GEOIP":
 		return disableGeoIP
+	case "IPDB.ONE":
+		return IPDBOne
 	default:
 		return LeoIP
 	}
