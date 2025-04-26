@@ -236,6 +236,16 @@ func parseIPDBOneResponse(ip string, responseBody []byte) (*IPGeoData, error) {
 		if routingData.Get("asn.name").Exists() && routingData.Get("asn.name").Type != gjson.Null {
 			result.Owner = routingData.Get("asn.name").String()
 		}
+
+		// Get domain, override owner
+		if routingData.Get("asn.domain").Exists() && routingData.Get("asn.domain").Type != gjson.Null {
+			result.Owner = routingData.Get("asn.domain").String()
+		}
+
+		// Get asname as Whois
+		if routingData.Get("asn.asname").Exists() && routingData.Get("asn.asname").Type != gjson.Null {
+			result.Whois = routingData.Get("asn.asname").String()
+		}
 	}
 
 	return result, nil
