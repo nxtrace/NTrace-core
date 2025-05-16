@@ -149,6 +149,8 @@ func Filter(ip string) (*IPGeoData, bool) {
 		fallthrough
 	case cidrRangeContains("55.0.0.0/8", ip):
 		fallthrough
+	case cidrRangeContains("205.0.0.0/8", ip):
+		fallthrough
 	case cidrRangeContains("214.0.0.0/8", ip):
 		fallthrough
 	case cidrRangeContains("215.0.0.0/8", ip):
