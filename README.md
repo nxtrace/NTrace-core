@@ -58,7 +58,7 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
 * Linux
     * One-click installation script
       ```shell
-      curl nxtrace.org/nt |bash
+      curl -sL nxtrace.org/nt |bash
       ```
 
     * Install nxtrace from the APT repository
@@ -222,7 +222,12 @@ nexttrace --tcp --port 443 2001:4860:4860::8888
 # UDP Trace
 nexttrace --udp 1.0.0.1
 
-nexttrace --udp --port 53 1.0.0.1
+# You can specify the target port yourself [here it is 5353], the default is port 33494
+nexttrace --udp --port 5353 1.0.0.1
+
+# For TCP/UDP Trace, you can specify the source port; by default, a fixed random port is used 
+# (if you need to use a different random source port for each packet, please set the ENV variable NEXTTRACE_RANDOMPORT)
+nexttrace --tcp --source-port 14514 www.bing.com
 ```
 
 `NextTrace` also supports some advanced functions, such as ttl control, concurrent probe packet count control, mode switching, etc.
@@ -383,6 +388,8 @@ Arguments:
   -e  --disable-mpls                 Disable MPLS
   -v  --version                      Print version info and exit
   -s  --source                       Use source src_addr for outgoing packets
+      --source-port                  Use source port src_port for outgoing
+                                     packets
   -D  --dev                          Use the following Network Devices as the
                                      source address in outgoing packets
   -z  --send-time                    Set how many [milliseconds] between

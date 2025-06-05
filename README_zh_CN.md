@@ -65,7 +65,7 @@ Document Language: [English](README.md) | 简体中文
 * Linux 
   * 一键安装脚本
     ```shell
-    curl nxtrace.org/nt | bash
+    curl -sL nxtrace.org/nt | bash
     ```
   
   * 从 nxtrace的APT源安装
@@ -226,14 +226,17 @@ nexttrace --source 204.98.134.56 9.9.9.9
 # TCP SYN Trace
 nexttrace --tcp www.bing.com
 
-# 可以自行指定端口[此处为443]，默认80端口
+# 可以自行指定目标端口[此处为443]，默认80端口
 nexttrace --tcp --port 443 2001:4860:4860::8888
 
 # UDP Trace
 nexttrace --udp 1.0.0.1
 
-# 可以自行指定端口[此处为5353]，默认33494端口
+# 可以自行指定目标端口[此处为5353]，默认33494端口
 nexttrace --udp --port 5353 1.0.0.1
+
+# TCP/UDP Trace 可以自行指定源端口，默认使用随机一个固定的端口(如需每次发包随机使用不同的源端口，请设置`ENV` `NEXTTRACE_RANDOMPORT`)
+nexttrace --tcp --source-port 14514 www.bing.com
 ```
 
 `NextTrace`也同样支持一些进阶功能，如 TTL 控制、并发数控制、模式切换等
@@ -377,6 +380,8 @@ Arguments:
   -e  --disable-mpls                 Disable MPLS
   -v  --version                      Print version info and exit
   -s  --source                       Use source src_addr for outgoing packets
+      --source-port                  Use source port src_port for outgoing
+                                     packets
   -D  --dev                          Use the following Network Devices as the
                                      source address in outgoing packets
   -z  --send-time                    Set how many [milliseconds] between
