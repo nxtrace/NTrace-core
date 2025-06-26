@@ -459,7 +459,7 @@ nexttrace --pow-provider sakura
 
 ## AIWEN TECH Support
 
-本项目受 [埃文科技](https://www.ipplus360.com) 赞助。 很高兴使用`埃文科技城市级IP库`增强本项目地理信息查询的准确性与完整性，并免费提供给公众。
+本项目受 [埃文科技](https://www.ipplus360.com) 赞助。 很高兴使用`埃文科技城市级IP库`增强本项目 GEOIP 查询的准确性与完整性，并免费提供给公众。
 
 <img src="https://www.ipplus360.com/img/LOGO.c86cd0e1.svg" title="" alt="埃文科技 IP 定位数据" width="331">
 
