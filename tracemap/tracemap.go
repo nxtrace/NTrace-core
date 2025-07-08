@@ -23,7 +23,7 @@ func GetMapUrl(r string) (string, error) {
 		if len(strings.Split(fastIp, ":")) > 1 {
 			fastIp = "[" + fastIp + "]"
 		}
-		host = "origin-fallback.nxtrace.org"
+		host = "api.nxtrace.org"
 	} else {
 		// 默认配置完成，开始寻找最优 IP
 		fastIp = util.GetFastIP(host, port, false)

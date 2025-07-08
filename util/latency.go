@@ -30,7 +30,7 @@ var FastIpCache = ""
 func GetFastIP(domain string, port string, enableOutput bool) string {
 	proxyUrl := GetProxy()
 	if proxyUrl != nil {
-		return "origin-fallback.nxtrace.org"
+		return "api.nxtrace.org"
 	}
 	if FastIpCache != "" {
 		return FastIpCache
@@ -38,7 +38,7 @@ func GetFastIP(domain string, port string, enableOutput bool) string {
 
 	var ips []net.IP
 	var err error
-	if domain == "origin-fallback.nxtrace.org" {
+	if domain == "api.nxtrace.org" {
 		ips, err = net.LookupIP("api.nxtrace.org")
 	} else {
 		ips, err = net.LookupIP(domain)
@@ -122,6 +122,7 @@ func checkLatency(domain string, ip string, port string) {
 		return
 	}
 	req.Host = domain
+	req.Header.Add("User-Agent", UserAgent)
 	resp, err := client.Do(req)
 	if err != nil {
 		//results <- ResponseInfo{IP: ip, Latency: "error", Content: ""}
