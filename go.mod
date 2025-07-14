@@ -11,7 +11,7 @@ require (
 	github.com/syndtr/gocapability v0.0.0-20200815063812-42c35b437635
 	github.com/tsosunchia/powclient v0.1.5
 	golang.org/x/net v0.41.0
-	golang.org/x/sync v0.15.0
+	golang.org/x/sync v0.16.0
 )
 
 require (
