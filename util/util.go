@@ -208,7 +208,7 @@ func GetenvDefault(key, defVal string) string {
 }
 
 func GetHostAndPort() (host string, port string) {
-	var hostP = GetenvDefault("NEXTTRACE_HOSTPORT", "origin-fallback.nxtrace.org")
+	var hostP = GetenvDefault("NEXTTRACE_HOSTPORT", "api.nxtrace.org")
 	// 解析域名
 	hostArr := strings.Split(hostP, ":")
 	// 判断是否有指定端口
