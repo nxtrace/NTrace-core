@@ -125,15 +125,15 @@ func (f *FastTracer) testFastBJ_v6() {
 }
 
 func (f *FastTracer) testFastSH_v6() {
-	f.tracert_v6(TestIPsCollection.Shanghai.Location, TestIPsCollection.Beijing.CT163)
-	f.tracert_v6(TestIPsCollection.Shanghai.Location, TestIPsCollection.Beijing.CU169)
-	f.tracert_v6(TestIPsCollection.Shanghai.Location, TestIPsCollection.Beijing.CM)
+	f.tracert_v6(TestIPsCollection.Shanghai.Location, TestIPsCollection.Shanghai.CT163)
+	f.tracert_v6(TestIPsCollection.Shanghai.Location, TestIPsCollection.Shanghai.CU169)
+	f.tracert_v6(TestIPsCollection.Shanghai.Location, TestIPsCollection.Shanghai.CM)
 }
 
 func (f *FastTracer) testFastGZ_v6() {
-	f.tracert_v6(TestIPsCollection.Guangzhou.Location, TestIPsCollection.Beijing.CT163)
-	f.tracert_v6(TestIPsCollection.Guangzhou.Location, TestIPsCollection.Beijing.CU169)
-	f.tracert_v6(TestIPsCollection.Guangzhou.Location, TestIPsCollection.Beijing.CM)
+	f.tracert_v6(TestIPsCollection.Guangzhou.Location, TestIPsCollection.Guangzhou.CT163)
+	f.tracert_v6(TestIPsCollection.Guangzhou.Location, TestIPsCollection.Guangzhou.CU169)
+	f.tracert_v6(TestIPsCollection.Guangzhou.Location, TestIPsCollection.Guangzhou.CM)
 }
 
 func FastTestv6(traceMode trace.Method, outEnable bool, paramsFastTrace ParamsFastTrace) {
