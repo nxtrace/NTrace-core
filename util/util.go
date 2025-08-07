@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/nxtrace/NTrace-core/config"
 	"log"
 	"net"
 	"net/url"
@@ -14,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/fatih/color"
+	"github.com/nxtrace/NTrace-core/config"
 )
 
 var DisableMPLS = GetenvDefault("NEXTTRACE_DISABLEMPLS", "")

@@ -1,8 +1,7 @@
 package trace
 
 import (
-	"encoding/binary"
-	"math"
+	"log"
 	"math/rand"
 	"net"
 	"sync"
@@ -27,6 +26,8 @@ type TCPTracerIPv6 struct {
 	SrcIP               net.IP
 	icmp                net.PacketConn
 	tcp                 net.PacketConn
+	tcpConn             *ipv6.PacketConn
+	hopLimitLock        sync.Mutex
 
 	final     int
 	finalLock sync.Mutex
@@ -36,6 +37,11 @@ type TCPTracerIPv6 struct {
 }
 
 func (t *TCPTracerIPv6) Execute() (*Result, error) {
+	// 初始化 inflightRequest map
+	t.inflightRequestLock.Lock()
+	t.inflightRequest = make(map[int]chan Hop)
+	t.inflightRequestLock.Unlock()
+
 	if len(t.res.Hops) > 0 {
 		return &t.res, ErrTracerouteExecuted
 	}
@@ -43,11 +49,20 @@ func (t *TCPTracerIPv6) Execute() (*Result, error) {
 	t.SrcIP, _ = util.LocalIPPortv6(t.DestIP)
 	// log.Println(util.LocalIPPortv6(t.DestIP))
 	var err error
-	t.tcp, err = net.ListenPacket("ip6:tcp", t.SrcIP.String())
+
+	if t.SrcAddr != "" {
+		t.tcp, err = net.ListenPacket("ip6:tcp", t.SrcAddr)
+	} else {
+		t.tcp, err = net.ListenPacket("ip6:tcp", t.SrcIP.String())
+	}
 	if err != nil {
 		return nil, err
 	}
-	t.icmp, err = icmp.ListenPacket("ip6:ipv6-icmp", "::")
+	defer t.tcp.Close()
+
+	t.tcpConn = ipv6.NewPacketConn(t.tcp)
+
+	t.icmp, err = icmp.ListenPacket("ip6:ipv6-icmp", t.SrcAddr)
 	if err != nil {
 		return &t.res, err
 	}
@@ -56,7 +71,7 @@ func (t *TCPTracerIPv6) Execute() (*Result, error) {
 	var cancel context.CancelFunc
 	t.ctx, cancel = context.WithCancel(context.Background())
 	defer cancel()
-	t.inflightRequest = make(map[int]chan Hop)
+
 	t.final = -1
 
 	go t.listenICMP()
@@ -70,9 +85,12 @@ func (t *TCPTracerIPv6) Execute() (*Result, error) {
 			break
 		}
 		for i := 0; i < t.NumMeasurements; i++ {
+			// TTL 高 8 位、探测索引占低 24 位
+			seq := (ttl << 24) | (i & 0xFFFFFF)
+
 			t.wg.Add(1)
-			go t.send(ttl)
-			<-time.After(time.Millisecond * time.Duration(t.Config.PacketInterval))
+			go t.send(ttl, seq)
+			time.Sleep(time.Millisecond * time.Duration(t.Config.PacketInterval))
 		}
 		if t.RealtimePrinter != nil {
 			// 对于实时模式，应该按照TTL进行并发请求
@@ -89,9 +107,8 @@ func (t *TCPTracerIPv6) Execute() (*Result, error) {
 				time.Sleep(200 * time.Millisecond)
 			}
 		}
-
 	}()
-
+	// 如果是表格模式，则一次性并发请求
 	if t.RealtimePrinter == nil {
 		t.wg.Wait()
 	}
@@ -108,27 +125,40 @@ func (t *TCPTracerIPv6) listenICMP() {
 		case <-t.ctx.Done():
 			return
 		case msg := <-lc.Messages:
-			// log.Println(msg)
-
 			if msg.N == nil {
 				continue
 			}
 			rm, err := icmp.ParseMessage(58, msg.Msg[:*msg.N])
 			if err != nil {
-				// log.Println(err)
+				log.Println(err)
 				continue
 			}
 			switch rm.Type {
 			case ipv6.ICMPTypeTimeExceeded:
-				t.handleICMPMessage(msg)
+				body := rm.Body.(*icmp.TimeExceeded)
+				data := body.Data
+				if len(data) < 40 {
+					continue
+				}
+				dstip := net.IP(data[24:40])
+				if dstip.Equal(t.DestIP) {
+					t.handleICMPMessage(msg, data)
+				}
 			case ipv6.ICMPTypeDestinationUnreachable:
-				t.handleICMPMessage(msg)
+				body := rm.Body.(*icmp.DstUnreach)
+				data := body.Data
+				if len(data) < 40 {
+					continue
+				}
+				dstip := net.IP(data[24:40])
+				if dstip.Equal(t.DestIP) {
+					t.handleICMPMessage(msg, data)
+				}
 			default:
 				//log.Println("received icmp message of unknown type", rm.Type)
 			}
 		}
 	}
-
 }
 
 // @title    listenTCP
@@ -150,14 +180,13 @@ func (t *TCPTracerIPv6) listenTCP() {
 			if msg.Peer.String() != t.DestIP.String() {
 				continue
 			}
-
 			// 解包
 			packet := gopacket.NewPacket(msg.Msg[:*msg.N], layers.LayerTypeTCP, gopacket.Default)
 			// 从包中获取TCP layer信息
 			if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {
 				tcp, _ := tcpLayer.(*layers.TCP)
-				// 取得目标主机的Sequence Number
-
+				t.inflightRequestLock.Lock()
+				// 从对端返回的 ACK - 1 恢复出原始探测包的 Sequence
 				if ch, ok := t.inflightRequest[int(tcp.Ack-1)]; ok {
 					// 最后一跳
 					ch <- Hop{
@@ -165,60 +194,77 @@ func (t *TCPTracerIPv6) listenTCP() {
 						Address: msg.Peer,
 					}
 				}
+				t.inflightRequestLock.Unlock()
 			}
 		}
 	}
 }
 
-func (t *TCPTracerIPv6) handleICMPMessage(msg ReceivedMessage) {
-	var sequenceNumber = binary.BigEndian.Uint32(msg.Msg[52:56])
+func (t *TCPTracerIPv6) handleICMPMessage(msg ReceivedMessage, data []byte) {
+	header, err := util.GetICMPResponsePayload(data)
+	if err != nil {
+		return
+	}
+
+	seq, err := util.GetTCPSeq(header)
+	if err != nil {
+		return
+	}
 
 	t.inflightRequestLock.Lock()
 	defer t.inflightRequestLock.Unlock()
-	ch, ok := t.inflightRequest[int(sequenceNumber)]
+
+	ch, ok := t.inflightRequest[int(seq)]
 	if !ok {
 		return
 	}
-	// log.Println("发送数据", sequenceNumber)
+
 	ch <- Hop{
 		Success: true,
 		Address: msg.Peer,
 	}
-	// log.Println("发送成功")
 }
 
-func (t *TCPTracerIPv6) send(ttl int) error {
-	err := t.sem.Acquire(context.Background(), 1)
-	if err != nil {
+func (t *TCPTracerIPv6) send(ttl, seq int) error {
+	defer t.wg.Done()
+
+	if err := t.sem.Acquire(t.ctx, 1); err != nil {
 		return err
 	}
 	defer t.sem.Release(1)
 
-	defer t.wg.Done()
 	if t.final != -1 && ttl > t.final {
 		return nil
 	}
-	// 随机种子
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	_, srcPort := func() (net.IP, int) {
+
+	t.inflightRequestLock.Lock()
+	hopCh := make(chan Hop, 1)
+	t.inflightRequest[seq] = hopCh
+	t.inflightRequestLock.Unlock()
+	defer func() {
+		t.inflightRequestLock.Lock()
+		delete(t.inflightRequest, seq)
+		t.inflightRequestLock.Unlock()
+	}()
+
+	_, SrcPort := func() (net.IP, int) {
 		if util.EnvRandomPort == "" && t.SrcPort != 0 {
 			return nil, t.SrcPort
 		}
 		return util.LocalIPPortv6(t.DestIP)
 	}()
+
 	ipHeader := &layers.IPv6{
 		SrcIP:      t.SrcIP,
 		DstIP:      t.DestIP,
-		NextHeader: layers.IPProtocolTCP,
 		HopLimit:   uint8(ttl),
+		NextHeader: layers.IPProtocolTCP,
 	}
-	// 使用Uint16兼容32位系统，防止在rand的时候因使用int32而溢出
-	sequenceNumber := uint32(r.Intn(math.MaxUint16))
 
 	tcpHeader := &layers.TCP{
-		SrcPort: layers.TCPPort(srcPort),
+		SrcPort: layers.TCPPort(SrcPort),
 		DstPort: layers.TCPPort(t.DestPort),
-		Seq:     sequenceNumber,
+		Seq:     uint32(seq),
 		SYN:     true,
 		Window:  14600,
 	}
@@ -233,32 +279,26 @@ func (t *TCPTracerIPv6) send(ttl int) error {
 	desiredPayloadSize := t.Config.PktSize
 	payload := make([]byte, desiredPayloadSize)
 	// 设置随机种子
-	rand.Seed(time.Now().UnixNano())
-
-	// 填充随机数
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for i := range payload {
-		payload[i] = byte(rand.Intn(256))
+		payload[i] = byte(r.Intn(256))
 	}
 	//copy(buf.Bytes(), payload)
-
 	if err := gopacket.SerializeLayers(buf, opts, tcpHeader, gopacket.Payload(payload)); err != nil {
 		return err
 	}
-
-	err = ipv6.NewPacketConn(t.tcp).SetHopLimit(ttl)
-	if err != nil {
+	// 串行设置 HopLimit + 发送，放在同一把锁里保证并发安全
+	t.hopLimitLock.Lock()
+	if err := t.tcpConn.SetHopLimit(ttl); err != nil {
+		t.hopLimitLock.Unlock()
 		return err
 	}
-
 	start := time.Now()
 	if _, err := t.tcp.WriteTo(buf.Bytes(), &net.IPAddr{IP: t.DestIP}); err != nil {
+		t.hopLimitLock.Unlock()
 		return err
 	}
-	// log.Println(ttl, sequenceNumber)
-	t.inflightRequestLock.Lock()
-	hopCh := make(chan Hop, 1)
-	t.inflightRequest[int(sequenceNumber)] = hopCh
-	t.inflightRequestLock.Unlock()
+	t.hopLimitLock.Unlock()
 
 	select {
 	case <-t.ctx.Done():
@@ -288,10 +328,11 @@ func (t *TCPTracerIPv6) send(ttl int) error {
 
 		t.fetchLock.Lock()
 		defer t.fetchLock.Unlock()
-		h.fetchIPData(t.Config)
+		if err := h.fetchIPData(t.Config); err != nil {
+			return err
+		}
 
 		t.res.add(h)
-
 	case <-time.After(t.Timeout):
 		if t.final != -1 && ttl > t.final {
 			return nil
@@ -305,6 +346,5 @@ func (t *TCPTracerIPv6) send(ttl int) error {
 			Error:   ErrHopLimitTimeout,
 		})
 	}
-
 	return nil
 }
