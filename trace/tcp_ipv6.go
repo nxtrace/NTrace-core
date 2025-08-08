@@ -137,7 +137,7 @@ func (t *TCPTracerIPv6) listenICMP() {
 			case ipv6.ICMPTypeTimeExceeded:
 				body := rm.Body.(*icmp.TimeExceeded)
 				data := body.Data
-				if len(data) < 40 {
+				if len(data) < 40 || data[0]>>4 != 6 {
 					continue
 				}
 				dstip := net.IP(data[24:40])
@@ -147,7 +147,7 @@ func (t *TCPTracerIPv6) listenICMP() {
 			case ipv6.ICMPTypeDestinationUnreachable:
 				body := rm.Body.(*icmp.DstUnreach)
 				data := body.Data
-				if len(data) < 40 {
+				if len(data) < 40 || data[0]>>4 != 6 {
 					continue
 				}
 				dstip := net.IP(data[24:40])

@@ -160,18 +160,18 @@ func (t *UDPTracer) listenICMP() {
 			switch rm.Type {
 			case ipv4.ICMPTypeTimeExceeded:
 				body := rm.Body.(*icmp.TimeExceeded)
-				data := body.Data   // 内层原始 IP 包（IP 头 + 8B）
-				if len(data) < 20 { // 内层 IP 头至少 20B
+				data := body.Data
+				if len(data) < 20 || data[0]>>4 != 4 {
 					continue
 				}
-				dstip := net.IP(data[16:20]) // 内层 IP 头目的地址
+				dstip := net.IP(data[16:20])
 				if dstip.Equal(t.DestIP) {
 					t.handleICMPMessage(msg, data)
 				}
 			case ipv4.ICMPTypeDestinationUnreachable:
 				body := rm.Body.(*icmp.DstUnreach)
 				data := body.Data
-				if len(data) < 20 {
+				if len(data) < 20 || data[0]>>4 != 4 {
 					continue
 				}
 				dstip := net.IP(data[16:20])

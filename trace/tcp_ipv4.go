@@ -127,24 +127,34 @@ func (t *TCPTracer) listenICMP() {
 			if msg.N == nil {
 				continue
 			}
-			if len(msg.Msg) < 28 {
+			rm, err := icmp.ParseMessage(1, msg.Msg[:*msg.N])
+			if err != nil {
+				log.Println(err)
 				continue
 			}
-			dstip := net.IP(msg.Msg[24:28])
-			if dstip.Equal(t.DestIP) {
-				rm, err := icmp.ParseMessage(1, msg.Msg[:*msg.N])
-				if err != nil {
-					log.Println(err)
+			switch rm.Type {
+			case ipv4.ICMPTypeTimeExceeded:
+				body := rm.Body.(*icmp.TimeExceeded)
+				data := body.Data
+				if len(data) < 20 || data[0]>>4 != 4 {
 					continue
 				}
-				switch rm.Type {
-				case ipv4.ICMPTypeTimeExceeded:
-					t.handleICMPMessage(msg, rm.Body.(*icmp.TimeExceeded).Data)
-				case ipv4.ICMPTypeDestinationUnreachable:
-					t.handleICMPMessage(msg, rm.Body.(*icmp.DstUnreach).Data)
-				default:
-					//log.Println("received icmp message of unknown type", rm.Type)
+				dstip := net.IP(data[16:20])
+				if dstip.Equal(t.DestIP) {
+					t.handleICMPMessage(msg, data)
 				}
+			case ipv4.ICMPTypeDestinationUnreachable:
+				body := rm.Body.(*icmp.DstUnreach)
+				data := body.Data
+				if len(data) < 20 || data[0]>>4 != 4 {
+					continue
+				}
+				dstip := net.IP(data[16:20])
+				if dstip.Equal(t.DestIP) {
+					t.handleICMPMessage(msg, data)
+				}
+			default:
+				//log.Println("received icmp message of unknown type", rm.Type)
 			}
 		}
 	}

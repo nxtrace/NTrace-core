@@ -131,9 +131,25 @@ func (t *UDPTracerIPv6) listenICMP() {
 			}
 			switch rm.Type {
 			case ipv6.ICMPTypeTimeExceeded:
-				t.handleICMPMessage(msg)
+				body := rm.Body.(*icmp.TimeExceeded)
+				data := body.Data
+				if len(data) < 40 || data[0]>>4 != 6 {
+					continue
+				}
+				dstip := net.IP(data[24:40])
+				if dstip.Equal(t.DestIP) {
+					t.handleICMPMessage(msg)
+				}
 			case ipv6.ICMPTypeDestinationUnreachable:
-				t.handleICMPMessage(msg)
+				body := rm.Body.(*icmp.DstUnreach)
+				data := body.Data
+				if len(data) < 40 || data[0]>>4 != 6 {
+					continue
+				}
+				dstip := net.IP(data[24:40])
+				if dstip.Equal(t.DestIP) {
+					t.handleICMPMessage(msg)
+				}
 			default:
 				//log.Println("received icmp message of unknown type", rm.Type)
 			}

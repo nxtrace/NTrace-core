@@ -4,18 +4,18 @@ import (
 	"bytes"
 	"encoding/binary"
 	"log"
+	"math/rand"
 	"net"
 	"os"
-	"strconv"
 	"sync"
 	"time"
 
+	"github.com/nxtrace/NTrace-core/trace/internal"
+	"github.com/nxtrace/NTrace-core/util"
 	"golang.org/x/net/context"
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv6"
 	"golang.org/x/sync/semaphore"
-
-	"github.com/nxtrace/NTrace-core/trace/internal"
 )
 
 type ICMPTracerv6 struct {
@@ -23,8 +23,10 @@ type ICMPTracerv6 struct {
 	wg                  sync.WaitGroup
 	res                 Result
 	ctx                 context.Context
+	echoIDTag           uint8
+	pidLow              uint8
 	inflightRequest     map[int]chan Hop
-	inflightRequestLock sync.RWMutex
+	inflightRequestLock sync.Mutex
 	icmp                net.PacketConn
 	icmpConn            *ipv6.PacketConn
 	hopLimitLock        sync.Mutex
@@ -61,11 +63,19 @@ func (t *ICMPTracerv6) PrintFunc() {
 	}
 }
 
+func (t *ICMPTracerv6) initEchoID() {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	t.echoIDTag = uint8(r.Intn(256))     // 高 8 位随机 tag
+	t.pidLow = uint8(os.Getpid() & 0xFF) // 低 8 位为 pid
+}
+
 func (t *ICMPTracerv6) Execute() (*Result, error) {
 	// 初始化 inflightRequest map
 	t.inflightRequestLock.Lock()
 	t.inflightRequest = make(map[int]chan Hop)
 	t.inflightRequestLock.Unlock()
+	// 初始化 Echo.ID
+	t.initEchoID()
 
 	if len(t.res.Hops) > 0 {
 		return &t.res, ErrTracerouteExecuted
@@ -134,7 +144,6 @@ func (t *ICMPTracerv6) Execute() (*Result, error) {
 
 func (t *ICMPTracerv6) listenICMP() {
 	lc := NewPacketListener(t.icmp, t.ctx)
-	psize = t.Config.PktSize
 	go lc.Start()
 	for {
 		select {
@@ -144,62 +153,79 @@ func (t *ICMPTracerv6) listenICMP() {
 			if msg.N == nil {
 				continue
 			}
-			if msg.Msg[0] == 129 {
-				rm, err := icmp.ParseMessage(58, msg.Msg[:*msg.N])
-				if err != nil {
-					log.Println(err)
-					continue
-				}
-				echoReply, ok := rm.Body.(*icmp.Echo)
-				if ok {
+			rm, err := icmp.ParseMessage(58, msg.Msg[:*msg.N])
+			if err != nil {
+				log.Println(err)
+				continue
+			}
+			switch rm.Type {
+			case ipv6.ICMPTypeEchoReply:
+				echo := rm.Body.(*icmp.Echo)
+				data := echo.Data
+				// 只在 Peer 是目的地址时分发，用 seq 作为通道 key
+				if ip, ok := msg.Peer.(*net.IPAddr); ok && ip.IP.Equal(t.DestIP) {
+					id := uint16(echo.ID)
+					if uint8(id>>8) != t.echoIDTag || uint8(id&0xFF) != t.pidLow {
+						continue
+					}
 					// 从 Echo.Seq 恢复出先前编码的 (ttl<<8)|index
-					seq := echoReply.Seq
+					seq := echo.Seq
 					// 高 8 位是真正的 TTL
 					ttl := seq >> 8
 					// TTL 越界时舍弃
 					if ttl < t.BeginHop || ttl > t.MaxHops {
 						continue
 					}
-					// 只在目的地址匹配时分发，使用 seq 作为 key
-					if msg.Peer.String() == t.DestIP.String() {
-						t.handleICMPMessage(msg, 1, echoReply.Data, seq)
-					}
+					t.handleICMPMessage(msg, 1, data, seq)
 				}
-				continue
-			}
-			// 使用 inner ICMP header 的 Seq 作为唯一标识
-			seq := int(binary.BigEndian.Uint16(msg.Msg[54:56]))
-			ttl := seq >> 8
-			if ttl < t.BeginHop || ttl > t.MaxHops {
-				continue
-			}
-			packetId := strconv.FormatInt(int64(binary.BigEndian.Uint16(msg.Msg[52:54])), 2)
-			if processId, _, err := reverseID(packetId); err == nil {
-				if processId == int64(os.Getpid()&0x7f) {
-					dstip := net.IP(msg.Msg[32:48])
-					// 无效包本地环回包
-					if dstip.String() == "::" {
+			case ipv6.ICMPTypeTimeExceeded:
+				body := rm.Body.(*icmp.TimeExceeded)
+				data := body.Data
+				if len(data) < 40 || data[0]>>4 != 6 {
+					continue
+				}
+				dstip := net.IP(data[24:40])
+				// 无效包本地环回包
+				if dstip.String() == "::" {
+					continue
+				}
+				if dstip.Equal(t.DestIP) || dstip.Equal(net.IPv6zero) {
+					inner, err := util.GetICMPResponsePayload(data)
+					if err != nil || len(inner) < 8 {
 						continue
 					}
-					if dstip.Equal(t.DestIP) || dstip.Equal(net.IPv6zero) {
-						// 匹配再继续解析包，否则直接丢弃
-						rm, err := icmp.ParseMessage(58, msg.Msg[:*msg.N])
-						if err != nil {
-							log.Println(err)
-							continue
-						}
-						switch rm.Type {
-						case ipv6.ICMPTypeTimeExceeded:
-							t.handleICMPMessage(msg, 0, rm.Body.(*icmp.TimeExceeded).Data, seq)
-						case ipv6.ICMPTypeEchoReply:
-							t.handleICMPMessage(msg, 1, rm.Body.(*icmp.Echo).Data, seq)
-						case ipv6.ICMPTypeDestinationUnreachable:
-							t.handleICMPMessage(msg, 2, rm.Body.(*icmp.DstUnreach).Data, seq)
-						default:
-							// log.Println("received icmp message of unknown type", rm.Type)
-						}
+					id := binary.BigEndian.Uint16(inner[4:6])
+					if uint8(id>>8) != t.echoIDTag || uint8(id&0xFF) != t.pidLow {
+						continue
 					}
+					seq := int(binary.BigEndian.Uint16(inner[6:8]))
+					t.handleICMPMessage(msg, 0, data, seq)
 				}
+			case ipv6.ICMPTypeDestinationUnreachable:
+				body := rm.Body.(*icmp.DstUnreach)
+				data := body.Data
+				if len(data) < 40 || data[0]>>4 != 6 {
+					continue
+				}
+				dstip := net.IP(data[24:40])
+				// 无效包本地环回包
+				if dstip.String() == "::" {
+					continue
+				}
+				if dstip.Equal(t.DestIP) || dstip.Equal(net.IPv6zero) {
+					inner, err := util.GetICMPResponsePayload(data)
+					if err != nil || len(inner) < 8 {
+						continue
+					}
+					id := binary.BigEndian.Uint16(inner[4:6])
+					if uint8(id>>8) != t.echoIDTag || uint8(id&0xFF) != t.pidLow {
+						continue
+					}
+					seq := int(binary.BigEndian.Uint16(inner[6:8]))
+					t.handleICMPMessage(msg, 2, data, seq)
+				}
+			default:
+				//log.Println("received icmp message of unknown type", rm.Type)
 			}
 			// dstip := net.IP(msg.Msg[32:48])
 			// if binary.BigEndian.Uint16(msg.Msg[52:54]) != uint16(os.Getpid()&0xffff) {
@@ -243,8 +269,8 @@ func (t *ICMPTracerv6) handleICMPMessage(msg ReceivedMessage, icmpType int8, dat
 			return
 		}
 	}
-	t.inflightRequestLock.RLock()
-	defer t.inflightRequestLock.RUnlock()
+	t.inflightRequestLock.Lock()
+	defer t.inflightRequestLock.Unlock()
 
 	mpls := extractMPLS(msg, data)
 	if _, ok := t.inflightRequest[seq]; ok {
@@ -277,8 +303,8 @@ func (t *ICMPTracerv6) send(ttl, seq int) error {
 		delete(t.inflightRequest, seq)
 		t.inflightRequestLock.Unlock()
 	}()
-	//id := gernerateID(ttl)
-	id := gernerateID(0)
+	// 高8位放随机tag，低8位放pid低8位
+	id := int(uint16(t.echoIDTag)<<8 | uint16(t.pidLow))
 	//data := []byte{byte(ttl)}
 	data := []byte{byte(0)}
 	data = append(data, bytes.Repeat([]byte{1}, t.Config.PktSize-5)...)

@@ -43,33 +43,48 @@ func GetICMPResponsePayload(data []byte) ([]byte, error) {
 		if len(data) < hdrLen {
 			return nil, errors.New("inner IPv6 header too short")
 		}
-		// NextHeader 字段在偏移 6
 		next := data[6]
-		offset := hdrLen // 从基础头后面开始处理扩展头
-		// 遍历并跳过所有常见的扩展头
+		offset := hdrLen
 		for {
 			switch next {
-			case 0, 43, 44, 50, 51, 60:
-				// 扩展头第 2 字节是 hdrExtLen（单位 8 字节）
-				if offset+1 >= len(data) {
-					return nil, errors.New("IPv6 extension header too short")
+			case 0, 43, 60: // HBH, Routing, DestOpts
+				if offset+2 > len(data) {
+					return nil, errors.New("IPv6 ext too short")
 				}
 				hdrExtLen := int(data[offset+1])
 				extLen := (hdrExtLen + 1) * 8
-				offset += extLen
-				if offset > len(data) {
-					return nil, errors.New("IPv6 extension header overflow")
+				if offset+extLen > len(data) {
+					return nil, errors.New("IPv6 ext overflow")
 				}
-				// 更新下一个头部类型
+				next = data[offset] // Next Header 是扩展头的第 0 字节
+				offset += extLen
+			case 44: // Fragment
+				if offset+8 > len(data) {
+					return nil, errors.New("IPv6 frag too short")
+				}
+				next = data[offset] // 第 0 字节仍是 Next Header
+				offset += 8
+			case 51: // AH
+				if offset+2 > len(data) {
+					return nil, errors.New("IPv6 AH too short")
+				}
+				ahLen := int(data[offset+1]) // 单位 4 字节，不含前 2 个 32-bit
+				extLen := (ahLen + 2) * 4
+				if offset+extLen > len(data) {
+					return nil, errors.New("IPv6 AH overflow")
+				}
 				next = data[offset]
+				offset += extLen
+			case 50: // ESP
+				return nil, errors.New("IPv6 ESP encountered; cannot locate upper-layer")
 			default:
-				// 遇到非扩展头（例如 TCP=6, UDP=17, ICMPv6=58 等），跳出
-				goto PAYLOAD
+				// 到达上层（TCP=6, UDP=17, ICMPv6=58 等）
+				if offset > len(data) {
+					return nil, errors.New("IPv6 offset out of range")
+				}
+				return data[offset:], nil
 			}
 		}
-	PAYLOAD:
-		// 从 offset 开始即为 UDP/TCP 报文
-		return data[offset:], nil
 	default:
 		return nil, errors.New("unknown IP version")
 	}
@@ -84,14 +99,7 @@ func GetTCPSeq(data []byte) (uint32, error) {
 }
 
 func GetUDPSeq(data []byte) (uint16, error) {
-	if len(data) < 1 {
-		return 0, errors.New("received invalid IP header")
-	}
-	hdrLen, err := GetIPHeaderLength(data)
-	if err != nil {
-		return 0, err
-	}
-	if len(data) < hdrLen {
+	if len(data) < 6 {
 		return 0, errors.New("inner IPv4 header too short")
 	}
 	seqBytes := data[4:6]
