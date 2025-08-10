@@ -57,7 +57,7 @@ func New() table.Table {
 	headerFmt := color.New(color.FgGreen, color.Underline).SprintfFunc()
 	columnFmt := color.New(color.FgYellow).SprintfFunc()
 
-	tbl := table.New("Hop", "IP", "Lantency", "ASN", "Location", "Owner")
+	tbl := table.New("Hop", "IP", "Latency", "ASN", "Location", "Owner")
 	tbl.WithHeaderFormatter(headerFmt).WithFirstColumnFormatter(columnFmt)
 	return tbl
 }
@@ -69,14 +69,14 @@ func tableDataGenerator(h trace.Hop) *rowData {
 			IP:  "*",
 		}
 	} else {
-		lantency := fmt.Sprintf("%.2fms", h.RTT.Seconds()*1000)
+		latency := fmt.Sprintf("%.2fms", h.RTT.Seconds()*1000)
 		IP := h.Address.String()
 
 		if strings.HasPrefix(IP, "9.") {
 			return &rowData{
 				Hop:     fmt.Sprint(h.TTL),
 				IP:      IP,
-				Latency: lantency,
+				Latency: latency,
 				Country: "LAN Address",
 				Prov:    "",
 				Owner:   "",
@@ -85,7 +85,7 @@ func tableDataGenerator(h trace.Hop) *rowData {
 			return &rowData{
 				Hop:     fmt.Sprint(h.TTL),
 				IP:      IP,
-				Latency: lantency,
+				Latency: latency,
 				Country: "LAN Address",
 				Prov:    "",
 				Owner:   "",
@@ -103,7 +103,7 @@ func tableDataGenerator(h trace.Hop) *rowData {
 		r := &rowData{
 			Hop:      fmt.Sprint(h.TTL),
 			IP:       IP,
-			Latency:  lantency,
+			Latency:  latency,
 			Asnumber: h.Geo.Asnumber,
 			Country:  h.Geo.CountryEn,
 			Prov:     h.Geo.ProvEn,

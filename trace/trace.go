@@ -3,6 +3,7 @@ package trace
 import (
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"strconv"
 	"strings"
@@ -27,6 +28,7 @@ type Config struct {
 	BeginHop         int
 	MaxHops          int
 	NumMeasurements  int
+	MaxAttempts      int
 	ParallelRequests int
 	Timeout          time.Duration
 	DestIP           net.IP
@@ -70,6 +72,26 @@ func Traceroute(method Method, config Config) (*Result, error) {
 	if config.ParallelRequests == 0 {
 		config.ParallelRequests = config.NumMeasurements * 5
 	}
+	// 若 CLI 未给或给了非正数，则尝试用环境变量
+	if config.MaxAttempts <= 0 && util.EnvMaxAttempts != "" {
+		if env, err := strconv.Atoi(util.EnvMaxAttempts); err == nil {
+			config.MaxAttempts = env
+		} else {
+			log.Printf("ignore invalid NEXTTRACE_MAXATTEMPTS=%q: %v", util.EnvMaxAttempts, err)
+		}
+	}
+
+	if config.MaxAttempts <= 0 || config.MaxAttempts < config.NumMeasurements {
+		n := config.NumMeasurements
+		switch {
+		case n <= 2 || n >= 10:
+			config.MaxAttempts = n // 1–2 或 ≥10 → 等于 n
+		case n <= 6:
+			config.MaxAttempts = n + 3 // 3–6 → n+3
+		default:
+			config.MaxAttempts = 10 // 7–9 → 10
+		}
+	}
 
 	switch method {
 	case ICMPTrace:
@@ -107,15 +129,66 @@ type Result struct {
 	TraceMapUrl string
 }
 
-func (s *Result) add(hop Hop) {
+// 判定 Hop 是否“有效”
+func isValidHop(h Hop) bool {
+	return h.Success && h.Address != nil
+}
+
+// 新版 add：带审计/限容
+// - N = numMeasurements（每个 TTL 组的最小输出条数）
+// - M = maxAttempts（每个 TTL 组的最大尝试条数）
+// 规则：前 N-1 条无条件放行；第 N 条进行审计（已有有效 / 当次有效 / 达到最后一次尝试 任一成立即放行）；超过 N 条一律忽略
+func (s *Result) add(hop Hop, attemptIdx, numMeasurements, maxAttempts int) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
+
+	k := hop.TTL - 1
+	for len(s.Hops) <= k {
+		s.Hops = append(s.Hops, make([]Hop, 0))
+	}
+	bucket := s.Hops[k]
+
+	n := numMeasurements
+
+	switch {
+	case len(bucket) < n-1:
+		// 前 N-1：无条件放行
+		s.Hops[k] = append(bucket, hop)
+		return
+	case len(bucket) == n-1:
+		// 正在决定第 N 条：审计
+		// 放行条件（三选一）：
+		// 1) 前 N-1 中已存在有效值；或
+		// 2) 当前 hop 为有效值；或
+		// 3) 已到最后一次尝试
+		hasValid := false
+		for _, h := range bucket {
+			if isValidHop(h) {
+				hasValid = true
+				break
+			}
+		}
+		if hasValid || isValidHop(hop) || (attemptIdx+1 >= maxAttempts) {
+			s.Hops[k] = append(bucket, hop) // 填满第 N 个
+		}
+		// 否则丢弃，等待后续更优候选（长度仍保持 N-1）
+		return
+	default:
+		// 已经有 N 条：忽略后续尝试
+		return
+	}
+}
+
+// 旧版 addLegacy
+func (s *Result) addLegacy(hop Hop) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
 	k := hop.TTL - 1
 	for len(s.Hops) < hop.TTL {
 		s.Hops = append(s.Hops, make([]Hop, 0))
 	}
 	s.Hops[k] = append(s.Hops[k], hop)
-
 }
 
 func (s *Result) reduce(final int) {

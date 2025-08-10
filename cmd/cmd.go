@@ -27,7 +27,7 @@ import (
 	"github.com/syndtr/gocapability/capability"
 )
 
-func Excute() {
+func Execute() {
 	parser := argparse.NewParser("nexttrace", "An open source visual route tracking CLI tool")
 	// Create string flag
 	ipv4Only := parser.Flag("4", "ipv4", &argparse.Options{Help: "Use IPv4 only"})
@@ -39,6 +39,7 @@ func Excute() {
 	numMeasurements := parser.Int("q", "queries", &argparse.Options{Default: 3, Help: "Set the number of probes per each hop"})
 	parallelRequests := parser.Int("", "parallel-requests", &argparse.Options{Default: 18, Help: "Set ParallelRequests number. It should be 1 when there is a multi-routing"})
 	maxHops := parser.Int("m", "max-hops", &argparse.Options{Default: 30, Help: "Set the max number of hops (max TTL to be reached)"})
+	maxAttempts := parser.Int("", "max-attempts", &argparse.Options{Help: "Set the max number of attempts per TTL (instead of a fixed auto value)"})
 	dataOrigin := parser.Selector("d", "data-provider", []string{"Ip2region", "ip2region", "IP.SB", "ip.sb", "IPInfo", "ipinfo", "IPInsight", "ipinsight", "IPAPI.com", "ip-api.com", "IPInfoLocal", "ipinfolocal", "chunzhen", "LeoMoeAPI", "leomoeapi", "ipdb.one", "disable-geoip"}, &argparse.Options{Default: "LeoMoeAPI",
 		Help: "Choose IP Geograph Data Provider [IP.SB, IPInfo, IPInsight, IP-API.com, Ip2region, IPInfoLocal, CHUNZHEN, disable-geoip]"})
 	powProvider := parser.Selector("", "pow-provider", []string{"api.nxtrace.org", "sakura"}, &argparse.Options{Default: "api.nxtrace.org",
@@ -53,7 +54,7 @@ func Excute() {
 	rawPrint := parser.Flag("", "raw", &argparse.Options{Help: "An Output Easy to Parse"})
 	jsonPrint := parser.Flag("j", "json", &argparse.Options{Help: "Output trace results as JSON"})
 	classicPrint := parser.Flag("c", "classic", &argparse.Options{Help: "Classic Output trace results like BestTrace"})
-	beginHop := parser.Int("f", "first", &argparse.Options{Default: 1, Help: "Start from the first_ttl hop (instead from 1)"})
+	beginHop := parser.Int("f", "first", &argparse.Options{Default: 1, Help: "Start from the first_ttl hop (instead of 1)"})
 	disableMaptrace := parser.Flag("M", "map", &argparse.Options{Help: "Disable Print Trace Map"})
 	disableMPLS := parser.Flag("e", "disable-mpls", &argparse.Options{Help: "Disable MPLS"})
 	ver := parser.Flag("v", "version", &argparse.Options{Help: "Print version info and exit"})
@@ -264,6 +265,7 @@ func Excute() {
 		PacketInterval:   *packetInterval,
 		TTLInterval:      *ttlInterval,
 		NumMeasurements:  *numMeasurements,
+		MaxAttempts:      *maxAttempts,
 		ParallelRequests: *parallelRequests,
 		Lang:             *lang,
 		RDns:             !*noRdns,
@@ -358,7 +360,6 @@ func Excute() {
 }
 
 func capabilitiesCheck() {
-
 	// Windows 判断放在前面，防止遇到一些奇奇怪怪的问题
 	if runtime.GOOS == "windows" {
 		// Running on Windows, skip checking capabilities

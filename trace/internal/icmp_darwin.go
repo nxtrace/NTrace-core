@@ -21,10 +21,10 @@ var (
 	errUnknownIface   = errors.New("unknown network interface")
 
 	networkMap = map[string]string{
-		"ip4:icmp": "udp4",
-		"ip4:1":    "udp4",
-		"ip6:icmp": "udp6",
-		"ip6:58":   "udp6",
+		"ip4:icmp":      "udp4",
+		"ip4:1":         "udp4",
+		"ip6:ipv6-icmp": "udp6",
+		"ip6:58":        "udp6",
 	}
 )
 
@@ -93,5 +93,4 @@ func ListenICMP(network string, laddr string) (net.PacketConn, error) {
 	} else {
 		return nil, errUnknownNetwork
 	}
-	//}
 }

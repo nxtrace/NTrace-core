@@ -3,6 +3,7 @@ package trace
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"log"
 	"math/rand"
 	"net"
@@ -62,13 +63,38 @@ func (t *ICMPTracer) PrintFunc() {
 	}
 }
 
+func (t *ICMPTracer) ttlComp(ttl int) bool {
+	idx := ttl - 1
+	t.res.lock.Lock()
+	defer t.res.lock.Unlock()
+	return idx < len(t.res.Hops) && len(t.res.Hops[idx]) >= t.NumMeasurements
+}
+
+func (t *ICMPTracer) launchTTL(ttl int) {
+	go func(ttl int) {
+		for i := 0; i < t.MaxAttempts; i++ {
+			// 若此 TTL 已完成，则不再发起新的尝试
+			if t.ttlComp(ttl) {
+				return
+			}
+			t.wg.Add(1)
+			go func(ttl, i int) {
+				if err := t.send(ttl, i); err != nil {
+					log.Printf("send failed: ttl=%d i=%d: %v", ttl, i, err)
+				}
+			}(ttl, i)
+			<-time.After(time.Millisecond * time.Duration(t.Config.PacketInterval))
+		}
+	}(ttl)
+}
+
 func (t *ICMPTracer) initEchoID() {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	t.echoIDTag = uint8(r.Intn(256))     // 高 8 位随机 tag
 	t.pidLow = uint8(os.Getpid() & 0xFF) // 低 8 位为 pid
 }
 
-func (t *ICMPTracer) Execute() (*Result, error) {
+func (t *ICMPTracer) Execute() (res *Result, err error) {
 	// 初始化 inflightRequest map
 	t.inflightRequestLock.Lock()
 	t.inflightRequest = make(map[int]chan Hop)
@@ -80,13 +106,15 @@ func (t *ICMPTracer) Execute() (*Result, error) {
 		return &t.res, ErrTracerouteExecuted
 	}
 
-	var err error
-
 	t.icmp, err = internal.ListenICMP("ip4:icmp", t.SrcAddr)
 	if err != nil {
 		return &t.res, err
 	}
-	defer t.icmp.Close()
+	defer func() {
+		if c := t.icmp; c != nil { // 先拷一份引用，避免 defer 执行时 t.icmp 已被并发改写
+			err = errors.Join(err, c.Close())
+		}
+	}()
 
 	t.icmpConn = ipv4.NewPacketConn(t.icmp)
 
@@ -102,21 +130,23 @@ func (t *ICMPTracer) Execute() (*Result, error) {
 
 	t.sem = semaphore.NewWeighted(int64(t.ParallelRequests))
 
-	for ttl := t.BeginHop; ttl <= t.MaxHops; ttl++ {
-		// 如果到达最终跳，则退出
-		if t.final != -1 && ttl > t.final {
-			break
-		}
-		for i := 0; i < t.NumMeasurements; i++ {
-			// 将 TTL 编码到高 8 位；将索引 i 编码到低 8 位
-			seq := (ttl << 8) | (i & 0xFF)
+	go func() {
+		// 立即启动 BeginHop 对应的 TTL 组
+		t.launchTTL(t.BeginHop)
+		// 之后按 TTLInterval 周期启动后续 TTL 组
+		ticker := time.NewTicker(time.Millisecond * time.Duration(t.Config.TTLInterval))
+		defer ticker.Stop()
 
-			t.wg.Add(1)
-			go t.send(ttl, seq)
-			<-time.After(time.Millisecond * time.Duration(t.Config.PacketInterval))
+		for ttl := t.BeginHop + 1; ttl <= t.MaxHops; ttl++ {
+			<-ticker.C
+			// 如果到达最终跳，则退出
+			if t.final != -1 && ttl > t.final {
+				break
+			}
+			// 并发启动这个 TTL 的所有测量
+			t.launchTTL(ttl)
 		}
-		<-time.After(time.Millisecond * time.Duration(t.Config.TTLInterval))
-	}
+	}()
 	t.wg.Wait()
 	t.res.reduce(t.final)
 
@@ -144,7 +174,7 @@ func (t *ICMPTracer) listenICMP() {
 				echo := rm.Body.(*icmp.Echo)
 				data := echo.Data
 				// 只在 Peer 是目的地址时分发，用 seq 作为通道 key
-				if ip, ok := msg.Peer.(*net.IPAddr); ok && ip.IP.Equal(t.DestIP) {
+				if msg.Peer.String() == t.DestIP.String() {
 					id := uint16(echo.ID)
 					if uint8(id>>8) != t.echoIDTag || uint8(id&0xFF) != t.pidLow {
 						continue
@@ -205,27 +235,39 @@ func (t *ICMPTracer) listenICMP() {
 }
 
 func (t *ICMPTracer) handleICMPMessage(msg ReceivedMessage, icmpType int8, data []byte, seq int) {
-	if icmpType == 2 {
-		if t.DestIP.String() != msg.Peer.String() {
-			return
-		}
+	if icmpType == 2 && msg.Peer.String() != t.DestIP.String() {
+		return
 	}
 
-	t.inflightRequestLock.Lock()
-	defer t.inflightRequestLock.Unlock()
-
 	mpls := extractMPLS(msg, data)
-	if _, ok := t.inflightRequest[seq]; ok {
-		t.inflightRequest[seq] <- Hop{
-			Success: true,
-			Address: msg.Peer,
-			MPLS:    mpls,
-		}
+	// 取出通道后立刻解锁
+	t.inflightRequestLock.Lock()
+	ch, ok := t.inflightRequest[seq]
+	t.inflightRequestLock.Unlock()
+	if !ok || ch == nil {
+		return
+	}
+
+	h := Hop{
+		Success: true,
+		Address: msg.Peer,
+		MPLS:    mpls,
+	}
+	// 非阻塞发送，避免重复回包把缓冲塞满导致阻塞
+	select {
+	case ch <- h:
+	default:
+		// 丢弃重复/迟到的相同 seq 回包，避免阻塞
 	}
 }
 
-func (t *ICMPTracer) send(ttl, seq int) error {
+func (t *ICMPTracer) send(ttl, i int) error {
 	defer t.wg.Done()
+
+	if t.ttlComp(ttl) {
+		// 快路径短路：若该 TTL 已完成，直接返回避免竞争信号量与无谓发包
+		return nil
+	}
 
 	if err := t.sem.Acquire(t.ctx, 1); err != nil {
 		return err
@@ -235,6 +277,13 @@ func (t *ICMPTracer) send(ttl, seq int) error {
 	if t.final != -1 && ttl > t.final {
 		return nil
 	}
+
+	if t.ttlComp(ttl) {
+		// 竞态兜底：获取信号量期间可能已完成，再次检查以避免冗余发包
+		return nil
+	}
+	// 将 TTL 编码到高 8 位；将索引 i 编码到低 8 位
+	seq := (ttl << 8) | (i & 0xFF)
 
 	t.inflightRequestLock.Lock()
 	hopCh := make(chan Hop, 1)
@@ -314,20 +363,20 @@ func (t *ICMPTracer) send(ttl, seq int) error {
 			return err
 		}
 
-		t.res.add(h)
+		t.res.add(h, i, t.NumMeasurements, t.MaxAttempts)
 	case <-time.After(t.Timeout):
 		if t.final != -1 && ttl > t.final {
 			return nil
 		}
 
-		t.res.add(Hop{
+		h := Hop{
 			Success: false,
 			Address: nil,
 			TTL:     ttl,
 			RTT:     0,
 			Error:   ErrHopLimitTimeout,
-		})
-
+		}
+		t.res.add(h, i, t.NumMeasurements, t.MaxAttempts)
 	}
 	return nil
 }

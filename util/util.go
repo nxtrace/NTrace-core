@@ -19,6 +19,7 @@ import (
 var DisableMPLS = GetenvDefault("NEXTTRACE_DISABLEMPLS", "")
 var EnableHidDstIP = GetenvDefault("NEXTTRACE_ENABLEHIDDENDSTIP", "")
 var EnvIPInfoLocalPath = GetenvDefault("NEXTTRACE_IPINFOLOCALPATH", "")
+var EnvMaxAttempts = GetenvDefault("NEXTTRACE_MAXATTEMPTS", "")
 var EnvRandomPort = GetenvDefault("NEXTTRACE_RANDOMPORT", "")
 var EnvToken = GetenvDefault("NEXTTRACE_TOKEN", "")
 var Uninterrupted = GetenvDefault("NEXTTRACE_UNINTERRUPTED", "")
