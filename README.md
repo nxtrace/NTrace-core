@@ -237,9 +237,9 @@ nexttrace --tcp --source-port 14514 www.bing.com
 nexttrace --queries 2 www.hkix.net
 
 # Set the maximum attempts per TTL
-nexttrace --max-attempts 5 www.hkix.net
+nexttrace --max-attempts 10 www.hkix.net
 # or use the ENV variable NEXTTRACE_MAXATTEMPTS to persist across runs
-export NEXTTRACE_MAXATTEMPTS=5
+export NEXTTRACE_MAXATTEMPTS=10
 
 # No concurrent probe packets, only one probe packet is sent at a time
 nexttrace --parallel-requests 1 www.hkix.net

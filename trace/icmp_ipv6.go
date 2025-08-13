@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/nxtrace/NTrace-core/trace/internal"
@@ -27,16 +28,12 @@ type ICMPTracerv6 struct {
 	echoIDTag           uint8
 	pidLow              uint8
 	inflightRequest     map[int]chan Hop
-	inflightRequestLock sync.Mutex
+	inflightRequestLock sync.RWMutex
 	icmp                net.PacketConn
 	icmpConn            *ipv6.PacketConn
 	hopLimitLock        sync.Mutex
-
-	final     int
-	finalLock sync.Mutex
-
-	sem       *semaphore.Weighted
-	fetchLock sync.Mutex
+	final               atomic.Int32
+	sem                 *semaphore.Weighted
 }
 
 func (t *ICMPTracerv6) PrintFunc() {
@@ -53,7 +50,7 @@ func (t *ICMPTracerv6) PrintFunc() {
 				t.RealtimePrinter(&t.res, ttl)
 			}
 			ttl++
-			if ttl == t.final || ttl >= t.MaxHops {
+			if ttl == int(t.final.Load()) || ttl >= t.MaxHops {
 				return
 			}
 		}
@@ -63,8 +60,8 @@ func (t *ICMPTracerv6) PrintFunc() {
 
 func (t *ICMPTracerv6) ttlComp(ttl int) bool {
 	idx := ttl - 1
-	t.res.lock.Lock()
-	defer t.res.lock.Unlock()
+	t.res.lock.RLock()
+	defer t.res.lock.RUnlock()
 	return idx < len(t.res.Hops) && len(t.res.Hops[idx]) >= t.NumMeasurements
 }
 
@@ -93,16 +90,16 @@ func (t *ICMPTracerv6) initEchoID() {
 }
 
 func (t *ICMPTracerv6) Execute() (res *Result, err error) {
-	// 初始化 inflightRequest map
-	t.inflightRequestLock.Lock()
-	t.inflightRequest = make(map[int]chan Hop)
-	t.inflightRequestLock.Unlock()
 	// 初始化 Echo.ID
 	t.initEchoID()
+	// 初始化 inflightRequest map
+	t.inflightRequest = make(map[int]chan Hop)
 
 	if len(t.res.Hops) > 0 {
 		return &t.res, ErrTracerouteExecuted
 	}
+	// 初始化 Result.Hops，并预分配到 MaxHops
+	t.res.Hops = make([][]Hop, t.MaxHops)
 
 	t.icmp, err = internal.ListenICMP("ip6:ipv6-icmp", t.SrcAddr)
 	if err != nil {
@@ -120,7 +117,7 @@ func (t *ICMPTracerv6) Execute() (res *Result, err error) {
 	t.ctx, cancel = context.WithCancel(context.Background())
 	defer cancel()
 
-	t.final = -1
+	t.final.Store(-1)
 
 	go t.listenICMP()
 	t.wg.Add(1)
@@ -138,7 +135,7 @@ func (t *ICMPTracerv6) Execute() (res *Result, err error) {
 		for ttl := t.BeginHop + 1; ttl <= t.MaxHops; ttl++ {
 			<-ticker.C
 			// 如果到达最终跳，则退出
-			if t.final != -1 && ttl > t.final {
+			if f := t.final.Load(); f != -1 && ttl > int(f) {
 				break
 			}
 			// 并发启动这个 TTL 的所有测量
@@ -164,7 +161,7 @@ func (t *ICMPTracerv6) Execute() (res *Result, err error) {
 	// 	}
 	// }
 	t.wg.Wait()
-	t.res.reduce(t.final)
+	t.res.reduce(int(t.final.Load()))
 
 	return &t.res, nil
 }
@@ -190,7 +187,7 @@ func (t *ICMPTracerv6) listenICMP() {
 				echo := rm.Body.(*icmp.Echo)
 				data := echo.Data
 				// 只在 Peer 是目的地址时分发，用 seq 作为通道 key
-				if msg.Peer.String() == t.DestIP.String() {
+				if ip, ok := msg.Peer.(*net.IPAddr); ok && ip.IP.Equal(t.DestIP) {
 					id := uint16(echo.ID)
 					if uint8(id>>8) != t.echoIDTag || uint8(id&0xFF) != t.pidLow {
 						continue
@@ -291,15 +288,17 @@ func (t *ICMPTracerv6) listenICMP() {
 }
 
 func (t *ICMPTracerv6) handleICMPMessage(msg ReceivedMessage, icmpType int8, data []byte, seq int) {
-	if icmpType == 2 && msg.Peer.String() != t.DestIP.String() {
-		return
+	if icmpType == 2 {
+		if ip, ok := msg.Peer.(*net.IPAddr); !ok || !ip.IP.Equal(t.DestIP) {
+			return
+		}
 	}
 
 	mpls := extractMPLS(msg, data)
 	// 取出通道后立刻解锁
-	t.inflightRequestLock.Lock()
+	t.inflightRequestLock.RLock()
 	ch, ok := t.inflightRequest[seq]
-	t.inflightRequestLock.Unlock()
+	t.inflightRequestLock.RUnlock()
 	if !ok || ch == nil {
 		return
 	}
@@ -330,7 +329,7 @@ func (t *ICMPTracerv6) send(ttl, i int) error {
 	}
 	defer t.sem.Release(1)
 
-	if t.final != -1 && ttl > t.final {
+	if f := t.final.Load(); f != -1 && ttl > int(f) {
 		return nil
 	}
 
@@ -393,35 +392,42 @@ func (t *ICMPTracerv6) send(ttl, i int) error {
 		return nil
 	case h := <-hopCh:
 		rtt := time.Since(start)
-		if t.final != -1 && ttl > t.final {
+		if f := t.final.Load(); f != -1 && ttl > int(f) {
 			return nil
 		}
+
 		if addr, ok := h.Address.(*net.IPAddr); ok && addr.IP.Equal(t.DestIP) {
-			t.finalLock.Lock()
-			if t.final == -1 || ttl < t.final {
-				t.final = ttl
+			for {
+				old := t.final.Load()
+				if old != -1 && ttl >= int(old) {
+					break
+				}
+				if t.final.CompareAndSwap(old, int32(ttl)) {
+					break
+				}
 			}
-			t.finalLock.Unlock()
 		} else if addr, ok := h.Address.(*net.TCPAddr); ok && addr.IP.Equal(t.DestIP) {
-			t.finalLock.Lock()
-			if t.final == -1 || ttl < t.final {
-				t.final = ttl
+			for {
+				old := t.final.Load()
+				if old != -1 && ttl >= int(old) {
+					break
+				}
+				if t.final.CompareAndSwap(old, int32(ttl)) {
+					break
+				}
 			}
-			t.finalLock.Unlock()
 		}
 
 		h.TTL = ttl
 		h.RTT = rtt
 
-		t.fetchLock.Lock()
-		defer t.fetchLock.Unlock()
 		if err := h.fetchIPData(t.Config); err != nil {
 			return err
 		}
 
 		t.res.add(h, i, t.NumMeasurements, t.MaxAttempts)
 	case <-time.After(t.Timeout):
-		if t.final != -1 && ttl > t.final {
+		if f := t.final.Load(); f != -1 && ttl > int(f) {
 			return nil
 		}
 
@@ -432,6 +438,7 @@ func (t *ICMPTracerv6) send(ttl, i int) error {
 			RTT:     0,
 			Error:   ErrHopLimitTimeout,
 		}
+
 		t.res.add(h, i, t.NumMeasurements, t.MaxAttempts)
 	}
 	return nil

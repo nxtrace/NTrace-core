@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/gopacket"
@@ -23,19 +24,15 @@ type UDPTracerIPv6 struct {
 	res                 Result
 	ctx                 context.Context
 	inflightRequest     map[int]chan Hop
-	inflightRequestLock sync.Mutex
+	inflightRequestLock sync.RWMutex
 	SrcIP               net.IP
 	icmp                net.PacketConn
 	udp                 net.PacketConn
 	udpConn             *ipv6.PacketConn
 	hopLimitLock        sync.Mutex
-
-	final     int
-	finalLock sync.Mutex
-
-	sem       *semaphore.Weighted
-	fetchLock sync.Mutex
-	udpMutex  sync.Mutex
+	final               atomic.Int32
+	sem                 *semaphore.Weighted
+	udpMutex            sync.Mutex
 }
 
 func (t *UDPTracerIPv6) PrintFunc() {
@@ -52,7 +49,7 @@ func (t *UDPTracerIPv6) PrintFunc() {
 				t.RealtimePrinter(&t.res, ttl)
 			}
 			ttl++
-			if ttl == t.final || ttl >= t.MaxHops {
+			if ttl == int(t.final.Load()) || ttl >= t.MaxHops {
 				return
 			}
 		}
@@ -62,13 +59,13 @@ func (t *UDPTracerIPv6) PrintFunc() {
 
 func (t *UDPTracerIPv6) Execute() (res *Result, err error) {
 	// 初始化 inflightRequest map
-	t.inflightRequestLock.Lock()
 	t.inflightRequest = make(map[int]chan Hop)
-	t.inflightRequestLock.Unlock()
 
 	if len(t.res.Hops) > 0 {
 		return &t.res, ErrTracerouteExecuted
 	}
+	// 初始化 Result.Hops，并预分配到 MaxHops
+	t.res.Hops = make([][]Hop, t.MaxHops)
 
 	t.SrcIP, _ = util.LocalIPPortv6(t.DestIP)
 
@@ -102,7 +99,7 @@ func (t *UDPTracerIPv6) Execute() (res *Result, err error) {
 	t.ctx, cancel = context.WithCancel(context.Background())
 	defer cancel()
 
-	t.final = -1
+	t.final.Store(-1)
 
 	go t.listenICMP()
 	t.wg.Add(1)
@@ -112,7 +109,7 @@ func (t *UDPTracerIPv6) Execute() (res *Result, err error) {
 
 	for ttl := t.BeginHop; ttl <= t.MaxHops; ttl++ {
 		// 如果到达最终跳，则退出
-		if t.final != -1 && ttl > t.final {
+		if f := t.final.Load(); f != -1 && ttl > int(f) {
 			break
 		}
 		for i := 0; i < t.NumMeasurements; i++ {
@@ -127,7 +124,7 @@ func (t *UDPTracerIPv6) Execute() (res *Result, err error) {
 		<-time.After(time.Millisecond * time.Duration(t.Config.TTLInterval))
 	}
 	t.wg.Wait()
-	t.res.reduce(t.final)
+	t.res.reduce(int(t.final.Load()))
 
 	return &t.res, nil
 }
@@ -199,9 +196,9 @@ func (t *UDPTracerIPv6) handleICMPMessage(msg ReceivedMessage) {
 	origUDP := udpLayer.(*layers.UDP)
 	SrcPort := int(origUDP.SrcPort)
 	// 取出通道后立刻解锁
-	t.inflightRequestLock.Lock()
+	t.inflightRequestLock.RLock()
 	ch, ok := t.inflightRequest[SrcPort]
-	t.inflightRequestLock.Unlock()
+	t.inflightRequestLock.RUnlock()
 	if !ok || ch == nil {
 		return
 	}
@@ -231,7 +228,7 @@ func (t *UDPTracerIPv6) send(ttl int) error {
 	}
 	defer t.sem.Release(1)
 
-	if t.final != -1 && ttl > t.final {
+	if f := t.final.Load(); f != -1 && ttl > int(f) {
 		return nil
 	}
 
@@ -249,7 +246,6 @@ func (t *UDPTracerIPv6) send(ttl int) error {
 	defer func() {
 		t.inflightRequestLock.Lock()
 		delete(t.inflightRequest, SrcPort)
-		close(hopCh)
 		t.inflightRequestLock.Unlock()
 	}()
 
@@ -301,36 +297,42 @@ func (t *UDPTracerIPv6) send(ttl int) error {
 		return nil
 	case h := <-hopCh:
 		rtt := time.Since(start)
-		if t.final != -1 && ttl > t.final {
+		if f := t.final.Load(); f != -1 && ttl > int(f) {
 			return nil
 		}
 
 		if addr, ok := h.Address.(*net.IPAddr); ok && addr.IP.Equal(t.DestIP) {
-			t.finalLock.Lock()
-			if t.final == -1 || ttl < t.final {
-				t.final = ttl
+			for {
+				old := t.final.Load()
+				if old != -1 && ttl >= int(old) {
+					break
+				}
+				if t.final.CompareAndSwap(old, int32(ttl)) {
+					break
+				}
 			}
-			t.finalLock.Unlock()
 		} else if addr, ok := h.Address.(*net.UDPAddr); ok && addr.IP.Equal(t.DestIP) {
-			t.finalLock.Lock()
-			if t.final == -1 || ttl < t.final {
-				t.final = ttl
+			for {
+				old := t.final.Load()
+				if old != -1 && ttl >= int(old) {
+					break
+				}
+				if t.final.CompareAndSwap(old, int32(ttl)) {
+					break
+				}
 			}
-			t.finalLock.Unlock()
 		}
 
 		h.TTL = ttl
 		h.RTT = rtt
 
-		t.fetchLock.Lock()
-		defer t.fetchLock.Unlock()
 		if err := h.fetchIPData(t.Config); err != nil {
 			return err
 		}
 
 		t.res.addLegacy(h)
 	case <-time.After(t.Timeout):
-		if t.final != -1 && ttl > t.final {
+		if f := t.final.Load(); f != -1 && ttl > int(f) {
 			return nil
 		}
 
@@ -341,6 +343,7 @@ func (t *UDPTracerIPv6) send(ttl int) error {
 			RTT:     0,
 			Error:   ErrHopLimitTimeout,
 		}
+
 		t.res.addLegacy(h)
 	}
 	return nil
