@@ -255,7 +255,7 @@ func (h *Hop) fetchIPData(c Config) (err error) {
 			return
 		}
 		h.Lang = c.Lang
-		// (1) 本地快速路径（例如离线库或快速命中）
+		// (1) 本地快速路径
 		if g, ok := ipgeo.Filter(ipStr); ok {
 			h.Geo = g
 			ipGeoCh <- nil

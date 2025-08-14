@@ -1,28 +1,31 @@
 package trace
 
 import (
+	"context"
 	"errors"
 	"log"
 	"math/rand"
 	"net"
+	"os"
+	"os/signal"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
-	"github.com/nxtrace/NTrace-core/util"
-	"golang.org/x/net/context"
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv4"
 	"golang.org/x/sync/semaphore"
+
+	"github.com/nxtrace/NTrace-core/util"
 )
 
 type TCPTracer struct {
 	Config
 	wg                  sync.WaitGroup
 	res                 Result
-	ctx                 context.Context
 	inflightRequest     map[int]chan Hop
 	inflightRequestLock sync.RWMutex
 	SrcIP               net.IP
@@ -34,9 +37,20 @@ type TCPTracer struct {
 	sem                 *semaphore.Weighted
 }
 
-func (t *TCPTracer) PrintFunc() {
+func (t *TCPTracer) PrintFunc(ctx context.Context, status chan<- bool) {
 	defer t.wg.Done()
+	// 默认认为是正常退出，只有在 ctx 取消时改为 false
+	normalExit := true
+	defer func() {
+		select {
+		case status <- normalExit:
+		default:
+		}
+		close(status)
+	}()
 	ttl := t.Config.BeginHop - 1
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
 	for {
 		if t.AsyncPrinter != nil {
 			t.AsyncPrinter(&t.res)
@@ -52,7 +66,13 @@ func (t *TCPTracer) PrintFunc() {
 				return
 			}
 		}
-		<-time.After(200 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			// 非正常退出
+			normalExit = false
+			return
+		case <-ticker.C:
+		}
 	}
 }
 
@@ -63,20 +83,24 @@ func (t *TCPTracer) ttlComp(ttl int) bool {
 	return idx < len(t.res.Hops) && len(t.res.Hops[idx]) >= t.NumMeasurements
 }
 
-func (t *TCPTracer) launchTTL(ttl int) {
+func (t *TCPTracer) launchTTL(ctx context.Context, ttl int) {
 	go func(ttl int) {
 		for i := 0; i < t.MaxAttempts; i++ {
-			// 若此 TTL 已完成，则不再发起新的尝试
-			if t.ttlComp(ttl) {
+			// 若此 TTL 已完成或 ctx 已取消，则不再发起新的尝试
+			if t.ttlComp(ttl) || ctx.Err() != nil {
 				return
 			}
 			t.wg.Add(1)
 			go func(ttl, i int) {
-				if err := t.send(ttl, i); err != nil {
+				if err := t.send(ctx, ttl, i); err != nil && !errors.Is(err, context.Canceled) {
 					log.Printf("send failed: ttl=%d i=%d: %v", ttl, i, err)
 				}
 			}(ttl, i)
-			<-time.After(time.Millisecond * time.Duration(t.Config.PacketInterval))
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(time.Millisecond * time.Duration(t.Config.PacketInterval)):
+			}
 		}
 	}(ttl)
 }
@@ -103,7 +127,7 @@ func (t *TCPTracer) Execute() (res *Result, err error) {
 	}
 	defer func() {
 		if c := t.tcp; c != nil { // 先拷一份引用，避免 defer 执行时 t.tcp 已被并发改写
-			err = errors.Join(err, c.Close())
+			_ = c.Close()
 		}
 	}()
 
@@ -115,54 +139,69 @@ func (t *TCPTracer) Execute() (res *Result, err error) {
 	}
 	defer func() {
 		if c := t.icmp; c != nil { // 先拷一份引用，避免 defer 执行时 t.icmp 已被并发改写
-			err = errors.Join(err, c.Close())
+			_ = c.Close()
 		}
 	}()
 
-	var cancel context.CancelFunc
-	t.ctx, cancel = context.WithCancel(context.Background())
-	defer cancel()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	t.final.Store(-1)
 
-	go t.listenICMP()
-	go t.listenTCP()
 	t.wg.Add(1)
-	go t.PrintFunc()
+	go t.listenICMP(ctx)
+	t.wg.Add(1)
+	go t.listenTCP(ctx)
+	statusCh := make(chan bool, 1)
+	t.wg.Add(1)
+	go t.PrintFunc(ctx, statusCh)
 
 	t.sem = semaphore.NewWeighted(int64(t.ParallelRequests))
 
+	t.wg.Add(1)
 	go func() {
+		defer t.wg.Done()
 		// 立即启动 BeginHop 对应的 TTL 组
-		t.launchTTL(t.BeginHop)
+		t.launchTTL(ctx, t.BeginHop)
 		// 之后按 TTLInterval 周期启动后续 TTL 组
 		ticker := time.NewTicker(time.Millisecond * time.Duration(t.Config.TTLInterval))
 		defer ticker.Stop()
-
 		for ttl := t.BeginHop + 1; ttl <= t.MaxHops; ttl++ {
-			<-ticker.C
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
 			// 如果到达最终跳，则退出
 			if f := t.final.Load(); f != -1 && ttl > int(f) {
-				break
+				return
 			}
 			// 并发启动这个 TTL 的所有测量
-			t.launchTTL(ttl)
+			t.launchTTL(ctx, ttl)
 		}
 	}()
+	normalExit := <-statusCh
+	stop()
 	t.wg.Wait()
 	t.res.reduce(int(t.final.Load()))
-
+	if !normalExit {
+		return &t.res, context.Canceled
+	}
 	return &t.res, nil
 }
 
-func (t *TCPTracer) listenICMP() {
-	lc := NewPacketListener(t.icmp, t.ctx)
-	go lc.Start()
+func (t *TCPTracer) listenICMP(ctx context.Context) {
+	defer t.wg.Done()
+	lc := NewPacketListener(t.icmp)
+	go lc.Start(ctx)
 	for {
 		select {
-		case <-t.ctx.Done():
+		case <-ctx.Done():
 			return
-		case msg := <-lc.Messages:
+		case msg, ok := <-lc.Messages:
+			if !ok {
+				return
+			}
 			if msg.N == nil {
 				continue
 			}
@@ -173,7 +212,10 @@ func (t *TCPTracer) listenICMP() {
 			}
 			switch rm.Type {
 			case ipv4.ICMPTypeTimeExceeded:
-				body := rm.Body.(*icmp.TimeExceeded)
+				body, ok := rm.Body.(*icmp.TimeExceeded)
+				if !ok || body == nil {
+					continue
+				}
 				data := body.Data
 				if len(data) < 20 || data[0]>>4 != 4 {
 					continue
@@ -183,7 +225,10 @@ func (t *TCPTracer) listenICMP() {
 					t.handleICMPMessage(msg, data)
 				}
 			case ipv4.ICMPTypeDestinationUnreachable:
-				body := rm.Body.(*icmp.DstUnreach)
+				body, ok := rm.Body.(*icmp.DstUnreach)
+				if !ok || body == nil {
+					continue
+				}
 				data := body.Data
 				if len(data) < 20 || data[0]>>4 != 4 {
 					continue
@@ -201,15 +246,18 @@ func (t *TCPTracer) listenICMP() {
 
 // @title    listenTCP
 // @description   监听TCP的响应数据包
-func (t *TCPTracer) listenTCP() {
-	lc := NewPacketListener(t.tcp, t.ctx)
-	go lc.Start()
-
+func (t *TCPTracer) listenTCP(ctx context.Context) {
+	defer t.wg.Done()
+	lc := NewPacketListener(t.tcp)
+	go lc.Start(ctx)
 	for {
 		select {
-		case <-t.ctx.Done():
+		case <-ctx.Done():
 			return
-		case msg := <-lc.Messages:
+		case msg, ok := <-lc.Messages:
+			if !ok {
+				return
+			}
 			if msg.N == nil {
 				continue
 			}
@@ -275,15 +323,14 @@ func (t *TCPTracer) handleICMPMessage(msg ReceivedMessage, data []byte) {
 	}
 }
 
-func (t *TCPTracer) send(ttl, i int) error {
+func (t *TCPTracer) send(ctx context.Context, ttl, i int) error {
 	defer t.wg.Done()
-
 	if t.ttlComp(ttl) {
 		// 快路径短路：若该 TTL 已完成，直接返回避免竞争信号量与无谓发包
 		return nil
 	}
 
-	if err := t.sem.Acquire(t.ctx, 1); err != nil {
+	if err := t.sem.Acquire(ctx, 1); err != nil {
 		return err
 	}
 	defer t.sem.Release(1)
@@ -367,8 +414,8 @@ func (t *TCPTracer) send(ttl, i int) error {
 	t.hopLimitLock.Unlock()
 
 	select {
-	case <-t.ctx.Done():
-		return nil
+	case <-ctx.Done():
+		return context.Canceled
 	case h := <-hopCh:
 		rtt := time.Since(start)
 		if f := t.final.Load(); f != -1 && ttl > int(f) {

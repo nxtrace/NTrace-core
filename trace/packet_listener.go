@@ -1,10 +1,10 @@
 package trace
 
 import (
+	"context"
+	"errors"
 	"net"
 	"time"
-
-	"golang.org/x/net/context"
 )
 
 type ReceivedMessage struct {
@@ -15,47 +15,60 @@ type ReceivedMessage struct {
 }
 
 // PacketListener 负责监听网络数据包并通过通道传递接收到的消息
+// 对外暴露只读的 Messages，避免外部代码误写
 type PacketListener struct {
-	ctx      context.Context
 	Conn     net.PacketConn
-	Messages chan ReceivedMessage
+	Messages <-chan ReceivedMessage
+	ch       chan ReceivedMessage
 }
 
 // NewPacketListener 创建一个新的数据包监听器
 // conn: 用于接收数据包的连接
-// ctx: 用于控制监听器生命周期的上下文
 // 返回初始化好的 PacketListener 实例
-func NewPacketListener(conn net.PacketConn, ctx context.Context) *PacketListener {
-	results := make(chan ReceivedMessage, 50)
+func NewPacketListener(conn net.PacketConn) *PacketListener {
+	ch := make(chan ReceivedMessage, 64)
 
-	return &PacketListener{Conn: conn, ctx: ctx, Messages: results}
+	return &PacketListener{Conn: conn, Messages: ch, ch: ch}
 }
 
-func (l *PacketListener) Start() {
+func (l *PacketListener) Start(ctx context.Context) {
+	defer close(l.ch)
+	// 取消就关闭连接，立刻打断 ReadFrom
+	go func() {
+		<-ctx.Done()
+		_ = l.Conn.Close()
+	}()
+
+	buf := make([]byte, 4096)
+
 	for {
+		n, peer, err := l.Conn.ReadFrom(buf)
+		if err != nil {
+			// 连接关闭或 ctx 取消：直接退出
+			if errors.Is(err, net.ErrClosed) || ctx.Err() != nil {
+				return
+			}
+			// 限时等待投递错误；超时或取消就丢弃/退出
+			select {
+			case l.ch <- ReceivedMessage{Err: err}:
+			case <-ctx.Done():
+				return
+			case <-time.After(5 * time.Second):
+			}
+			continue
+		}
+		// 拷贝出精确长度，避免 buf 复用带来的数据竞争
+		pkt := make([]byte, n)
+		copy(pkt, buf[:n])
+
+		nn := new(int)
+		*nn = n
+		// 限时等待投递数据；超时或取消就丢弃/退出
 		select {
-		case <-l.ctx.Done():
+		case l.ch <- ReceivedMessage{N: nn, Peer: peer, Msg: pkt}:
+		case <-ctx.Done():
 			return
-		default:
-		}
-
-		reply := make([]byte, 1500)
-		err := l.Conn.SetReadDeadline(time.Now().Add(2 * time.Second))
-		if err != nil {
-			l.Messages <- ReceivedMessage{Err: err}
-			continue
-		}
-
-		n, peer, err := l.Conn.ReadFrom(reply)
-		if err != nil {
-			l.Messages <- ReceivedMessage{Err: err}
-			continue
-		}
-		l.Messages <- ReceivedMessage{
-			N:    &n,
-			Peer: peer,
-			Err:  nil,
-			Msg:  reply,
+		case <-time.After(5 * time.Second):
 		}
 	}
 }

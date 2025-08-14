@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -319,6 +321,11 @@ func Execute() {
 	}
 
 	res, err := trace.Traceroute(m, conf)
+	if errors.Is(err, context.Canceled) {
+		// 用户主动中断：跳过后续的正常收尾
+		// os.Exit(130)
+		return
+	}
 
 	if err != nil {
 		log.Fatalln(err)

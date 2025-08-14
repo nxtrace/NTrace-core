@@ -1,28 +1,31 @@
 package trace
 
 import (
+	"context"
 	"errors"
 	"log"
 	"math/rand"
 	"net"
+	"os"
+	"os/signal"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
-	"github.com/nxtrace/NTrace-core/util"
-	"golang.org/x/net/context"
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv6"
 	"golang.org/x/sync/semaphore"
+
+	"github.com/nxtrace/NTrace-core/util"
 )
 
 type UDPTracerIPv6 struct {
 	Config
 	wg                  sync.WaitGroup
 	res                 Result
-	ctx                 context.Context
 	inflightRequest     map[int]chan Hop
 	inflightRequestLock sync.RWMutex
 	SrcIP               net.IP
@@ -35,9 +38,20 @@ type UDPTracerIPv6 struct {
 	udpMutex            sync.Mutex
 }
 
-func (t *UDPTracerIPv6) PrintFunc() {
+func (t *UDPTracerIPv6) PrintFunc(ctx context.Context, status chan<- bool) {
 	defer t.wg.Done()
+	// 默认认为是正常退出，只有在 ctx 取消时改为 false
+	normalExit := true
+	defer func() {
+		select {
+		case status <- normalExit:
+		default:
+		}
+		close(status)
+	}()
 	ttl := t.Config.BeginHop - 1
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
 	for {
 		if t.AsyncPrinter != nil {
 			t.AsyncPrinter(&t.res)
@@ -53,7 +67,13 @@ func (t *UDPTracerIPv6) PrintFunc() {
 				return
 			}
 		}
-		<-time.After(200 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			// 非正常退出
+			normalExit = false
+			return
+		case <-ticker.C:
+		}
 	}
 }
 
@@ -79,7 +99,7 @@ func (t *UDPTracerIPv6) Execute() (res *Result, err error) {
 	}
 	defer func() {
 		if c := t.udp; c != nil { // 先拷一份引用，避免 defer 执行时 t.udp 已被并发改写
-			err = errors.Join(err, c.Close())
+			_ = c.Close()
 		}
 	}()
 
@@ -91,52 +111,74 @@ func (t *UDPTracerIPv6) Execute() (res *Result, err error) {
 	}
 	defer func() {
 		if c := t.icmp; c != nil { // 先拷一份引用，避免 defer 执行时 t.icmp 已被并发改写
-			err = errors.Join(err, c.Close())
+			_ = c.Close()
 		}
 	}()
 
-	var cancel context.CancelFunc
-	t.ctx, cancel = context.WithCancel(context.Background())
-	defer cancel()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	t.final.Store(-1)
 
-	go t.listenICMP()
 	t.wg.Add(1)
-	go t.PrintFunc()
+	go t.listenICMP(ctx)
+	statusCh := make(chan bool, 1)
+	t.wg.Add(1)
+	go t.PrintFunc(ctx, statusCh)
 
 	t.sem = semaphore.NewWeighted(int64(t.ParallelRequests))
 
+ttlLoop:
 	for ttl := t.BeginHop; ttl <= t.MaxHops; ttl++ {
 		// 如果到达最终跳，则退出
 		if f := t.final.Load(); f != -1 && ttl > int(f) {
 			break
 		}
 		for i := 0; i < t.NumMeasurements; i++ {
+			// 若 ctx 已取消，则不再发起新的尝试
+			if ctx.Err() != nil {
+				break ttlLoop
+			}
 			t.wg.Add(1)
 			go func(ttl int) {
-				if err := t.send(ttl); err != nil {
+				if err := t.send(ctx, ttl); err != nil && !errors.Is(err, context.Canceled) {
 					log.Printf("send failed: ttl=%d: %v", ttl, err)
 				}
 			}(ttl)
-			<-time.After(time.Millisecond * time.Duration(t.Config.PacketInterval))
+			select {
+			case <-ctx.Done():
+				break ttlLoop
+			case <-time.After(time.Millisecond * time.Duration(t.Config.PacketInterval)):
+			}
 		}
-		<-time.After(time.Millisecond * time.Duration(t.Config.TTLInterval))
+		select {
+		case <-ctx.Done():
+			break ttlLoop
+		case <-time.After(time.Millisecond * time.Duration(t.Config.TTLInterval)):
+		}
 	}
+	normalExit := <-statusCh
+	stop()
 	t.wg.Wait()
 	t.res.reduce(int(t.final.Load()))
-
+	if !normalExit {
+		return &t.res, context.Canceled
+	}
 	return &t.res, nil
 }
 
-func (t *UDPTracerIPv6) listenICMP() {
-	lc := NewPacketListener(t.icmp, t.ctx)
-	go lc.Start()
+func (t *UDPTracerIPv6) listenICMP(ctx context.Context) {
+	defer t.wg.Done()
+	lc := NewPacketListener(t.icmp)
+	go lc.Start(ctx)
 	for {
 		select {
-		case <-t.ctx.Done():
+		case <-ctx.Done():
 			return
-		case msg := <-lc.Messages:
+		case msg, ok := <-lc.Messages:
+			if !ok {
+				return
+			}
 			if msg.N == nil {
 				continue
 			}
@@ -147,7 +189,10 @@ func (t *UDPTracerIPv6) listenICMP() {
 			}
 			switch rm.Type {
 			case ipv6.ICMPTypeTimeExceeded:
-				body := rm.Body.(*icmp.TimeExceeded)
+				body, ok := rm.Body.(*icmp.TimeExceeded)
+				if !ok || body == nil {
+					continue
+				}
 				data := body.Data
 				if len(data) < 40 || data[0]>>4 != 6 {
 					continue
@@ -157,7 +202,10 @@ func (t *UDPTracerIPv6) listenICMP() {
 					t.handleICMPMessage(msg)
 				}
 			case ipv6.ICMPTypeDestinationUnreachable:
-				body := rm.Body.(*icmp.DstUnreach)
+				body, ok := rm.Body.(*icmp.DstUnreach)
+				if !ok || body == nil {
+					continue
+				}
 				data := body.Data
 				if len(data) < 40 || data[0]>>4 != 6 {
 					continue
@@ -215,15 +263,14 @@ func (t *UDPTracerIPv6) handleICMPMessage(msg ReceivedMessage) {
 	}
 }
 
-func (t *UDPTracerIPv6) send(ttl int) error {
+func (t *UDPTracerIPv6) send(ctx context.Context, ttl int) error {
 	defer t.wg.Done()
-
 	if util.EnvRandomPort == "" {
 		t.udpMutex.Lock()
 		defer t.udpMutex.Unlock()
 	}
 
-	if err := t.sem.Acquire(t.ctx, 1); err != nil {
+	if err := t.sem.Acquire(ctx, 1); err != nil {
 		return err
 	}
 	defer t.sem.Release(1)
@@ -293,8 +340,8 @@ func (t *UDPTracerIPv6) send(ttl int) error {
 	t.hopLimitLock.Unlock()
 
 	select {
-	case <-t.ctx.Done():
-		return nil
+	case <-ctx.Done():
+		return context.Canceled
 	case h := <-hopCh:
 		rtt := time.Since(start)
 		if f := t.final.Load(); f != -1 && ttl > int(f) {
