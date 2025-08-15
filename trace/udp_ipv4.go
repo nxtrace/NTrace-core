@@ -114,14 +114,18 @@ func (t *UDPTracer) Execute() (res *Result, err error) {
 	}
 	// 初始化 Result.Hops，并预分配到 MaxHops
 	t.res.Hops = make([][]Hop, t.MaxHops)
-
-	t.SrcIP, _ = util.LocalIPPort(t.DestIP)
-
-	if t.SrcAddr != "" {
-		t.udp, err = net.ListenPacket("ip4:udp", t.SrcAddr)
-	} else {
-		t.udp, err = net.ListenPacket("ip4:udp", t.SrcIP.String())
+	// 解析并校验用户指定的 IPv4 源地址
+	SrcAddr := net.ParseIP(t.SrcAddr).To4()
+	if t.SrcAddr != "" && SrcAddr == nil {
+		return nil, errors.New("invalid IPv4 SrcAddr:" + t.SrcAddr)
 	}
+
+	t.SrcIP, _ = util.LocalIPPort(t.DestIP, SrcAddr, "udp")
+	if t.SrcIP == nil {
+		return nil, errors.New("cannot determine local IPv4 address")
+	}
+
+	t.udp, err = net.ListenPacket("ip4:udp", t.SrcIP.String())
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +140,7 @@ func (t *UDPTracer) Execute() (res *Result, err error) {
 		return nil, err
 	}
 
-	t.icmp, err = icmp.ListenPacket("ip4:icmp", t.SrcAddr)
+	t.icmp, err = icmp.ListenPacket("ip4:icmp", t.SrcIP.String())
 	if err != nil {
 		return &t.res, err
 	}
@@ -307,7 +311,7 @@ func (t *UDPTracer) send(ctx context.Context, ttl, i int) error {
 		if util.EnvRandomPort == "" && t.SrcPort != 0 {
 			return nil, t.SrcPort
 		}
-		return util.LocalIPPort(t.DestIP)
+		return util.LocalIPPort(t.DestIP, t.SrcIP, "udp")
 	}()
 	//var payload []byte
 	//if t.Quic {

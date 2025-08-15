@@ -86,14 +86,18 @@ func (t *UDPTracerIPv6) Execute() (res *Result, err error) {
 	}
 	// 初始化 Result.Hops，并预分配到 MaxHops
 	t.res.Hops = make([][]Hop, t.MaxHops)
-
-	t.SrcIP, _ = util.LocalIPPortv6(t.DestIP)
-
-	if t.SrcAddr != "" {
-		t.udp, err = net.ListenPacket("ip6:udp", t.SrcAddr)
-	} else {
-		t.udp, err = net.ListenPacket("ip6:udp", t.SrcIP.String())
+	// 解析并校验用户指定的 IPv6 源地址
+	SrcAddr := net.ParseIP(t.SrcAddr)
+	if t.SrcAddr != "" && (SrcAddr == nil || SrcAddr.To4() != nil || SrcAddr.To16() == nil) {
+		return nil, errors.New("invalid IPv6 SrcAddr: " + t.SrcAddr)
 	}
+
+	t.SrcIP, _ = util.LocalIPPortv6(t.DestIP, SrcAddr, "udp6")
+	if t.SrcIP == nil {
+		return nil, errors.New("cannot determine local IPv6 address")
+	}
+
+	t.udp, err = net.ListenPacket("ip6:udp", t.SrcIP.String())
 	if err != nil {
 		return nil, err
 	}
@@ -283,7 +287,7 @@ func (t *UDPTracerIPv6) send(ctx context.Context, ttl int) error {
 		if util.EnvRandomPort == "" && t.SrcPort != 0 {
 			return nil, t.SrcPort
 		}
-		return util.LocalIPPortv6(t.DestIP)
+		return util.LocalIPPortv6(t.DestIP, t.SrcIP, "udp6")
 	}()
 
 	t.inflightRequestLock.Lock()

@@ -123,8 +123,18 @@ func (t *ICMPTracerv6) Execute() (res *Result, err error) {
 	}
 	// 初始化 Result.Hops，并预分配到 MaxHops
 	t.res.Hops = make([][]Hop, t.MaxHops)
+	// 解析并校验用户指定的 IPv6 源地址
+	SrcAddr := net.ParseIP(t.SrcAddr)
+	if t.SrcAddr != "" && (SrcAddr == nil || SrcAddr.To4() != nil || SrcAddr.To16() == nil) {
+		return nil, errors.New("invalid IPv6 SrcAddr: " + t.SrcAddr)
+	}
 
-	t.icmp, err = internal.ListenICMP("ip6:ipv6-icmp", t.SrcAddr)
+	SrcIP := ""
+	if SrcAddr != nil {
+		SrcIP = SrcAddr.String()
+	}
+
+	t.icmp, err = internal.ListenICMP("ip6:ipv6-icmp", SrcIP)
 	if err != nil {
 		return &t.res, err
 	}

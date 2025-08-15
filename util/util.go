@@ -52,50 +52,111 @@ func LookupAddr(addr string) ([]string, error) {
 	return names, nil
 }
 
-// getLocalIPPort encapsulates the logic to get local IP and port via a UDP connection
-func getLocalIPPort(dstip net.IP) (net.IP, int) {
-	serverAddr, err := net.ResolveUDPAddr("udp", dstip.String()+":12345")
-	if err != nil {
-		log.Fatal(err)
-	}
-	con, err := net.DialUDP("udp", nil, serverAddr)
-	if err != nil {
+// getLocalIPPort（仅用于 IPv4）：
+// (1) 若 srcip 非空，则以其为绑定源 IP；否则先通过 DialUDP 到 dstip 获取实际出站源 IP
+// (2) 根据 proto("tcp"/"udp") 做一次本地端口可用性测试（Listen* 绑定 Port=0，让内核挑一个可用端口）
+// (3) 立即关闭监听并返回 (bindIP, bindPort)，若出错则返回 (nil, -1)
+func getLocalIPPort(dstip net.IP, srcip net.IP, proto string) (net.IP, int) {
+	if dstip == nil || dstip.To4() == nil {
 		return nil, -1
 	}
-	defer con.Close()
-	if udpaddr, ok := con.LocalAddr().(*net.UDPAddr); ok {
-		return udpaddr.IP, udpaddr.Port
+	// (1) 选定 bindIP：优先使用显式 srcip，否则通过 UDP 伪 connect 探测
+	var bindIP net.IP
+	if srcip != nil && srcip.To4() != nil {
+		bindIP = srcip
+	} else {
+		serverAddr := &net.UDPAddr{IP: dstip, Port: 12345}
+		con, err := net.DialUDP("udp4", nil, serverAddr)
+		if err != nil {
+			return nil, -1
+		}
+		la, _ := con.LocalAddr().(*net.UDPAddr)
+		_ = con.Close()
+		if la == nil || la.IP == nil || la.IP.To4() == nil {
+			return nil, -1
+		}
+		bindIP = la.IP
+	}
+	// (2) 按需求测试端口可用性（仅本地 bind，不做网络握手）
+	switch proto {
+	case "tcp":
+		ln, err := net.ListenTCP("tcp4", &net.TCPAddr{IP: bindIP, Port: 0})
+		if err != nil {
+			return nil, -1
+		}
+		bindPort := ln.Addr().(*net.TCPAddr).Port
+		_ = ln.Close()
+		return bindIP, bindPort
+	case "udp":
+		pc, err := net.ListenUDP("udp4", &net.UDPAddr{IP: bindIP, Port: 0})
+		if err != nil {
+			return nil, -1
+		}
+		bindPort := pc.LocalAddr().(*net.UDPAddr).Port
+		_ = pc.Close()
+		return bindIP, bindPort
 	}
 	return nil, -1
 }
 
-// getLocalIPPortv6 encapsulates the logic to get local IPv6 and port via a UDP connection
-func getLocalIPPortv6(dstip net.IP) (net.IP, int) {
-	serverAddr, err := net.ResolveUDPAddr("udp", "["+dstip.String()+"]:12345")
-	if err != nil {
-		log.Fatal(err)
-	}
-	con, err := net.DialUDP("udp", nil, serverAddr)
-	if err != nil {
+// getLocalIPPortv6（仅用于 IPv6）：
+// (1) 若 srcip 非空，则以其为绑定源 IP；否则先通过 DialUDP 到 dstip 获取实际出站源 IP
+// (2) 根据 proto("tcp6"/"udp6") 做一次本地端口可用性测试（Listen* 绑定 Port=0，让内核挑一个可用端口）
+// (3) 立即关闭监听并返回 (bindIP, bindPort)，若出错则返回 (nil, -1)
+func getLocalIPPortv6(dstip net.IP, srcip net.IP, proto string) (net.IP, int) {
+	if dstip == nil || dstip.To16() == nil || dstip.To4() != nil {
 		return nil, -1
 	}
-	defer con.Close()
-	if udpaddr, ok := con.LocalAddr().(*net.UDPAddr); ok {
-		return udpaddr.IP, udpaddr.Port
+	// (1) 选定 bindIP：优先使用显式 srcip，否则通过 UDP 伪 connect 探测
+	var bindIP net.IP
+	if srcip != nil && srcip.To16() != nil && srcip.To4() == nil {
+		bindIP = srcip
+	} else {
+		serverAddr := &net.UDPAddr{IP: dstip, Port: 12345}
+		con, err := net.DialUDP("udp6", nil, serverAddr)
+		if err != nil {
+			return nil, -1
+		}
+		la, _ := con.LocalAddr().(*net.UDPAddr)
+		_ = con.Close()
+		if la == nil || la.IP == nil || la.IP.To16() == nil || la.IP.To4() != nil {
+			return nil, -1
+		}
+		bindIP = la.IP
 	}
+	// (2) 按需求测试端口可用性（仅本地 bind，不做网络握手）
+	switch proto {
+	case "tcp6":
+		ln, err := net.ListenTCP("tcp6", &net.TCPAddr{IP: bindIP, Port: 0})
+		if err != nil {
+			return nil, -1
+		}
+		bindPort := ln.Addr().(*net.TCPAddr).Port
+		_ = ln.Close()
+		return bindIP, bindPort
+	case "udp6":
+		pc, err := net.ListenUDP("udp6", &net.UDPAddr{IP: bindIP, Port: 0})
+		if err != nil {
+			return nil, -1
+		}
+		bindPort := pc.LocalAddr().(*net.UDPAddr).Port
+		_ = pc.Close()
+		return bindIP, bindPort
+	}
+
 	return nil, -1
 }
 
-// LocalIPPort returns the local IP and port based on our destination IP, with caching unless EnvRandomPort is set.
-func LocalIPPort(dstip net.IP) (net.IP, int) {
-	// If EnvRandomPort is set, bypass caching and return a new port every time.
+// LocalIPPort 根据目标 IPv4（以及可选的源 IPv4 与协议）返回本地 IP 与一个可用端口
+// 若未设置 EnvRandomPort，则结果会被缓存（仅计算一次）
+func LocalIPPort(dstip net.IP, srcip net.IP, proto string) (net.IP, int) {
+	// 若开启随机端口模式，每次直接计算并返回
 	if EnvRandomPort != "" {
-		return getLocalIPPort(dstip)
+		return getLocalIPPort(dstip, srcip, proto)
 	}
-
-	// Otherwise, use the cached value (computed only once).
+	// 否则仅计算一次并缓存
 	localIPOnce.Do(func() {
-		cachedLocalIP, cachedLocalPort = getLocalIPPort(dstip)
+		cachedLocalIP, cachedLocalPort = getLocalIPPort(dstip, srcip, proto)
 	})
 	if cachedLocalIP != nil {
 		return cachedLocalIP, cachedLocalPort
@@ -103,15 +164,16 @@ func LocalIPPort(dstip net.IP) (net.IP, int) {
 	return nil, -1
 }
 
-func LocalIPPortv6(dstip net.IP) (net.IP, int) {
-	// If EnvRandomPort is set, bypass caching and return a new port every time.
+// LocalIPPortv6 根据目标 IPv6（以及可选的源 IPv6 与协议）返回本地 IP 与一个可用端口
+// 若未设置 EnvRandomPort，则结果会被缓存（仅计算一次）
+func LocalIPPortv6(dstip net.IP, srcip net.IP, proto string) (net.IP, int) {
+	// 若开启随机端口模式，每次直接计算并返回
 	if EnvRandomPort != "" {
-		return getLocalIPPortv6(dstip)
+		return getLocalIPPortv6(dstip, srcip, proto)
 	}
-
-	// Otherwise, use the cached value (computed only once).
+	// 否则仅计算一次并缓存
 	localIPv6Once.Do(func() {
-		cachedLocalIPv6, cachedLocalPort6 = getLocalIPPortv6(dstip)
+		cachedLocalIPv6, cachedLocalPort6 = getLocalIPPortv6(dstip, srcip, proto)
 	})
 	if cachedLocalIPv6 != nil {
 		return cachedLocalIPv6, cachedLocalPort6

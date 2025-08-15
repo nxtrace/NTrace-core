@@ -114,14 +114,18 @@ func (t *TCPTracerIPv6) Execute() (res *Result, err error) {
 	}
 	// 初始化 Result.Hops，并预分配到 MaxHops
 	t.res.Hops = make([][]Hop, t.MaxHops)
-
-	t.SrcIP, _ = util.LocalIPPortv6(t.DestIP)
-	// log.Println(util.LocalIPPortv6(t.DestIP))
-	if t.SrcAddr != "" {
-		t.tcp, err = net.ListenPacket("ip6:tcp", t.SrcAddr)
-	} else {
-		t.tcp, err = net.ListenPacket("ip6:tcp", t.SrcIP.String())
+	// 解析并校验用户指定的 IPv6 源地址
+	SrcAddr := net.ParseIP(t.SrcAddr)
+	if t.SrcAddr != "" && (SrcAddr == nil || SrcAddr.To4() != nil || SrcAddr.To16() == nil) {
+		return nil, errors.New("invalid IPv6 SrcAddr: " + t.SrcAddr)
 	}
+
+	t.SrcIP, _ = util.LocalIPPortv6(t.DestIP, SrcAddr, "tcp6")
+	if t.SrcIP == nil {
+		return nil, errors.New("cannot determine local IPv6 address")
+	}
+
+	t.tcp, err = net.ListenPacket("ip6:tcp", t.SrcIP.String())
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +137,7 @@ func (t *TCPTracerIPv6) Execute() (res *Result, err error) {
 
 	t.tcpConn = ipv6.NewPacketConn(t.tcp)
 
-	t.icmp, err = icmp.ListenPacket("ip6:ipv6-icmp", t.SrcAddr)
+	t.icmp, err = icmp.ListenPacket("ip6:ipv6-icmp", t.SrcIP.String())
 	if err != nil {
 		return &t.res, err
 	}
@@ -360,7 +364,7 @@ func (t *TCPTracerIPv6) send(ctx context.Context, ttl, i int) error {
 		if util.EnvRandomPort == "" && t.SrcPort != 0 {
 			return nil, t.SrcPort
 		}
-		return util.LocalIPPortv6(t.DestIP)
+		return util.LocalIPPortv6(t.DestIP, t.SrcIP, "tcp6")
 	}()
 
 	ipHeader := &layers.IPv6{

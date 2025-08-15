@@ -125,8 +125,18 @@ func (t *ICMPTracer) Execute() (res *Result, err error) {
 	}
 	// 初始化 Result.Hops，并预分配到 MaxHops
 	t.res.Hops = make([][]Hop, t.MaxHops)
+	// 解析并校验用户指定的 IPv4 源地址
+	SrcAddr := net.ParseIP(t.SrcAddr).To4()
+	if t.SrcAddr != "" && SrcAddr == nil {
+		return nil, errors.New("invalid IPv4 SrcAddr:" + t.SrcAddr)
+	}
 
-	t.icmp, err = internal.ListenICMP("ip4:icmp", t.SrcAddr)
+	SrcIP := ""
+	if SrcAddr != nil {
+		SrcIP = SrcAddr.String()
+	}
+
+	t.icmp, err = internal.ListenICMP("ip4:icmp", SrcIP)
 	if err != nil {
 		return &t.res, err
 	}

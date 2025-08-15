@@ -11,9 +11,10 @@ import (
 	"syscall"
 	"time"
 
+	"golang.org/x/sync/singleflight"
+
 	"github.com/nxtrace/NTrace-core/ipgeo"
 	"github.com/nxtrace/NTrace-core/util"
-	"golang.org/x/sync/singleflight"
 )
 
 var (
