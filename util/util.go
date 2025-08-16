@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/fatih/color"
+
 	"github.com/nxtrace/NTrace-core/config"
 )
 

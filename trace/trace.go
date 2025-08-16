@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"golang.org/x/net/idna"
 	"golang.org/x/sync/singleflight"
 
 	"github.com/nxtrace/NTrace-core/ipgeo"
@@ -210,6 +211,47 @@ type Hop struct {
 	MPLS     []string
 }
 
+func isLDHASCII(label string) bool {
+	for i := 0; i < len(label); i++ {
+		b := label[i]
+		if b > 0x7F {
+			return false
+		}
+		if (b >= 'A' && b <= 'Z') || (b >= 'a' && b <= 'z') || (b >= '0' && b <= '9') || b == '-' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func CanonicalHostname(s string) string {
+	if s == "" {
+		return ""
+	}
+	// 去掉末尾点
+	if strings.HasSuffix(s, ".") {
+		s = strings.TrimSuffix(s, ".")
+	}
+	// 按标签逐个处理，确保仅对“需要”的标签做 IDNA 转换
+	parts := strings.Split(s, ".")
+	for i, label := range parts {
+		if label == "" {
+			continue // 防御：跳过空标签
+		}
+		if isLDHASCII(label) {
+			// 纯 ASCII 且仅含 LDH：保留原大小写，不做大小写折叠
+			continue
+		}
+		// 含非 ASCII 或不满足 LDH：对该标签做 IDNA 转 ASCII
+		if ascii, err := idna.Lookup.ToASCII(label); err == nil && ascii != "" {
+			parts[i] = ascii // punycode 一般小写；这是期望行为
+		}
+		// 若转换失败，保留原标签，不在此处返回错误（由调用链决定是否需要处理）
+	}
+	return strings.Join(parts, ".")
+}
+
 func (h *Hop) fetchIPData(c Config) (err error) {
 	ipStr := h.Address.String()
 	// DN42
@@ -221,7 +263,7 @@ func (h *Hop) fetchIPData(c Config) (err error) {
 				return util.LookupAddr(ipStr)
 			})
 			if ptrs, _ := v.([]string); len(ptrs) > 0 {
-				h.Hostname = ptrs[0][:len(ptrs[0])-1]
+				h.Hostname = CanonicalHostname(ptrs[0])
 				combined = ipStr + "," + h.Hostname
 			}
 		}
@@ -232,17 +274,27 @@ func (h *Hop) fetchIPData(c Config) (err error) {
 		if c.IPGeoSource != nil {
 			// 如果缓存中已有结果，直接使用
 			if cacheVal, ok := geoCache.Load(combined); ok {
-				h.Geo = cacheVal.(*ipgeo.IPGeoData)
-				return nil
+				if g, ok := cacheVal.(*ipgeo.IPGeoData); ok && g != nil {
+					h.Geo = g
+					return nil
+				}
 			}
 			// singleflight 合并相同 key 的并发查询
 			v, err, _ := ipGeoSF.Do(combined, func() (any, error) {
-				return c.IPGeoSource(combined, c.Timeout, c.Lang, c.Maptrace)
+				timeout := c.Timeout
+				if timeout < 2*time.Second {
+					timeout = 2 * time.Second
+				}
+				return c.IPGeoSource(combined, timeout, c.Lang, c.Maptrace)
 			})
 			if err != nil {
 				return err
 			}
-			h.Geo = v.(*ipgeo.IPGeoData)
+			geo, ok := v.(*ipgeo.IPGeoData)
+			if !ok || geo == nil {
+				return errors.New("ipgeo: nil or bad type from singleflight (DN42)")
+			}
+			h.Geo = geo
 			// 如果缓存中无结果，进行查询并将结果存入缓存
 			geoCache.Store(combined, h.Geo)
 		}
@@ -264,9 +316,11 @@ func (h *Hop) fetchIPData(c Config) (err error) {
 		}
 		// (2) 如果缓存中已有结果，直接使用
 		if cacheVal, ok := geoCache.Load(ipStr); ok {
-			h.Geo = cacheVal.(*ipgeo.IPGeoData)
-			ipGeoCh <- nil
-			return
+			if g, ok := cacheVal.(*ipgeo.IPGeoData); ok && g != nil {
+				h.Geo = g
+				ipGeoCh <- nil
+				return
+			}
 		}
 		// (3) singleflight 去重
 		timeout := c.Timeout
@@ -280,8 +334,12 @@ func (h *Hop) fetchIPData(c Config) (err error) {
 			ipGeoCh <- err
 			return
 		}
-		h.Geo = v.(*ipgeo.IPGeoData)
-		// 如果缓存中无结果，进行查询并将结果存入缓存
+		geo, ok := v.(*ipgeo.IPGeoData)
+		if !ok || geo == nil {
+			ipGeoCh <- errors.New("ipgeo: nil or bad type from singleflight")
+			return
+		}
+		h.Geo = geo
 		geoCache.Store(ipStr, h.Geo)
 		ipGeoCh <- nil
 	}()
@@ -307,7 +365,7 @@ func (h *Hop) fetchIPData(c Config) (err error) {
 			select {
 			case ptrs := <-rdnsCh:
 				if len(ptrs) > 0 {
-					h.Hostname = ptrs[0]
+					h.Hostname = CanonicalHostname(ptrs[0])
 				}
 			case <-time.After(1 * time.Second):
 				// 超时不阻塞
@@ -326,7 +384,7 @@ func (h *Hop) fetchIPData(c Config) (err error) {
 			return err
 		case ptrs := <-rdnsCh:
 			if len(ptrs) > 0 {
-				h.Hostname = ptrs[0][:len(ptrs[0])-1]
+				h.Hostname = CanonicalHostname(ptrs[0])
 			}
 			// 然后等待 IPGeo 完成
 			return <-ipGeoCh
