@@ -52,18 +52,21 @@ func RealtimePrinterWithRouter(res *trace.Result, ttl int) {
 		if blockDisplay {
 			fmt.Printf("%4s", "")
 		}
+		ipStr := ip
+		if util.EnableHidDstIP != "" && ip == util.DestIP {
+			ipStr = util.HideIPPart(ip)
+		}
 		if net.ParseIP(ip).To4() == nil {
 			fmt.Fprintf(color.Output, "%s",
-				color.New(color.FgWhite, color.Bold).Sprintf("%-25s", ip),
+				color.New(color.FgWhite, color.Bold).Sprintf("%-25s", ipStr),
 			)
 		} else {
 			fmt.Fprintf(color.Output, "%s",
-				color.New(color.FgWhite, color.Bold).Sprintf("%-15s", ip),
+				color.New(color.FgWhite, color.Bold).Sprintf("%-15s", ipStr),
 			)
 		}
 
 		i, _ := strconv.Atoi(v[0])
-
 		if res.Hops[ttl][i].Geo.Asnumber != "" {
 			fmt.Fprintf(color.Output, " %s", color.New(color.FgHiGreen, color.Bold).Sprintf("AS%-6s", res.Hops[ttl][i].Geo.Asnumber))
 		} else {

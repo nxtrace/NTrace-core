@@ -264,7 +264,7 @@ func (t *UDPTracerIPv6) handleICMPMessage(msg ReceivedMessage) {
 
 func (t *UDPTracerIPv6) send(ctx context.Context, ttl int) error {
 	defer t.wg.Done()
-	if util.EnvRandomPort == "" {
+	if util.EnvRandomPort == "" && t.SrcPort > 0 {
 		t.udpMutex.Lock()
 		defer t.udpMutex.Unlock()
 	}
@@ -279,7 +279,7 @@ func (t *UDPTracerIPv6) send(ctx context.Context, ttl int) error {
 	}
 
 	_, SrcPort := func() (net.IP, int) {
-		if util.EnvRandomPort == "" && t.SrcPort != 0 {
+		if util.EnvRandomPort == "" && t.SrcPort > 0 {
 			return nil, t.SrcPort
 		}
 		return util.LocalIPPortv6(t.DestIP, t.SrcIP, "udp6")

@@ -24,6 +24,7 @@ var EnvMaxAttempts = GetenvDefault("NEXTTRACE_MAXATTEMPTS", "")
 var EnvRandomPort = GetenvDefault("NEXTTRACE_RANDOMPORT", "")
 var EnvToken = GetenvDefault("NEXTTRACE_TOKEN", "")
 var Uninterrupted = GetenvDefault("NEXTTRACE_UNINTERRUPTED", "")
+var SrcPort int
 var DestIP string
 var PowProviderParam = ""
 var RdnsCache sync.Map
@@ -167,10 +168,10 @@ func getLocalIPPortv6(dstip net.IP, srcip net.IP, proto string) (net.IP, int) {
 }
 
 // LocalIPPort 根据目标 IPv4（以及可选的源 IPv4 与协议）返回本地 IP 与一个可用端口
-// 若未设置 EnvRandomPort，则结果会被缓存（仅计算一次）
+// 若未设置 EnvRandomPort 且 SrcPort != -1，则结果会被缓存（仅计算一次）
 func LocalIPPort(dstip net.IP, srcip net.IP, proto string) (net.IP, int) {
 	// 若开启随机端口模式，每次直接计算并返回
-	if EnvRandomPort != "" {
+	if EnvRandomPort != "" || SrcPort == -1 {
 		return getLocalIPPort(dstip, srcip, proto)
 	}
 	// 否则仅计算一次并缓存
@@ -184,10 +185,10 @@ func LocalIPPort(dstip net.IP, srcip net.IP, proto string) (net.IP, int) {
 }
 
 // LocalIPPortv6 根据目标 IPv6（以及可选的源 IPv6 与协议）返回本地 IP 与一个可用端口
-// 若未设置 EnvRandomPort，则结果会被缓存（仅计算一次）
+// 若未设置 EnvRandomPort 且 SrcPort != -1，则结果会被缓存（仅计算一次）
 func LocalIPPortv6(dstip net.IP, srcip net.IP, proto string) (net.IP, int) {
 	// 若开启随机端口模式，每次直接计算并返回
-	if EnvRandomPort != "" {
+	if EnvRandomPort != "" || SrcPort == -1 {
 		return getLocalIPPortv6(dstip, srcip, proto)
 	}
 	// 否则仅计算一次并缓存

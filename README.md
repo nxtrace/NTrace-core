@@ -226,7 +226,7 @@ nexttrace --udp 1.0.0.1
 nexttrace --udp --port 5353 1.0.0.1
 
 # For TCP/UDP Trace, you can specify the source port; by default, a fixed random port is used 
-# (If you need to use a different random source port for each packet, please set the ENV variable NEXTTRACE_RANDOMPORT)
+# (If you need to use a different random source port for each packet, please set the ENV variable NEXTTRACE_RANDOMPORT, or set the source port to -1)
 nexttrace --tcp --source-port 14514 www.bing.com
 ```
 

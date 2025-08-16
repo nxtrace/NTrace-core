@@ -51,26 +51,18 @@ func RealtimePrinter(res *trace.Result, ttl int) {
 		if blockDisplay {
 			fmt.Printf("%4s", "")
 		}
+		ipStr := ip
+		if util.EnableHidDstIP != "" && ip == util.DestIP {
+			ipStr = util.HideIPPart(ip)
+		}
 		if net.ParseIP(ip).To4() == nil {
-			if util.EnableHidDstIP == "" || ip != util.DestIP {
-				fmt.Fprintf(color.Output, "%s",
-					color.New(color.FgWhite, color.Bold).Sprintf("%-25s", ip),
-				)
-			} else {
-				fmt.Fprintf(color.Output, "%s",
-					color.New(color.FgWhite, color.Bold).Sprintf("%-25s", util.HideIPPart(ip)),
-				)
-			}
+			fmt.Fprintf(color.Output, "%s",
+				color.New(color.FgWhite, color.Bold).Sprintf("%-25s", ipStr),
+			)
 		} else {
-			if util.EnableHidDstIP == "" || ip != util.DestIP {
-				fmt.Fprintf(color.Output, "%s",
-					color.New(color.FgWhite, color.Bold).Sprintf("%-15s", ip),
-				)
-			} else {
-				fmt.Fprintf(color.Output, "%s",
-					color.New(color.FgWhite, color.Bold).Sprintf("%-15s", util.HideIPPart(ip)),
-				)
-			}
+			fmt.Fprintf(color.Output, "%s",
+				color.New(color.FgWhite, color.Bold).Sprintf("%-15s", ipStr),
+			)
 		}
 
 		i, _ := strconv.Atoi(v[0])

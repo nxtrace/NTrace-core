@@ -255,6 +255,7 @@ func Execute() {
 		printer.PrintTraceRouteNav(ip, domain, *dataOrigin, *maxHops, *packetSize, *srcAddr, string(m))
 	}
 
+	util.SrcPort = *srcPort
 	util.DestIP = ip.String()
 	var conf = trace.Config{
 		DN42:             *dn42,
