@@ -2,13 +2,14 @@ package printer
 
 import (
 	"fmt"
-	"github.com/nxtrace/NTrace-core/config"
-	"github.com/nxtrace/NTrace-core/trace"
-	"github.com/nxtrace/NTrace-core/util"
 	"net"
 	"strings"
 
 	"github.com/fatih/color"
+
+	"github.com/nxtrace/NTrace-core/config"
+	"github.com/nxtrace/NTrace-core/trace"
+	"github.com/nxtrace/NTrace-core/util"
 )
 
 var version = config.Version

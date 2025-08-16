@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
+	"github.com/nxtrace/NTrace-core/util"
+
 	"github.com/nxtrace/NTrace-core/trace"
 )
 
@@ -84,15 +86,19 @@ func RealtimePrinterWithRouter(res *trace.Result, ttl int) {
 			res.Hops[ttl][i].Geo.Country = "LAN Address"
 		}
 
-		if net.ParseIP(ip).To4() != nil {
+		hostname := res.Hops[ttl][i].Hostname
+		if util.EnableHidDstIP != "" && ip == util.DestIP {
+			hostname = ""
+		}
 
+		if net.ParseIP(ip).To4() != nil {
 			fmt.Fprintf(color.Output, " %s %s %s %s %s\n    %s   ",
 				color.New(color.FgWhite, color.Bold).Sprintf("%s", res.Hops[ttl][i].Geo.Country),
 				color.New(color.FgWhite, color.Bold).Sprintf("%s", res.Hops[ttl][i].Geo.Prov),
 				color.New(color.FgWhite, color.Bold).Sprintf("%s", res.Hops[ttl][i].Geo.City),
 				color.New(color.FgWhite, color.Bold).Sprintf("%s", res.Hops[ttl][i].Geo.District),
 				fmt.Sprintf("%-6s", res.Hops[ttl][i].Geo.Owner),
-				color.New(color.FgHiBlack, color.Bold).Sprintf("%-39s", res.Hops[ttl][i].Hostname),
+				color.New(color.FgHiBlack, color.Bold).Sprintf("%-39s", hostname),
 			)
 		} else {
 			fmt.Fprintf(color.Output, " %s %s %s %s %s\n    %s   ",
@@ -101,7 +107,7 @@ func RealtimePrinterWithRouter(res *trace.Result, ttl int) {
 				color.New(color.FgWhite, color.Bold).Sprintf("%s", res.Hops[ttl][i].Geo.City),
 				color.New(color.FgWhite, color.Bold).Sprintf("%s", res.Hops[ttl][i].Geo.District),
 				fmt.Sprintf("%-6s", res.Hops[ttl][i].Geo.Owner),
-				color.New(color.FgHiBlack, color.Bold).Sprintf("%-32s", res.Hops[ttl][i].Hostname),
+				color.New(color.FgHiBlack, color.Bold).Sprintf("%-32s", hostname),
 			)
 		}
 
