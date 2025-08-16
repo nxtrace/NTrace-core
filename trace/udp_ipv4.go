@@ -215,35 +215,30 @@ func (t *UDPTracer) listenICMP(ctx context.Context) {
 				log.Println(err)
 				continue
 			}
+			var data []byte
 			switch rm.Type {
 			case ipv4.ICMPTypeTimeExceeded:
 				body, ok := rm.Body.(*icmp.TimeExceeded)
 				if !ok || body == nil {
 					continue
 				}
-				data := body.Data
-				if len(data) < 20 || data[0]>>4 != 4 {
-					continue
-				}
-				dstip := net.IP(data[16:20])
-				if dstip.Equal(t.DestIP) {
-					t.handleICMPMessage(msg, data)
-				}
+				data = body.Data
 			case ipv4.ICMPTypeDestinationUnreachable:
 				body, ok := rm.Body.(*icmp.DstUnreach)
 				if !ok || body == nil {
 					continue
 				}
-				data := body.Data
-				if len(data) < 20 || data[0]>>4 != 4 {
-					continue
-				}
-				dstip := net.IP(data[16:20])
-				if dstip.Equal(t.DestIP) {
-					t.handleICMPMessage(msg, data)
-				}
+				data = body.Data
 			default:
+				continue
 				//log.Println("received icmp message of unknown type", rm.Type)
+			}
+			if len(data) < 20 || data[0]>>4 != 4 {
+				continue
+			}
+			dstip := net.IP(data[16:20])
+			if dstip.Equal(t.DestIP) || dstip.Equal(net.IPv4zero) {
+				t.handleICMPMessage(msg, data)
 			}
 		}
 	}
@@ -379,17 +374,7 @@ func (t *UDPTracer) send(ctx context.Context, ttl, i int) error {
 			return nil
 		}
 
-		if addr, ok := h.Address.(*net.IPAddr); ok && addr.IP.Equal(t.DestIP) {
-			for {
-				old := t.final.Load()
-				if old != -1 && ttl >= int(old) {
-					break
-				}
-				if t.final.CompareAndSwap(old, int32(ttl)) {
-					break
-				}
-			}
-		} else if addr, ok := h.Address.(*net.UDPAddr); ok && addr.IP.Equal(t.DestIP) {
+		if ip := util.AddrIP(h.Address); ip != nil && ip.Equal(t.DestIP) {
 			for {
 				old := t.final.Load()
 				if old != -1 && ttl >= int(old) {

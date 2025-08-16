@@ -28,7 +28,7 @@ var (
 	}
 )
 
-func ListenICMP(network string, laddr string) (net.PacketConn, error) {
+func ListenPacket(network string, laddr string) (net.PacketConn, error) {
 	// 为兼容NE，需要注释掉
 	//if os.Getuid() == 0 { // root
 	//	return net.ListenPacket(network, laddr)

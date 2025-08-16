@@ -214,35 +214,30 @@ func (t *TCPTracerIPv6) listenICMP(ctx context.Context) {
 				log.Println(err)
 				continue
 			}
+			var data []byte
 			switch rm.Type {
 			case ipv6.ICMPTypeTimeExceeded:
 				body, ok := rm.Body.(*icmp.TimeExceeded)
 				if !ok || body == nil {
 					continue
 				}
-				data := body.Data
-				if len(data) < 40 || data[0]>>4 != 6 {
-					continue
-				}
-				dstip := net.IP(data[24:40])
-				if dstip.Equal(t.DestIP) {
-					t.handleICMPMessage(msg, data)
-				}
+				data = body.Data
 			case ipv6.ICMPTypeDestinationUnreachable:
 				body, ok := rm.Body.(*icmp.DstUnreach)
 				if !ok || body == nil {
 					continue
 				}
-				data := body.Data
-				if len(data) < 40 || data[0]>>4 != 6 {
-					continue
-				}
-				dstip := net.IP(data[24:40])
-				if dstip.Equal(t.DestIP) {
-					t.handleICMPMessage(msg, data)
-				}
+				data = body.Data
 			default:
+				continue
 				//log.Println("received icmp message of unknown type", rm.Type)
+			}
+			if len(data) < 40 || data[0]>>4 != 6 {
+				continue
+			}
+			dstip := net.IP(data[24:40])
+			if dstip.Equal(t.DestIP) || dstip.Equal(net.IPv6zero) {
+				t.handleICMPMessage(msg, data)
 			}
 		}
 	}
@@ -265,7 +260,7 @@ func (t *TCPTracerIPv6) listenTCP(ctx context.Context) {
 			if msg.N == nil {
 				continue
 			}
-			if ip, ok := msg.Peer.(*net.IPAddr); ok && ip.IP.Equal(t.DestIP) {
+			if ip := util.AddrIP(msg.Peer); ip != nil && ip.Equal(t.DestIP) {
 				// 解包
 				packet := gopacket.NewPacket(msg.Msg[:*msg.N], layers.LayerTypeTCP, gopacket.Default)
 				// 从包中获取TCP layer信息
@@ -422,17 +417,7 @@ func (t *TCPTracerIPv6) send(ctx context.Context, ttl, i int) error {
 			return nil
 		}
 
-		if addr, ok := h.Address.(*net.IPAddr); ok && addr.IP.Equal(t.DestIP) {
-			for {
-				old := t.final.Load()
-				if old != -1 && ttl >= int(old) {
-					break
-				}
-				if t.final.CompareAndSwap(old, int32(ttl)) {
-					break
-				}
-			}
-		} else if addr, ok := h.Address.(*net.TCPAddr); ok && addr.IP.Equal(t.DestIP) {
+		if ip := util.AddrIP(h.Address); ip != nil && ip.Equal(t.DestIP) {
 			for {
 				old := t.final.Load()
 				if old != -1 && ttl >= int(old) {

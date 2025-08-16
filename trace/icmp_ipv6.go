@@ -134,7 +134,7 @@ func (t *ICMPTracerv6) Execute() (res *Result, err error) {
 		SrcIP = SrcAddr.String()
 	}
 
-	t.icmp, err = internal.ListenICMP("ip6:ipv6-icmp", SrcIP)
+	t.icmp, err = internal.ListenPacket("ip6:ipv6-icmp", SrcIP)
 	if err != nil {
 		return &t.res, err
 	}
@@ -229,15 +229,19 @@ func (t *ICMPTracerv6) listenICMP(ctx context.Context) {
 				log.Println(err)
 				continue
 			}
+			var (
+				data     []byte
+				icmpType int8 // 0=TimeExceeded, 2=DestinationUnreachable
+			)
 			switch rm.Type {
 			case ipv6.ICMPTypeEchoReply:
 				echo, ok := rm.Body.(*icmp.Echo)
 				if !ok || echo == nil {
 					continue
 				}
-				data := echo.Data
+				data = echo.Data
 				// 只在 Peer 是目的地址时分发，用 seq 作为通道 key
-				if ip, ok := msg.Peer.(*net.IPAddr); ok && ip.IP.Equal(t.DestIP) {
+				if ip := util.AddrIP(msg.Peer); ip != nil && ip.Equal(t.DestIP) {
 					id := uint16(echo.ID)
 					if uint8(id>>8) != t.echoIDTag || uint8(id&0xFF) != t.pidLow {
 						continue
@@ -252,60 +256,40 @@ func (t *ICMPTracerv6) listenICMP(ctx context.Context) {
 					}
 					t.handleICMPMessage(msg, 1, data, seq)
 				}
+				continue
 			case ipv6.ICMPTypeTimeExceeded:
 				body, ok := rm.Body.(*icmp.TimeExceeded)
 				if !ok || body == nil {
 					continue
 				}
-				data := body.Data
-				if len(data) < 40 || data[0]>>4 != 6 {
-					continue
-				}
-				dstip := net.IP(data[24:40])
-				// 无效包本地环回包
-				if dstip.String() == "::" {
-					continue
-				}
-				if dstip.Equal(t.DestIP) || dstip.Equal(net.IPv6zero) {
-					inner, err := util.GetICMPResponsePayload(data)
-					if err != nil || len(inner) < 8 {
-						continue
-					}
-					id := binary.BigEndian.Uint16(inner[4:6])
-					if uint8(id>>8) != t.echoIDTag || uint8(id&0xFF) != t.pidLow {
-						continue
-					}
-					seq := int(binary.BigEndian.Uint16(inner[6:8]))
-					t.handleICMPMessage(msg, 0, data, seq)
-				}
+				data = body.Data
+				icmpType = 0
 			case ipv6.ICMPTypeDestinationUnreachable:
 				body, ok := rm.Body.(*icmp.DstUnreach)
 				if !ok || body == nil {
 					continue
 				}
-				data := body.Data
-				if len(data) < 40 || data[0]>>4 != 6 {
-					continue
-				}
-				dstip := net.IP(data[24:40])
-				// 无效包本地环回包
-				if dstip.String() == "::" {
-					continue
-				}
-				if dstip.Equal(t.DestIP) || dstip.Equal(net.IPv6zero) {
-					inner, err := util.GetICMPResponsePayload(data)
-					if err != nil || len(inner) < 8 {
-						continue
-					}
-					id := binary.BigEndian.Uint16(inner[4:6])
-					if uint8(id>>8) != t.echoIDTag || uint8(id&0xFF) != t.pidLow {
-						continue
-					}
-					seq := int(binary.BigEndian.Uint16(inner[6:8]))
-					t.handleICMPMessage(msg, 2, data, seq)
-				}
+				data = body.Data
+				icmpType = 2
 			default:
+				continue
 				//log.Println("received icmp message of unknown type", rm.Type)
+			}
+			if len(data) < 40 || data[0]>>4 != 6 {
+				continue
+			}
+			dstip := net.IP(data[24:40])
+			if dstip.Equal(t.DestIP) || dstip.Equal(net.IPv6zero) {
+				inner, err := util.GetICMPResponsePayload(data)
+				if err != nil || len(inner) < 8 {
+					continue
+				}
+				id := binary.BigEndian.Uint16(inner[4:6])
+				if uint8(id>>8) != t.echoIDTag || uint8(id&0xFF) != t.pidLow {
+					continue
+				}
+				seq := int(binary.BigEndian.Uint16(inner[6:8]))
+				t.handleICMPMessage(msg, icmpType, data, seq)
 			}
 			// dstip := net.IP(msg.Msg[32:48])
 			// if binary.BigEndian.Uint16(msg.Msg[52:54]) != uint16(os.Getpid()&0xffff) {
@@ -345,7 +329,7 @@ func (t *ICMPTracerv6) listenICMP(ctx context.Context) {
 
 func (t *ICMPTracerv6) handleICMPMessage(msg ReceivedMessage, icmpType int8, data []byte, seq int) {
 	if icmpType == 2 {
-		if ip, ok := msg.Peer.(*net.IPAddr); !ok || !ip.IP.Equal(t.DestIP) {
+		if ip := util.AddrIP(msg.Peer); ip == nil || !ip.Equal(t.DestIP) {
 			return
 		}
 	}
@@ -447,17 +431,7 @@ func (t *ICMPTracerv6) send(ctx context.Context, ttl, i int) error {
 			return nil
 		}
 
-		if addr, ok := h.Address.(*net.IPAddr); ok && addr.IP.Equal(t.DestIP) {
-			for {
-				old := t.final.Load()
-				if old != -1 && ttl >= int(old) {
-					break
-				}
-				if t.final.CompareAndSwap(old, int32(ttl)) {
-					break
-				}
-			}
-		} else if addr, ok := h.Address.(*net.TCPAddr); ok && addr.IP.Equal(t.DestIP) {
+		if ip := util.AddrIP(h.Address); ip != nil && ip.Equal(t.DestIP) {
 			for {
 				old := t.final.Load()
 				if old != -1 && ttl >= int(old) {

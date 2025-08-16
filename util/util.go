@@ -35,6 +35,25 @@ var cachedLocalIPv6 net.IP
 var cachedLocalPort6 int
 var localIPv6Once sync.Once
 
+func IsIPv6(ip net.IP) bool {
+	return ip != nil && ip.To4() == nil && ip.To16() != nil
+}
+
+// AddrIP 从常见的 net.Addr 中提取 IP：支持 *net.IPAddr / *net.TCPAddr / *net.UDPAddr
+// 若无法提取，返回 nil
+func AddrIP(a net.Addr) net.IP {
+	switch addr := a.(type) {
+	case *net.IPAddr:
+		return addr.IP
+	case *net.TCPAddr:
+		return addr.IP
+	case *net.UDPAddr:
+		return addr.IP
+	default:
+		return nil
+	}
+}
+
 func LookupAddr(addr string) ([]string, error) {
 	// 如果在缓存中找到，直接返回
 	if hostname, ok := RdnsCache.Load(addr); ok {
@@ -105,12 +124,12 @@ func getLocalIPPort(dstip net.IP, srcip net.IP, proto string) (net.IP, int) {
 // (2) 根据 proto("tcp6"/"udp6") 做一次本地端口可用性测试（Listen* 绑定 Port=0，让内核挑一个可用端口）
 // (3) 立即关闭监听并返回 (bindIP, bindPort)，若出错则返回 (nil, -1)
 func getLocalIPPortv6(dstip net.IP, srcip net.IP, proto string) (net.IP, int) {
-	if dstip == nil || dstip.To16() == nil || dstip.To4() != nil {
+	if !IsIPv6(dstip) {
 		return nil, -1
 	}
 	// (1) 选定 bindIP：优先使用显式 srcip，否则通过 UDP 伪 connect 探测
 	var bindIP net.IP
-	if srcip != nil && srcip.To16() != nil && srcip.To4() == nil {
+	if srcip != nil && IsIPv6(srcip) {
 		bindIP = srcip
 	} else {
 		serverAddr := &net.UDPAddr{IP: dstip, Port: 12345}
@@ -144,7 +163,6 @@ func getLocalIPPortv6(dstip net.IP, srcip net.IP, proto string) (net.IP, int) {
 		_ = pc.Close()
 		return bindIP, bindPort
 	}
-
 	return nil, -1
 }
 
