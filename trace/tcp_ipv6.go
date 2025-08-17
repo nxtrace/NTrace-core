@@ -356,7 +356,7 @@ func (t *TCPTracerIPv6) send(ctx context.Context, ttl, i int) error {
 	}()
 
 	_, SrcPort := func() (net.IP, int) {
-		if util.EnvRandomPort == "" && t.SrcPort > 0 {
+		if !util.RandomPortEnabled() && t.SrcPort > 0 {
 			return nil, t.SrcPort
 		}
 		return util.LocalIPPortv6(t.DestIP, t.SrcIP, "tcp6")

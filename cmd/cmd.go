@@ -308,7 +308,7 @@ func Execute() {
 		conf.AsyncPrinter = nil
 	}
 
-	if util.Uninterrupted != "" && *rawPrint {
+	if util.Uninterrupted && *rawPrint {
 		for {
 			_, err := trace.Traceroute(m, conf)
 			if err != nil {
@@ -318,7 +318,7 @@ func Execute() {
 	}
 
 	if *disableMPLS {
-		util.DisableMPLS = "1"
+		util.DisableMPLS = true
 	}
 
 	res, err := trace.Traceroute(m, conf)

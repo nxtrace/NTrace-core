@@ -303,7 +303,7 @@ func (t *UDPTracer) send(ctx context.Context, ttl, i int) error {
 	}()
 
 	_, SrcPort := func() (net.IP, int) {
-		if util.EnvRandomPort == "" && t.SrcPort > 0 {
+		if !util.RandomPortEnabled() && t.SrcPort > 0 {
 			return nil, t.SrcPort
 		}
 		return util.LocalIPPort(t.DestIP, t.SrcIP, "udp")

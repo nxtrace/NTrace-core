@@ -3,7 +3,6 @@ package trace
 import (
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"strconv"
 	"strings"
@@ -78,12 +77,8 @@ func Traceroute(method Method, config Config) (*Result, error) {
 		config.ParallelRequests = config.NumMeasurements * 5
 	}
 	// 若 CLI 未给或给了非正数，则尝试用环境变量
-	if config.MaxAttempts <= 0 && util.EnvMaxAttempts != "" {
-		if env, err := strconv.Atoi(util.EnvMaxAttempts); err == nil {
-			config.MaxAttempts = env
-		} else {
-			log.Printf("ignore invalid NEXTTRACE_MAXATTEMPTS=%q: %v", util.EnvMaxAttempts, err)
-		}
+	if config.MaxAttempts <= 0 && util.EnvMaxAttempts > 0 {
+		config.MaxAttempts = util.EnvMaxAttempts
 	}
 
 	if config.MaxAttempts <= 0 || config.MaxAttempts < config.NumMeasurements {
@@ -395,7 +390,7 @@ func (h *Hop) fetchIPData(c Config) (err error) {
 }
 
 func extractMPLS(msg ReceivedMessage, data []byte) []string {
-	if util.DisableMPLS != "" {
+	if util.DisableMPLS {
 		return nil
 	}
 

@@ -17,13 +17,6 @@ import (
 	"github.com/nxtrace/NTrace-core/config"
 )
 
-var DisableMPLS = GetenvDefault("NEXTTRACE_DISABLEMPLS", "")
-var EnableHidDstIP = GetenvDefault("NEXTTRACE_ENABLEHIDDENDSTIP", "")
-var EnvIPInfoLocalPath = GetenvDefault("NEXTTRACE_IPINFOLOCALPATH", "")
-var EnvMaxAttempts = GetenvDefault("NEXTTRACE_MAXATTEMPTS", "")
-var EnvRandomPort = GetenvDefault("NEXTTRACE_RANDOMPORT", "")
-var EnvToken = GetenvDefault("NEXTTRACE_TOKEN", "")
-var Uninterrupted = GetenvDefault("NEXTTRACE_UNINTERRUPTED", "")
 var SrcPort int
 var DestIP string
 var PowProviderParam = ""
@@ -53,6 +46,10 @@ func AddrIP(a net.Addr) net.IP {
 	default:
 		return nil
 	}
+}
+
+func RandomPortEnabled() bool {
+	return EnvRandomPort || SrcPort == -1
 }
 
 func LookupAddr(addr string) ([]string, error) {
@@ -168,10 +165,9 @@ func getLocalIPPortv6(dstip net.IP, srcip net.IP, proto string) (net.IP, int) {
 }
 
 // LocalIPPort 根据目标 IPv4（以及可选的源 IPv4 与协议）返回本地 IP 与一个可用端口
-// 若未设置 EnvRandomPort 且 SrcPort != -1，则结果会被缓存（仅计算一次）
 func LocalIPPort(dstip net.IP, srcip net.IP, proto string) (net.IP, int) {
 	// 若开启随机端口模式，每次直接计算并返回
-	if EnvRandomPort != "" || SrcPort == -1 {
+	if RandomPortEnabled() {
 		return getLocalIPPort(dstip, srcip, proto)
 	}
 	// 否则仅计算一次并缓存
@@ -185,10 +181,9 @@ func LocalIPPort(dstip net.IP, srcip net.IP, proto string) (net.IP, int) {
 }
 
 // LocalIPPortv6 根据目标 IPv6（以及可选的源 IPv6 与协议）返回本地 IP 与一个可用端口
-// 若未设置 EnvRandomPort 且 SrcPort != -1，则结果会被缓存（仅计算一次）
 func LocalIPPortv6(dstip net.IP, srcip net.IP, proto string) (net.IP, int) {
 	// 若开启随机端口模式，每次直接计算并返回
-	if EnvRandomPort != "" || SrcPort == -1 {
+	if RandomPortEnabled() {
 		return getLocalIPPortv6(dstip, srcip, proto)
 	}
 	// 否则仅计算一次并缓存
@@ -278,27 +273,14 @@ func DomainLookUp(host string, ipVersion string, dotServer string, disableOutput
 	}
 }
 
-func GetenvDefault(key, defVal string) string {
-	val, ok := os.LookupEnv(key)
-	if ok {
-		_, ok := os.LookupEnv("NEXTTRACE_DEBUG")
-		if ok {
-			fmt.Println("ENV", key, "detected as", val)
-		}
-		return val
-	}
-	return defVal
-}
-
 func GetHostAndPort() (host string, port string) {
-	var hostP = GetenvDefault("NEXTTRACE_HOSTPORT", "api.nxtrace.org")
 	// 解析域名
-	hostArr := strings.Split(hostP, ":")
+	hostArr := strings.Split(EnvHostPort, ":")
 	// 判断是否有指定端口
 	if len(hostArr) > 1 {
 		// 判断是否为 IPv6
-		if strings.HasPrefix(hostP, "[") {
-			tmp := strings.Split(hostP, "]")
+		if strings.HasPrefix(EnvHostPort, "[") {
+			tmp := strings.Split(EnvHostPort, "]")
 			host = tmp[0]
 			host = host[1:]
 			if port = tmp[1]; port != "" {
@@ -308,7 +290,7 @@ func GetHostAndPort() (host string, port string) {
 			host, port = hostArr[0], hostArr[1]
 		}
 	} else {
-		host = hostP
+		host = EnvHostPort
 	}
 	if port == "" {
 		// 默认端口
@@ -318,11 +300,10 @@ func GetHostAndPort() (host string, port string) {
 }
 
 func GetProxy() *url.URL {
-	proxyURLStr := GetenvDefault("NEXTTRACE_PROXY", "")
-	if proxyURLStr == "" {
+	if EnvProxyURL == "" {
 		return nil
 	}
-	proxyURL, err := url.Parse(proxyURLStr)
+	proxyURL, err := url.Parse(EnvProxyURL)
 	if err != nil {
 		log.Println("Failed to parse proxy URL:", err)
 		return nil
@@ -333,7 +314,7 @@ func GetProxy() *url.URL {
 func GetPowProvider() string {
 	var powProvider string
 	if PowProviderParam == "" {
-		powProvider = GetenvDefault("NEXTTRACE_POWPROVIDER", "api.nxtrace.org")
+		powProvider = EnvPowProvider
 	} else {
 		powProvider = PowProviderParam
 	}
