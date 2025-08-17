@@ -258,11 +258,11 @@ func extractMPLS(msg ReceivedMessage, data []byte) []string {
 
 	tmp := fmt.Sprintf("%x", msg.Msg[:*msg.N])
 
-	index := strings.Index(tmp, strings.Repeat("01", psize-4)+"00004fff")
+	index := strings.Index(tmp, "00004fff")
 	if index == -1 {
 		return nil
 	}
-	tmp = tmp[index+psize*2:]
+	tmp = tmp[index+4:]
 	//由于限制长度了
 	index1 := strings.Index(tmp, "00002000")
 	l := len(tmp[index1+4:])/8 - 2
