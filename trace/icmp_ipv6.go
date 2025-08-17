@@ -449,7 +449,6 @@ func (t *ICMPTracerv6) send(ctx context.Context, ttl, i int) error {
 		if err := h.fetchIPData(t.Config); err != nil {
 			return err
 		}
-
 		t.res.add(h, i, t.NumMeasurements, t.MaxAttempts)
 	case <-time.After(t.Timeout):
 		if f := t.final.Load(); f != -1 && ttl > int(f) {
@@ -463,7 +462,6 @@ func (t *ICMPTracerv6) send(ctx context.Context, ttl, i int) error {
 			RTT:     0,
 			Error:   ErrHopLimitTimeout,
 		}
-
 		t.res.add(h, i, t.NumMeasurements, t.MaxAttempts)
 	}
 	return nil

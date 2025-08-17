@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/fatih/color"
+
 	"github.com/nxtrace/NTrace-core/ipgeo"
 	"github.com/nxtrace/NTrace-core/printer"
 	"github.com/nxtrace/NTrace-core/trace"

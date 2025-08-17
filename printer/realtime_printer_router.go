@@ -7,9 +7,9 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
-	"github.com/nxtrace/NTrace-core/util"
 
 	"github.com/nxtrace/NTrace-core/trace"
+	"github.com/nxtrace/NTrace-core/util"
 )
 
 func RealtimePrinterWithRouter(res *trace.Result, ttl int) {

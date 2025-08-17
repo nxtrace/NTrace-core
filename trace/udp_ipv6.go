@@ -264,7 +264,7 @@ func (t *UDPTracerIPv6) handleICMPMessage(msg ReceivedMessage) {
 
 func (t *UDPTracerIPv6) send(ctx context.Context, ttl int) error {
 	defer t.wg.Done()
-	if !util.RandomPortEnabled() && t.SrcPort > 0 {
+	if !util.RandomPortEnabled() {
 		t.udpMutex.Lock()
 		defer t.udpMutex.Unlock()
 	}
@@ -365,7 +365,6 @@ func (t *UDPTracerIPv6) send(ctx context.Context, ttl int) error {
 		if err := h.fetchIPData(t.Config); err != nil {
 			return err
 		}
-
 		t.res.addLegacy(h)
 	case <-time.After(t.Timeout):
 		if f := t.final.Load(); f != -1 && ttl > int(f) {
@@ -379,7 +378,6 @@ func (t *UDPTracerIPv6) send(ctx context.Context, ttl int) error {
 			RTT:     0,
 			Error:   ErrHopLimitTimeout,
 		}
-
 		t.res.addLegacy(h)
 	}
 	return nil

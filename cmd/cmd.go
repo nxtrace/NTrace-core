@@ -12,9 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fatih/color"
-
 	"github.com/akamensky/argparse"
+	"github.com/fatih/color"
+	"github.com/syndtr/gocapability/capability"
+
 	"github.com/nxtrace/NTrace-core/config"
 	fastTrace "github.com/nxtrace/NTrace-core/fast_trace"
 	"github.com/nxtrace/NTrace-core/ipgeo"
@@ -25,7 +26,6 @@ import (
 	"github.com/nxtrace/NTrace-core/tracemap"
 	"github.com/nxtrace/NTrace-core/util"
 	"github.com/nxtrace/NTrace-core/wshandle"
-	"github.com/syndtr/gocapability/capability"
 )
 
 func Execute() {

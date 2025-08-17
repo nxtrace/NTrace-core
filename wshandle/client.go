@@ -12,10 +12,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gorilla/websocket"
+
 	"github.com/nxtrace/NTrace-core/pow"
 	"github.com/nxtrace/NTrace-core/util"
-
-	"github.com/gorilla/websocket"
 )
 
 type WsConn struct {
