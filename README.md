@@ -163,6 +163,9 @@ nexttrace --ipv6 g.co
 # IPv6 ICMP Trace
 nexttrace 2606:4700:4700::1111
 
+# Developer mode: set the ENV variable NEXTTRACE_DEVMODE=1 to make fatal errors panic with a stack trace.
+export NEXTTRACE_DEVMODE=1
+
 # Disable Path Visualization With the -M parameter
 nexttrace koreacentral.blob.core.windows.net
 # MapTrace URL: https://api.nxtrace.org/tracemap/html/c14e439e-3250-5310-8965-42a1e3545266.html

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"os/signal"
@@ -224,13 +223,13 @@ func Execute() {
 	}
 
 	if err != nil {
-		//fmt.Println(err)
-		//os.Exit(1)
-		panic(err)
+		if util.EnvDevMode {
+			panic(err)
+		} else {
+			fmt.Println(err)
+			os.Exit(1)
+		}
 	}
-	//}()
-	//
-	//wg.Wait()
 
 	if *srcDev != "" {
 		dev, _ := net.InterfaceByName(*srcDev)
@@ -322,14 +321,14 @@ func Execute() {
 	}
 
 	res, err := trace.Traceroute(m, conf)
-	if errors.Is(err, context.Canceled) {
-		// 用户主动中断：跳过后续的正常收尾
-		// os.Exit(130)
-		return
-	}
-
 	if err != nil {
-		log.Fatalln(err)
+		if errors.Is(err, context.Canceled) {
+			// 用户主动中断：跳过后续的正常收尾
+			// os.Exit(130)
+			return
+		}
+		fmt.Println(err)
+		return
 	}
 
 	if *tablePrint {
@@ -350,7 +349,8 @@ func Execute() {
 		(util.StringInSlice(strings.ToUpper(*dataOrigin), []string{"LEOMOEAPI", "IPINFO", "IPINFO", "IP-API.COM", "IPAPI.COM"})) {
 		url, err := tracemap.GetMapUrl(string(r))
 		if err != nil {
-			log.Fatalln(err)
+			fmt.Println(err)
+			return
 		}
 		res.TraceMapUrl = url
 		if !*jsonPrint {
