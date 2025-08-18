@@ -394,10 +394,6 @@ func extractMPLS(msg ReceivedMessage, data []byte) []string {
 		return nil
 	}
 
-	if psize != 52 {
-		return nil
-	}
-
 	extensionOffset := 20 + 8 + psize
 
 	if len(data) <= extensionOffset {
@@ -405,27 +401,33 @@ func extractMPLS(msg ReceivedMessage, data []byte) []string {
 	}
 
 	extensionBody := data[extensionOffset:]
-	if len(extensionBody) < 8 || len(extensionBody)%8 != 0 {
+	if len(extensionBody) < 8 {
 		return nil
 	}
 
 	tmp := fmt.Sprintf("%x", msg.Msg[:*msg.N])
 
-	index := strings.Index(tmp, "00004fff")
-	if index == -1 {
+	index := 68 + 2*psize
+	if len(tmp) < index {
 		return nil
 	}
-	tmp = tmp[index+4:]
+	tmp = tmp[index:]
 	//由于限制长度了
-	index1 := strings.Index(tmp, "00002000")
-	l := len(tmp[index1+4:])/8 - 2
-	//fmt.Printf("l:%d\n", l)
-
+	index1 := strings.Index(tmp, "2000")
+	if index1 < 0 {
+		return nil
+	}
+	// 判断此处这个ICMP Multi-Part Extensions的CLass为MPLS Label Stack Class (1)
+	if tmp[index1+14:index1+16] != "01" {
+		return nil
+	}
+	l := len(tmp[index1:])/8 - 2
+	// 如果MPLS标签数小于1，直接返回nil
 	if l < 1 {
 		return nil
 	}
 	//去掉扩展头和MPLS头
-	tmp = tmp[index1+4+8*2:]
+	tmp = tmp[index1+8*2:]
 	//fmt.Print(tmp)
 
 	var retStrList []string

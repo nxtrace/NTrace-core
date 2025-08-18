@@ -344,8 +344,8 @@ func (t *ICMPTracer) send(ctx context.Context, ttl, i int) error {
 	id := int(uint16(t.echoIDTag)<<8 | uint16(t.pidLow))
 	//data := []byte{byte(ttl)}
 	data := []byte{byte(0)}
-	data = append(data, bytes.Repeat([]byte{1}, t.Config.PktSize-5)...)
-	data = append(data, 0x00, 0x00, 0x4f, 0xff)
+	data = append(data, bytes.Repeat([]byte{0}, t.Config.PktSize-5)...)
+	data = append(data, 0x00, 0x6e, 0x74, 0x72)
 
 	icmpHeader := icmp.Message{
 		Type: ipv4.ICMPTypeEcho, Code: 0,
