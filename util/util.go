@@ -346,3 +346,21 @@ func HideIPPart(ip string) string {
 	// IPv6: 隐藏后96位
 	return parsedIP.Mask(net.CIDRMask(32, 128)).String() + "/32"
 }
+
+func ChecksumOK(data []byte) bool {
+	var sum uint32
+	// 两两成 16-bit 大端序 word 累加
+	for i := 0; i+1 < len(data); i += 2 {
+		word := uint32(data[i])<<8 | uint32(data[i+1])
+		sum += word
+		// 折叠进位
+		sum = (sum & 0xffff) + (sum >> 16)
+	}
+	// 奇数字节则末尾补 0
+	if len(data)%2 == 1 {
+		sum += uint32(data[len(data)-1]) << 8
+		sum = (sum & 0xffff) + (sum >> 16)
+	}
+	// 最终再折叠一次，保证 16 位
+	return (sum&0xffff)+(sum>>16) != 0xffff
+}

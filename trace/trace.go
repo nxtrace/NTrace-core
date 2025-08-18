@@ -1,6 +1,7 @@
 package trace
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
@@ -394,41 +395,39 @@ func extractMPLS(msg ReceivedMessage, data []byte) []string {
 		return nil
 	}
 
-	extensionOffset := 20 + 8 + psize
-
-	if len(data) <= extensionOffset {
-		return nil
-	}
-
-	extensionBody := data[extensionOffset:]
-	if len(extensionBody) < 8 {
-		return nil
-	}
-
 	tmp := fmt.Sprintf("%x", msg.Msg[:*msg.N])
 
-	index := 68 + 2*psize
-	if len(tmp) < index {
+	var findValid func(tmp, sub string, from int) string
+	findValid = func(tmp, sub string, from int) string {
+		index := strings.LastIndex(tmp[:from], sub)
+		if index == -1 {
+			return ""
+		}
+		if len(tmp[index:])%8 == 0 || len(tmp[index:])/8 < 3 {
+			return tmp[index:]
+		}
+		return findValid(tmp, sub, index)
+	}
+	tmp = findValid(tmp, "2000", len(tmp))
+	if tmp == "" {
 		return nil
 	}
-	tmp = tmp[index:]
-	//由于限制长度了
-	index1 := strings.Index(tmp, "2000")
-	if index1 < 0 {
+	xdata, err := hex.DecodeString(tmp)
+	if err != nil {
+		return nil
+	}
+	xdata[2], xdata[3] = 0, 0
+	if !util.ChecksumOK(xdata) {
 		return nil
 	}
 	// 判断此处这个ICMP Multi-Part Extensions的CLass为MPLS Label Stack Class (1)
-	if tmp[index1+14:index1+16] != "01" {
+	if tmp[14:16] != "01" {
+		//fmt.Println("CLASS:", tmp[14:16], ",不是MPLS标签栈类")
 		return nil
 	}
-	l := len(tmp[index1:])/8 - 2
-	// 如果MPLS标签数小于1，直接返回nil
-	if l < 1 {
-		return nil
-	}
+	l := len(tmp)/8 - 2
 	//去掉扩展头和MPLS头
-	tmp = tmp[index1+8*2:]
-	//fmt.Print(tmp)
+	tmp = tmp[8*2:]
 
 	var retStrList []string
 	for i := 0; i < l; i++ {
@@ -458,40 +457,8 @@ func extractMPLS(msg ReceivedMessage, data []byte) []string {
 			return nil
 		}
 
-		//if i > 0 {
-		//	retStr += "\n    "
-		//}
-
 		retStrList = append(retStrList, fmt.Sprintf("[MPLS: Lbl %d, TC %d, S %s, TTL %d]", label, tc, s, ttlMpls))
 	}
-
-	//label, err := strconv.ParseInt(tmp[len(tmp)-8:len(tmp)-3], 16, 32)
-	//if err != nil {
-	//	return ""
-	//}
-	//
-	//strSlice := fmt.Sprintf("%s", []byte(tmp[len(tmp)-3:len(tmp)-2]))
-	////fmt.Printf("\nstrSlice: %s\n", strSlice)
-	//
-	//num, err := strconv.ParseUint(strSlice, 16, 64)
-	//if err != nil {
-	//	return ""
-	//}
-	//binaryStr := fmt.Sprintf("%04s", strconv.FormatUint(num, 2))
-	//
-	////fmt.Printf("\nbinaryStr: %s\n", binaryStr)
-	//tc, err := strconv.ParseInt(binaryStr[:3], 2, 32)
-	//if err != nil {
-	//	return ""
-	//}
-	//s := binaryStr[3:]
-	//
-	//ttlMpls, err := strconv.ParseInt(tmp[len(tmp)-2:], 16, 32)
-	//if err != nil {
-	//	return ""
-	//}
-	//
-	//retStr := fmt.Sprintf("Lbl %d, TC %d, S %s, TTL %d", label, tc, s, ttlMpls)
 
 	return retStrList
 }
