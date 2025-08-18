@@ -1,103 +1,212 @@
 package trace
 
 import (
+	"context"
+	"errors"
 	"log"
 	"math/rand"
 	"net"
-	"strconv"
+	"os"
+	"os/signal"
 	"sync"
+	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
-	"github.com/nxtrace/NTrace-core/util"
-	"golang.org/x/net/context"
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv4"
 	"golang.org/x/sync/semaphore"
+
+	"github.com/nxtrace/NTrace-core/util"
 )
 
 type UDPTracer struct {
 	Config
 	wg                  sync.WaitGroup
 	res                 Result
-	ctx                 context.Context
 	inflightRequest     map[int]chan Hop
-	inflightRequestLock sync.Mutex
-
-	icmp net.PacketConn
-
-	final     int
-	finalLock sync.Mutex
-
-	sem       *semaphore.Weighted
-	fetchLock sync.Mutex
-	udpMutex  sync.Mutex
+	inflightRequestLock sync.RWMutex
+	SrcIP               net.IP
+	icmp                net.PacketConn
+	udp                 net.PacketConn
+	udpConn             *ipv4.RawConn
+	hopLimitLock        sync.Mutex
+	final               atomic.Int32
+	sem                 *semaphore.Weighted
 }
 
-func (t *UDPTracer) Execute() (*Result, error) {
+func (t *UDPTracer) PrintFunc(ctx context.Context, status chan<- bool) {
+	defer t.wg.Done()
+	// 默认认为是正常退出，只有在 ctx 取消时改为 false
+	normalExit := true
+	defer func() {
+		select {
+		case status <- normalExit:
+		default:
+		}
+		close(status)
+	}()
+	ttl := t.Config.BeginHop - 1
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if t.AsyncPrinter != nil {
+			t.AsyncPrinter(&t.res)
+		}
+		// 接收的时候检查一下是不是 3 跳都齐了
+		if ttl < len(t.res.Hops) &&
+			len(t.res.Hops[ttl]) == t.NumMeasurements {
+			if t.RealtimePrinter != nil {
+				t.RealtimePrinter(&t.res, ttl)
+			}
+			ttl++
+			if ttl == int(t.final.Load()) || ttl >= t.MaxHops {
+				return
+			}
+		}
+		select {
+		case <-ctx.Done():
+			// 非正常退出
+			normalExit = false
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+func (t *UDPTracer) ttlComp(ttl int) bool {
+	idx := ttl - 1
+	t.res.lock.RLock()
+	defer t.res.lock.RUnlock()
+	return idx < len(t.res.Hops) && len(t.res.Hops[idx]) >= t.NumMeasurements
+}
+
+func (t *UDPTracer) launchTTL(ctx context.Context, ttl int) {
+	go func(ttl int) {
+		for i := 0; i < t.MaxAttempts; i++ {
+			// 若此 TTL 已完成或 ctx 已取消，则不再发起新的尝试
+			if t.ttlComp(ttl) || ctx.Err() != nil {
+				return
+			}
+			t.wg.Add(1)
+			go func(ttl, i int) {
+				if err := t.send(ctx, ttl, i); err != nil && !errors.Is(err, context.Canceled) {
+					log.Printf("send failed: ttl=%d i=%d: %v", ttl, i, err)
+				}
+			}(ttl, i)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(time.Millisecond * time.Duration(t.Config.PacketInterval)):
+			}
+		}
+	}(ttl)
+}
+
+func (t *UDPTracer) Execute() (res *Result, err error) {
+	// 初始化 inflightRequest map
+	t.inflightRequest = make(map[int]chan Hop)
+
 	if len(t.res.Hops) > 0 {
 		return &t.res, ErrTracerouteExecuted
 	}
+	// 初始化 Result.Hops，并预分配到 MaxHops
+	t.res.Hops = make([][]Hop, t.MaxHops)
+	// 解析并校验用户指定的 IPv4 源地址
+	SrcAddr := net.ParseIP(t.SrcAddr).To4()
+	if t.SrcAddr != "" && SrcAddr == nil {
+		return nil, errors.New("invalid IPv4 SrcAddr:" + t.SrcAddr)
+	}
 
-	var err error
-	t.icmp, err = icmp.ListenPacket("ip4:icmp", t.SrcAddr)
+	t.SrcIP, _ = util.LocalIPPort(t.DestIP, SrcAddr, "udp")
+	if t.SrcIP == nil {
+		return nil, errors.New("cannot determine local IPv4 address")
+	}
+
+	t.udp, err = net.ListenPacket("ip4:udp", t.SrcIP.String())
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if c := t.udp; c != nil { // 先拷一份引用，避免 defer 执行时 t.udp 已被并发改写
+			_ = c.Close()
+		}
+	}()
+
+	t.udpConn, err = ipv4.NewRawConn(t.udp)
+	if err != nil {
+		return nil, err
+	}
+
+	t.icmp, err = icmp.ListenPacket("ip4:icmp", t.SrcIP.String())
 	if err != nil {
 		return &t.res, err
 	}
-	defer t.icmp.Close()
-
-	var cancel context.CancelFunc
-	t.ctx, cancel = context.WithCancel(context.Background())
-	defer cancel()
-	t.inflightRequest = make(map[int]chan Hop)
-	t.final = -1
-
-	go t.listenICMP()
-
-	t.sem = semaphore.NewWeighted(int64(t.ParallelRequests))
-	for ttl := t.BeginHop; ttl <= t.MaxHops; ttl++ {
-		// 如果到达最终跳，则退出
-		if t.final != -1 && ttl > t.final {
-			break
-		}
-		for i := 0; i < t.NumMeasurements; i++ {
-			t.wg.Add(1)
-			go t.send(ttl)
-			<-time.After(time.Millisecond * time.Duration(t.Config.PacketInterval))
-		}
-		if t.RealtimePrinter != nil {
-			// 对于实时模式，应该按照TTL进行并发请求
-			t.wg.Wait()
-			t.RealtimePrinter(&t.res, ttl-1)
-		}
-		<-time.After(time.Millisecond * time.Duration(t.Config.TTLInterval))
-	}
-	go func() {
-		if t.AsyncPrinter != nil {
-			for {
-				t.AsyncPrinter(&t.res)
-				time.Sleep(200 * time.Millisecond)
-			}
+	defer func() {
+		if c := t.icmp; c != nil { // 先拷一份引用，避免 defer 执行时 t.icmp 已被并发改写
+			_ = c.Close()
 		}
 	}()
-	// 如果是表格模式，则一次性并发请求
-	if t.AsyncPrinter != nil {
-		t.wg.Wait()
-	}
-	t.res.reduce(t.final)
 
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	t.final.Store(-1)
+
+	t.wg.Add(1)
+	go t.listenICMP(ctx)
+	statusCh := make(chan bool, 1)
+	t.wg.Add(1)
+	go t.PrintFunc(ctx, statusCh)
+
+	t.sem = semaphore.NewWeighted(int64(t.ParallelRequests))
+
+	t.wg.Add(1)
+	go func() {
+		defer t.wg.Done()
+		// 立即启动 BeginHop 对应的 TTL 组
+		t.launchTTL(ctx, t.BeginHop)
+		// 之后按 TTLInterval 周期启动后续 TTL 组
+		ticker := time.NewTicker(time.Millisecond * time.Duration(t.Config.TTLInterval))
+		defer ticker.Stop()
+		for ttl := t.BeginHop + 1; ttl <= t.MaxHops; ttl++ {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+			// 如果到达最终跳，则退出
+			if f := t.final.Load(); f != -1 && ttl > int(f) {
+				return
+			}
+			// 并发启动这个 TTL 的所有测量
+			t.launchTTL(ctx, ttl)
+		}
+	}()
+	normalExit := <-statusCh
+	stop()
+	t.wg.Wait()
+	t.res.reduce(int(t.final.Load()))
+	if !normalExit {
+		return &t.res, context.Canceled
+	}
 	return &t.res, nil
 }
 
-func (t *UDPTracer) listenICMP() {
-	lc := NewPacketListener(t.icmp, t.ctx)
-	go lc.Start()
+func (t *UDPTracer) listenICMP(ctx context.Context) {
+	defer t.wg.Done()
+	lc := NewPacketListener(t.icmp)
+	go lc.Start(ctx)
 	for {
 		select {
-		case <-t.ctx.Done():
+		case <-ctx.Done():
 			return
-		case msg := <-lc.Messages:
+		case msg, ok := <-lc.Messages:
+			if !ok {
+				return
+			}
 			if msg.N == nil {
 				continue
 			}
@@ -106,123 +215,121 @@ func (t *UDPTracer) listenICMP() {
 				log.Println(err)
 				continue
 			}
+			var data []byte
 			switch rm.Type {
 			case ipv4.ICMPTypeTimeExceeded:
-				t.handleICMPMessage(msg, rm.Body.(*icmp.TimeExceeded).Data)
+				body, ok := rm.Body.(*icmp.TimeExceeded)
+				if !ok || body == nil {
+					continue
+				}
+				data = body.Data
 			case ipv4.ICMPTypeDestinationUnreachable:
-				t.handleICMPMessage(msg, rm.Body.(*icmp.DstUnreach).Data)
+				body, ok := rm.Body.(*icmp.DstUnreach)
+				if !ok || body == nil {
+					continue
+				}
+				data = body.Data
 			default:
-				// log.Println("received icmp message of unknown type", rm.Type)
+				continue
+				//log.Println("received icmp message of unknown type", rm.Type)
+			}
+			if len(data) < 20 || data[0]>>4 != 4 {
+				continue
+			}
+			dstip := net.IP(data[16:20])
+			if dstip.Equal(t.DestIP) || dstip.Equal(net.IPv4zero) {
+				t.handleICMPMessage(msg, data)
 			}
 		}
 	}
-
 }
 
 func (t *UDPTracer) handleICMPMessage(msg ReceivedMessage, data []byte) {
-	header, err := util.GetICMPResponsePayload(data)
+	seq, err := util.GetUDPSeq(data)
 	if err != nil {
 		return
 	}
-	srcPort := util.GetUDPSrcPort(header)
-	t.inflightRequestLock.Lock()
-	defer t.inflightRequestLock.Unlock()
-	ch, ok := t.inflightRequest[int(srcPort)]
-	if !ok {
+	// 取出通道后立刻解锁
+	t.inflightRequestLock.RLock()
+	ch, ok := t.inflightRequest[int(seq)]
+	t.inflightRequestLock.RUnlock()
+	if !ok || ch == nil {
 		return
 	}
-	ch <- Hop{
+
+	h := Hop{
 		Success: true,
 		Address: msg.Peer,
 	}
-}
-
-var cachedLocalPort int
-
-func (t *UDPTracer) getUDPConn(try int) (net.IP, int, net.PacketConn, error) {
-	srcIP, _ := util.LocalIPPort(t.DestIP)
-	var ipString string
-	if srcIP == nil {
-		ipString = ""
-	} else {
-		ipString = srcIP.String()
-	}
-
-	// Check environment variable to decide caching behavior
-	if util.EnvRandomPort == "" {
-		if t.SrcPort != 0 {
-			cachedLocalPort = t.SrcPort
-		}
-		// Use cached random port logic
-		if cachedLocalPort == 0 {
-			// First time: listen on a random port
-			udpConn, err := net.ListenPacket("udp", ipString+":0")
-			if err != nil {
-				if try > 3 {
-					log.Fatal(err)
-				}
-				return srcIP, 0, nil, err
-			}
-			cachedLocalPort = udpConn.LocalAddr().(*net.UDPAddr).Port
-			// Close the initial connection after obtaining the port
-			udpConn.Close()
-		}
-		// Use the cached local port to establish a new connection
-		udpConn, err := net.ListenPacket("udp", ipString+":"+strconv.Itoa(cachedLocalPort))
-		if err != nil {
-			return srcIP, cachedLocalPort, nil, err
-		}
-		return srcIP, cachedLocalPort, udpConn, nil
-	} else {
-		// Without caching: create a new connection each time using a new random port
-		udpConn, err := net.ListenPacket("udp", ipString+":0")
-		if err != nil {
-			return srcIP, 0, nil, err
-		}
-		localPort := udpConn.LocalAddr().(*net.UDPAddr).Port
-		return srcIP, localPort, udpConn, nil
+	// 非阻塞发送，避免重复回包把缓冲塞满导致阻塞
+	select {
+	case ch <- h:
+	default:
+		// 丢弃重复/迟到的相同 seq 回包，避免阻塞
 	}
 }
 
-func (t *UDPTracer) send(ttl int) error {
-	err := t.sem.Acquire(context.Background(), 1)
-	if err != nil {
+func (t *UDPTracer) send(ctx context.Context, ttl, i int) error {
+	defer t.wg.Done()
+	if t.ttlComp(ttl) {
+		// 快路径短路：若该 TTL 已完成，直接返回避免竞争信号量与无谓发包
+		return nil
+	}
+
+	if err := t.sem.Acquire(ctx, 1); err != nil {
 		return err
 	}
 	defer t.sem.Release(1)
 
-	defer t.wg.Done()
-	if t.final != -1 && ttl > t.final {
+	if f := t.final.Load(); f != -1 && ttl > int(f) {
 		return nil
 	}
 
-	if util.EnvRandomPort == "" {
-		t.udpMutex.Lock()
-		defer t.udpMutex.Unlock()
+	if t.ttlComp(ttl) {
+		// 竞态兜底：获取信号量期间可能已完成，再次检查以避免冗余发包
+		return nil
 	}
+	// 将 TTL 编码到高 8 位；将索引 i 编码到低 8 位
+	seq := (ttl << 8) | (i & 0xFF)
 
-	srcIP, srcPort, udpConn, err := t.getUDPConn(0)
-	if err != nil {
-		return err
-	}
-	defer udpConn.Close()
+	t.inflightRequestLock.Lock()
+	hopCh := make(chan Hop, 1)
+	t.inflightRequest[seq] = hopCh
+	t.inflightRequestLock.Unlock()
+	defer func() {
+		t.inflightRequestLock.Lock()
+		delete(t.inflightRequest, seq)
+		t.inflightRequestLock.Unlock()
+	}()
 
+	_, SrcPort := func() (net.IP, int) {
+		if !util.RandomPortEnabled() && t.SrcPort > 0 {
+			return nil, t.SrcPort
+		}
+		return util.LocalIPPort(t.DestIP, t.SrcIP, "udp")
+	}()
 	//var payload []byte
 	//if t.Quic {
 	//	payload = GenerateQuicPayloadWithRandomIds()
 	//} else {
 	ipHeader := &layers.IPv4{
-		SrcIP:    srcIP,
+		SrcIP:    t.SrcIP,
 		DstIP:    t.DestIP,
+		Id:       uint16(seq),
 		Protocol: layers.IPProtocolUDP,
 		TTL:      uint8(ttl),
+		//Flags:    layers.IPv4DontFragment,
+	}
+	if t.DontFragment {
+		ipHeader.Flags = layers.IPv4DontFragment
 	}
 
 	udpHeader := &layers.UDP{
-		SrcPort: layers.UDPPort(srcPort),
+		SrcPort: layers.UDPPort(SrcPort),
 		DstPort: layers.UDPPort(t.DestPort),
 	}
 	_ = udpHeader.SetNetworkLayerForChecksum(ipHeader)
+
 	buf := gopacket.NewSerializeBuffer()
 	opts := gopacket.SerializeOptions{
 		ComputeChecksums: true,
@@ -230,108 +337,75 @@ func (t *UDPTracer) send(ttl int) error {
 	}
 
 	desiredPayloadSize := t.Config.PktSize
-	if desiredPayloadSize-8 > 0 {
-		desiredPayloadSize -= 8
-	}
 	payload := make([]byte, desiredPayloadSize)
 	// 设置随机种子
-	rand.Seed(time.Now().UnixNano())
-
-	// 填充随机数
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for i := range payload {
-		payload[i] = byte(rand.Intn(256))
+		payload[i] = byte(r.Intn(256))
 	}
 	//copy(buf.Bytes(), payload)
-
-	if err := gopacket.SerializeLayers(buf, opts, udpHeader, gopacket.Payload(payload)); err != nil {
+	if err := gopacket.SerializeLayers(buf, opts, ipHeader, udpHeader, gopacket.Payload(payload)); err != nil {
 		return err
 	}
-
-	//payload = buf.Bytes()
-	//}
-
-	err = ipv4.NewPacketConn(udpConn).SetTTL(ttl)
+	// 完整的报文字节
+	packet := buf.Bytes()
+	// 解析 IP 头长度（IHL）
+	ihl := int(packet[0]&0x0f) * 4
+	// 构造 ipv4.Header
+	hdr, err := ipv4.ParseHeader(packet[:ihl])
 	if err != nil {
 		return err
 	}
-
+	// 串行设置 TTL + 发送，放在同一把锁里保证并发安全
+	t.hopLimitLock.Lock()
 	start := time.Now()
-	if _, err := udpConn.WriteTo(buf.Bytes(), &net.UDPAddr{IP: t.DestIP, Port: t.DestPort}); err != nil {
+	if err := t.udpConn.WriteTo(hdr, packet[ihl:], nil); err != nil {
+		t.hopLimitLock.Unlock()
 		return err
 	}
-
-	// 在对inflightRequest进行写操作的时候应该加锁保护，以免多个goroutine协程试图同时写入造成panic
-	t.inflightRequestLock.Lock()
-	hopCh := make(chan Hop, 1)
-	t.inflightRequest[srcPort] = hopCh
-	t.inflightRequestLock.Unlock()
-	defer func() {
-		t.inflightRequestLock.Lock()
-		close(hopCh)
-		delete(t.inflightRequest, srcPort)
-		t.inflightRequestLock.Unlock()
-	}()
-
-	go func() {
-		reply := make([]byte, 1500)
-		_, peer, err := udpConn.ReadFrom(reply)
-		if err != nil {
-			// probably because we closed the connection
-			return
-		}
-		hopCh <- Hop{
-			Success: true,
-			Address: &net.IPAddr{IP: peer.(*net.UDPAddr).IP},
-		}
-	}()
+	t.hopLimitLock.Unlock()
 
 	select {
-	case <-t.ctx.Done():
-		return nil
+	case <-ctx.Done():
+		return context.Canceled
 	case h := <-hopCh:
 		rtt := time.Since(start)
-		if t.final != -1 && ttl > t.final {
+		if f := t.final.Load(); f != -1 && ttl > int(f) {
 			return nil
 		}
-		if addr, ok := h.Address.(*net.IPAddr); ok && addr.IP.Equal(t.DestIP) {
-			t.finalLock.Lock()
-			if t.final == -1 || ttl < t.final {
-				t.final = ttl
+
+		if ip := util.AddrIP(h.Address); ip != nil && ip.Equal(t.DestIP) {
+			for {
+				old := t.final.Load()
+				if old != -1 && ttl >= int(old) {
+					break
+				}
+				if t.final.CompareAndSwap(old, int32(ttl)) {
+					break
+				}
 			}
-			t.finalLock.Unlock()
-		} else if addr, ok := h.Address.(*net.UDPAddr); ok && addr.IP.Equal(t.DestIP) {
-			t.finalLock.Lock()
-			if t.final == -1 || ttl < t.final {
-				t.final = ttl
-			}
-			t.finalLock.Unlock()
 		}
 
 		h.TTL = ttl
 		h.RTT = rtt
 
-		t.fetchLock.Lock()
-		defer t.fetchLock.Unlock()
-		err := h.fetchIPData(t.Config)
-		if err != nil {
+		if err := h.fetchIPData(t.Config); err != nil {
 			return err
 		}
-
-		t.res.add(h)
-
+		t.res.add(h, i, t.NumMeasurements, t.MaxAttempts)
 	case <-time.After(t.Timeout):
-		if t.final != -1 && ttl > t.final {
+		if f := t.final.Load(); f != -1 && ttl > int(f) {
 			return nil
 		}
 
-		t.res.add(Hop{
+		h := Hop{
 			Success: false,
 			Address: nil,
 			TTL:     ttl,
 			RTT:     0,
 			Error:   ErrHopLimitTimeout,
-		})
+		}
+		t.res.add(h, i, t.NumMeasurements, t.MaxAttempts)
 	}
-
 	return nil
 }

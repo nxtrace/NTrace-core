@@ -4,14 +4,16 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"github.com/fatih/color"
-	"github.com/nxtrace/NTrace-core/util"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/fatih/color"
+
+	"github.com/nxtrace/NTrace-core/util"
 )
 
 func GetMapUrl(r string) (string, error) {

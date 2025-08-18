@@ -2,13 +2,15 @@ package pow
 
 import (
 	"fmt"
-	"github.com/nxtrace/NTrace-core/util"
-	"github.com/tsosunchia/powclient"
 	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/tsosunchia/powclient"
+
+	"github.com/nxtrace/NTrace-core/util"
 )
 
 const (

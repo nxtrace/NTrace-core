@@ -1,103 +1,188 @@
 package trace
 
 import (
+	"context"
+	"errors"
 	"log"
 	"math/rand"
 	"net"
-	"strconv"
+	"os"
+	"os/signal"
 	"sync"
+	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
-	"github.com/nxtrace/NTrace-core/util"
-	"golang.org/x/net/context"
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv6"
 	"golang.org/x/sync/semaphore"
+
+	"github.com/nxtrace/NTrace-core/util"
 )
 
 type UDPTracerIPv6 struct {
 	Config
 	wg                  sync.WaitGroup
 	res                 Result
-	ctx                 context.Context
 	inflightRequest     map[int]chan Hop
-	inflightRequestLock sync.Mutex
-
-	icmp net.PacketConn
-
-	final     int
-	finalLock sync.Mutex
-
-	sem       *semaphore.Weighted
-	fetchLock sync.Mutex
-	udpMutex  sync.Mutex
+	inflightRequestLock sync.RWMutex
+	SrcIP               net.IP
+	icmp                net.PacketConn
+	udp                 net.PacketConn
+	udpConn             *ipv6.PacketConn
+	hopLimitLock        sync.Mutex
+	final               atomic.Int32
+	sem                 *semaphore.Weighted
+	udpMutex            sync.Mutex
 }
 
-func (t *UDPTracerIPv6) Execute() (*Result, error) {
+func (t *UDPTracerIPv6) PrintFunc(ctx context.Context, status chan<- bool) {
+	defer t.wg.Done()
+	// 默认认为是正常退出，只有在 ctx 取消时改为 false
+	normalExit := true
+	defer func() {
+		select {
+		case status <- normalExit:
+		default:
+		}
+		close(status)
+	}()
+	ttl := t.Config.BeginHop - 1
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if t.AsyncPrinter != nil {
+			t.AsyncPrinter(&t.res)
+		}
+		// 接收的时候检查一下是不是 3 跳都齐了
+		if ttl < len(t.res.Hops) &&
+			len(t.res.Hops[ttl]) == t.NumMeasurements {
+			if t.RealtimePrinter != nil {
+				t.RealtimePrinter(&t.res, ttl)
+			}
+			ttl++
+			if ttl == int(t.final.Load()) || ttl >= t.MaxHops {
+				return
+			}
+		}
+		select {
+		case <-ctx.Done():
+			// 非正常退出
+			normalExit = false
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+func (t *UDPTracerIPv6) Execute() (res *Result, err error) {
+	// 初始化 inflightRequest map
+	t.inflightRequest = make(map[int]chan Hop)
+
 	if len(t.res.Hops) > 0 {
 		return &t.res, ErrTracerouteExecuted
 	}
+	// 初始化 Result.Hops，并预分配到 MaxHops
+	t.res.Hops = make([][]Hop, t.MaxHops)
+	// 解析并校验用户指定的 IPv6 源地址
+	SrcAddr := net.ParseIP(t.SrcAddr)
+	if t.SrcAddr != "" && (SrcAddr == nil || SrcAddr.To4() != nil || SrcAddr.To16() == nil) {
+		return nil, errors.New("invalid IPv6 SrcAddr: " + t.SrcAddr)
+	}
 
-	var err error
-	t.icmp, err = icmp.ListenPacket("ip6:ipv6-icmp", "::")
+	t.SrcIP, _ = util.LocalIPPortv6(t.DestIP, SrcAddr, "udp6")
+	if t.SrcIP == nil {
+		return nil, errors.New("cannot determine local IPv6 address")
+	}
+
+	t.udp, err = net.ListenPacket("ip6:udp", t.SrcIP.String())
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if c := t.udp; c != nil { // 先拷一份引用，避免 defer 执行时 t.udp 已被并发改写
+			_ = c.Close()
+		}
+	}()
+
+	t.udpConn = ipv6.NewPacketConn(t.udp)
+
+	t.icmp, err = icmp.ListenPacket("ip6:ipv6-icmp", t.SrcIP.String())
 	if err != nil {
 		return &t.res, err
 	}
-	defer t.icmp.Close()
+	defer func() {
+		if c := t.icmp; c != nil { // 先拷一份引用，避免 defer 执行时 t.icmp 已被并发改写
+			_ = c.Close()
+		}
+	}()
 
-	var cancel context.CancelFunc
-	t.ctx, cancel = context.WithCancel(context.Background())
-	defer cancel()
-	t.inflightRequest = make(map[int]chan Hop)
-	t.final = -1
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
-	go t.listenICMP()
+	t.final.Store(-1)
+
+	t.wg.Add(1)
+	go t.listenICMP(ctx)
+	statusCh := make(chan bool, 1)
+	t.wg.Add(1)
+	go t.PrintFunc(ctx, statusCh)
 
 	t.sem = semaphore.NewWeighted(int64(t.ParallelRequests))
+
+ttlLoop:
 	for ttl := t.BeginHop; ttl <= t.MaxHops; ttl++ {
 		// 如果到达最终跳，则退出
-		if t.final != -1 && ttl > t.final {
+		if f := t.final.Load(); f != -1 && ttl > int(f) {
 			break
 		}
 		for i := 0; i < t.NumMeasurements; i++ {
+			// 若 ctx 已取消，则不再发起新的尝试
+			if ctx.Err() != nil {
+				break ttlLoop
+			}
 			t.wg.Add(1)
-			go t.send(ttl)
-			<-time.After(time.Millisecond * time.Duration(t.Config.PacketInterval))
-		}
-		if t.RealtimePrinter != nil {
-			// 对于实时模式，应该按照TTL进行并发请求
-			t.wg.Wait()
-			t.RealtimePrinter(&t.res, ttl-1)
-		}
-		<-time.After(time.Millisecond * time.Duration(t.Config.TTLInterval))
-	}
-	go func() {
-		if t.AsyncPrinter != nil {
-			for {
-				t.AsyncPrinter(&t.res)
-				time.Sleep(200 * time.Millisecond)
+			go func(ttl int) {
+				if err := t.send(ctx, ttl); err != nil && !errors.Is(err, context.Canceled) {
+					log.Printf("send failed: ttl=%d: %v", ttl, err)
+				}
+			}(ttl)
+			select {
+			case <-ctx.Done():
+				break ttlLoop
+			case <-time.After(time.Millisecond * time.Duration(t.Config.PacketInterval)):
 			}
 		}
-	}()
-	// 如果是表格模式，则一次性并发请求
-	if t.AsyncPrinter != nil {
-		t.wg.Wait()
+		select {
+		case <-ctx.Done():
+			break ttlLoop
+		case <-time.After(time.Millisecond * time.Duration(t.Config.TTLInterval)):
+		}
 	}
-	t.res.reduce(t.final)
-
+	normalExit := <-statusCh
+	stop()
+	t.wg.Wait()
+	t.res.reduce(int(t.final.Load()))
+	if !normalExit {
+		return &t.res, context.Canceled
+	}
 	return &t.res, nil
 }
 
-func (t *UDPTracerIPv6) listenICMP() {
-	lc := NewPacketListener(t.icmp, t.ctx)
-	go lc.Start()
+func (t *UDPTracerIPv6) listenICMP(ctx context.Context) {
+	defer t.wg.Done()
+	lc := NewPacketListener(t.icmp)
+	go lc.Start(ctx)
 	for {
 		select {
-		case <-t.ctx.Done():
+		case <-ctx.Done():
 			return
-		case msg := <-lc.Messages:
+		case msg, ok := <-lc.Messages:
+			if !ok {
+				return
+			}
 			if msg.N == nil {
 				continue
 			}
@@ -106,184 +191,123 @@ func (t *UDPTracerIPv6) listenICMP() {
 				log.Println(err)
 				continue
 			}
+			var data []byte
 			switch rm.Type {
 			case ipv6.ICMPTypeTimeExceeded:
-				t.handleICMPMessage(msg)
+				body, ok := rm.Body.(*icmp.TimeExceeded)
+				if !ok || body == nil {
+					continue
+				}
+				data = body.Data
 			case ipv6.ICMPTypeDestinationUnreachable:
-				t.handleICMPMessage(msg)
+				body, ok := rm.Body.(*icmp.DstUnreach)
+				if !ok || body == nil {
+					continue
+				}
+				data = body.Data
 			default:
-				// log.Println("received icmp message of unknown type", rm.Type)
+				continue
+				//log.Println("received icmp message of unknown type", rm.Type)
+			}
+			if len(data) < 40 || data[0]>>4 != 6 {
+				continue
+			}
+			dstip := net.IP(data[24:40])
+			if dstip.Equal(t.DestIP) || dstip.Equal(net.IPv6zero) {
+				t.handleICMPMessage(msg)
 			}
 		}
 	}
 }
 
-// handleICMPMessage 处理 ICMPv6 消息并提取 UDP 源端口
-//
-// ICMPv6 错误消息格式:
-// - ICMPv6 头部 (8 字节)
-// - 原始 IPv6 包 (包含 IPv6 头部和 UDP 头部)
-//
-// 处理步骤:
-// 1. 验证消息长度
-// 2. 解析 ICMPv6 头部
-// 3. 提取原始 IPv6 包
-// 4. 处理可能的扩展头部
-// 5. 提取 UDP 源端口
-// 6. 发送结果到对应通道
 func (t *UDPTracerIPv6) handleICMPMessage(msg ReceivedMessage) {
-	// ICMPv6 错误消息至少需要包含 IPv6 头部(40字节)和部分 UDP 头部
-	if len(msg.Msg) < 48 {
+	// 消息至少要有 IPv6 基本头 (40B) + ICMPv6 头 (8B)
+	if msg.N == nil || *msg.N < 48 {
 		return
 	}
 
-	// 尝试解析 ICMPv6 消息中包含的原始数据包
-	var offset int = 8 // ICMPv6 头部长度
+	raw := msg.Msg[:*msg.N]
+	inner := raw[8:]
 
-	// 检查剩余长度是否足够包含 IPv6 头部
-	if len(msg.Msg) < offset+40 {
+	header, err := util.GetICMPResponsePayload(inner)
+	if err != nil {
 		return
 	}
 
-	// 验证 IPv6 版本 (前4位应该是6)
-	if (msg.Msg[offset] >> 4) != 6 {
+	packet := gopacket.NewPacket(header, layers.LayerTypeUDP, gopacket.Default)
+	udpLayer := packet.Layer(layers.LayerTypeUDP)
+	if udpLayer == nil {
 		return
 	}
 
-	// 获取下一个头部类型
-	nextHeader := msg.Msg[offset+6]
-
-	// 跳过 IPv6 基本头部
-	offset += 40
-
-	// 处理可能的扩展头部
-	for nextHeader != 17 && offset+2 < len(msg.Msg) { // 17 是 UDP 协议号
-		switch nextHeader {
-		case 0: // Hop-by-Hop Options
-		case 43: // Routing
-		case 44: // Fragment
-		case 50: // ESP
-		case 51: // AH
-		case 60: // Destination Options
-			if offset+2 >= len(msg.Msg) {
-				return // 不够长，无法读取扩展头部长度
-			}
-			nextHeader = msg.Msg[offset]
-			headerLen := int(msg.Msg[offset+1])*8 + 8
-			offset += headerLen
-		default:
-			// 未知或不支持的扩展头部类型
-			return
-		}
-	}
-
-	// 确认下一个头部是 UDP (17)
-	if nextHeader != 17 {
+	origUDP := udpLayer.(*layers.UDP)
+	SrcPort := int(origUDP.SrcPort)
+	// 取出通道后立刻解锁
+	t.inflightRequestLock.RLock()
+	ch, ok := t.inflightRequest[SrcPort]
+	t.inflightRequestLock.RUnlock()
+	if !ok || ch == nil {
 		return
 	}
 
-	// 确保有足够的数据来读取 UDP 源端口
-	if offset+2 > len(msg.Msg) {
-		return
-	}
-
-	// 从 UDP 头部提取源端口(前2字节)
-	srcPort := int(uint16(msg.Msg[offset])<<8 | uint16(msg.Msg[offset+1]))
-
-	t.inflightRequestLock.Lock()
-	defer t.inflightRequestLock.Unlock()
-	ch, ok := t.inflightRequest[srcPort]
-	if !ok {
-		return
-	}
-	ch <- Hop{
+	h := Hop{
 		Success: true,
 		Address: msg.Peer,
 	}
-}
-
-var cachedLocalPortv6 int
-
-func (t *UDPTracerIPv6) getUDPConn(try int) (net.IP, int, net.PacketConn, error) {
-	srcIP, _ := util.LocalIPPortv6(t.DestIP)
-	var ipString string
-	if srcIP == nil {
-		ipString = "::"
-	} else {
-		ipString = srcIP.String()
-	}
-
-	// Check environment variable to decide caching behavior
-	if util.EnvRandomPort == "" {
-		if t.SrcPort != 0 {
-			cachedLocalPortv6 = t.SrcPort
-		}
-		// Use cached random port logic
-		if cachedLocalPortv6 == 0 {
-			// First time: listen on a random port
-			udpConn, err := net.ListenPacket("udp6", "["+ipString+"]:0")
-			if err != nil {
-				if try > 3 {
-					log.Fatal(err)
-				}
-				return srcIP, 0, nil, err
-			}
-			cachedLocalPortv6 = udpConn.LocalAddr().(*net.UDPAddr).Port
-			// Close the initial connection after obtaining the port
-			udpConn.Close()
-		}
-		// Use the cached local port to establish a new connection
-		udpConn, err := net.ListenPacket("udp6", "["+ipString+"]:"+strconv.Itoa(cachedLocalPortv6))
-		if err != nil {
-			return srcIP, cachedLocalPortv6, nil, err
-		}
-		return srcIP, cachedLocalPortv6, udpConn, nil
-	} else {
-		// Without caching: create a new connection each time using a new random port
-		udpConn, err := net.ListenPacket("udp6", "["+ipString+"]:0")
-		if err != nil {
-			return srcIP, 0, nil, err
-		}
-		localPort := udpConn.LocalAddr().(*net.UDPAddr).Port
-		return srcIP, localPort, udpConn, nil
+	// 非阻塞发送，避免重复回包把缓冲塞满导致阻塞
+	select {
+	case ch <- h:
+	default:
+		// 丢弃重复/迟到的相同 icmp 回包，避免阻塞
 	}
 }
 
-func (t *UDPTracerIPv6) send(ttl int) error {
-	err := t.sem.Acquire(context.Background(), 1)
-	if err != nil {
-		return err
-	}
-	defer t.sem.Release(1)
-
+func (t *UDPTracerIPv6) send(ctx context.Context, ttl int) error {
 	defer t.wg.Done()
-	if t.final != -1 && ttl > t.final {
-		return nil
-	}
-
-	if util.EnvRandomPort == "" {
+	if !util.RandomPortEnabled() {
 		t.udpMutex.Lock()
 		defer t.udpMutex.Unlock()
 	}
 
-	srcIP, srcPort, udpConn, err := t.getUDPConn(0)
-	if err != nil {
+	if err := t.sem.Acquire(ctx, 1); err != nil {
 		return err
 	}
-	defer udpConn.Close()
+	defer t.sem.Release(1)
+
+	if f := t.final.Load(); f != -1 && ttl > int(f) {
+		return nil
+	}
+
+	_, SrcPort := func() (net.IP, int) {
+		if !util.RandomPortEnabled() && t.SrcPort > 0 {
+			return nil, t.SrcPort
+		}
+		return util.LocalIPPortv6(t.DestIP, t.SrcIP, "udp6")
+	}()
+
+	t.inflightRequestLock.Lock()
+	hopCh := make(chan Hop, 1)
+	t.inflightRequest[SrcPort] = hopCh
+	t.inflightRequestLock.Unlock()
+	defer func() {
+		t.inflightRequestLock.Lock()
+		delete(t.inflightRequest, SrcPort)
+		t.inflightRequestLock.Unlock()
+	}()
 
 	ipHeader := &layers.IPv6{
-		SrcIP:      srcIP,
+		SrcIP:      t.SrcIP,
 		DstIP:      t.DestIP,
-		NextHeader: layers.IPProtocolUDP,
 		HopLimit:   uint8(ttl),
+		NextHeader: layers.IPProtocolUDP,
 	}
 
 	udpHeader := &layers.UDP{
-		SrcPort: layers.UDPPort(srcPort),
+		SrcPort: layers.UDPPort(SrcPort),
 		DstPort: layers.UDPPort(t.DestPort),
 	}
 	_ = udpHeader.SetNetworkLayerForChecksum(ipHeader)
+
 	buf := gopacket.NewSerializeBuffer()
 	opts := gopacket.SerializeOptions{
 		ComputeChecksums: true,
@@ -291,104 +315,70 @@ func (t *UDPTracerIPv6) send(ttl int) error {
 	}
 
 	desiredPayloadSize := t.Config.PktSize
-	if desiredPayloadSize-8 > 0 {
-		desiredPayloadSize -= 8
-	}
 	payload := make([]byte, desiredPayloadSize)
 	// 设置随机种子
-	rand.Seed(time.Now().UnixNano())
-
-	// 填充随机数
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for i := range payload {
-		payload[i] = byte(rand.Intn(256))
+		payload[i] = byte(r.Intn(256))
 	}
 
 	if err := gopacket.SerializeLayers(buf, opts, udpHeader, gopacket.Payload(payload)); err != nil {
 		return err
 	}
-
-	err = ipv6.NewPacketConn(udpConn).SetHopLimit(ttl)
-	if err != nil {
+	// 串行设置 HopLimit + 发送，放在同一把锁里保证并发安全
+	t.hopLimitLock.Lock()
+	if err := t.udpConn.SetHopLimit(ttl); err != nil {
+		t.hopLimitLock.Unlock()
 		return err
 	}
-
 	start := time.Now()
-	if _, err := udpConn.WriteTo(buf.Bytes(), &net.UDPAddr{IP: t.DestIP, Port: t.DestPort}); err != nil {
+	if _, err := t.udp.WriteTo(buf.Bytes(), &net.IPAddr{IP: t.DestIP}); err != nil {
+		t.hopLimitLock.Unlock()
 		return err
 	}
-
-	// 在对inflightRequest进行写操作的时候应该加锁保护，以免多个goroutine协程试图同时写入造成panic
-	t.inflightRequestLock.Lock()
-	hopCh := make(chan Hop, 1)
-	t.inflightRequest[srcPort] = hopCh
-	t.inflightRequestLock.Unlock()
-	defer func() {
-		t.inflightRequestLock.Lock()
-		close(hopCh)
-		delete(t.inflightRequest, srcPort)
-		t.inflightRequestLock.Unlock()
-	}()
-
-	go func() {
-		reply := make([]byte, 1500)
-		_, peer, err := udpConn.ReadFrom(reply)
-		if err != nil {
-			// probably because we closed the connection
-			return
-		}
-		hopCh <- Hop{
-			Success: true,
-			Address: &net.IPAddr{IP: peer.(*net.UDPAddr).IP},
-		}
-	}()
+	t.hopLimitLock.Unlock()
 
 	select {
-	case <-t.ctx.Done():
-		return nil
+	case <-ctx.Done():
+		return context.Canceled
 	case h := <-hopCh:
 		rtt := time.Since(start)
-		if t.final != -1 && ttl > t.final {
+		if f := t.final.Load(); f != -1 && ttl > int(f) {
 			return nil
 		}
-		if addr, ok := h.Address.(*net.IPAddr); ok && addr.IP.Equal(t.DestIP) {
-			t.finalLock.Lock()
-			if t.final == -1 || ttl < t.final {
-				t.final = ttl
+
+		if ip := util.AddrIP(h.Address); ip != nil && ip.Equal(t.DestIP) {
+			for {
+				old := t.final.Load()
+				if old != -1 && ttl >= int(old) {
+					break
+				}
+				if t.final.CompareAndSwap(old, int32(ttl)) {
+					break
+				}
 			}
-			t.finalLock.Unlock()
-		} else if addr, ok := h.Address.(*net.UDPAddr); ok && addr.IP.Equal(t.DestIP) {
-			t.finalLock.Lock()
-			if t.final == -1 || ttl < t.final {
-				t.final = ttl
-			}
-			t.finalLock.Unlock()
 		}
 
 		h.TTL = ttl
 		h.RTT = rtt
 
-		t.fetchLock.Lock()
-		defer t.fetchLock.Unlock()
-		err := h.fetchIPData(t.Config)
-		if err != nil {
+		if err := h.fetchIPData(t.Config); err != nil {
 			return err
 		}
-
-		t.res.add(h)
-
+		t.res.addLegacy(h)
 	case <-time.After(t.Timeout):
-		if t.final != -1 && ttl > t.final {
+		if f := t.final.Load(); f != -1 && ttl > int(f) {
 			return nil
 		}
 
-		t.res.add(Hop{
+		h := Hop{
 			Success: false,
 			Address: nil,
 			TTL:     ttl,
 			RTT:     0,
 			Error:   ErrHopLimitTimeout,
-		})
+		}
+		t.res.addLegacy(h)
 	}
-
 	return nil
 }

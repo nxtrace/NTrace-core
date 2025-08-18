@@ -8,13 +8,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tidwall/gjson"
+
 	"github.com/nxtrace/NTrace-core/config"
 	"github.com/nxtrace/NTrace-core/util"
-
-	"github.com/tidwall/gjson"
 )
 
-// Language mapping for IPDB.One API
+// LangMap shows language mapping for IPDB.One API
 var LangMap = map[string]string{
 	"en": "en",
 	"cn": "zh",
@@ -30,9 +30,9 @@ type IPDBOneConfig struct {
 // GetDefaultConfig returns the default configuration with fallback values
 func GetDefaultConfig() *IPDBOneConfig {
 	return &IPDBOneConfig{
-		BaseURL: util.GetenvDefault("IPDBONE_BASE_URL", "https://api.ipdb.one"),
-		ApiID:   util.GetenvDefault("IPDBONE_API_ID", ""),
-		ApiKey:  util.GetenvDefault("IPDBONE_API_KEY", ""),
+		BaseURL: util.GetEnvDefault("IPDBONE_BASE_URL", "https://api.ipdb.one"),
+		ApiID:   util.GetEnvDefault("IPDBONE_API_ID", ""),
+		ApiKey:  util.GetEnvDefault("IPDBONE_API_KEY", ""),
 	}
 }
 

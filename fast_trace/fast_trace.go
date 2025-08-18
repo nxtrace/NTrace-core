@@ -3,19 +3,21 @@ package fastTrace
 import (
 	"bufio"
 	"fmt"
-	"github.com/fatih/color"
-	"github.com/nxtrace/NTrace-core/ipgeo"
-	"github.com/nxtrace/NTrace-core/printer"
-	"github.com/nxtrace/NTrace-core/trace"
-	"github.com/nxtrace/NTrace-core/tracelog"
-	"github.com/nxtrace/NTrace-core/util"
-	"github.com/nxtrace/NTrace-core/wshandle"
 	"log"
 	"net"
 	"os"
 	"os/signal"
 	"strings"
 	"time"
+
+	"github.com/fatih/color"
+
+	"github.com/nxtrace/NTrace-core/ipgeo"
+	"github.com/nxtrace/NTrace-core/printer"
+	"github.com/nxtrace/NTrace-core/trace"
+	"github.com/nxtrace/NTrace-core/tracelog"
+	"github.com/nxtrace/NTrace-core/util"
+	"github.com/nxtrace/NTrace-core/wshandle"
 )
 
 type FastTracer struct {
@@ -291,7 +293,7 @@ func testFile(paramsFastTrace ParamsFastTrace, traceMode trace.Method) {
 		fmt.Fprintf(color.Output, "%s\n",
 			color.New(color.FgYellow, color.Bold).Sprint("『 "+ip.Desc+"』"),
 		)
-		if util.EnableHidDstIP == "" {
+		if !util.EnableHidDstIP {
 			fmt.Printf("traceroute to %s, %d hops max, %d bytes payload, %s mode\n", ip.Ip, paramsFastTrace.MaxHops, paramsFastTrace.PktSize, strings.ToUpper(string(tracerouteMethod)))
 		} else {
 			fmt.Printf("traceroute to %s, %d hops max, %d bytes payload, %s mode\n", util.HideIPPart(ip.Ip), paramsFastTrace.MaxHops, paramsFastTrace.PktSize, strings.ToUpper(string(tracerouteMethod)))

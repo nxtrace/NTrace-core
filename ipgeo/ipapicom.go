@@ -2,7 +2,6 @@ package ipgeo
 
 import (
 	"errors"
-	"github.com/nxtrace/NTrace-core/util"
 	"io"
 	"log"
 	"net/http"
@@ -11,6 +10,8 @@ import (
 	"time"
 
 	"github.com/tidwall/gjson"
+
+	"github.com/nxtrace/NTrace-core/util"
 )
 
 func IPApiCom(ip string, timeout time.Duration, _ string, _ bool) (*IPGeoData, error) {

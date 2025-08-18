@@ -2,17 +2,19 @@ package fastTrace
 
 import (
 	"fmt"
+	"log"
+	"os"
+	"os/signal"
+	"strings"
+
 	"github.com/fatih/color"
+
 	"github.com/nxtrace/NTrace-core/ipgeo"
 	"github.com/nxtrace/NTrace-core/printer"
 	"github.com/nxtrace/NTrace-core/trace"
 	"github.com/nxtrace/NTrace-core/tracelog"
 	"github.com/nxtrace/NTrace-core/util"
 	"github.com/nxtrace/NTrace-core/wshandle"
-	"log"
-	"os"
-	"os/signal"
-	"strings"
 )
 
 //var pFastTracer ParamsFastTrace

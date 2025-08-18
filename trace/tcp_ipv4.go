@@ -1,179 +1,292 @@
 package trace
 
 import (
+	"context"
+	"errors"
 	"log"
-	"math"
 	"math/rand"
 	"net"
+	"os"
+	"os/signal"
 	"sync"
+	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
-	"github.com/nxtrace/NTrace-core/util"
-	"golang.org/x/net/context"
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv4"
 	"golang.org/x/sync/semaphore"
+
+	"github.com/nxtrace/NTrace-core/util"
 )
 
 type TCPTracer struct {
 	Config
 	wg                  sync.WaitGroup
 	res                 Result
-	ctx                 context.Context
 	inflightRequest     map[int]chan Hop
-	inflightRequestLock sync.Mutex
+	inflightRequestLock sync.RWMutex
 	SrcIP               net.IP
 	icmp                net.PacketConn
 	tcp                 net.PacketConn
-
-	final     int
-	finalLock sync.Mutex
-
-	sem       *semaphore.Weighted
-	fetchLock sync.Mutex
+	tcpConn             *ipv4.PacketConn
+	hopLimitLock        sync.Mutex
+	final               atomic.Int32
+	sem                 *semaphore.Weighted
 }
 
-func (t *TCPTracer) Execute() (*Result, error) {
+func (t *TCPTracer) PrintFunc(ctx context.Context, status chan<- bool) {
+	defer t.wg.Done()
+	// 默认认为是正常退出，只有在 ctx 取消时改为 false
+	normalExit := true
+	defer func() {
+		select {
+		case status <- normalExit:
+		default:
+		}
+		close(status)
+	}()
+	ttl := t.Config.BeginHop - 1
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if t.AsyncPrinter != nil {
+			t.AsyncPrinter(&t.res)
+		}
+		// 接收的时候检查一下是不是 3 跳都齐了
+		if ttl < len(t.res.Hops) &&
+			len(t.res.Hops[ttl]) == t.NumMeasurements {
+			if t.RealtimePrinter != nil {
+				t.RealtimePrinter(&t.res, ttl)
+			}
+			ttl++
+			if ttl == int(t.final.Load()) || ttl >= t.MaxHops {
+				return
+			}
+		}
+		select {
+		case <-ctx.Done():
+			// 非正常退出
+			normalExit = false
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+func (t *TCPTracer) ttlComp(ttl int) bool {
+	idx := ttl - 1
+	t.res.lock.RLock()
+	defer t.res.lock.RUnlock()
+	return idx < len(t.res.Hops) && len(t.res.Hops[idx]) >= t.NumMeasurements
+}
+
+func (t *TCPTracer) launchTTL(ctx context.Context, ttl int) {
+	go func(ttl int) {
+		for i := 0; i < t.MaxAttempts; i++ {
+			// 若此 TTL 已完成或 ctx 已取消，则不再发起新的尝试
+			if t.ttlComp(ttl) || ctx.Err() != nil {
+				return
+			}
+			t.wg.Add(1)
+			go func(ttl, i int) {
+				if err := t.send(ctx, ttl, i); err != nil && !errors.Is(err, context.Canceled) {
+					log.Printf("send failed: ttl=%d i=%d: %v", ttl, i, err)
+				}
+			}(ttl, i)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(time.Millisecond * time.Duration(t.Config.PacketInterval)):
+			}
+		}
+	}(ttl)
+}
+
+func (t *TCPTracer) Execute() (res *Result, err error) {
+	// 初始化 inflightRequest map
+	t.inflightRequest = make(map[int]chan Hop)
+
 	if len(t.res.Hops) > 0 {
 		return &t.res, ErrTracerouteExecuted
 	}
-
-	t.SrcIP, _ = util.LocalIPPort(t.DestIP)
-
-	var err error
-	if t.SrcAddr != "" {
-		t.tcp, err = net.ListenPacket("ip4:tcp", t.SrcAddr)
-	} else {
-		t.tcp, err = net.ListenPacket("ip4:tcp", t.SrcIP.String())
+	// 初始化 Result.Hops，并预分配到 MaxHops
+	t.res.Hops = make([][]Hop, t.MaxHops)
+	// 解析并校验用户指定的 IPv4 源地址
+	SrcAddr := net.ParseIP(t.SrcAddr).To4()
+	if t.SrcAddr != "" && SrcAddr == nil {
+		return nil, errors.New("invalid IPv4 SrcAddr:" + t.SrcAddr)
 	}
 
+	t.SrcIP, _ = util.LocalIPPort(t.DestIP, SrcAddr, "tcp")
+	if t.SrcIP == nil {
+		return nil, errors.New("cannot determine local IPv4 address")
+	}
+
+	t.tcp, err = net.ListenPacket("ip4:tcp", t.SrcIP.String())
 	if err != nil {
 		return nil, err
 	}
-	t.icmp, err = icmp.ListenPacket("ip4:icmp", t.SrcAddr)
+	defer func() {
+		if c := t.tcp; c != nil { // 先拷一份引用，避免 defer 执行时 t.tcp 已被并发改写
+			_ = c.Close()
+		}
+	}()
+
+	t.tcpConn = ipv4.NewPacketConn(t.tcp)
+
+	t.icmp, err = icmp.ListenPacket("ip4:icmp", t.SrcIP.String())
 	if err != nil {
 		return &t.res, err
 	}
-	defer t.icmp.Close()
+	defer func() {
+		if c := t.icmp; c != nil { // 先拷一份引用，避免 defer 执行时 t.icmp 已被并发改写
+			_ = c.Close()
+		}
+	}()
 
-	var cancel context.CancelFunc
-	t.ctx, cancel = context.WithCancel(context.Background())
-	defer cancel()
-	t.inflightRequestLock.Lock()
-	t.inflightRequest = make(map[int]chan Hop)
-	t.inflightRequestLock.Unlock()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
-	t.final = -1
+	t.final.Store(-1)
 
-	go t.listenICMP()
-	go t.listenTCP()
+	t.wg.Add(1)
+	go t.listenICMP(ctx)
+	t.wg.Add(1)
+	go t.listenTCP(ctx)
+	statusCh := make(chan bool, 1)
+	t.wg.Add(1)
+	go t.PrintFunc(ctx, statusCh)
 
 	t.sem = semaphore.NewWeighted(int64(t.ParallelRequests))
 
-	for ttl := t.BeginHop; ttl <= t.MaxHops; ttl++ {
-		// 如果到达最终跳，则退出
-		if t.final != -1 && ttl > t.final {
-			break
-		}
-		for i := 0; i < t.NumMeasurements; i++ {
-			t.wg.Add(1)
-			go t.send(ttl)
-			<-time.After(time.Millisecond * time.Duration(t.Config.PacketInterval))
-		}
-		if t.RealtimePrinter != nil {
-			// 对于实时模式，应该按照TTL进行并发请求
-			t.wg.Wait()
-			t.RealtimePrinter(&t.res, ttl-1)
-		}
-
-		<-time.After(time.Millisecond * time.Duration(t.Config.TTLInterval))
-	}
+	t.wg.Add(1)
 	go func() {
-		if t.AsyncPrinter != nil {
-			for {
-				t.AsyncPrinter(&t.res)
-				time.Sleep(200 * time.Millisecond)
+		defer t.wg.Done()
+		// 立即启动 BeginHop 对应的 TTL 组
+		t.launchTTL(ctx, t.BeginHop)
+		// 之后按 TTLInterval 周期启动后续 TTL 组
+		ticker := time.NewTicker(time.Millisecond * time.Duration(t.Config.TTLInterval))
+		defer ticker.Stop()
+		for ttl := t.BeginHop + 1; ttl <= t.MaxHops; ttl++ {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
 			}
+			// 如果到达最终跳，则退出
+			if f := t.final.Load(); f != -1 && ttl > int(f) {
+				return
+			}
+			// 并发启动这个 TTL 的所有测量
+			t.launchTTL(ctx, ttl)
 		}
-
 	}()
-
-	// 如果是表格模式，则一次性并发请求
-	if t.RealtimePrinter == nil {
-		t.wg.Wait()
+	normalExit := <-statusCh
+	stop()
+	t.wg.Wait()
+	t.res.reduce(int(t.final.Load()))
+	if !normalExit {
+		return &t.res, context.Canceled
 	}
-	t.res.reduce(t.final)
-
 	return &t.res, nil
 }
 
-func (t *TCPTracer) listenICMP() {
-	lc := NewPacketListener(t.icmp, t.ctx)
-	go lc.Start()
+func (t *TCPTracer) listenICMP(ctx context.Context) {
+	defer t.wg.Done()
+	lc := NewPacketListener(t.icmp)
+	go lc.Start(ctx)
 	for {
 		select {
-		case <-t.ctx.Done():
+		case <-ctx.Done():
 			return
-		case msg := <-lc.Messages:
+		case msg, ok := <-lc.Messages:
+			if !ok {
+				return
+			}
 			if msg.N == nil {
 				continue
 			}
-			dstip := net.IP(msg.Msg[24:28])
-			if dstip.Equal(t.DestIP) {
-				rm, err := icmp.ParseMessage(1, msg.Msg[:*msg.N])
-				if err != nil {
-					log.Println(err)
+			rm, err := icmp.ParseMessage(1, msg.Msg[:*msg.N])
+			if err != nil {
+				log.Println(err)
+				continue
+			}
+			var data []byte
+			switch rm.Type {
+			case ipv4.ICMPTypeTimeExceeded:
+				body, ok := rm.Body.(*icmp.TimeExceeded)
+				if !ok || body == nil {
 					continue
 				}
-				switch rm.Type {
-				case ipv4.ICMPTypeTimeExceeded:
-					t.handleICMPMessage(msg, rm.Body.(*icmp.TimeExceeded).Data)
-				case ipv4.ICMPTypeDestinationUnreachable:
-					t.handleICMPMessage(msg, rm.Body.(*icmp.DstUnreach).Data)
-				default:
-					//log.Println("received icmp message of unknown type", rm.Type)
+				data = body.Data
+			case ipv4.ICMPTypeDestinationUnreachable:
+				body, ok := rm.Body.(*icmp.DstUnreach)
+				if !ok || body == nil {
+					continue
 				}
+				data = body.Data
+			default:
+				continue
+				//log.Println("received icmp message of unknown type", rm.Type)
+			}
+			if len(data) < 20 || data[0]>>4 != 4 {
+				continue
+			}
+			dstip := net.IP(data[16:20])
+			if dstip.Equal(t.DestIP) || dstip.Equal(net.IPv4zero) {
+				t.handleICMPMessage(msg, data)
 			}
 		}
 	}
-
 }
 
 // @title    listenTCP
 // @description   监听TCP的响应数据包
-func (t *TCPTracer) listenTCP() {
-	lc := NewPacketListener(t.tcp, t.ctx)
-	go lc.Start()
-
+func (t *TCPTracer) listenTCP(ctx context.Context) {
+	defer t.wg.Done()
+	lc := NewPacketListener(t.tcp)
+	go lc.Start(ctx)
 	for {
 		select {
-		case <-t.ctx.Done():
+		case <-ctx.Done():
 			return
-		case msg := <-lc.Messages:
+		case msg, ok := <-lc.Messages:
+			if !ok {
+				return
+			}
 			if msg.N == nil {
 				continue
 			}
-			if msg.Peer.String() != t.DestIP.String() {
-				continue
-			}
+			if ip := util.AddrIP(msg.Peer); ip != nil && ip.Equal(t.DestIP) {
+				// 解包
+				packet := gopacket.NewPacket(msg.Msg[:*msg.N], layers.LayerTypeTCP, gopacket.Default)
+				// 从包中获取TCP layer信息
+				if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {
+					tcp, _ := tcpLayer.(*layers.TCP)
+					// 从对端返回的 ACK-1 恢复出原始探测包的 seq
+					seq := int(tcp.Ack - 1)
+					// 取出通道后立刻解锁
+					t.inflightRequestLock.RLock()
+					ch, ok := t.inflightRequest[seq]
+					t.inflightRequestLock.RUnlock()
+					if !ok || ch == nil {
+						continue
+					}
 
-			// 解包
-			packet := gopacket.NewPacket(msg.Msg[:*msg.N], layers.LayerTypeTCP, gopacket.Default)
-			// 从包中获取TCP layer信息
-			if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {
-				tcp, _ := tcpLayer.(*layers.TCP)
-				// 取得目标主机的Sequence Number
-				t.inflightRequestLock.Lock()
-				if ch, ok := t.inflightRequest[int(tcp.Ack-1)]; ok {
-					// 最后一跳
-					ch <- Hop{
+					h := Hop{
 						Success: true,
 						Address: msg.Peer,
 					}
+					// 非阻塞发送，避免重复回包把缓冲塞满导致阻塞
+					select {
+					case ch <- h:
+					default:
+						// 丢弃重复/迟到的相同 seq 回包，避免阻塞
+					}
 				}
-				t.inflightRequestLock.Unlock()
 			}
 		}
 	}
@@ -184,55 +297,86 @@ func (t *TCPTracer) handleICMPMessage(msg ReceivedMessage, data []byte) {
 	if err != nil {
 		return
 	}
-	sequenceNumber := util.GetTCPSeq(header)
-	t.inflightRequestLock.Lock()
-	defer t.inflightRequestLock.Unlock()
-	ch, ok := t.inflightRequest[int(sequenceNumber)]
-	if !ok {
+
+	seq, err := util.GetTCPSeq(header)
+	if err != nil {
 		return
 	}
-	ch <- Hop{
+	// 取出通道后立刻解锁
+	t.inflightRequestLock.RLock()
+	ch, ok := t.inflightRequest[int(seq)]
+	t.inflightRequestLock.RUnlock()
+	if !ok || ch == nil {
+		return
+	}
+
+	h := Hop{
 		Success: true,
 		Address: msg.Peer,
 	}
-
+	// 非阻塞发送，避免重复回包把缓冲塞满导致阻塞
+	select {
+	case ch <- h:
+	default:
+		// 丢弃重复/迟到的相同 seq 回包，避免阻塞
+	}
 }
 
-func (t *TCPTracer) send(ttl int) error {
-	err := t.sem.Acquire(context.Background(), 1)
-	if err != nil {
+func (t *TCPTracer) send(ctx context.Context, ttl, i int) error {
+	defer t.wg.Done()
+	if t.ttlComp(ttl) {
+		// 快路径短路：若该 TTL 已完成，直接返回避免竞争信号量与无谓发包
+		return nil
+	}
+
+	if err := t.sem.Acquire(ctx, 1); err != nil {
 		return err
 	}
 	defer t.sem.Release(1)
 
-	defer t.wg.Done()
-	if t.final != -1 && ttl > t.final {
+	if f := t.final.Load(); f != -1 && ttl > int(f) {
 		return nil
 	}
-	// 随机种子
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	_, srcPort := func() (net.IP, int) {
-		if util.EnvRandomPort == "" && t.SrcPort != 0 {
+
+	if t.ttlComp(ttl) {
+		// 竞态兜底：获取信号量期间可能已完成，再次检查以避免冗余发包
+		return nil
+	}
+	// 将 TTL 编码到高 8 位；将索引 i 编码到低 24 位
+	seq := (ttl << 24) | (i & 0xFFFFFF)
+
+	t.inflightRequestLock.Lock()
+	hopCh := make(chan Hop, 1)
+	t.inflightRequest[seq] = hopCh
+	t.inflightRequestLock.Unlock()
+	defer func() {
+		t.inflightRequestLock.Lock()
+		delete(t.inflightRequest, seq)
+		t.inflightRequestLock.Unlock()
+	}()
+
+	_, SrcPort := func() (net.IP, int) {
+		if !util.RandomPortEnabled() && t.SrcPort > 0 {
 			return nil, t.SrcPort
 		}
-		return util.LocalIPPort(t.DestIP)
+		return util.LocalIPPort(t.DestIP, t.SrcIP, "tcp")
 	}()
+
 	ipHeader := &layers.IPv4{
 		SrcIP:    t.SrcIP,
 		DstIP:    t.DestIP,
 		Protocol: layers.IPProtocolTCP,
 		TTL:      uint8(ttl),
-		//Flags:    layers.IPv4DontFragment, // 我感觉没必要
+		//Flags:    layers.IPv4DontFragment,
 	}
 	if t.DontFragment {
 		ipHeader.Flags = layers.IPv4DontFragment
 	}
-	// 使用Uint16兼容32位系统，防止在rand的时候因使用int32而溢出
-	sequenceNumber := uint32(r.Intn(math.MaxUint16))
+
 	tcpHeader := &layers.TCP{
-		SrcPort: layers.TCPPort(srcPort),
+		SrcPort: layers.TCPPort(SrcPort),
 		DstPort: layers.TCPPort(t.DestPort),
-		Seq:     sequenceNumber,
+		Seq:     uint32(seq),
 		SYN:     true,
 		Window:  14600,
 	}
@@ -247,88 +391,68 @@ func (t *TCPTracer) send(ttl int) error {
 	desiredPayloadSize := t.Config.PktSize
 	payload := make([]byte, desiredPayloadSize)
 	// 设置随机种子
-	rand.Seed(time.Now().UnixNano())
-
-	// 填充随机数
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for i := range payload {
-		payload[i] = byte(rand.Intn(256))
+		payload[i] = byte(r.Intn(256))
 	}
 	//copy(buf.Bytes(), payload)
-
 	if err := gopacket.SerializeLayers(buf, opts, tcpHeader, gopacket.Payload(payload)); err != nil {
 		return err
 	}
-
-	err = ipv4.NewPacketConn(t.tcp).SetTTL(ttl)
-	if err != nil {
+	// 串行设置 TTL + 发送，放在同一把锁里保证并发安全
+	t.hopLimitLock.Lock()
+	if err := t.tcpConn.SetTTL(ttl); err != nil {
+		t.hopLimitLock.Unlock()
 		return err
 	}
-
 	start := time.Now()
 	if _, err := t.tcp.WriteTo(buf.Bytes(), &net.IPAddr{IP: t.DestIP}); err != nil {
+		t.hopLimitLock.Unlock()
 		return err
 	}
-	t.inflightRequestLock.Lock()
-	hopCh := make(chan Hop, 1)
-	t.inflightRequest[int(sequenceNumber)] = hopCh
-	t.inflightRequestLock.Unlock()
-	/*
-		// 这里属于 2个Sender，N个Receiver的情况，在哪里关闭Channel都容易导致Panic
-		defer func() {
-			t.inflightRequestLock.Lock()
-			close(hopCh)
-			delete(t.inflightRequest, srcPort)
-			t.inflightRequestLock.Unlock()
-		}()
-	*/
+	t.hopLimitLock.Unlock()
+
 	select {
-	case <-t.ctx.Done():
-		return nil
+	case <-ctx.Done():
+		return context.Canceled
 	case h := <-hopCh:
 		rtt := time.Since(start)
-		if t.final != -1 && ttl > t.final {
+		if f := t.final.Load(); f != -1 && ttl > int(f) {
 			return nil
 		}
 
-		if addr, ok := h.Address.(*net.IPAddr); ok && addr.IP.Equal(t.DestIP) {
-			t.finalLock.Lock()
-			if t.final == -1 || ttl < t.final {
-				t.final = ttl
+		if ip := util.AddrIP(h.Address); ip != nil && ip.Equal(t.DestIP) {
+			for {
+				old := t.final.Load()
+				if old != -1 && ttl >= int(old) {
+					break
+				}
+				if t.final.CompareAndSwap(old, int32(ttl)) {
+					break
+				}
 			}
-			t.finalLock.Unlock()
-		} else if addr, ok := h.Address.(*net.TCPAddr); ok && addr.IP.Equal(t.DestIP) {
-			t.finalLock.Lock()
-			if t.final == -1 || ttl < t.final {
-				t.final = ttl
-			}
-			t.finalLock.Unlock()
 		}
 
 		h.TTL = ttl
 		h.RTT = rtt
 
-		t.fetchLock.Lock()
-		defer t.fetchLock.Unlock()
-		err := h.fetchIPData(t.Config)
-		if err != nil {
+		if err := h.fetchIPData(t.Config); err != nil {
 			return err
 		}
-
-		t.res.add(h)
-
+		t.res.add(h, i, t.NumMeasurements, t.MaxAttempts)
 	case <-time.After(t.Timeout):
-		if t.final != -1 && ttl > t.final {
+		if f := t.final.Load(); f != -1 && ttl > int(f) {
 			return nil
 		}
 
-		t.res.add(Hop{
+		h := Hop{
 			Success: false,
 			Address: nil,
 			TTL:     ttl,
 			RTT:     0,
 			Error:   ErrHopLimitTimeout,
-		})
+		}
+		t.res.add(h, i, t.NumMeasurements, t.MaxAttempts)
 	}
-
 	return nil
 }

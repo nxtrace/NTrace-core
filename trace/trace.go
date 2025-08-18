@@ -10,6 +10,9 @@ import (
 	"syscall"
 	"time"
 
+	"golang.org/x/net/idna"
+	"golang.org/x/sync/singleflight"
+
 	"github.com/nxtrace/NTrace-core/ipgeo"
 	"github.com/nxtrace/NTrace-core/util"
 )
@@ -19,6 +22,8 @@ var (
 	ErrTracerouteExecuted = errors.New("traceroute already executed")
 	ErrHopLimitTimeout    = errors.New("hop timeout")
 	geoCache              = sync.Map{}
+	ipGeoSF               singleflight.Group
+	rdnsSF                singleflight.Group
 )
 
 type Config struct {
@@ -27,6 +32,7 @@ type Config struct {
 	BeginHop         int
 	MaxHops          int
 	NumMeasurements  int
+	MaxAttempts      int
 	ParallelRequests int
 	Timeout          time.Duration
 	DestIP           net.IP
@@ -70,6 +76,22 @@ func Traceroute(method Method, config Config) (*Result, error) {
 	if config.ParallelRequests == 0 {
 		config.ParallelRequests = config.NumMeasurements * 5
 	}
+	// 若 CLI 未给或给了非正数，则尝试用环境变量
+	if config.MaxAttempts <= 0 && util.EnvMaxAttempts > 0 {
+		config.MaxAttempts = util.EnvMaxAttempts
+	}
+
+	if config.MaxAttempts <= 0 || config.MaxAttempts < config.NumMeasurements {
+		n := config.NumMeasurements
+		switch {
+		case n <= 2 || n >= 10:
+			config.MaxAttempts = n // 1–2 或 ≥10 → n
+		case n <= 6:
+			config.MaxAttempts = n + 3 // 3–6 → n+3
+		default:
+			config.MaxAttempts = 10 // 7–9 → 10
+		}
+	}
 
 	switch method {
 	case ICMPTrace:
@@ -103,19 +125,67 @@ func Traceroute(method Method, config Config) (*Result, error) {
 
 type Result struct {
 	Hops        [][]Hop
-	lock        sync.Mutex
+	lock        sync.RWMutex
 	TraceMapUrl string
 }
 
-func (s *Result) add(hop Hop) {
+// 判定 Hop 是否“有效”
+func isValidHop(h Hop) bool {
+	return h.Success && h.Address != nil
+}
+
+// 新版 add：带审计/限容
+// - N = numMeasurements（每个 TTL 组的最小输出条数）
+// - M = maxAttempts（每个 TTL 组的最大尝试条数）
+// 规则：前 N-1 条无条件放行；第 N 条进行审计（已有有效 / 当次有效 / 达到最后一次尝试 任一成立即放行）；超过 N 条一律忽略
+func (s *Result) add(hop Hop, attemptIdx, numMeasurements, maxAttempts int) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
+
+	k := hop.TTL - 1
+	bucket := s.Hops[k]
+
+	n := numMeasurements
+
+	switch {
+	case len(bucket) < n-1:
+		// 前 N-1：无条件放行
+		s.Hops[k] = append(bucket, hop)
+		return
+	case len(bucket) == n-1:
+		// 正在决定第 N 条：审计
+		// 放行条件（三选一）：
+		// (1) 前 N-1 中已存在有效值
+		// (2) 当前 hop 为有效值
+		// (3) 已到最后一次尝试
+		hasValid := false
+		for _, h := range bucket {
+			if isValidHop(h) {
+				hasValid = true
+				break
+			}
+		}
+		if hasValid || isValidHop(hop) || (attemptIdx+1 >= maxAttempts) {
+			s.Hops[k] = append(bucket, hop) // 填满第 N 个
+		}
+		// 否则丢弃，等待后续更优候选（长度仍保持 N-1）
+		return
+	default:
+		// 已经有 N 条：忽略后续尝试
+		return
+	}
+}
+
+// 旧版 addLegacy
+func (s *Result) addLegacy(hop Hop) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
 	k := hop.TTL - 1
 	for len(s.Hops) < hop.TTL {
 		s.Hops = append(s.Hops, make([]Hop, 0))
 	}
 	s.Hops[k] = append(s.Hops[k], hop)
-
 }
 
 func (s *Result) reduce(final int) {
@@ -136,108 +206,191 @@ type Hop struct {
 	MPLS     []string
 }
 
-func (h *Hop) fetchIPData(c Config) (err error) {
+func isLDHASCII(label string) bool {
+	for i := 0; i < len(label); i++ {
+		b := label[i]
+		if b > 0x7F {
+			return false
+		}
+		if (b >= 'A' && b <= 'Z') || (b >= 'a' && b <= 'z') || (b >= '0' && b <= '9') || b == '-' {
+			continue
+		}
+		return false
+	}
+	return true
+}
 
+func CanonicalHostname(s string) string {
+	if s == "" {
+		return ""
+	}
+	// 去掉末尾点
+	if strings.HasSuffix(s, ".") {
+		s = strings.TrimSuffix(s, ".")
+	}
+	// 按标签逐个处理，确保仅对“需要”的标签做 IDNA 转换
+	parts := strings.Split(s, ".")
+	for i, label := range parts {
+		if label == "" {
+			continue // 防御：跳过空标签
+		}
+		if isLDHASCII(label) {
+			// 纯 ASCII 且仅含 LDH：保留原大小写，不做大小写折叠
+			continue
+		}
+		// 含非 ASCII 或不满足 LDH：对该标签做 IDNA 转 ASCII
+		if ascii, err := idna.Lookup.ToASCII(label); err == nil && ascii != "" {
+			parts[i] = ascii // punycode 一般小写；这是期望行为
+		}
+		// 若转换失败，保留原标签，不在此处返回错误（由调用链决定是否需要处理）
+	}
+	return strings.Join(parts, ".")
+}
+
+func (h *Hop) fetchIPData(c Config) (err error) {
+	ipStr := h.Address.String()
 	// DN42
 	if c.DN42 {
-		var ip string
-		// 首先查找 PTR 记录
-		r, err := util.LookupAddr(h.Address.String())
-		if err == nil && len(r) > 0 {
-			h.Hostname = r[0][:len(r[0])-1]
-			ip = h.Address.String() + "," + h.Hostname
+		var combined string
+		if c.RDns && h.Hostname == "" {
+			// singleflight 避免同一 IP 并发重复查询 PTR
+			v, _, _ := rdnsSF.Do(ipStr, func() (any, error) {
+				return util.LookupAddr(ipStr)
+			})
+			if ptrs, _ := v.([]string); len(ptrs) > 0 {
+				h.Hostname = CanonicalHostname(ptrs[0])
+				combined = ipStr + "," + h.Hostname
+			}
 		}
-		h.Geo, _ = c.IPGeoSource(ip, c.Timeout, c.Lang, c.Maptrace)
+		if combined == "" {
+			combined = ipStr
+		}
+
+		if c.IPGeoSource != nil {
+			// 如果缓存中已有结果，直接使用
+			if cacheVal, ok := geoCache.Load(combined); ok {
+				if g, ok := cacheVal.(*ipgeo.IPGeoData); ok && g != nil {
+					h.Geo = g
+					return nil
+				}
+			}
+			// singleflight 合并相同 key 的并发查询
+			v, err, _ := ipGeoSF.Do(combined, func() (any, error) {
+				timeout := c.Timeout
+				if timeout < 2*time.Second {
+					timeout = 2 * time.Second
+				}
+				return c.IPGeoSource(combined, timeout, c.Lang, c.Maptrace)
+			})
+			if err != nil {
+				return err
+			}
+			geo, ok := v.(*ipgeo.IPGeoData)
+			if !ok || geo == nil {
+				return errors.New("ipgeo: nil or bad type from singleflight (DN42)")
+			}
+			h.Geo = geo
+			// 如果缓存中无结果，进行查询并将结果存入缓存
+			geoCache.Store(combined, h.Geo)
+		}
 		return nil
 	}
+	// 地理信息查询：快速路径 -> 缓存 -> singleflight
+	ipGeoCh := make(chan error, 1)
+	go func() {
+		if c.IPGeoSource == nil || h.Geo != nil {
+			ipGeoCh <- nil
+			return
+		}
+		h.Lang = c.Lang
+		// (1) 本地快速路径
+		if g, ok := ipgeo.Filter(ipStr); ok {
+			h.Geo = g
+			ipGeoCh <- nil
+			return
+		}
+		// (2) 如果缓存中已有结果，直接使用
+		if cacheVal, ok := geoCache.Load(ipStr); ok {
+			if g, ok := cacheVal.(*ipgeo.IPGeoData); ok && g != nil {
+				h.Geo = g
+				ipGeoCh <- nil
+				return
+			}
+		}
+		// (3) singleflight 去重
+		timeout := c.Timeout
+		if timeout < 2*time.Second {
+			timeout = 2 * time.Second
+		}
+		v, err, _ := ipGeoSF.Do(ipStr, func() (any, error) {
+			return c.IPGeoSource(ipStr, timeout, c.Lang, c.Maptrace)
+		})
+		if err != nil {
+			ipGeoCh <- err
+			return
+		}
+		geo, ok := v.(*ipgeo.IPGeoData)
+		if !ok || geo == nil {
+			ipGeoCh <- errors.New("ipgeo: nil or bad type from singleflight")
+			return
+		}
+		h.Geo = geo
+		geoCache.Store(ipStr, h.Geo)
+		ipGeoCh <- nil
+	}()
 
-	// Debug Area
-	// c.AlwaysWaitRDNS = true
-
-	// Initialize a rDNS Channel
-	rDNSChan := make(chan []string)
-	fetchDoneChan := make(chan bool)
-
-	if c.RDns && h.Hostname == "" {
-		// Create a rDNS Query go-routine
+	rdnsStarted := c.RDns && h.Hostname == ""
+	rdnsCh := make(chan []string, 1)
+	if rdnsStarted {
 		go func() {
-			r, err := util.LookupAddr(h.Address.String())
-			if err != nil {
-				// No PTR Record
-				rDNSChan <- nil
+			v, _, _ := rdnsSF.Do(ipStr, func() (any, error) {
+				return util.LookupAddr(ipStr)
+			})
+			if ptrs, _ := v.([]string); len(ptrs) > 0 {
+				rdnsCh <- ptrs
 			} else {
-				// One PTR Record is found
-				rDNSChan <- r
+				rdnsCh <- nil
 			}
 		}()
 	}
 
-	// Create Data Fetcher go-routine
-	go func() {
-		// Start to fetch IP Geolocation data
-		if c.IPGeoSource != nil && h.Geo == nil {
-			res := false
-			h.Lang = c.Lang
-			h.Geo, res = ipgeo.Filter(h.Address.String())
-			if !res {
-				timeout := c.Timeout
-				if c.Timeout < 2*time.Second {
-					timeout = 2 * time.Second
+	if c.AlwaysWaitRDNS {
+		// 必须等 PTR（1s 超时），然后再确保 IPGeo 完成
+		if rdnsStarted {
+			select {
+			case ptrs := <-rdnsCh:
+				if len(ptrs) > 0 {
+					h.Hostname = CanonicalHostname(ptrs[0])
 				}
-				//h.Geo, err = c.IPGeoSource(h.Address.String(), timeout, c.Lang, c.Maptrace)
-				if cacheVal, ok := geoCache.Load(h.Address.String()); ok {
-					// 如果缓存中已有结果，直接使用
-					h.Geo = cacheVal.(*ipgeo.IPGeoData)
-				} else {
-					// 如果缓存中无结果，进行查询并将结果存入缓存
-					h.Geo, err = c.IPGeoSource(h.Address.String(), timeout, c.Lang, c.Maptrace)
-					if err == nil {
-						geoCache.Store(h.Address.String(), h.Geo)
-					}
-				}
+			case <-time.After(1 * time.Second):
+				// 超时不阻塞
 			}
 		}
-		// Fetch Done
-		fetchDoneChan <- true
-	}()
-
-	// Select Close Flag
-	var selectClose bool
-	if !c.AlwaysWaitRDNS {
-		select {
-		case <-fetchDoneChan:
-			// When fetch done signal received, stop waiting PTR record
-		case ptr := <-rDNSChan:
-			// process result
-			if err == nil && len(ptr) > 0 {
-				h.Hostname = ptr[0][:len(ptr[0])-1]
-			}
-			selectClose = true
+		if err := <-ipGeoCh; err != nil {
+			return err
 		}
-	} else {
-		select {
-		case ptr := <-rDNSChan:
-			// process result
-			if err == nil && len(ptr) > 0 {
-				h.Hostname = ptr[0]
-			}
-		// 1 second timeout
-		case <-time.After(time.Second * 1):
-		}
-		selectClose = true
+		return nil
 	}
-
-	// When Select Close, fetchDoneChan Received will also be closed
-	if selectClose {
-		// New a receiver to prevent channel congestion
-		<-fetchDoneChan
+	// 非强制等待 PTR：依据率先完成者决定是否还等 PTR
+	if rdnsStarted {
+		select {
+		case err := <-ipGeoCh:
+			// 地理信息先完成：不再等待 PTR
+			return err
+		case ptrs := <-rdnsCh:
+			if len(ptrs) > 0 {
+				h.Hostname = CanonicalHostname(ptrs[0])
+			}
+			// 然后等待 IPGeo 完成
+			return <-ipGeoCh
+		}
 	}
-
-	return
+	// 未启动 rDNS，只需等待地理信息
+	return <-ipGeoCh
 }
 
 func extractMPLS(msg ReceivedMessage, data []byte) []string {
-	if util.DisableMPLS != "" {
+	if util.DisableMPLS {
 		return nil
 	}
 

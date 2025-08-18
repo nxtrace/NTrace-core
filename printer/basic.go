@@ -2,13 +2,14 @@ package printer
 
 import (
 	"fmt"
-	"github.com/nxtrace/NTrace-core/config"
-	"github.com/nxtrace/NTrace-core/trace"
-	"github.com/nxtrace/NTrace-core/util"
 	"net"
 	"strings"
 
 	"github.com/fatih/color"
+
+	"github.com/nxtrace/NTrace-core/config"
+	"github.com/nxtrace/NTrace-core/trace"
+	"github.com/nxtrace/NTrace-core/util"
 )
 
 var version = config.Version
@@ -84,7 +85,7 @@ func PrintTraceRouteNav(ip net.IP, domain string, dataOrigin string, maxHops int
 	} else {
 		srcAddr += " ->"
 	}
-	if util.EnableHidDstIP == "" {
+	if !util.EnableHidDstIP {
 		if ip.String() == domain {
 			fmt.Printf("%s %s, %d hops max, %d bytes payload, %s mode\n", srcAddr, ip.String(), maxHops, packetSize, strings.ToUpper(mode))
 		} else {

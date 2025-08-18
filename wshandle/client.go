@@ -2,8 +2,6 @@ package wshandle
 
 import (
 	"crypto/tls"
-	"github.com/nxtrace/NTrace-core/pow"
-	"github.com/nxtrace/NTrace-core/util"
 	"log"
 	"net"
 	"net/http"
@@ -15,6 +13,9 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+
+	"github.com/nxtrace/NTrace-core/pow"
+	"github.com/nxtrace/NTrace-core/util"
 )
 
 type WsConn struct {
@@ -103,9 +104,12 @@ func (c *WsConn) messageSendHandler() {
 			// 向 websocket 发起关闭连接任务
 			err := c.Conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 			if err != nil {
-				// log.Println("write close:", err)
-				//os.Exit(1)
-				panic(err)
+				if util.EnvDevMode {
+					panic(err)
+				} else {
+					log.Println("write close:", err)
+					os.Exit(1)
+				}
 			}
 			select {
 			// 等到了结果，直接退出
@@ -134,9 +138,12 @@ func (c *WsConn) recreateWsConn() {
 				jwtToken, err = pow.GetToken(util.GetPowProvider(), util.GetPowProvider(), port)
 			}
 			if err != nil {
-				//log.Println(err)
-				//os.Exit(1)
-				panic(err)
+				if util.EnvDevMode {
+					panic(err)
+				} else {
+					log.Println("write close:", err)
+					os.Exit(1)
+				}
 			}
 		} else {
 			// 使用 cacheToken
@@ -207,9 +214,12 @@ func createWsConn() *WsConn {
 			jwtToken, err = pow.GetToken(util.GetPowProvider(), util.GetPowProvider(), port)
 		}
 		if err != nil {
-			//log.Println(err)
-			//os.Exit(1)
-			panic(err)
+			if util.EnvDevMode {
+				panic(err)
+			} else {
+				log.Println("write close:", err)
+				os.Exit(1)
+			}
 		}
 		ua = []string{util.UserAgent}
 	}
