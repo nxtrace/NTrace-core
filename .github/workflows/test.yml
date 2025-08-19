@@ -33,7 +33,7 @@ jobs:
         with:
           go-version: '1.23'
       - name: Checkout codebase
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Test with unix
         if: ${{ matrix.os != 'windows-latest' }}
         run: sudo go test -v -ldflags=-checklinkname=0 -coverprofile='coverage.out' -covermode=count ./...
