@@ -99,9 +99,9 @@ func GetTCPSeq(data []byte) (uint32, error) {
 }
 
 func GetUDPSeq(data []byte) (uint16, error) {
-	if len(data) < 6 {
-		return 0, errors.New("inner IPv4 header too short")
+	if len(data) < 8 {
+		return 0, errors.New("length of udp header too short")
 	}
-	seqBytes := data[4:6]
+	seqBytes := data[6:8]
 	return binary.BigEndian.Uint16(seqBytes), nil
 }

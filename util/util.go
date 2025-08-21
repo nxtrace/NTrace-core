@@ -137,7 +137,7 @@ func getLocalIPPortv6(dstip net.IP, srcip net.IP, proto string) (net.IP, int) {
 		}
 		la, _ := con.LocalAddr().(*net.UDPAddr)
 		_ = con.Close()
-		if la == nil || la.IP == nil || la.IP.To16() == nil || la.IP.To4() != nil {
+		if la == nil || !IsIPv6(la.IP) {
 			return nil, -1
 		}
 		bindIP = la.IP
@@ -356,11 +356,99 @@ func ChecksumOK(data []byte) bool {
 		// 折叠进位
 		sum = (sum & 0xffff) + (sum >> 16)
 	}
+
 	// 奇数字节则末尾补 0
 	if len(data)%2 == 1 {
 		sum += uint32(data[len(data)-1]) << 8
 		sum = (sum & 0xffff) + (sum >> 16)
 	}
+
 	// 最终再折叠一次，保证 16 位
 	return (sum&0xffff)+(sum>>16) != 0xffff
+}
+
+// fold16 对 32 位累加和做 16 位一补折叠（包含 end-around carry）
+func fold16(sum uint32) uint16 {
+	for sum>>16 != 0 {
+		sum = (sum & 0xFFFF) + (sum >> 16)
+	}
+
+	return uint16(sum & 0xFFFF)
+}
+
+// addBytes 按大端把字节流每 16 位累加到 sum；若长度为奇数，最后 1 字节作为高位、低位补 0
+func addBytes(sum uint32, b []byte) uint32 {
+	for i := 0; i+1 < len(b); i += 2 {
+		sum += uint32(b[i])<<8 | uint32(b[i+1])
+	}
+
+	if len(b)%2 == 1 {
+		sum += uint32(b[len(b)-1]) << 8
+	}
+
+	return sum
+}
+
+// UDPBaseSum 在“UDP.Checksum 视为 0、payload[0:2]=0x0000”的前提下，计算 16 位一补和 S0
+func UDPBaseSum(srcip, dstip net.IP, srcPort, dstPort, udpLen int, payload []byte) uint16 {
+	sum := uint32(0)
+
+	if src4 := srcip.To4(); src4 != nil {
+		dst4 := dstip.To4()
+		sum = addBytes(sum, src4)
+		sum = addBytes(sum, dst4)
+		sum += uint32(0x0011)
+		sum += uint32(udpLen & 0xFFFF)
+	} else {
+		src16 := srcip.To16()
+		dst16 := dstip.To16()
+		sum = addBytes(sum, src16)
+		sum = addBytes(sum, dst16)
+
+		ulen := uint32(udpLen)
+		sum += (ulen >> 16) & 0xFFFF
+		sum += ulen & 0xFFFF
+
+		sum += uint32(0x0011)
+	}
+
+	sum += uint32(srcPort & 0xFFFF)
+	sum += uint32(dstPort & 0xFFFF)
+	sum += uint32(udpLen & 0xFFFF)
+
+	sum = addBytes(sum, payload)
+
+	return fold16(sum)
+}
+
+// FudgeWordForSeq 给定 S0 与目标 checksum（如 seq），返回应写入 payload[0:2] 的补偿值（16 位）
+// 原理：最终一补和 targetSum = ^targetChecksum；令补偿位 X，则 X = targetSum ⊕ (~S0)
+func FudgeWordForSeq(S0, targetChecksum uint16) uint16 {
+	targetSum := ^targetChecksum         // 目标一补和
+	x := uint32(targetSum) + uint32(^S0) // X = targetSum ⊕ (~S0)
+	return fold16(x)
+}
+
+// MakePayloadWithTargetChecksum 修改 payload，使最终 UDP.Checksum == targetChecksum
+// 要求：payload 长度 >= 2（前 2 字节作为补偿位写入）
+func MakePayloadWithTargetChecksum(payload []byte, srcip, dstip net.IP, srcPort, dstPort int, targetChecksum uint16) error {
+	if len(payload) < 2 {
+		return errors.New("payload too short, need >= 2 bytes for fudge")
+	}
+
+	// v4/v6 一致性校验
+	if (srcip.To4() == nil) != (dstip.To4() == nil) {
+		return errors.New("src/dst IP version mismatch (v4/v6)")
+	}
+
+	// 补偿位清零，再按“校验和字段=0”的前提计算 S0
+	payload[0], payload[1] = 0, 0
+	udpLen := 8 + len(payload)
+	S0 := UDPBaseSum(srcip, dstip, srcPort, dstPort, udpLen, payload)
+	fudge := FudgeWordForSeq(S0, targetChecksum)
+
+	// 回写补偿位（网络序）
+	payload[0] = byte(fudge >> 8)
+	payload[1] = byte(fudge)
+	return nil
 }

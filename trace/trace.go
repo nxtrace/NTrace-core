@@ -135,7 +135,7 @@ func isValidHop(h Hop) bool {
 	return h.Success && h.Address != nil
 }
 
-// 新版 add：带审计/限容
+// add 带审计/限容
 // - N = numMeasurements（每个 TTL 组的最小输出条数）
 // - M = maxAttempts（每个 TTL 组的最大尝试条数）
 // 规则：前 N-1 条无条件放行；第 N 条进行审计（已有有效 / 当次有效 / 达到最后一次尝试 任一成立即放行）；超过 N 条一律忽略
@@ -175,18 +175,6 @@ func (s *Result) add(hop Hop, attemptIdx, numMeasurements, maxAttempts int) {
 		// 已经有 N 条：忽略后续尝试
 		return
 	}
-}
-
-// 旧版 addLegacy
-func (s *Result) addLegacy(hop Hop) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	k := hop.TTL - 1
-	for len(s.Hops) < hop.TTL {
-		s.Hops = append(s.Hops, make([]Hop, 0))
-	}
-	s.Hops[k] = append(s.Hops[k], hop)
 }
 
 func (s *Result) reduce(final int) {

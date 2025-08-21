@@ -105,6 +105,11 @@ func Execute() {
 
 	domain := *str
 
+	// 仅在使用 UDP 探测时，确保 UDP 负载长度 ≥ 2
+	if *udp && *packetSize < 2 {
+		*packetSize = 2
+	}
+
 	var m trace.Method
 
 	switch {

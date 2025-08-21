@@ -116,7 +116,7 @@ func (t *TCPTracerIPv6) Execute() (res *Result, err error) {
 	t.res.Hops = make([][]Hop, t.MaxHops)
 	// 解析并校验用户指定的 IPv6 源地址
 	SrcAddr := net.ParseIP(t.SrcAddr)
-	if t.SrcAddr != "" && (SrcAddr == nil || SrcAddr.To4() != nil || SrcAddr.To16() == nil) {
+	if t.SrcAddr != "" && !util.IsIPv6(SrcAddr) {
 		return nil, errors.New("invalid IPv6 SrcAddr: " + t.SrcAddr)
 	}
 
