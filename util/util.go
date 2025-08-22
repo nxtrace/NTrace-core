@@ -17,6 +17,7 @@ import (
 	"github.com/nxtrace/NTrace-core/config"
 )
 
+var SrcDev string
 var SrcPort int
 var DestIP string
 var PowProviderParam = ""
@@ -58,16 +59,72 @@ func LookupAddr(addr string) ([]string, error) {
 		//fmt.Println("hit RdnsCache for", addr, hostname)
 		return []string{hostname.(string)}, nil
 	}
+
 	// 如果缓存中未找到，进行 DNS 查询
 	names, err := net.LookupAddr(addr)
 	if err != nil {
 		return nil, err
 	}
+
 	// 将查询结果存入缓存
 	if len(names) > 0 {
 		RdnsCache.Store(addr, names[0])
 	}
 	return names, nil
+}
+
+// FindDeviceByIP 根据给定 IPv4/IPv6 源地址返回所属网卡名，找不到返回 ""
+func FindDeviceByIP(srcip net.IP) string {
+	if SrcDev != "" {
+		return SrcDev
+	}
+
+	if srcip == nil {
+		return ""
+	}
+	is6 := IsIPv6(srcip)
+
+	var v4, v6 net.IP
+	if is6 {
+		v6 = srcip.To16()
+	} else {
+		v4 = srcip.To4()
+		if v4 == nil {
+			return ""
+		}
+	}
+
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return ""
+	}
+	for _, ifi := range ifaces {
+		addrs, _ := ifi.Addrs()
+		for _, a := range addrs {
+			var got net.IP
+			switch v := a.(type) {
+			case *net.IPNet:
+				got = v.IP
+			case *net.IPAddr:
+				got = v.IP
+			default:
+				continue
+			}
+			if got == nil {
+				continue
+			}
+			if is6 {
+				if g := got.To16(); g != nil && IsIPv6(got) && g.Equal(v6) {
+					return ifi.Name
+				}
+			} else {
+				if g := got.To4(); g != nil && g.Equal(v4) {
+					return ifi.Name
+				}
+			}
+		}
+	}
+	return ""
 }
 
 // getLocalIPPort（仅用于 IPv4）：
@@ -78,6 +135,7 @@ func getLocalIPPort(dstip net.IP, srcip net.IP, proto string) (net.IP, int) {
 	if dstip == nil || dstip.To4() == nil {
 		return nil, -1
 	}
+
 	// (1) 选定 bindIP：优先使用显式 srcip，否则通过 UDP 伪 connect 探测
 	var bindIP net.IP
 	if srcip != nil && srcip.To4() != nil {
@@ -95,6 +153,7 @@ func getLocalIPPort(dstip net.IP, srcip net.IP, proto string) (net.IP, int) {
 		}
 		bindIP = la.IP
 	}
+
 	// (2) 按需求测试端口可用性（仅本地 bind，不做网络握手）
 	switch proto {
 	case "tcp":
@@ -125,6 +184,7 @@ func getLocalIPPortv6(dstip net.IP, srcip net.IP, proto string) (net.IP, int) {
 	if !IsIPv6(dstip) {
 		return nil, -1
 	}
+
 	// (1) 选定 bindIP：优先使用显式 srcip，否则通过 UDP 伪 connect 探测
 	var bindIP net.IP
 	if srcip != nil && IsIPv6(srcip) {
@@ -142,6 +202,7 @@ func getLocalIPPortv6(dstip net.IP, srcip net.IP, proto string) (net.IP, int) {
 		}
 		bindIP = la.IP
 	}
+
 	// (2) 按需求测试端口可用性（仅本地 bind，不做网络握手）
 	switch proto {
 	case "tcp6":
@@ -170,10 +231,12 @@ func LocalIPPort(dstip net.IP, srcip net.IP, proto string) (net.IP, int) {
 	if RandomPortEnabled() {
 		return getLocalIPPort(dstip, srcip, proto)
 	}
+
 	// 否则仅计算一次并缓存
 	localIPOnce.Do(func() {
 		cachedLocalIP, cachedLocalPort = getLocalIPPort(dstip, srcip, proto)
 	})
+
 	if cachedLocalIP != nil {
 		return cachedLocalIP, cachedLocalPort
 	}
@@ -186,10 +249,12 @@ func LocalIPPortv6(dstip net.IP, srcip net.IP, proto string) (net.IP, int) {
 	if RandomPortEnabled() {
 		return getLocalIPPortv6(dstip, srcip, proto)
 	}
+
 	// 否则仅计算一次并缓存
 	localIPv6Once.Do(func() {
 		cachedLocalIPv6, cachedLocalPort6 = getLocalIPPortv6(dstip, srcip, proto)
 	})
+
 	if cachedLocalIPv6 != nil {
 		return cachedLocalIPv6, cachedLocalPort6
 	}

@@ -33,7 +33,7 @@ func NewPacketListener(conn net.PacketConn) *PacketListener {
 
 func (l *PacketListener) Start(ctx context.Context) {
 	defer close(l.ch)
-	// 取消就关闭连接，立刻打断 ReadFrom
+
 	go func() {
 		<-ctx.Done()
 		_ = l.Conn.Close()
@@ -48,6 +48,7 @@ func (l *PacketListener) Start(ctx context.Context) {
 			if errors.Is(err, net.ErrClosed) || ctx.Err() != nil {
 				return
 			}
+
 			// 限时等待投递错误；超时或取消就丢弃/退出
 			select {
 			case l.ch <- ReceivedMessage{Err: err}:
@@ -57,12 +58,16 @@ func (l *PacketListener) Start(ctx context.Context) {
 			}
 			continue
 		}
+		if n == 0 {
+			continue
+		}
+
 		// 拷贝出精确长度，避免 buf 复用带来的数据竞争
 		pkt := make([]byte, n)
 		copy(pkt, buf[:n])
-
 		nn := new(int)
 		*nn = n
+
 		// 限时等待投递数据；超时或取消就丢弃/退出
 		select {
 		case l.ch <- ReceivedMessage{N: nn, Peer: peer, Msg: pkt}:

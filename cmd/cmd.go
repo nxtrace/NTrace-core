@@ -238,6 +238,7 @@ func Execute() {
 
 	if *srcDev != "" {
 		dev, _ := net.InterfaceByName(*srcDev)
+		util.SrcDev = dev.Name
 		if addrs, err := dev.Addrs(); err == nil {
 			for _, addr := range addrs {
 				if (addr.(*net.IPNet).IP.To4() == nil) == (ip.To4() == nil) {

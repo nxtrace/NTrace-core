@@ -48,9 +48,11 @@ func (t *UDPTracer) PrintFunc(ctx context.Context, status chan<- bool) {
 		}
 		close(status)
 	}()
+
 	ttl := t.Config.BeginHop - 1
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
+
 	for {
 		if t.AsyncPrinter != nil {
 			t.AsyncPrinter(&t.res)
@@ -171,8 +173,8 @@ func (t *UDPTracer) Execute() (res *Result, err error) {
 
 		// 之后按 TTLInterval 周期启动后续 TTL 组
 		ticker := time.NewTicker(time.Millisecond * time.Duration(t.Config.TTLInterval))
-
 		defer ticker.Stop()
+
 		for ttl := t.BeginHop + 1; ttl <= t.MaxHops; ttl++ {
 			select {
 			case <-ctx.Done():
@@ -358,6 +360,7 @@ func (t *UDPTracer) send(ctx context.Context, ttl, i int) error {
 
 	desiredPayloadSize := t.Config.PktSize
 	payload := make([]byte, desiredPayloadSize)
+
 	// 设置随机种子
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for k := 2; k < desiredPayloadSize; k++ {
@@ -371,6 +374,7 @@ func (t *UDPTracer) send(ctx context.Context, ttl, i int) error {
 		return err
 	}
 
+	// 序列化 UDP 头与 payload 到缓冲区
 	if err := gopacket.SerializeLayers(buf, opts, udpHeader, gopacket.Payload(payload)); err != nil {
 		return err
 	}
@@ -416,6 +420,7 @@ func (t *UDPTracer) send(ctx context.Context, ttl, i int) error {
 		if err := h.fetchIPData(t.Config); err != nil {
 			return err
 		}
+
 		t.res.add(h, i, t.NumMeasurements, t.MaxAttempts)
 	case <-time.After(t.Timeout):
 		if f := t.final.Load(); f != -1 && ttl > int(f) {
@@ -429,6 +434,7 @@ func (t *UDPTracer) send(ctx context.Context, ttl, i int) error {
 			RTT:     0,
 			Error:   ErrHopLimitTimeout,
 		}
+
 		t.res.add(h, i, t.NumMeasurements, t.MaxAttempts)
 	}
 	return nil
