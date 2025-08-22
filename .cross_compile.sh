@@ -5,7 +5,7 @@ set -e
 DIST_PREFIX="nexttrace"
 DEBUG_MODE=${2}
 TARGET_DIR="dist"
-PLATFORMS="darwin/amd64 darwin/arm64 linux/386 linux/amd64 linux/arm64 linux/mips linux/mips64 linux/mipsle linux/mips64le windows/amd64 windows/arm64 openbsd/amd64 openbsd/arm64 freebsd/amd64 freebsd/arm64"
+PLATFORMS="linux/386 linux/amd64 linux/arm64 linux/mips linux/mips64 linux/mipsle linux/mips64le windows/amd64 windows/arm64 openbsd/amd64 openbsd/arm64 freebsd/amd64 freebsd/arm64"
 
 BUILD_VERSION="$(git describe --tags --always)"
 BUILD_DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
@@ -58,4 +58,24 @@ done
                         -w -s -checklinkname=0"
     fi
 
-
+if [ "$(uname)" = "Darwin" ]; then
+  for GOARCH in amd64 arm64; do
+    export CGO_ENABLED=1
+    export GOOS=darwin
+    export TARGET=${TARGET_DIR}/${DIST_PREFIX}_${GOOS}_${GOARCH}
+    echo "build => ${TARGET}"
+    if [ "${DEBUG_MODE}" = "debug" ]; then
+      go build -trimpath -gcflags "all=-N -l" -o "${TARGET}" \
+        -ldflags "-X 'github.com/nxtrace/NTrace-core/config.Version=${BUILD_VERSION}' \
+                  -X 'github.com/nxtrace/NTrace-core/config.BuildDate=${BUILD_DATE}' \
+                  -X 'github.com/nxtrace/NTrace-core/config.CommitID=${COMMIT_SHA1}' \
+                  -w -s -checklinkname=0"
+    else
+      go build -trimpath -o "${TARGET}" \
+        -ldflags "-X 'github.com/nxtrace/NTrace-core/config.Version=${BUILD_VERSION}' \
+                  -X 'github.com/nxtrace/NTrace-core/config.BuildDate=${BUILD_DATE}' \
+                  -X 'github.com/nxtrace/NTrace-core/config.CommitID=${COMMIT_SHA1}' \
+                  -w -s -checklinkname=0"
+    fi
+  done
+fi
