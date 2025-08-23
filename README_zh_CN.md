@@ -499,10 +499,18 @@ nexttrace --pow-provider sakura
 
 ## Others
 
-其他第三方 API 尽管集成在本项目内，但是具体的 TOS 以及 AUP，请详见第三方 API 官网。如遇到 IP 数据错误，也请直接联系他们纠错。
+- 其他第三方 API 尽管集成在本项目内，但是具体的 TOS 以及 AUP，请详见第三方 API 官网。如遇到 IP 数据错误，也请直接联系他们纠错。
 
-如何获取最新commit的新鲜出炉的二进制可执行文件？
->请前往GitHub Actions中最新一次 [Build & Release](https://github.com/nxtrace/Ntrace-V1/actions/workflows/build.yml) workflow.
+
+- 如何获取最新commit的新鲜出炉的二进制可执行文件？
+    >请前往GitHub Actions中最新一次 [Build & Release](https://github.com/nxtrace/Ntrace-V1/actions/workflows/build.yml) workflow.
+
+
+- 一些已知问题
+    + Windows 平台下，ICMP 模式须手动放行ICMP/ICMPv6防火墙
+    + Windows 平台下，TCP/UDP 模式暂不可用
+    + macOS 平台下，仅 ICMP 模式不需要提权运行
+    + 在一些情况下，同时运行多个 NextTrace 实例可能会导致互相干扰结果(目前仅在 TCP 模式下有观察到)
 
 ## IP 数据以及精准度说明
 
