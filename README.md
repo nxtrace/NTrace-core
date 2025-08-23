@@ -515,14 +515,22 @@ This Project uses [JetBrain Open-Source Project License](https://jb.gg/OpenSourc
 
 ### Others
 
-Although other third-party APIs are integrated in this project, please refer to the official website of the third-party APIs for specific TOS and AUP. If you encounter IP data errors, please contact them directly to correct them.
+- Although other third-party APIs are integrated in this project, please refer to the official website of the third-party APIs for specific TOS and AUP. If you encounter IP data errors, please contact them directly to correct them.
 
-For feedback related to corrections about IP information, we currently have two channels available:
->- [IP 错误报告汇总帖](https://github.com/orgs/nxtrace/discussions/222) in the GITHUB ISSUES section of this project (Recommended)
->- This project's dedicated correction email: `correction@nxtrace.org` (Please note that this email is only for correcting IP-related information. For other feedback, please submit an ISSUE)
 
-How to obtain the freshly baked binary executable of the latest commit?
-> Please go to the most recent [Build & Release](https://github.com/nxtrace/Ntrace-V1/actions/workflows/build.yml) workflow in GitHub Actions.
+- For feedback related to corrections about IP information, we currently have two channels available:
+    >- [IP 错误报告汇总帖](https://github.com/orgs/nxtrace/discussions/222) in the GITHUB ISSUES section of this project (Recommended)
+    >- This project's dedicated correction email: `correction@nxtrace.org` (Please note that this email is only for correcting IP-related information. For other feedback, please submit an ISSUE)
+
+
+- How to obtain the freshly baked binary executable of the latest commit?
+    > Please go to the most recent [Build & Release](https://github.com/nxtrace/Ntrace-V1/actions/workflows/build.yml) workflow in GitHub Actions.
+
+- Known Issues
+    + On Windows, ICMP mode requires manual firewall allowance for ICMP/ICMPv6
+    + On Windows, TCP/UDP modes are currently unavailable
+    + On macOS, only ICMP mode does not require elevated privileges
+    + In some cases, running multiple instances of NextTrace simultaneously may interfere with each other’s results (observed so far only in TCP mode)
 
 ## Star History
 
