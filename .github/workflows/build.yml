@@ -3,10 +3,8 @@ name: Build & Release
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
-    tags:
-      - "v*"
+    branches: [ main ]
+    tags: [ "v*" ]
     paths:
       - "**/*.go"
       - "go.mod"
@@ -19,228 +17,241 @@ on:
       - "go.mod"
       - "go.sum"
       - ".github/workflows/*.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-release-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        # Include amd64 on all platforms.
         goos: [windows, freebsd, openbsd, linux, dragonfly]
         goarch: [amd64, 386]
         exclude:
-          # Exclude i386 on dragonfly.
           - goarch: 386
             goos: dragonfly
         include:
-          # BEGIN Linux ARM 5 6 7
-          - goos: linux
-            goarch: arm
-            goarm: 7
-          - goos: linux
-            goarch: arm
-            goarm: 6
-          - goos: linux
-            goarch: arm
-            goarm: 5
-          # END Linux ARM 5 6 7
-          # BEGIN Android ARM 8
-          - goos: android
-            goarch: arm64
-          # END Android ARM 8
-          # Windows ARM
-          - goos: windows
-            goarch: arm64
-          - goos: windows
-            goarch: arm
-            goarm: 7
-          # BEGIN Other architectures
-          # BEGIN riscv64 & ARM64
-          - goos: linux
-            goarch: arm64
-          - goos: linux
-            goarch: riscv64
-          # END riscv64 & ARM64
-          # BEGIN MIPS
-          - goos: linux
-            goarch: mips64
-          - goos: linux
-            goarch: mips64le
-          - goos: linux
-            goarch: mipsle
-          - goos: linux
-            goarch: mips
-          - goos: linux
-            goarch: mipsle
-            gomips: softfloat
-          - goos: linux
-            goarch: mips
-            gomips: softfloat
-          # END MIPS
-          # BEGIN PPC
-          - goos: linux
-            goarch: ppc64
-          - goos: linux
-            goarch: ppc64le
-          # END PPC
-          # BEGIN FreeBSD ARM
-          - goos: freebsd
-            goarch: arm64
-          - goos: freebsd
-            goarch: arm
-            goarm: 7
-          # END FreeBSD ARM
-          # BEGIN S390X
-          - goos: linux
-            goarch: s390x
-          # END S390X
-          # END Other architectures
-          # BEGIN OPENBSD ARM
-          - goos: openbsd
-            goarch: arm64
-          - goos: openbsd
-            goarch: arm
-            goarm: 7
+          - { goos: linux,   goarch: arm,    goarm: 7 }
+          - { goos: linux,   goarch: arm,    goarm: 6 }
+          - { goos: linux,   goarch: arm,    goarm: 5 }
+          - { goos: android, goarch: arm64 }
+          - { goos: windows, goarch: arm64 }
+          - { goos: windows, goarch: arm,    goarm: 7 }
+          - { goos: linux,   goarch: arm64 }
+          - { goos: linux,   goarch: riscv64 }
+          - { goos: linux,   goarch: mips64 }
+          - { goos: linux,   goarch: mips64le }
+          - { goos: linux,   goarch: mipsle }
+          - { goos: linux,   goarch: mips }
+          - { goos: linux,   goarch: mipsle, gomips: softfloat }
+          - { goos: linux,   goarch: mips,   gomips: softfloat }
+          - { goos: linux,   goarch: ppc64 }
+          - { goos: linux,   goarch: ppc64le }
+          - { goos: freebsd, goarch: arm64 }
+          - { goos: freebsd, goarch: arm,    goarm: 7 }
+          - { goos: linux,   goarch: s390x }
+          - { goos: openbsd, goarch: arm64 }
+          - { goos: openbsd, goarch: arm,    goarm: 7 }
     env:
-      GOOS: ${{ matrix.goos }}
-      GOARCH: ${{ matrix.goarch }}
-      GOARM: ${{ matrix.goarm }}
-      GOMIPS: ${{ matrix.gomips }}
       CGO_ENABLED: 0
-    steps:
-      - name: Checkout codebase
-        uses: actions/checkout@v5
-      - name: Show workflow information
-        run: |
-          if [ ! -z $GOARM ]; then
-            export GOARM=v$GOARM
-          fi
-          export _NAME="nexttrace_${GOOS}_${GOARCH}${GOARM}"
-          if [ "$GOOS" == "windows" ]; then
-            export _NAME="$_NAME.exe"
-          fi
-          if [ "$GOMIPS" == "softfloat" ]; then
-            export _NAME="${_NAME}_softfolat"
-          fi
-          echo "GOOS: $GOOS, GOARCH: $GOARCH, GOARM: $GOARM, GOMIPS: $GOMIPS, RELEASE_NAME: $_NAME"
-          echo "ASSET_NAME=$_NAME" >> $GITHUB_ENV
-          echo "BUILD_VERSION=$(git describe --tags --always)" >> $GITHUB_ENV
-          echo "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_ENV
-          echo "COMMIT_SHA1=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.25.x'
-      - name: Get project dependencies
-        run: go mod download
-      - name: Build
-        run: |
-          go build -trimpath -o dist/${ASSET_NAME} \
-            -ldflags "-X 'github.com/nxtrace/NTrace-core/config.Version=${BUILD_VERSION}' \
-                      -X 'github.com/nxtrace/NTrace-core/config.BuildDate=${BUILD_DATE}' \
-                      -X 'github.com/nxtrace/NTrace-core/config.CommitID=${COMMIT_SHA1}'\
-                      -checklinkname=0 -w -s"
-      - name: Upload files to Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.ASSET_NAME }}
-          path: |
-            dist/${{ env.ASSET_NAME }}
-      - name: Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with: # 将下述可执行文件 release 上去
-          draft: true # Release草稿
-          files: |
-            dist/*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GT_Token }}
-
-  build-darwin:
-    runs-on: macos-latest
-    strategy:
-      matrix:
-        goarch: [ amd64, arm64 ]
-    env:
-      GOOS: darwin
+      GOOS:   ${{ matrix.goos }}
       GOARCH: ${{ matrix.goarch }}
-      CGO_ENABLED: 1
+      GOARM:  ${{ matrix.goarm }}
+      GOMIPS: ${{ matrix.gomips }}
     steps:
-      - name: Checkout codebase
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
 
-      - name: Show workflow information
-        run: |
-          export _NAME="nexttrace_${GOOS}_${GOARCH}"
-          echo "GOOS: $GOOS, GOARCH: $GOARCH, RELEASE_NAME=$_NAME"
-          echo "ASSET_NAME=$_NAME" >> $GITHUB_ENV
-          echo "BUILD_VERSION=$(git describe --tags --always)" >> $GITHUB_ENV
-          echo "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_ENV
-          echo "COMMIT_SHA1=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
-
-      - name: Set up Go
+      - name: Set up Go (built-in cache)
         uses: actions/setup-go@v5
         with:
           go-version: '1.25.x'
+          check-latest: true
+          cache: true
+
+      - name: Resolve build metadata
+        run: |
+          set -e
+          BUILD_VERSION="$(git describe --tags --always 2>/dev/null || echo dev)"
+          BUILD_DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          COMMIT_SHA1="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+
+          ARM_SUFFIX=""
+          if [ -n "${GOARM:-}" ]; then ARM_SUFFIX="v${GOARM}"; fi
+          NAME="nexttrace_${GOOS}_${GOARCH}${ARM_SUFFIX}"
+          if [ "${GOOS}" = "windows" ]; then NAME="${NAME}.exe"; fi
+          if [ "${GOMIPS:-}" = "softfloat" ]; then NAME="${NAME}_softfloat"; fi
+
+          echo "BUILD_VERSION=${BUILD_VERSION}" >> $GITHUB_ENV
+          echo "BUILD_DATE=${BUILD_DATE}"       >> $GITHUB_ENV
+          echo "COMMIT_SHA1=${COMMIT_SHA1}"     >> $GITHUB_ENV
+          echo "ASSET_NAME=${NAME}"             >> $GITHUB_ENV
+
       - name: Get project dependencies
         run: go mod download
+
       - name: Build
         run: |
-          go build -trimpath -o dist/${ASSET_NAME} \
-            -ldflags "-X 'github.com/nxtrace/NTrace-core/config.Version=${BUILD_VERSION}' \
-                      -X 'github.com/nxtrace/NTrace-core/config.BuildDate=${BUILD_DATE}' \
-                      -X 'github.com/nxtrace/NTrace-core/config.CommitID=${COMMIT_SHA1}' \
+          mkdir -p dist
+          go build -trimpath -o "dist/${ASSET_NAME}" \
+            -ldflags "-X github.com/nxtrace/NTrace-core/config.Version=${BUILD_VERSION} \
+                      -X github.com/nxtrace/NTrace-core/config.BuildDate=${BUILD_DATE} \
+                      -X github.com/nxtrace/NTrace-core/config.CommitID=${COMMIT_SHA1} \
                       -checklinkname=0 -w -s"
 
-      - name: Upload files to Artifacts
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.ASSET_NAME }}
           path: dist/${{ env.ASSET_NAME }}
 
-      - name: Release
-        if: startsWith(github.ref, 'refs/tags/v')
+  build-darwin:
+    runs-on: macos-latest
+    strategy:
+      matrix: { goarch: [ amd64, arm64 ] }
+    env:
+      GOOS: darwin
+      GOARCH: ${{ matrix.goarch }}
+      CGO_ENABLED: 1
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Go (built-in cache)
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          check-latest: true
+          cache: true
+
+      - name: Sanity check (Xcode/SDK/lipo/pcap)
+        run: |
+          set -e
+          xcode-select -p
+          SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
+          echo "$SDKROOT"
+          clang --version || true
+          xcrun -f lipo
+          command -v lipo >/dev/null || (echo "lipo not found"; exit 1)
+          test -f "$SDKROOT/usr/include/pcap/pcap.h" || (echo "pcap headers not found in SDK"; exit 1)
+
+      - name: Resolve build metadata + Darwin CGO flags
+        run: |
+          set -e
+          SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
+          if [ "${GOARCH}" = "amd64" ]; then ARCH_FLAG="-arch x86_64"; else ARCH_FLAG="-arch arm64"; fi
+          echo "CC=clang"       >> $GITHUB_ENV
+          echo "CXX=clang++"    >> $GITHUB_ENV
+          echo "CGO_CFLAGS=-isysroot ${SDKROOT} ${ARCH_FLAG} -mmacosx-version-min=11.0" >> $GITHUB_ENV
+          echo "CGO_LDFLAGS=-isysroot ${SDKROOT} ${ARCH_FLAG} -mmacosx-version-min=11.0" >> $GITHUB_ENV
+
+          BUILD_VERSION="$(git describe --tags --always 2>/dev/null || echo dev)"
+          BUILD_DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          COMMIT_SHA1="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+          NAME="nexttrace_${GOOS}_${GOARCH}"
+          echo "BUILD_VERSION=${BUILD_VERSION}" >> $GITHUB_ENV
+          echo "BUILD_DATE=${BUILD_DATE}"       >> $GITHUB_ENV
+          echo "COMMIT_SHA1=${COMMIT_SHA1}"     >> $GITHUB_ENV
+          echo "ASSET_NAME=${NAME}"             >> $GITHUB_ENV
+
+      - name: Get project dependencies
+        run: go mod download
+
+      - name: Build (Darwin, CGO+libpcap via SDK)
+        run: |
+          mkdir -p dist
+          go build -trimpath -o "dist/${ASSET_NAME}" \
+            -ldflags "-X github.com/nxtrace/NTrace-core/config.Version=${BUILD_VERSION} \
+                      -X github.com/nxtrace/NTrace-core/config.BuildDate=${BUILD_DATE} \
+                      -X github.com/nxtrace/NTrace-core/config.CommitID=${COMMIT_SHA1} \
+                      -checklinkname=0 -w -s"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ASSET_NAME }}
+          path: dist/${{ env.ASSET_NAME }}
+
+  # NEW: 构建 Universal，并上传为 Artifact（不依赖 tag）
+  darwin-universal:
+    runs-on: macos-latest
+    needs: [ build-darwin ]
+    steps:
+      - name: Download darwin slices (flatten)
+        uses: actions/download-artifact@v4
+        with:
+          pattern: nexttrace_darwin_*
+          merge-multiple: true
+          path: dist
+
+      - name: Make macOS Universal (amd64+arm64)
+        run: |
+          set -e
+          AMD64="dist/nexttrace_darwin_amd64"
+          ARM64="dist/nexttrace_darwin_arm64"
+          if [ -f "$AMD64" ] && [ -f "$ARM64" ]; then
+            lipo -create -output dist/nexttrace_darwin_universal "$AMD64" "$ARM64"
+            file dist/nexttrace_darwin_universal || true
+            echo "✅ Built: dist/nexttrace_darwin_universal"
+          else
+            echo "❌ Missing darwin slices; cannot build universal." >&2
+            exit 1
+          fi
+          ls -l dist
+
+      - name: Upload universal as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexttrace_darwin_universal
+          path: dist/nexttrace_darwin_universal
+
+  # 发布时仅下载所有 Artifact（包含 universal），直接发布
+  release:
+    runs-on: ubuntu-latest
+    needs: [ build, build-darwin, darwin-universal ]
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Download all artifacts (flatten)
+        uses: actions/download-artifact@v4
+        with:
+          pattern: nexttrace_*
+          merge-multiple: true
+          path: dist_release
+
+      - name: List payload
+        run: ls -l dist_release | sed -n '1,300p'
+
+      - name: Create GitHub Release (draft)
         uses: softprops/action-gh-release@v2
         with:
           draft: true
-          files: |
-            dist/*
+          files: dist_release/*
         env:
-          GITHUB_TOKEN: ${{ secrets.GT_Token }}
+          GITHUB_TOKEN: ${{ github.token }}
 
   publish-new-formula:
-    needs: build
-    # The type of runner that the job will run on
     runs-on: ubuntu-latest
+    needs: [ release ]
     if: startsWith(github.ref, 'refs/tags/v')
-
-    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      # Runs a single command using the runners shell
       - name: config git
         run: |
           git config --global user.email "${{ secrets.git_mail }}"
           git config --global user.name "${{ secrets.git_name }}"
       - name: Clone repo
-        run: |
-          git clone https://github.com/nxtrace/homebrew-nexttrace.git
-      - name: Exec scipt
+        run: git clone https://github.com/nxtrace/homebrew-nexttrace.git
+      - name: Exec script
         run: |
           cd homebrew-nexttrace
           bash genFormula.sh
-      # - name: setup SSH keys and known_hosts
-      #   run: |
-      #     mkdir -p ~/.ssh
-      #     ssh-keyscan github.com >> ~/.ssh/known_hosts
-      #     ssh-agent -a $SSH_AUTH_SOCK > /dev/null
-      #     ssh-add - <<< "${{ secrets.ID_RSA }}"
-      #   env:
-      #     SSH_AUTH_SOCK: /tmp/ssh_agent.sock
       - name: Git Push
         run: |
           cd homebrew-nexttrace
-          git commit -am 'Publish a new version with Formula' || true
+          git add -A
+          git commit -m 'Publish a new version with Formula' || true
           git remote set-url origin https://${{ secrets.gt_token }}@github.com/nxtrace/homebrew-nexttrace.git
           git push
-        # env:
-        #   SSH_AUTH_SOCK: /tmp/ssh_agent.sock
       - run: echo "🍏 This job's status is ${{ job.status }}."
