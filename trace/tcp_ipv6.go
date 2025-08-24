@@ -163,9 +163,14 @@ func (t *TCPTracerIPv6) Execute() (res *Result, err error) {
 	t.wg.Add(1)
 	go func() {
 		defer t.wg.Done()
-		internal.ListenTCP(ctx, t.tcp, 6, t.SrcIP, t.DestIP, func(ack uint32, peer net.Addr) {
-			// 从对端返回的 ack-1 恢复出原始探测包的 seq
-			seq := int(ack - 1)
+		internal.ListenTCP(ctx, t.tcp, 6, t.SrcIP, t.DestIP, func(ack uint32, peer net.Addr, ackType int) {
+			// 依据报文类型还原原始探测 seq：1=RST+ACK => ack-1-PktSize；2=SYN+ACK => ack-1
+			var seq int
+			if ackType == 1 {
+				seq = int(ack) - 1 - t.Config.PktSize
+			} else {
+				seq = int(ack) - 1
+			}
 
 			// 取出通道后立刻解锁
 			t.inflightRequestLock.RLock()

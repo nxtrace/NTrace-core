@@ -15,7 +15,7 @@ import (
 	"github.com/nxtrace/NTrace-core/util"
 )
 
-func ListenTCP(ctx context.Context, _ net.PacketConn, ipv int, srcip, dstip net.IP, onACK func(ack uint32, peer net.Addr)) {
+func ListenTCP(ctx context.Context, _ net.PacketConn, ipv int, srcip, dstip net.IP, onACK func(ack uint32, peer net.Addr, ackType int)) {
 	dev := util.FindDeviceByIP(srcip)
 	if dev == "" {
 		dev = "en0"
@@ -33,9 +33,9 @@ func ListenTCP(ctx context.Context, _ net.PacketConn, ipv int, srcip, dstip net.
 	}
 	defer handle.Close()
 
-	// 过滤：只抓{ip/ip6}+tcp，来自 (dstip) → 本机 (srcip)，且 RST 或 SYN+ACK
+	// 过滤：只抓{ip/ip6}+tcp，来自 (dstip) → 本机 (srcip)
 	filter := fmt.Sprintf(
-		"%s and tcp and src host %s and dst host %s and (tcp[13] & 0x04 != 0 or tcp[13] & 0x12 == 0x12)",
+		"%s and tcp and src host %s and dst host %s",
 		ipPrefix, dstip.String(), srcip.String(),
 	)
 	if err := handle.SetBPFFilter(filter); err != nil {
@@ -61,25 +61,33 @@ func ListenTCP(ctx context.Context, _ net.PacketConn, ipv int, srcip, dstip net.
 				continue
 			}
 
-			// 从包中获取TCP layer信息
-			if tl := pkt.Layer(layers.LayerTypeTCP); tl != nil {
-				tcpL := tl.(*layers.TCP)
-				switch ipv {
-				case 4:
-					if ip4, _ := packet.(*layers.IPv4); ip4 != nil {
-						onACK(tcpL.Ack, &net.IPAddr{IP: ip4.SrcIP})
-					} else {
-						continue
-					}
-				case 6:
-					if ip6, _ := packet.(*layers.IPv6); ip6 != nil {
-						onACK(tcpL.Ack, &net.IPAddr{IP: ip6.SrcIP})
-					} else {
-						continue
-					}
-				default:
+			// 从包中获取 TCP 层信息，并区分 RST+ACK / SYN+ACK
+			if tl, ok := pkt.Layer(layers.LayerTypeTCP).(*layers.TCP); ok {
+				var ackType int
+				if tl.ACK && tl.RST {
+					ackType = 1 // 1=RST+ACK
+				} else if tl.ACK && tl.SYN {
+					ackType = 2 // 2=SYN+ACK
+				} else {
 					continue
 				}
+
+				// 提取对端 IP（按族别）
+				var ip net.IP
+				if ipv == 4 {
+					if ip4, ok := packet.(*layers.IPv4); ok && ip4 != nil {
+						ip = ip4.SrcIP
+					}
+				} else {
+					if ip6, ok := packet.(*layers.IPv6); ok && ip6 != nil {
+						ip = ip6.SrcIP
+					}
+				}
+				peer := &net.IPAddr{IP: ip}
+				if util.AddrIP(peer) == nil {
+					continue
+				}
+				onACK(tl.Ack, peer, ackType)
 			}
 		}
 	}

@@ -13,7 +13,7 @@ import (
 	"github.com/nxtrace/NTrace-core/util"
 )
 
-func ListenTCP(ctx context.Context, tcp net.PacketConn, ipv int, _, dstip net.IP, onACK func(ack uint32, peer net.Addr)) {
+func ListenTCP(ctx context.Context, tcp net.PacketConn, ipv int, _, dstip net.IP, onACK func(ack uint32, peer net.Addr, ackType int)) {
 	if tcp == nil {
 		return
 	}
@@ -47,27 +47,22 @@ func ListenTCP(ctx context.Context, tcp net.PacketConn, ipv int, _, dstip net.IP
 		copy(pkt, buf[:n])
 
 		// 解包
-		var packet gopacket.Packet
-		if ipv == 4 {
-			packet = gopacket.NewPacket(pkt, layers.LayerTypeIPv4, gopacket.Default)
-		} else {
-			packet = gopacket.NewPacket(pkt, layers.LayerTypeIPv6, gopacket.Default)
-		}
-		if errLayer := packet.ErrorLayer(); errLayer != nil {
-			// 回退：某些内核缓冲可能直接从 TCP 头开始
-			packet = gopacket.NewPacket(pkt, layers.LayerTypeTCP, gopacket.Default)
-			if packet.ErrorLayer() != nil {
-				continue
-			}
+		packet := gopacket.NewPacket(pkt, layers.LayerTypeTCP, gopacket.Default)
+		if packet.ErrorLayer() != nil {
+			continue
 		}
 
-		// 从包中获取TCP layer信息
-		if tl := packet.Layer(layers.LayerTypeTCP); tl != nil {
-			tcpL := tl.(*layers.TCP)
-			if !(tcpL.RST || (tcpL.SYN && tcpL.ACK)) {
+		// 从包中获取 TCP 层信息，并区分 RST+ACK / SYN+ACK
+		if tl, ok := packet.Layer(layers.LayerTypeTCP).(*layers.TCP); ok {
+			var ackType int
+			if tl.ACK && tl.RST {
+				ackType = 1 // 1=RST+ACK
+			} else if tl.ACK && tl.SYN {
+				ackType = 2 // 2=SYN+ACK
+			} else {
 				continue
 			}
-			onACK(tcpL.Ack, peer)
+			onACK(tl.Ack, peer, ackType)
 		}
 	}
 }
