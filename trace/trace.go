@@ -378,7 +378,7 @@ func (h *Hop) fetchIPData(c Config) (err error) {
 	return <-ipGeoCh
 }
 
-func extractMPLS(msg ReceivedMessage, data []byte) []string {
+func extractMPLS(msg ReceivedMessage) []string {
 	if util.DisableMPLS {
 		return nil
 	}
