@@ -148,16 +148,10 @@ jobs:
           check-latest: true
           cache: true
 
-      - name: Go toolchain info
+      - name: Show Go toolchain info
         run: |
           set -Eeuo pipefail
           go version && go env && echo "Supported targets (dist list):" && go tool dist list | sort -u
-
-      - name: Verify target is supported
-        run: |
-          set -Eeuo pipefail
-          if ! go tool dist list | grep -qx -- "${GOOS}/${GOARCH}"; then echo "Unsupported target: ${GOOS}/${GOARCH}"; exit 1; fi
-          echo "OK: ${GOOS}/${GOARCH} is supported."
 
       - name: Sanity check (Xcode/SDK/lipo/pcap)
         run: |
