@@ -15,14 +15,14 @@
 <h6 align="center">HomePage: www.nxtrace.org</h6>
 
 <p align="center">
-  <a href="https://github.com/nxtrace/Ntrace-V1/actions">
-    <img src="https://img.shields.io/github/actions/workflow/status/nxtrace/Ntrace-V1/build.yml?branch=main&style=flat-square" alt="Github Actions">
+  <a href="https://github.com/nxtrace/NTrace-V1/actions">
+    <img src="https://img.shields.io/github/actions/workflow/status/nxtrace/NTrace-V1/build.yml?branch=main&style=flat-square" alt="Github Actions">
   </a>
-  <a href="https://goreportcard.com/report/github.com/nxtrace/Ntrace-V1">
-    <img src="https://goreportcard.com/badge/github.com/nxtrace/Ntrace-V1?style=flat-square">
+  <a href="https://goreportcard.com/report/github.com/nxtrace/NTrace-V1">
+    <img src="https://goreportcard.com/badge/github.com/nxtrace/NTrace-V1?style=flat-square">
   </a>
   <a href="https://www.nxtrace.org/downloads">
-    <img src="https://img.shields.io/github/release/nxtrace/Ntrace-V1/all.svg?style=flat-square">
+    <img src="https://img.shields.io/github/release/nxtrace/NTrace-V1/all.svg?style=flat-square">
   </a>
 </p>
 
@@ -524,7 +524,7 @@ This Project uses [JetBrain Open-Source Project License](https://jb.gg/OpenSourc
 
 
 - How to obtain the freshly baked binary executable of the latest commit?
-    > Please go to the most recent [Build & Release](https://github.com/nxtrace/Ntrace-V1/actions/workflows/build.yml) workflow in GitHub Actions.
+    > Please go to the most recent [Build & Release](https://github.com/nxtrace/NTrace-V1/actions/workflows/build.yml) workflow in GitHub Actions.
 
 - Known Issues
     + On Windows, ICMP mode requires manual firewall allowance for ICMP/ICMPv6

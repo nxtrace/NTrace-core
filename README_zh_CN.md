@@ -16,14 +16,14 @@
 <h6 align="center">主页：www.nxtrace.org</h6>
 
 <p align="center">
-  <a href="https://github.com/nxtrace/Ntrace-V1/actions">
-    <img src="https://img.shields.io/github/actions/workflow/status/nxtrace/Ntrace-V1/build.yml?branch=main&style=flat-square" alt="Github Actions">
+  <a href="https://github.com/nxtrace/NTrace-V1/actions">
+    <img src="https://img.shields.io/github/actions/workflow/status/nxtrace/NTrace-V1/build.yml?branch=main&style=flat-square" alt="Github Actions">
   </a>
-  <a href="https://goreportcard.com/report/github.com/nxtrace/Ntrace-V1">
-    <img src="https://goreportcard.com/badge/github.com/nxtrace/Ntrace-V1?style=flat-square">
+  <a href="https://goreportcard.com/report/github.com/nxtrace/NTrace-V1">
+    <img src="https://goreportcard.com/badge/github.com/nxtrace/NTrace-V1?style=flat-square">
   </a>
   <a href="https://www.nxtrace.org/downloads">
-    <img src="https://img.shields.io/github/release/nxtrace/Ntrace-V1/all.svg?style=flat-square">
+    <img src="https://img.shields.io/github/release/nxtrace/NTrace-V1/all.svg?style=flat-square">
   </a>
 </p>
 
@@ -503,7 +503,7 @@ nexttrace --pow-provider sakura
 
 
 - 如何获取最新commit的新鲜出炉的二进制可执行文件？
-    >请前往GitHub Actions中最新一次 [Build & Release](https://github.com/nxtrace/Ntrace-V1/actions/workflows/build.yml) workflow.
+    >请前往GitHub Actions中最新一次 [Build & Release](https://github.com/nxtrace/NTrace-V1/actions/workflows/build.yml) workflow.
 
 
 - 一些已知问题
