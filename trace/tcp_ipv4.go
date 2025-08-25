@@ -291,6 +291,8 @@ func (t *TCPTracer) listenICMP(ctx context.Context) {
 }
 
 func (t *TCPTracer) handleICMPMessage(msg ReceivedMessage, data []byte) {
+	mpls := extractMPLS(msg)
+
 	header, err := util.GetICMPResponsePayload(data)
 	if err != nil {
 		return
@@ -312,6 +314,7 @@ func (t *TCPTracer) handleICMPMessage(msg ReceivedMessage, data []byte) {
 	h := Hop{
 		Success: true,
 		Address: msg.Peer,
+		MPLS:    mpls,
 	}
 
 	// 非阻塞发送，避免重复回包把缓冲塞满导致阻塞

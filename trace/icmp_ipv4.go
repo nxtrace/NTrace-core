@@ -226,8 +226,7 @@ func (t *ICMPTracer) listenICMP(ctx context.Context) {
 			}
 
 			var (
-				data     []byte
-				icmpType int8 // 0=TimeExceeded, 2=DestinationUnreachable
+				data []byte
 			)
 			switch rm.Type {
 			case ipv4.ICMPTypeEchoReply:
@@ -250,7 +249,7 @@ func (t *ICMPTracer) listenICMP(ctx context.Context) {
 					if ttl < t.BeginHop || ttl > t.MaxHops {
 						continue
 					}
-					t.handleICMPMessage(msg, 1, data, seq)
+					t.handleICMPMessage(msg, seq)
 				}
 				continue
 			case ipv4.ICMPTypeTimeExceeded:
@@ -259,14 +258,12 @@ func (t *ICMPTracer) listenICMP(ctx context.Context) {
 					continue
 				}
 				data = body.Data
-				icmpType = 0
 			case ipv4.ICMPTypeDestinationUnreachable:
 				body, ok := rm.Body.(*icmp.DstUnreach)
 				if !ok || body == nil {
 					continue
 				}
 				data = body.Data
-				icmpType = 2
 			default:
 				continue
 				//log.Println("received icmp message of unknown type", rm.Type)
@@ -287,20 +284,14 @@ func (t *ICMPTracer) listenICMP(ctx context.Context) {
 					continue
 				}
 				seq := int(binary.BigEndian.Uint16(inner[6:8]))
-				t.handleICMPMessage(msg, icmpType, data, seq)
+				t.handleICMPMessage(msg, seq)
 			}
 		}
 	}
 }
 
-func (t *ICMPTracer) handleICMPMessage(msg ReceivedMessage, icmpType int8, data []byte, seq int) {
-	if icmpType == 2 {
-		if ip := util.AddrIP(msg.Peer); ip == nil || !ip.Equal(t.DestIP) {
-			return
-		}
-	}
-
-	mpls := extractMPLS(msg, data)
+func (t *ICMPTracer) handleICMPMessage(msg ReceivedMessage, seq int) {
+	mpls := extractMPLS(msg)
 
 	// 取出通道后立刻解锁
 	t.inflightRequestLock.RLock()
