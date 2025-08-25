@@ -21,7 +21,7 @@
   <a href="https://goreportcard.com/report/github.com/nxtrace/NTrace-V1">
     <img src="https://goreportcard.com/badge/github.com/nxtrace/NTrace-V1?style=flat-square">
   </a>
-  <a href="https://www.nxtrace.org/downloads">
+  <a href="https://github.com/nxtrace/NTrace-V1/releases">
     <img src="https://img.shields.io/github/release/nxtrace/NTrace-V1/all.svg?style=flat-square">
   </a>
 </p>
