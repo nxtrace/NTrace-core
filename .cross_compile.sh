@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-set -euo pipefail
+
+set -Eeuo pipefail
 
 # -------- Config --------
 DIST_PREFIX="nexttrace"
@@ -32,8 +33,9 @@ mkdir -p -- "${TARGET_DIR}"
 # -------- Pure Go targets (CGO off) --------
 for pl in ${PLATFORMS}; do
   export CGO_ENABLED=0
-  export GOOS="$(echo "${pl}" | cut -d'/' -f1)"
-  export GOARCH="$(echo "${pl}" | cut -d'/' -f2)"
+  GOOS="${pl%%/*}"
+  GOARCH="${pl#*/}"
+  export GOOS GOARCH
 
   TARGET="${TARGET_DIR}/${DIST_PREFIX}_${GOOS}_${GOARCH}"
   if [[ "${GOOS}" == "windows" ]]; then
@@ -42,6 +44,13 @@ for pl in ${PLATFORMS}; do
 
   echo "build => ${TARGET}"
   go build "${GO_BUILD_FLAGS[@]}" -o "${TARGET}" -ldflags "${LD_BASE}"
+
+  # Extra soft-float variants for linux/mips and linux/mipsle
+  if [[ "${GOOS}" == "linux" && ( "${GOARCH}" == "mips" || "${GOARCH}" == "mipsle" ) ]]; then
+    TARGET_SOFT="${TARGET_DIR}/${DIST_PREFIX}_${GOOS}_${GOARCH}_softfloat"
+    echo "build => ${TARGET_SOFT} (GOMIPS=softfloat)"
+    GOMIPS=softfloat go build "${GO_BUILD_FLAGS[@]}" -o "${TARGET_SOFT}" -ldflags "${LD_BASE}"
+  fi
 done
 
 # -------- linux/armv7（CGO off）--------

@@ -1,5 +1,16 @@
 name: Build & Release
 
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 on:
   workflow_dispatch:
   push:
@@ -18,17 +29,12 @@ on:
       - "go.sum"
       - ".github/workflows/*.yml"
 
-permissions:
-  contents: write
-
-concurrency:
-  group: build-release-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   build:
     runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.allow_fail || false }}
     strategy:
+      fail-fast: false
       matrix:
         goos: [windows, freebsd, openbsd, linux, dragonfly]
         goarch: [amd64, 386]
@@ -41,7 +47,7 @@ jobs:
           - { goos: linux,   goarch: arm,    goarm: 5 }
           - { goos: android, goarch: arm64 }
           - { goos: windows, goarch: arm64 }
-          - { goos: windows, goarch: arm,    goarm: 7 }
+          - { goos: windows, goarch: arm,    goarm: 7, allow_fail: true } # windows/arm 计划于 Go 1.26 移除
           - { goos: linux,   goarch: arm64 }
           - { goos: linux,   goarch: riscv64 }
           - { goos: linux,   goarch: mips64 }
@@ -64,7 +70,11 @@ jobs:
       GOARM:  ${{ matrix.goarm }}
       GOMIPS: ${{ matrix.gomips }}
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout codebase
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Set up Go (built-in cache)
         uses: actions/setup-go@v5
@@ -73,9 +83,14 @@ jobs:
           check-latest: true
           cache: true
 
+      - name: Show Go toolchain info
+        run: |
+          set -Eeuo pipefail
+          go version && go env && echo "Supported targets (dist list):" && go tool dist list | sort -u
+
       - name: Resolve build metadata
         run: |
-          set -e
+          set -Eeuo pipefail
           BUILD_VERSION="$(git describe --tags --always 2>/dev/null || echo dev)"
           BUILD_DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           COMMIT_SHA1="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
@@ -86,10 +101,10 @@ jobs:
           if [ "${GOOS}" = "windows" ]; then NAME="${NAME}.exe"; fi
           if [ "${GOMIPS:-}" = "softfloat" ]; then NAME="${NAME}_softfloat"; fi
 
-          echo "BUILD_VERSION=${BUILD_VERSION}" >> $GITHUB_ENV
-          echo "BUILD_DATE=${BUILD_DATE}"       >> $GITHUB_ENV
-          echo "COMMIT_SHA1=${COMMIT_SHA1}"     >> $GITHUB_ENV
-          echo "ASSET_NAME=${NAME}"             >> $GITHUB_ENV
+          echo "BUILD_VERSION=${BUILD_VERSION}" >> "$GITHUB_ENV"
+          echo "BUILD_DATE=${BUILD_DATE}"       >> "$GITHUB_ENV"
+          echo "COMMIT_SHA1=${COMMIT_SHA1}"     >> "$GITHUB_ENV"
+          echo "ASSET_NAME=${NAME}"             >> "$GITHUB_ENV"
 
       - name: Get project dependencies
         run: go mod download
@@ -108,17 +123,23 @@ jobs:
         with:
           name: ${{ env.ASSET_NAME }}
           path: dist/${{ env.ASSET_NAME }}
+          if-no-files-found: error
 
   build-darwin:
     runs-on: macos-latest
     strategy:
+      fail-fast: false
       matrix: { goarch: [ amd64, arm64 ] }
     env:
       GOOS: darwin
       GOARCH: ${{ matrix.goarch }}
       CGO_ENABLED: 1
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout codebase
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Set up Go (built-in cache)
         uses: actions/setup-go@v5
@@ -127,9 +148,20 @@ jobs:
           check-latest: true
           cache: true
 
+      - name: Go toolchain info
+        run: |
+          set -Eeuo pipefail
+          go version && go env && echo "Supported targets (dist list):" && go tool dist list | sort -u
+
+      - name: Verify target is supported
+        run: |
+          set -Eeuo pipefail
+          if ! go tool dist list | grep -qx -- "${GOOS}/${GOARCH}"; then echo "Unsupported target: ${GOOS}/${GOARCH}"; exit 1; fi
+          echo "OK: ${GOOS}/${GOARCH} is supported."
+
       - name: Sanity check (Xcode/SDK/lipo/pcap)
         run: |
-          set -e
+          set -Eeuo pipefail
           xcode-select -p
           SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
           echo "$SDKROOT"
@@ -140,22 +172,23 @@ jobs:
 
       - name: Resolve build metadata + Darwin CGO flags
         run: |
-          set -e
+          set -Eeuo pipefail
           SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
           if [ "${GOARCH}" = "amd64" ]; then ARCH_FLAG="-arch x86_64"; else ARCH_FLAG="-arch arm64"; fi
-          echo "CC=clang"       >> $GITHUB_ENV
-          echo "CXX=clang++"    >> $GITHUB_ENV
-          echo "CGO_CFLAGS=-isysroot ${SDKROOT} ${ARCH_FLAG} -mmacosx-version-min=11.0" >> $GITHUB_ENV
-          echo "CGO_LDFLAGS=-isysroot ${SDKROOT} ${ARCH_FLAG} -mmacosx-version-min=11.0" >> $GITHUB_ENV
+          CC="$(xcrun -f clang)";  CXX="$(xcrun -f clang++)"
+          echo "CC=${CC}"   >> "$GITHUB_ENV"
+          echo "CXX=${CXX}" >> "$GITHUB_ENV"
+          echo "CGO_CFLAGS=-isysroot ${SDKROOT} ${ARCH_FLAG} -mmacosx-version-min=11.0"  >> "$GITHUB_ENV"
+          echo "CGO_LDFLAGS=-isysroot ${SDKROOT} ${ARCH_FLAG} -mmacosx-version-min=11.0" >> "$GITHUB_ENV"
 
           BUILD_VERSION="$(git describe --tags --always 2>/dev/null || echo dev)"
           BUILD_DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           COMMIT_SHA1="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
           NAME="nexttrace_${GOOS}_${GOARCH}"
-          echo "BUILD_VERSION=${BUILD_VERSION}" >> $GITHUB_ENV
-          echo "BUILD_DATE=${BUILD_DATE}"       >> $GITHUB_ENV
-          echo "COMMIT_SHA1=${COMMIT_SHA1}"     >> $GITHUB_ENV
-          echo "ASSET_NAME=${NAME}"             >> $GITHUB_ENV
+          echo "BUILD_VERSION=${BUILD_VERSION}" >> "$GITHUB_ENV"
+          echo "BUILD_DATE=${BUILD_DATE}"       >> "$GITHUB_ENV"
+          echo "COMMIT_SHA1=${COMMIT_SHA1}"     >> "$GITHUB_ENV"
+          echo "ASSET_NAME=${NAME}"             >> "$GITHUB_ENV"
 
       - name: Get project dependencies
         run: go mod download
@@ -174,6 +207,7 @@ jobs:
         with:
           name: ${{ env.ASSET_NAME }}
           path: dist/${{ env.ASSET_NAME }}
+          if-no-files-found: error
 
   # NEW: 构建 Universal，并上传为 Artifact（不依赖 tag）
   darwin-universal:
@@ -189,7 +223,7 @@ jobs:
 
       - name: Make macOS Universal (amd64+arm64)
         run: |
-          set -e
+          set -Eeuo pipefail
           AMD64="dist/nexttrace_darwin_amd64"
           ARM64="dist/nexttrace_darwin_arm64"
           if [ -f "$AMD64" ] && [ -f "$ARM64" ]; then
@@ -207,6 +241,7 @@ jobs:
         with:
           name: nexttrace_darwin_universal
           path: dist/nexttrace_darwin_universal
+          if-no-files-found: error
 
   # 发布时仅下载所有 Artifact（包含 universal），直接发布
   release:
@@ -221,16 +256,21 @@ jobs:
           merge-multiple: true
           path: dist_release
 
-      - name: List payload
-        run: ls -l dist_release | sed -n '1,300p'
+      - name: Show downloaded files
+        run: |
+          set -Eeuo pipefail
+          ls -lah dist_release
+          test -n "$(find dist_release -type f -print -quit)" || { echo "No artifacts found in dist_release"; exit 1; }
 
       - name: Create GitHub Release (draft)
         uses: softprops/action-gh-release@v2
         with:
           draft: true
+          name: ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
           files: dist_release/*
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
+          token: ${{ secrets.GT_TOKEN }}
+          fail_on_unmatched_files: true
 
   publish-new-formula:
     runs-on: ubuntu-latest
@@ -239,19 +279,21 @@ jobs:
     steps:
       - name: config git
         run: |
-          git config --global user.email "${{ secrets.git_mail }}"
-          git config --global user.name "${{ secrets.git_name }}"
+          git config --global user.email "${{ secrets.GIT_MAIL }}"
+          git config --global user.name "${{ secrets.GIT_NAME }}"
       - name: Clone repo
         run: git clone https://github.com/nxtrace/homebrew-nexttrace.git
       - name: Exec script
         run: |
+          set -Eeuo pipefail
           cd homebrew-nexttrace
           bash genFormula.sh
       - name: Git Push
         run: |
+          set -Eeuo pipefail
           cd homebrew-nexttrace
           git add -A
           git commit -m 'Publish a new version with Formula' || true
-          git remote set-url origin https://${{ secrets.gt_token }}@github.com/nxtrace/homebrew-nexttrace.git
+          git remote set-url origin https://${{ secrets.GT_TOKEN }}@github.com/nxtrace/homebrew-nexttrace.git
           git push
       - run: echo "🍏 This job's status is ${{ job.status }}."
