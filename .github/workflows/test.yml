@@ -1,5 +1,12 @@
 name: Test
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches:
@@ -20,25 +27,32 @@ on:
 
 jobs:
   test:
-    permissions:
-      contents: read
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [windows-latest, ubuntu-latest, macos-latest]
     steps:
-      - name: Set up Go
+      - name: Checkout codebase
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Set up Go (built-in cache)
         uses: actions/setup-go@v5
         with:
           go-version: '1.25.x'
-      - name: Checkout codebase
-        uses: actions/checkout@v5
+          check-latest: true
+          cache: true
+
       - name: Test with unix
         if: ${{ matrix.os != 'windows-latest' }}
+        shell: bash
         run: |
           sudo go env -w GOTOOLCHAIN=go1.25.0+auto
           sudo go test -v -ldflags=-checklinkname=0 -covermode=count -coverprofile='coverage.out' ./...
+
       - name: Test with windows
         if: ${{ matrix.os == 'windows-latest' }}
         run: |
