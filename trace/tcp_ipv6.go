@@ -38,17 +38,8 @@ type TCPTracerIPv6 struct {
 	sem                 *semaphore.Weighted
 }
 
-func (t *TCPTracerIPv6) PrintFunc(ctx context.Context, status chan<- bool) {
+func (t *TCPTracerIPv6) PrintFunc(ctx context.Context, cancel context.CancelCauseFunc) {
 	defer t.wg.Done()
-	// 默认认为是正常退出，只有在 ctx 取消时改为 false
-	normalExit := true
-	defer func() {
-		select {
-		case status <- normalExit:
-		default:
-		}
-		close(status)
-	}()
 
 	ttl := t.Config.BeginHop - 1
 	ticker := time.NewTicker(200 * time.Millisecond)
@@ -60,21 +51,19 @@ func (t *TCPTracerIPv6) PrintFunc(ctx context.Context, status chan<- bool) {
 		}
 
 		// 接收的时候检查一下是不是 3 跳都齐了
-		if ttl < len(t.res.Hops) &&
-			len(t.res.Hops[ttl]) == t.NumMeasurements {
+		if t.ttlComp(ttl + 1) {
 			if t.RealtimePrinter != nil {
 				t.RealtimePrinter(&t.res, ttl)
 			}
 			ttl++
 			if ttl == int(t.final.Load()) || ttl >= t.MaxHops {
+				cancel(errNaturalDone) // 标记“自然完成”
 				return
 			}
 		}
 
 		select {
 		case <-ctx.Done():
-			// 非正常退出
-			normalExit = false
 			return
 		case <-ticker.C:
 		}
@@ -117,7 +106,7 @@ func (t *TCPTracerIPv6) Execute() (res *Result, err error) {
 	t.inflightRequest = make(map[int]chan Hop)
 
 	if len(t.res.Hops) > 0 {
-		return &t.res, ErrTracerouteExecuted
+		return &t.res, errTracerouteExecuted
 	}
 
 	// 初始化 Result.Hops，并预分配到 MaxHops
@@ -154,8 +143,8 @@ func (t *TCPTracerIPv6) Execute() (res *Result, err error) {
 		}
 	}()
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
+	sigCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, cancel := context.WithCancelCause(sigCtx)
 	t.final.Store(-1)
 
 	t.wg.Add(1)
@@ -193,9 +182,8 @@ func (t *TCPTracerIPv6) Execute() (res *Result, err error) {
 			}
 		})
 	}()
-	statusCh := make(chan bool, 1)
 	t.wg.Add(1)
-	go t.PrintFunc(ctx, statusCh)
+	go t.PrintFunc(ctx, cancel)
 
 	t.sem = semaphore.NewWeighted(int64(t.ParallelRequests))
 
@@ -226,12 +214,18 @@ func (t *TCPTracerIPv6) Execute() (res *Result, err error) {
 		}
 	}()
 
-	normalExit := <-statusCh
+	<-ctx.Done()
 	stop()
 	t.wg.Wait()
-	t.res.reduce(int(t.final.Load()))
-	if !normalExit {
-		return &t.res, context.Canceled
+
+	bound := int(t.final.Load())
+	if bound == -1 {
+		bound = t.MaxHops
+	}
+	t.res.reduce(bound)
+
+	if cause := context.Cause(ctx); !errors.Is(cause, errNaturalDone) {
+		return &t.res, cause
 	}
 	return &t.res, nil
 }
@@ -455,7 +449,7 @@ func (t *TCPTracerIPv6) send(ctx context.Context, ttl, i int) error {
 			Address: nil,
 			TTL:     ttl,
 			RTT:     0,
-			Error:   ErrHopLimitTimeout,
+			Error:   errHopLimitTimeout,
 		}
 
 		t.res.add(h, i, t.NumMeasurements, t.MaxAttempts)
