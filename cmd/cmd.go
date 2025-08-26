@@ -73,8 +73,7 @@ func Execute() {
 	lang := parser.Selector("g", "language", []string{"en", "cn"}, &argparse.Options{Default: "cn",
 		Help: "Choose the language for displaying [en, cn]"})
 	file := parser.String("", "file", &argparse.Options{Help: "Read IP Address or domain name from file"})
-	nocolor := parser.Flag("C", "nocolor", &argparse.Options{Help: "Disable Colorful Output"})
-	dontFragment := parser.Flag("", "dont-fragment", &argparse.Options{Default: false, Help: "Set the Don't Fragment bit (IPv4 TCP only)"})
+	noColor := parser.Flag("C", "no-color", &argparse.Options{Help: "Disable Colorful Output"})
 
 	err := parser.Parse(os.Args)
 	if err != nil {
@@ -84,7 +83,7 @@ func Execute() {
 		return
 	}
 
-	if *nocolor {
+	if *noColor {
 		color.NoColor = true
 	} else {
 		color.NoColor = false
@@ -99,8 +98,13 @@ func Execute() {
 		os.Exit(0)
 	}
 
-	if !*tcp && *port == 80 {
-		*port = 33494
+	//if !*tcp && *port == 80 {
+	//	*port = 33494
+	//}
+
+	if *maxAttempts > 255 {
+		fmt.Println("MaxAttempts 最大值为 255，已自动调整为 255")
+		*maxAttempts = 255
 	}
 
 	domain := *str
@@ -135,7 +139,6 @@ func Execute() {
 			PktSize:        *packetSize,
 			Timeout:        time.Duration(*timeout) * time.Millisecond,
 			File:           *file,
-			DontFragment:   *dontFragment,
 			Dot:            *dot,
 		}
 
@@ -278,7 +281,6 @@ func Execute() {
 		IPGeoSource:      ipgeo.GetSource(*dataOrigin),
 		Timeout:          time.Duration(*timeout) * time.Millisecond,
 		PktSize:          *packetSize,
-		DontFragment:     *dontFragment,
 	}
 
 	// 暂时弃用

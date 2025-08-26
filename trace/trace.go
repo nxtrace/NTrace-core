@@ -51,7 +51,6 @@ type Config struct {
 	AsyncPrinter     func(res *Result)
 	PktSize          int
 	Maptrace         bool
-	DontFragment     bool
 }
 
 type Method string

@@ -365,10 +365,6 @@ func (t *TCPTracer) send(ctx context.Context, ttl, i int) error {
 		DstIP:    t.DestIP,
 		Protocol: layers.IPProtocolTCP,
 		TTL:      uint8(ttl),
-		//Flags:    layers.IPv4DontFragment,
-	}
-	if t.DontFragment {
-		ipHeader.Flags = layers.IPv4DontFragment
 	}
 
 	tcpHeader := &layers.TCP{

@@ -337,10 +337,6 @@ func (t *UDPTracer) send(ctx context.Context, ttl, i int) error {
 		DstIP:    t.DestIP,
 		Protocol: layers.IPProtocolUDP,
 		TTL:      uint8(ttl),
-		//Flags:    layers.IPv4DontFragment,
-	}
-	if t.DontFragment {
-		ipHeader.Flags = layers.IPv4DontFragment
 	}
 
 	udpHeader := &layers.UDP{
