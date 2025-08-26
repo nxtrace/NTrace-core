@@ -64,7 +64,13 @@ func (c *WsConn) keepAlive() {
 }
 
 func (c *WsConn) messageReceiveHandler() {
-	// defer close(c.Done)
+	defer func() {
+		select {
+		case <-c.Done:
+		default:
+			close(c.Done)
+		}
+	}()
 	for {
 		if c.Connected {
 			_, msg, err := c.Conn.ReadMessage()
@@ -86,7 +92,6 @@ func (c *WsConn) messageSendHandler() {
 		// 循环监听发送
 		select {
 		case <-c.Done:
-			log.Println("go-routine has been returned")
 			return
 		case t := <-c.MsgSendCh:
 			// log.Println(t)
@@ -106,10 +111,8 @@ func (c *WsConn) messageSendHandler() {
 			if err != nil {
 				if util.EnvDevMode {
 					panic(err)
-				} else {
-					log.Println("write close:", err)
-					os.Exit(1)
 				}
+				log.Fatalf("write close: %v", err)
 			}
 			select {
 			// 等到了结果，直接退出
@@ -117,7 +120,7 @@ func (c *WsConn) messageSendHandler() {
 			// 如果等待 1s 还是拿不到结果，不再等待，超时退出
 			case <-time.After(1 * time.Second):
 			}
-			os.Exit(0)
+			return
 		}
 	}
 }
@@ -140,10 +143,8 @@ func (c *WsConn) recreateWsConn() {
 			if err != nil {
 				if util.EnvDevMode {
 					panic(err)
-				} else {
-					log.Println("write close:", err)
-					os.Exit(1)
 				}
+				log.Fatalf("write close: %v", err)
 			}
 		} else {
 			// 使用 cacheToken
@@ -165,7 +166,7 @@ func (c *WsConn) recreateWsConn() {
 	if proxyUrl != nil {
 		dialer.Proxy = http.ProxyURL(proxyUrl)
 	}
-	ws, _, err := websocket.DefaultDialer.Dial(u.String(), requestHeader)
+	ws, _, err := dialer.Dial(u.String(), requestHeader)
 	c.Conn = ws
 	if err != nil {
 		log.Println("dial:", err)
@@ -216,10 +217,8 @@ func createWsConn() *WsConn {
 		if err != nil {
 			if util.EnvDevMode {
 				panic(err)
-			} else {
-				log.Println("write close:", err)
-				os.Exit(1)
 			}
+			log.Fatalf("write close: %v", err)
 		}
 		ua = []string{util.UserAgent}
 	}
@@ -240,7 +239,7 @@ func createWsConn() *WsConn {
 	u := url.URL{Scheme: "wss", Host: fastIp + ":" + port, Path: "/v3/ipGeoWs"}
 	// log.Printf("connecting to %s", u.String())
 
-	c, _, err := websocket.DefaultDialer.Dial(u.String(), requestHeader)
+	c, _, err := dialer.Dial(u.String(), requestHeader)
 
 	wsconn = &WsConn{
 		Conn:         c,

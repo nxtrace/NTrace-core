@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"os/signal"
@@ -230,10 +231,8 @@ func Execute() {
 	if err != nil {
 		if util.EnvDevMode {
 			panic(err)
-		} else {
-			fmt.Println(err)
-			os.Exit(1)
 		}
+		log.Fatal(err)
 	}
 
 	if *srcDev != "" {

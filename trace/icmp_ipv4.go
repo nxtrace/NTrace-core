@@ -88,7 +88,10 @@ func (t *ICMPTracer) launchTTL(ctx context.Context, ttl int) {
 			t.wg.Add(1)
 			go func(ttl, i int) {
 				if err := t.send(ctx, ttl, i); err != nil && !errors.Is(err, context.Canceled) {
-					log.Printf("send failed: ttl=%d i=%d: %v", ttl, i, err)
+					if util.EnvDevMode {
+						panic(err)
+					}
+					log.Fatal(err)
 				}
 			}(ttl, i)
 
@@ -103,7 +106,7 @@ func (t *ICMPTracer) launchTTL(ctx context.Context, ttl int) {
 
 func (t *ICMPTracer) initEchoID() {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	t.echoIDTag = uint8(r.Intn(256))     // 高 8 位随机 tag
+	t.echoIDTag = uint8(r.Intn(256))     // 高 8 位为随机 tag
 	t.pidLow = uint8(os.Getpid() & 0xFF) // 低 8 位为 pid
 }
 
@@ -407,9 +410,7 @@ func (t *ICMPTracer) send(ctx context.Context, ttl, i int) error {
 		h.TTL = ttl
 		h.RTT = rtt
 
-		if err := h.fetchIPData(t.Config); err != nil {
-			return err
-		}
+		_ = h.fetchIPData(t.Config) // 忽略错误，继续添加结果
 
 		t.res.add(h, i, t.NumMeasurements, t.MaxAttempts)
 	case <-time.After(t.Timeout):
