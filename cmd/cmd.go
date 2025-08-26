@@ -197,28 +197,24 @@ func Execute() {
 	//
 	//go func() {
 	//	defer wg.Done()
-	if strings.ToUpper(*dataOrigin) == "LEOMOEAPI" {
-		val, ok := os.LookupEnv("NEXTTRACE_DATAPROVIDER")
-		if strings.ToUpper(*powProvider) != "API.NXTRACE.ORG" {
+	//}()
+	if strings.EqualFold(*dataOrigin, "LEOMOEAPI") {
+		if !strings.EqualFold(*powProvider, "api.nxtrace.org") {
 			util.PowProviderParam = *powProvider
 		}
-		if ok {
-			*dataOrigin = val
+		if util.EnvDataProvider != "" {
+			*dataOrigin = util.EnvDataProvider
 		} else {
 			w := wshandle.New()
 			w.Interrupt = make(chan os.Signal, 1)
 			signal.Notify(w.Interrupt, os.Interrupt)
 			defer func() {
 				if w.Conn != nil {
-					w.Conn.Close()
+					_ = w.Conn.Close()
 				}
 			}()
 		}
 	}
-	//}()
-	//
-	//go func() {
-	//	defer wg.Done()
 
 	if *ipv6Only {
 		ip, err = util.DomainLookUp(domain, "6", *dot, *jsonPrint)

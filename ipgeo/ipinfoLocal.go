@@ -31,15 +31,15 @@ func getIPInfoLocalPath() error {
 		return nil
 	}
 	// NEXTTRACE_IPINFOLOCALPATH
-	if util.EnvIPInfoLocalPath != "" {
-		if _, err := os.Stat(util.EnvIPInfoLocalPath); err == nil {
-			ipinfoDataBasePath = util.EnvIPInfoLocalPath
+	path := util.GetEnvDefault("NEXTTRACE_IPINFOLOCALPATH", "")
+	if path != "" {
+		if _, err := os.Stat(path); err == nil {
+			ipinfoDataBasePath = path
 			return nil
-		} else {
-			return errors.New("NEXTTRACE_IPINFOLOCALPATH is set but the file does not exist")
 		}
+		return errors.New("NEXTTRACE_IPINFOLOCALPATH is set but the file does not exist")
 	}
-	folders := []string{}
+	var folders []string
 	// current folder
 	if cur, err := os.Getwd(); err == nil {
 		folders = append(folders, cur+string(filepath.Separator))
