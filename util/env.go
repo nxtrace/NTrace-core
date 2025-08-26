@@ -8,25 +8,33 @@ import (
 )
 
 var (
-	DisableMPLS        = GetEnvBool("NEXTTRACE_DISABLEMPLS", false)
-	EnableHidDstIP     = GetEnvBool("NEXTTRACE_ENABLEHIDDENDSTIP", false)
-	EnvDevMode         = GetEnvBool("NEXTTRACE_DEVMODE", false)
-	EnvHostPort        = GetEnvDefault("NEXTTRACE_HOSTPORT", "api.nxtrace.org")
-	EnvIPInfoLocalPath = GetEnvDefault("NEXTTRACE_IPINFOLOCALPATH", "")
-	EnvMaxAttempts     = GetEnvInt("NEXTTRACE_MAXATTEMPTS", 0)
-	EnvPowProvider     = GetEnvDefault("NEXTTRACE_POWPROVIDER", "api.nxtrace.org")
-	EnvProxyURL        = GetEnvDefault("NEXTTRACE_PROXY", "")
-	EnvRandomPort      = GetEnvBool("NEXTTRACE_RANDOMPORT", false)
-	EnvToken           = GetEnvDefault("NEXTTRACE_TOKEN", "")
-	Uninterrupted      = GetEnvBool("NEXTTRACE_UNINTERRUPTED", false)
+	DisableMPLS     = GetEnvBool("NEXTTRACE_DISABLEMPLS", false)
+	EnableHidDstIP  = GetEnvBool("NEXTTRACE_ENABLEHIDDENDSTIP", false)
+	EnvDevMode      = GetEnvBool("NEXTTRACE_DEVMODE", false)
+	EnvRandomPort   = GetEnvBool("NEXTTRACE_RANDOMPORT", false)
+	Uninterrupted   = GetEnvBool("NEXTTRACE_UNINTERRUPTED", false)
+	EnvProxyURL     = GetEnvDefault("NEXTTRACE_PROXY", "")
+	EnvToken        = GetEnvDefault("NEXTTRACE_TOKEN", "")
+	EnvDataProvider = GetEnvDefault("NEXTTRACE_DATAPROVIDER", "")
+	EnvHostPort     = GetEnvDefault("NEXTTRACE_HOSTPORT", "api.nxtrace.org")
+	EnvPowProvider  = GetEnvDefault("NEXTTRACE_POWPROVIDER", "api.nxtrace.org")
+	EnvMaxAttempts  = GetEnvInt("NEXTTRACE_MAXATTEMPTS", 0)
 )
 
+func GetEnvTrimmed(key string) (string, bool) {
+	v, ok := os.LookupEnv(key)
+	if !ok {
+		return "", false
+	}
+	val := strings.TrimSpace(v)
+	if os.Getenv("NEXTTRACE_DEBUG") != "" {
+		fmt.Println("ENV", key, "detected as", val)
+	}
+	return val, true
+}
+
 func GetEnvBool(key string, def bool) bool {
-	if v, ok := os.LookupEnv(key); ok {
-		val := strings.TrimSpace(v)
-		if os.Getenv("NEXTTRACE_DEBUG") != "" {
-			fmt.Println("ENV", key, "detected as", val)
-		}
+	if val, ok := GetEnvTrimmed(key); ok {
 		switch val {
 		case "1":
 			return true
@@ -39,28 +47,20 @@ func GetEnvBool(key string, def bool) bool {
 	return def
 }
 
-func GetEnvDefault(key, defVal string) string {
-	if v, ok := os.LookupEnv(key); ok {
-		val := strings.TrimSpace(v)
-		if os.Getenv("NEXTTRACE_DEBUG") != "" {
-			fmt.Println("ENV", key, "detected as", val)
-		}
+func GetEnvDefault(key string, def string) string {
+	if val, ok := GetEnvTrimmed(key); ok {
 		return val
 	}
-	return defVal
+	return def
 }
 
 func GetEnvInt(key string, def int) int {
-	if v, ok := os.LookupEnv(key); ok {
-		val := strings.TrimSpace(v)
-		if os.Getenv("NEXTTRACE_DEBUG") != "" {
-			fmt.Println("ENV", key, "detected as", val)
-		}
-		n, err := strconv.Atoi(val)
+	if val, ok := GetEnvTrimmed(key); ok {
+		num, err := strconv.Atoi(val)
 		if err != nil {
 			return def
 		}
-		return n
+		return num
 	}
 	return def
 }

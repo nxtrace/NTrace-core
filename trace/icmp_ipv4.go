@@ -57,7 +57,7 @@ func (t *ICMPTracer) PrintFunc(ctx context.Context, cancel context.CancelCauseFu
 			}
 			ttl++
 			if ttl == int(t.final.Load()) || ttl >= t.MaxHops {
-				cancel(errNaturalDone) // 标记“自然完成”
+				cancel(errNaturalDone) // 标记为“自然完成”
 				return
 			}
 		}
@@ -343,7 +343,7 @@ func (t *ICMPTracer) send(ctx context.Context, ttl, i int) error {
 		t.inflightRequestLock.Unlock()
 	}()
 
-	// 高8位放随机tag，低8位放pid低8位
+	// 将随机 tag 编码到高 8 位；将 pid 的低 8 位编码到低 8 位
 	id := int(uint16(t.echoIDTag)<<8 | uint16(t.pidLow))
 
 	var data []byte
@@ -355,7 +355,8 @@ func (t *ICMPTracer) send(ctx context.Context, ttl, i int) error {
 	}
 
 	icmpHeader := icmp.Message{
-		Type: ipv4.ICMPTypeEcho, Code: 0,
+		Type: ipv4.ICMPTypeEcho,
+		Code: 0,
 		Body: &icmp.Echo{
 			ID:   id,
 			Data: data,

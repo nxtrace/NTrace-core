@@ -56,7 +56,7 @@ func (t *UDPTracerIPv6) PrintFunc(ctx context.Context, cancel context.CancelCaus
 			}
 			ttl++
 			if ttl == int(t.final.Load()) || ttl >= t.MaxHops {
-				cancel(errNaturalDone) // 标记“自然完成”
+				cancel(errNaturalDone) // 标记为“自然完成”
 				return
 			}
 		}
