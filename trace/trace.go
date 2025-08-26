@@ -19,9 +19,10 @@ import (
 )
 
 var (
-	ErrInvalidMethod      = errors.New("invalid method")
-	ErrTracerouteExecuted = errors.New("traceroute already executed")
-	ErrHopLimitTimeout    = errors.New("hop timeout")
+	errHopLimitTimeout    = errors.New("hop timeout")
+	errInvalidMethod      = errors.New("invalid method")
+	errNaturalDone        = errors.New("trace natural done")
+	errTracerouteExecuted = errors.New("traceroute already executed")
 	geoCache              = sync.Map{}
 	ipGeoSF               singleflight.Group
 	rdnsSF                singleflight.Group
@@ -115,7 +116,7 @@ func Traceroute(method Method, config Config) (*Result, error) {
 			tracer = &TCPTracerIPv6{Config: config}
 		}
 	default:
-		return &Result{}, ErrInvalidMethod
+		return &Result{}, errInvalidMethod
 	}
 	result, err := tracer.Execute()
 	if err != nil && errors.Is(err, syscall.EPERM) {
