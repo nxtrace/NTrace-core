@@ -270,7 +270,7 @@ nexttrace --psize 1024 example.com
 nexttrace --route-path www.time.com.my
 
 # Disable color output
-nexttrace --nocolor 1.1.1.1
+nexttrace --no-color 1.1.1.1
 # or use ENV
 export NO_COLOR=1
 ```
@@ -344,7 +344,7 @@ Usage: nexttrace [-h|--help] [-4|--ipv4] [-6|--ipv6] [-T|--tcp] [-U|--udp]
                  [-i|--ttl-time <integer>] [--timeout <integer>] [--psize
                  <integer>] [_positionalArg_nexttrace_34 "<value>"]
                  [--dot-server (dnssb|aliyun|dnspod|google|cloudflare)]
-                 [-g|--language (en|cn)] [--file "<value>"] [-C|--nocolor]
+                 [-g|--language (en|cn)] [--file "<value>"] [-C|--no-color]
 
 Arguments:
 
@@ -419,7 +419,7 @@ Arguments:
   -g  --language                     Choose the language for displaying [en,
                                      cn]. Default: cn
       --file                         Read IP Address or domain name from file
-  -C  --nocolor                      Disable Colorful Output
+  -C  --no-color                      Disable Colorful Output
 ```
 
 ## Project screenshot
