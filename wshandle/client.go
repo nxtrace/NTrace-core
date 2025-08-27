@@ -158,7 +158,8 @@ func (c *WsConn) recreateWsConn() {
 		"User-Agent":    ua,
 		"Authorization": []string{"Bearer " + jwtToken},
 	}
-	dialer := websocket.DefaultDialer
+	dialer := *websocket.DefaultDialer // 按值拷贝，变成独立实例
+	// 现在 dialer 是一个新的 Dialer（值），内部字段与 DefaultDialer 相同
 	dialer.TLSClientConfig = &tls.Config{
 		ServerName: host,
 	}
@@ -229,7 +230,8 @@ func createWsConn() *WsConn {
 		"User-Agent":    ua,
 		"Authorization": []string{"Bearer " + jwtToken},
 	}
-	dialer := websocket.DefaultDialer
+	dialer := *websocket.DefaultDialer // 按值拷贝，变成独立实例
+	// 现在 dialer 是一个新的 Dialer（值），内部字段与 DefaultDialer 相同
 	dialer.TLSClientConfig = &tls.Config{
 		ServerName: host,
 	}
