@@ -522,7 +522,7 @@ This Project uses [JetBrain Open-Source Project License](https://jb.gg/OpenSourc
 
 - Known Issues
     + On Windows, ICMP mode requires manual firewall allowance for ICMP/ICMPv6
-    + On Windows, TCP/UDP modes are currently unavailable
+    + On Windows, TCP modes are currently unavailable
     + On macOS, only ICMP mode does not require elevated privileges
     + In some cases, running multiple instances of NextTrace simultaneously may interfere with each other’s results (observed so far only in TCP mode)
 

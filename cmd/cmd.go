@@ -181,8 +181,8 @@ func Execute() {
 
 	var ip net.IP
 
-	if runtime.GOOS == "windows" && (*tcp || *udp) {
-		fmt.Println("NextTrace 基于 Windows 的路由跟踪还在早期开发阶段，目前还存在诸多问题，TCP/UDP SYN 包请求可能不能正常运行")
+	if runtime.GOOS == "windows" && (*tcp) {
+		fmt.Println("NextTrace 基于 Windows 的路由跟踪还在早期开发阶段，目前还存在诸多问题，TCP SYN 包请求可能不能正常运行")
 	}
 
 	if *dn42 {
