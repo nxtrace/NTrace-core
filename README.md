@@ -514,7 +514,7 @@ This Project uses [JetBrain Open-Source Project License](https://jb.gg/OpenSourc
 
 - For feedback related to corrections about IP information, we currently have two channels available:
     >- [IP 错误报告汇总帖](https://github.com/orgs/nxtrace/discussions/222) in the GITHUB ISSUES section of this project (Recommended)
-    >- This project's dedicated correction email: `correction@nxtrace.org` (Please note that this email is only for correcting IP-related information. For other feedback, please submit an ISSUE)
+    >- This project's dedicated correction email: `correct#nxtrace.org` (Please note that this email is only for correcting IP-related information. For other feedback, please submit an ISSUE)
 
 
 - How to obtain the freshly baked binary executable of the latest commit?

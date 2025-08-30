@@ -29,32 +29,18 @@ func CopyRight() {
 	sponsor()
 	fmt.Fprintf(color.Output, "\n%s\n%s %s\n%s %s\n%s %s, %s, %s, %s\n%s %s\n",
 		color.New(color.FgCyan, color.Bold).Sprintf("%s", "NextTrace CopyRight"),
-		//color.New(color.FgGreen, color.Bold).Sprintf("%s", "Contact Us"),
-		//color.New(color.FgWhite, color.Bold).Sprintf("%s", "Feedback Email:"),
-		//color.New(color.FgHiBlack, color.Bold).Sprintf("%s", "nt@moeqing.com"),
-		//color.New(color.FgWhite, color.Bold).Sprintf("%s", "HomePage:"),
-		//color.New(color.FgHiBlack, color.Bold).Sprintf("%s", "github.com/nxtrace"),
 		color.New(color.FgWhite, color.Bold).Sprintf("%s", "Honorary Founder:"),
 		color.New(color.FgHiBlue, color.Bold).Sprintf("%s", "Leo"),
-		//color.New(color.FgHiBlack, color.Bold).Sprintf("%s", "i@leo.moe"),
 		color.New(color.FgWhite, color.Bold).Sprintf("%s", "Project Chair:"),
 		color.New(color.FgHiBlue, color.Bold).Sprintf("%s", "Tso"),
 		color.New(color.FgWhite, color.Bold).Sprintf("%s", "Core-Developer:"),
 		color.New(color.FgHiBlue, color.Bold).Sprintf("%s", "Leo"),
-		//color.New(color.FgHiBlack, color.Bold).Sprintf("%s", "i@leo.moe"),
 		color.New(color.FgHiBlue, color.Bold).Sprintf("%s", "Vincent"),
-		//color.New(color.FgHiBlack, color.Bold).Sprintf("%s", "i@vincent.moe"),
 		color.New(color.FgHiBlue, color.Bold).Sprintf("%s", "zhshch"),
-		//color.New(color.FgHiBlack, color.Bold).Sprintf("%s", "zhshch@athorx.com"),
 		color.New(color.FgHiBlue, color.Bold).Sprintf("%s", "Tso"),
-		//color.New(color.FgHiBlack, color.Bold).Sprintf("%s", "tsosunchia@gmail.com"),
 		color.New(color.FgWhite, color.Bold).Sprintf("%s", "Infra Maintainer:"),
 		color.New(color.FgHiBlue, color.Bold).Sprintf("%s", "Tso"),
-		//color.New(color.FgWhite, color.Bold).Sprintf("%s", "NOC Manager:"),
-		//color.New(color.FgHiBlue, color.Bold).Sprintf("%s", "YekongTAT"),
-		//color.New(color.FgHiBlack, color.Bold).Sprintf("%s", "tsosunchia@gmail.com"),
 	)
-	//PluginCopyRight()
 }
 
 func sponsor() {
@@ -69,14 +55,6 @@ func sponsor() {
 		color.New(color.FgHiBlack, color.Bold).Sprintf("%s", formatted),
 	)
 }
-
-//func PluginCopyRight() {
-//	fmt.Fprintf(color.Output, "%s\n%s %s\n\n",
-//		color.New(color.FgGreen, color.Bold).Sprintf("%s", "NextTrace Map Plugin Author"),
-//		color.New(color.FgWhite, color.Bold).Sprintf("%s", "Tso"),
-//		color.New(color.FgHiBlack, color.Bold).Sprintf("%s", "tsosunchia@gmail.com"),
-//	)
-//}
 
 func PrintTraceRouteNav(ip net.IP, domain string, dataOrigin string, maxHops int, packetSize int, srcAddr string, mode string) {
 	fmt.Println("IP Geo Data Provider: " + dataOrigin)
