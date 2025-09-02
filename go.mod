@@ -11,7 +11,7 @@ require (
 	github.com/oschwald/maxminddb-golang v1.13.1
 	github.com/rodaine/table v1.3.0
 	github.com/spf13/viper v1.20.1
-	github.com/stretchr/testify v1.11.0
+	github.com/stretchr/testify v1.11.1
 	github.com/syndtr/gocapability v0.0.0-20200815063812-42c35b437635
 	github.com/tidwall/gjson v1.18.0
 	github.com/tsosunchia/powclient v0.2.0
