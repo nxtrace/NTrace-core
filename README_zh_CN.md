@@ -93,7 +93,7 @@ Document Language: [English](README.md) | 简体中文
 
      同macOS Homebrew安装方法(homebrew-core版仅支持amd64)
 
-  * Deepin 安装命令
+  * deepin 安装命令
     ```shell
     apt install nexttrace
     ```
