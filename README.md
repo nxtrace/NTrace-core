@@ -86,7 +86,7 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
 
       Same as the macOS Homebrew's installation method (homebrew-core version only supports amd64)
 
-    * Deepin installation command
+    * deepin installation command
       ```shell
       apt install nexttrace
       ```
