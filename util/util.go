@@ -19,7 +19,7 @@ import (
 
 var SrcDev string
 var SrcPort int
-var DestIP string
+var DstIP string
 var PowProviderParam = ""
 var RdnsCache sync.Map
 var UserAgent = fmt.Sprintf("NextTrace %s/%s/%s", config.Version, runtime.GOOS, runtime.GOARCH)
@@ -71,60 +71,6 @@ func LookupAddr(addr string) ([]string, error) {
 		RdnsCache.Store(addr, names[0])
 	}
 	return names, nil
-}
-
-// FindDeviceByIP 根据给定 IPv4/IPv6 源地址返回所属网卡名，找不到返回 ""
-func FindDeviceByIP(srcip net.IP) string {
-	if SrcDev != "" {
-		return SrcDev
-	}
-
-	if srcip == nil {
-		return ""
-	}
-	is6 := IsIPv6(srcip)
-
-	var v4, v6 net.IP
-	if is6 {
-		v6 = srcip.To16()
-	} else {
-		v4 = srcip.To4()
-		if v4 == nil {
-			return ""
-		}
-	}
-
-	ifaces, err := net.Interfaces()
-	if err != nil {
-		return ""
-	}
-	for _, ifi := range ifaces {
-		addrs, _ := ifi.Addrs()
-		for _, a := range addrs {
-			var got net.IP
-			switch v := a.(type) {
-			case *net.IPNet:
-				got = v.IP
-			case *net.IPAddr:
-				got = v.IP
-			default:
-				continue
-			}
-			if got == nil {
-				continue
-			}
-			if is6 {
-				if g := got.To16(); g != nil && IsIPv6(got) && g.Equal(v6) {
-					return ifi.Name
-				}
-			} else {
-				if g := got.To4(); g != nil && g.Equal(v4) {
-					return ifi.Name
-				}
-			}
-		}
-	}
-	return ""
 }
 
 // getLocalIPPort（仅用于 IPv4）：
@@ -412,29 +358,10 @@ func HideIPPart(ip string) string {
 	return parsedIP.Mask(net.CIDRMask(32, 128)).String() + "/32"
 }
 
-func ChecksumOK(data []byte) bool {
-	var sum uint32
-	// 两两成 16-bit 大端序 word 累加
-	for i := 0; i+1 < len(data); i += 2 {
-		word := uint32(data[i])<<8 | uint32(data[i+1])
-		sum += word
-		// 折叠进位
-		sum = (sum & 0xffff) + (sum >> 16)
-	}
-
-	// 奇数字节则末尾补 0
-	if len(data)%2 == 1 {
-		sum += uint32(data[len(data)-1]) << 8
-		sum = (sum & 0xffff) + (sum >> 16)
-	}
-
-	// 最终再折叠一次，保证 16 位
-	return (sum&0xffff)+(sum>>16) != 0xffff
-}
-
 // fold16 对 32 位累加和做 16 位一补折叠（包含 end-around carry）
 func fold16(sum uint32) uint16 {
-	for sum>>16 != 0 {
+	// 将高 16 位进位折叠回低 16 位，直至无进位
+	for (sum >> 16) != 0 {
 		sum = (sum & 0xFFFF) + (sum >> 16)
 	}
 
@@ -442,13 +369,15 @@ func fold16(sum uint32) uint16 {
 }
 
 // addBytes 按大端把字节流每 16 位累加到 sum；若长度为奇数，最后 1 字节作为高位、低位补 0
-func addBytes(sum uint32, b []byte) uint32 {
-	for i := 0; i+1 < len(b); i += 2 {
-		sum += uint32(b[i])<<8 | uint32(b[i+1])
+func addBytes(sum uint32, data []byte) uint32 {
+	// 两两组成 16-bit 大端序累加
+	for i := 0; i+1 < len(data); i += 2 {
+		sum += uint32(data[i])<<8 | uint32(data[i+1])
 	}
 
-	if len(b)%2 == 1 {
-		sum += uint32(b[len(b)-1]) << 8
+	// 奇数字节则末尾补 0
+	if len(data)%2 == 1 {
+		sum += uint32(data[len(data)-1]) << 8
 	}
 
 	return sum

@@ -1,4 +1,4 @@
-package trace
+package internal
 
 import (
 	"context"
@@ -8,7 +8,6 @@ import (
 )
 
 type ReceivedMessage struct {
-	N    *int
 	Peer net.Addr
 	Msg  []byte
 	Err  error
@@ -65,12 +64,10 @@ func (l *PacketListener) Start(ctx context.Context) {
 		// 拷贝出精确长度，避免 buf 复用带来的数据竞争
 		pkt := make([]byte, n)
 		copy(pkt, buf[:n])
-		nn := new(int)
-		*nn = n
 
 		// 限时等待投递数据；超时或取消就丢弃/退出
 		select {
-		case l.ch <- ReceivedMessage{N: nn, Peer: peer, Msg: pkt}:
+		case l.ch <- ReceivedMessage{Peer: peer, Msg: pkt}:
 		case <-ctx.Done():
 			return
 		case <-time.After(5 * time.Second):

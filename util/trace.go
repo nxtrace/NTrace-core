@@ -90,9 +90,18 @@ func GetICMPResponsePayload(data []byte) ([]byte, error) {
 	}
 }
 
+func GetTCPPorts(data []byte) (int, int, error) {
+	if len(data) < 4 {
+		return 0, 0, errors.New("length of tcp header too short for ports")
+	}
+	srcPort := int(binary.BigEndian.Uint16(data[0:2]))
+	dstPort := int(binary.BigEndian.Uint16(data[2:4]))
+	return srcPort, dstPort, nil
+}
+
 func GetTCPSeq(data []byte) (uint32, error) {
 	if len(data) < 8 {
-		return 0, errors.New("length of tcp header too short")
+		return 0, errors.New("length of tcp header too short for seq")
 	}
 	seqBytes := data[4:8]
 	return binary.BigEndian.Uint32(seqBytes), nil

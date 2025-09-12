@@ -1,4 +1,4 @@
-//go:build darwin
+//go:build windows
 
 package internal
 
@@ -8,29 +8,24 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"sync"
 	"time"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
-	"golang.org/x/net/icmp"
-	"golang.org/x/net/ipv4"
-	"golang.org/x/net/ipv6"
+	wd "github.com/xjasonlyu/windivert-go"
 
 	"github.com/nxtrace/NTrace-core/util"
 )
 
 type TCPSpec struct {
-	IPVersion    int
-	SrcIP        net.IP
-	DstIP        net.IP
-	DstPort      int
-	PktSize      int
-	icmp         net.PacketConn
-	tcp          net.PacketConn
-	tcp4         *ipv4.PacketConn
-	tcp6         *ipv6.PacketConn
-	hopLimitLock sync.Mutex
+	IPVersion int
+	SrcIP     net.IP
+	DstIP     net.IP
+	DstPort   int
+	icmp      net.PacketConn
+	PktSize   int
+	addr      wd.Address
+	handle    wd.Handle
 }
 
 func NewTCPSpec(ipv int, srcIP, dstIP net.IP, dstPort int, icmp net.PacketConn, pktSize int) *TCPSpec {
@@ -38,66 +33,105 @@ func NewTCPSpec(ipv int, srcIP, dstIP net.IP, dstPort int, icmp net.PacketConn, 
 }
 
 func (s *TCPSpec) InitTCP() {
-	network := "ip4:tcp"
-	if s.IPVersion == 6 {
-		network = "ip6:tcp"
-	}
-
-	tcp, err := net.ListenPacket(network, s.SrcIP.String())
+	handle, err := wd.Open("false", wd.LayerNetwork, 0, 0)
 	if err != nil {
 		if util.EnvDevMode {
-			panic(fmt.Errorf("InitTCP: ListenPacket(%s, %s) failed: %v", network, s.SrcIP, err))
+			panic(fmt.Errorf("InitTCP: WinDivert open failed: %v", err))
 		}
-		log.Fatalf("InitTCP: ListenPacket(%s, %s) failed: %v", network, s.SrcIP, err)
+		log.Fatalf("InitTCP: WinDivert open failed: %v", err)
 	}
-	s.tcp = tcp
+	s.handle = handle
 
-	if s.IPVersion == 4 {
-		s.tcp4 = ipv4.NewPacketConn(tcp)
-	} else {
-		s.tcp6 = ipv6.NewPacketConn(tcp)
-	}
+	// 设置出站 Address
+	s.addr.SetLayer(wd.LayerNetwork)
+	s.addr.SetEvent(wd.EventNetworkPacket)
+	s.addr.SetOutbound()
 }
 
 func (s *TCPSpec) Close() {
-	_ = s.tcp.Close()
+	_ = s.handle.Close()
 }
 
 func (s *TCPSpec) ListenICMP(ctx context.Context, onICMP func(msg ReceivedMessage, finish time.Time, data []byte)) {
-	lc := NewPacketListener(s.icmp)
-	go lc.Start(ctx)
+	// 选择捕获设备与本地接口
+	dev, err := util.PcapDeviceByIP(s.SrcIP)
+	if err != nil {
+		return
+	}
+
+	ipPrefix := "ip"
+	proto := "icmp"
+	if s.IPVersion == 6 {
+		ipPrefix = "ip6"
+		proto = "icmp6"
+	}
+
+	// 以“立即模式”打开 pcap，降低首包丢失概率
+	handle, err := util.OpenLiveImmediate(dev, 65535, true, 4<<20)
+	if err != nil {
+		if util.EnvDevMode {
+			panic(fmt.Errorf("ListenICMP: pcap open failed on %s: %v", dev, err))
+		}
+		log.Fatalf("ListenICMP: pcap open failed on %s: %v", dev, err)
+	}
+	defer handle.Close()
+
+	// 过滤：只抓 {ip/ip6} + {icmp/icmp6}，且目标为本机 s.SrcIP
+	filter := fmt.Sprintf("%s and %s and dst host %s",
+		ipPrefix, proto, s.SrcIP.String())
+
+	if err := handle.SetBPFFilter(filter); err != nil {
+		if util.EnvDevMode {
+			panic(fmt.Errorf("ListenICMP: set BPF failed: %v (filter=%q)", err, filter))
+		}
+		log.Fatalf("ListenICMP: set BPF failed: %v (filter=%q)", err, filter)
+	}
+
+	src := gopacket.NewPacketSource(handle, handle.LinkType())
+	pktCh := src.Packets()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case msg, ok := <-lc.Messages:
+		case pkt, ok := <-pktCh:
 			if !ok {
 				return
 			}
 
-			if msg.Err != nil {
+			// 解包
+			packet := pkt.NetworkLayer()
+			if packet == nil {
 				continue
 			}
-			finish := time.Now()
 
-			var data []byte // 提取 ICMP 负载
+			// outer = IP 头 + 负载
+			outer := make([]byte, 0, len(packet.LayerContents())+len(packet.LayerPayload()))
+			outer = append(outer, packet.LayerContents()...)
+			outer = append(outer, packet.LayerPayload()...)
+
+			var peerIP net.IP // 提取对端 IP（按族别）
+			var data []byte   // 提取 ICMP 负载
 			if s.IPVersion == 4 {
-				rm, err := icmp.ParseMessage(1, msg.Msg)
-				if err != nil {
+				// 从包中获取 IPv4 层信息
+				ip4, ok := pkt.Layer(layers.LayerTypeIPv4).(*layers.IPv4)
+				if !ok || ip4 == nil {
 					continue
 				}
+				peerIP = ip4.SrcIP
 
-				switch rm.Type {
-				case ipv4.ICMPTypeTimeExceeded:
-					if body, ok := rm.Body.(*icmp.TimeExceeded); ok && body != nil {
-						data = body.Data
-					}
-				case ipv4.ICMPTypeDestinationUnreachable:
-					if body, ok := rm.Body.(*icmp.DstUnreach); ok && body != nil {
-						data = body.Data
-					}
+				// 从包中获取 ICMPv4 层信息
+				ic4, ok := pkt.Layer(layers.LayerTypeICMPv4).(*layers.ICMPv4)
+				if !ok || ic4 == nil {
+					continue
+				}
+				data = ic4.Payload
+
+				switch ic4.TypeCode.Type() {
+				case layers.ICMPv4TypeTimeExceeded:
+				case layers.ICMPv4TypeDestinationUnreachable:
 				default:
-					//log.Println("received icmp message of unknown type", rm.Type)
+					//log.Println("received icmp message of unknown type", ic4.TypeCode.Type())
 					continue
 				}
 
@@ -110,26 +144,26 @@ func (s *TCPSpec) ListenICMP(ctx context.Context, onICMP func(msg ReceivedMessag
 					continue
 				}
 			} else {
-				rm, err := icmp.ParseMessage(58, msg.Msg)
-				if err != nil {
+				// 从包中获取 IPv6 层信息
+				ip6, ok := pkt.Layer(layers.LayerTypeIPv6).(*layers.IPv6)
+				if !ok || ip6 == nil {
 					continue
 				}
+				peerIP = ip6.SrcIP
 
-				switch rm.Type {
-				case ipv6.ICMPTypeTimeExceeded:
-					if body, ok := rm.Body.(*icmp.TimeExceeded); ok && body != nil {
-						data = body.Data
-					}
-				case ipv6.ICMPTypePacketTooBig:
-					if body, ok := rm.Body.(*icmp.PacketTooBig); ok && body != nil {
-						data = body.Data
-					}
-				case ipv6.ICMPTypeDestinationUnreachable:
-					if body, ok := rm.Body.(*icmp.DstUnreach); ok && body != nil {
-						data = body.Data
-					}
+				// 从包中获取 ICMPv6 层信息
+				ic6, ok := pkt.Layer(layers.LayerTypeICMPv6).(*layers.ICMPv6)
+				if !ok || ic6 == nil {
+					continue
+				}
+				data = ic6.Payload[4:]
+
+				switch ic6.TypeCode.Type() {
+				case layers.ICMPv6TypeTimeExceeded:
+				case layers.ICMPv6TypePacketTooBig:
+				case layers.ICMPv6TypeDestinationUnreachable:
 				default:
-					//log.Println("received icmp message of unknown type", rm.Type)
+					//log.Println("received icmp message of unknown type", ic6.TypeCode.Type())
 					continue
 				}
 
@@ -142,6 +176,14 @@ func (s *TCPSpec) ListenICMP(ctx context.Context, onICMP func(msg ReceivedMessag
 					continue
 				}
 			}
+			peer := &net.IPAddr{IP: peerIP}
+
+			// outer：外层 IP 报文字节；data：ICMP 引用的内层 IP 片段
+			msg := ReceivedMessage{
+				Peer: peer,
+				Msg:  outer,
+			}
+			finish := pkt.Metadata().Timestamp
 			onICMP(msg, finish, data)
 		}
 	}
@@ -149,11 +191,9 @@ func (s *TCPSpec) ListenICMP(ctx context.Context, onICMP func(msg ReceivedMessag
 
 func (s *TCPSpec) ListenTCP(ctx context.Context, onTCP func(srcPort, seq int, peer net.Addr, finish time.Time)) {
 	// 选择捕获设备与本地接口
-	dev := "en0"
-	if util.SrcDev != "" {
-		dev = util.SrcDev
-	} else if d, err := util.PcapDeviceByIP(s.SrcIP); err == nil {
-		dev = d
+	dev, err := util.PcapDeviceByIP(s.SrcIP)
+	if err != nil {
+		return
 	}
 
 	ipPrefix := "ip"
@@ -256,20 +296,20 @@ func (s *TCPSpec) SendTCP(ctx context.Context, ipHdr interface{}, tcpHdr *layers
 	// 统一持有网络层接口
 	var (
 		netL gopacket.NetworkLayer
-		ttl  int
+		ipL  gopacket.SerializableLayer
 	)
 	if s.IPVersion == 4 {
 		ip4, ok := ipHdr.(*layers.IPv4)
 		if !ok || ip4 == nil {
 			return time.Time{}, errors.New("SendTCP: expect *layers.IPv4 when ipv==4")
 		}
-		netL, ttl = ip4, int(ip4.TTL)
+		netL, ipL = ip4, ip4
 	} else {
 		ip6, ok := ipHdr.(*layers.IPv6)
 		if !ok || ip6 == nil {
 			return time.Time{}, errors.New("SendTCP: expect *layers.IPv6 when ipv==6")
 		}
-		netL, ttl = ip6, int(ip6.HopLimit)
+		netL, ipL = ip6, ip6
 	}
 
 	_ = tcpHdr.SetNetworkLayerForChecksum(netL)
@@ -280,31 +320,16 @@ func (s *TCPSpec) SendTCP(ctx context.Context, ipHdr interface{}, tcpHdr *layers
 		FixLengths:       true,
 	}
 
-	// 序列化 TCP 头与 payload 到缓冲区
-	if err := gopacket.SerializeLayers(buf, opts, tcpHdr, gopacket.Payload(payload)); err != nil {
+	// 序列化 IP 与 TCP 头以及 payload 到缓冲区
+	if err := gopacket.SerializeLayers(buf, opts, ipL, tcpHdr, gopacket.Payload(payload)); err != nil {
 		return time.Time{}, err
-	}
-
-	// 串行设置 TTL/HopLimit + 发送，放在同一把锁里保证并发安全
-	s.hopLimitLock.Lock()
-	if s.IPVersion == 4 {
-		if err := s.tcp4.SetTTL(ttl); err != nil {
-			s.hopLimitLock.Unlock()
-			return time.Time{}, err
-		}
-	} else {
-		if err := s.tcp6.SetHopLimit(ttl); err != nil {
-			s.hopLimitLock.Unlock()
-			return time.Time{}, err
-		}
 	}
 
 	start := time.Now()
 
-	if _, err := s.tcp.WriteTo(buf.Bytes(), &net.IPAddr{IP: s.DstIP}); err != nil {
-		s.hopLimitLock.Unlock()
+	// 复用预置的出站 Address
+	if _, err := s.handle.Send(buf.Bytes(), &s.addr); err != nil {
 		return time.Time{}, err
 	}
-	s.hopLimitLock.Unlock()
 	return start, nil
 }

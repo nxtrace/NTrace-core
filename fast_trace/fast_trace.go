@@ -28,7 +28,7 @@ type FastTracer struct {
 type ParamsFastTrace struct {
 	SrcDev         string
 	SrcAddr        string
-	DestPort       int
+	DstPort        int
 	BeginHop       int
 	MaxHops        int
 	RDns           bool
@@ -59,8 +59,8 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 	}
 	var conf = trace.Config{
 		BeginHop:         f.ParamsFastTrace.BeginHop,
-		DestIP:           ip,
-		DestPort:         f.ParamsFastTrace.DestPort,
+		DstIP:            ip,
+		DstPort:          f.ParamsFastTrace.DstPort,
 		MaxHops:          f.ParamsFastTrace.MaxHops,
 		NumMeasurements:  3,
 		ParallelRequests: 18,
@@ -339,8 +339,8 @@ func testFile(paramsFastTrace ParamsFastTrace, traceMode trace.Method) {
 
 		var conf = trace.Config{
 			BeginHop:         paramsFastTrace.BeginHop,
-			DestIP:           net.ParseIP(ip.Ip),
-			DestPort:         paramsFastTrace.DestPort,
+			DstIP:            net.ParseIP(ip.Ip),
+			DstPort:          paramsFastTrace.DstPort,
 			MaxHops:          paramsFastTrace.MaxHops,
 			NumMeasurements:  3,
 			ParallelRequests: 18,
