@@ -503,6 +503,7 @@ func (t *TCPTracerIPv6) send(ctx context.Context, s *internal.TCPSpec, ttl, i in
 
 	start, err := s.SendTCP(ctx, ipHeader, tcpHeader, payload)
 	if err != nil {
+		_ = t.clearPending(seq)
 		return err
 	}
 	t.storeSent(seq, SrcPort, start)

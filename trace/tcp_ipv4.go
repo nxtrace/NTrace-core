@@ -504,6 +504,7 @@ func (t *TCPTracer) send(ctx context.Context, s *internal.TCPSpec, ttl, i int) e
 
 	start, err := s.SendTCP(ctx, ipHeader, tcpHeader, payload)
 	if err != nil {
+		_ = t.clearPending(seq)
 		return err
 	}
 	t.storeSent(seq, SrcPort, start)
