@@ -19,6 +19,7 @@ import (
 	"golang.org/x/net/ipv4"
 	"golang.org/x/sync/semaphore"
 
+	"github.com/nxtrace/NTrace-core/trace/internal"
 	"github.com/nxtrace/NTrace-core/util"
 )
 
@@ -40,7 +41,7 @@ type UDPTracer struct {
 func (t *UDPTracer) PrintFunc(ctx context.Context, cancel context.CancelCauseFunc) {
 	defer t.wg.Done()
 
-	ttl := t.Config.BeginHop - 1
+	ttl := t.BeginHop - 1
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -97,7 +98,7 @@ func (t *UDPTracer) launchTTL(ctx context.Context, ttl int) {
 			select {
 			case <-ctx.Done():
 				return
-			case <-time.After(time.Millisecond * time.Duration(t.Config.PacketInterval)):
+			case <-time.After(time.Millisecond * time.Duration(t.PacketInterval)):
 			}
 		}
 	}(ttl)
@@ -113,13 +114,14 @@ func (t *UDPTracer) Execute() (res *Result, err error) {
 
 	// 初始化 Result.Hops，并预分配到 MaxHops
 	t.res.Hops = make([][]Hop, t.MaxHops)
+	t.res.tailDone = make([]bool, t.MaxHops)
 
 	// 解析并校验用户指定的 IPv4 源地址
 	SrcAddr := net.ParseIP(t.SrcAddr).To4()
 	if t.SrcAddr != "" && SrcAddr == nil {
 		return nil, errors.New("invalid IPv4 SrcAddr:" + t.SrcAddr)
 	}
-	t.SrcIP, _ = util.LocalIPPort(t.DestIP, SrcAddr, "udp")
+	t.SrcIP, _ = util.LocalIPPort(t.DstIP, SrcAddr, "udp")
 	if t.SrcIP == nil {
 		return nil, errors.New("cannot determine local IPv4 address")
 	}
@@ -163,7 +165,7 @@ func (t *UDPTracer) Execute() (res *Result, err error) {
 		t.launchTTL(ctx, t.BeginHop)
 
 		// 之后按 TTLInterval 周期启动后续 TTL 组
-		ticker := time.NewTicker(time.Millisecond * time.Duration(t.Config.TTLInterval))
+		ticker := time.NewTicker(time.Millisecond * time.Duration(t.TTLInterval))
 		defer ticker.Stop()
 
 		for ttl := t.BeginHop + 1; ttl <= t.MaxHops; ttl++ {
@@ -201,7 +203,7 @@ func (t *UDPTracer) Execute() (res *Result, err error) {
 
 func (t *UDPTracer) listenICMP(ctx context.Context) {
 	defer t.wg.Done()
-	lc := NewPacketListener(t.icmp)
+	lc := internal.NewPacketListener(t.icmp)
 	go lc.Start(ctx)
 	for {
 		select {
@@ -212,11 +214,11 @@ func (t *UDPTracer) listenICMP(ctx context.Context) {
 				return
 			}
 
-			if msg.N == nil {
+			if msg.Err != nil {
 				continue
 			}
 
-			rm, err := icmp.ParseMessage(1, msg.Msg[:*msg.N])
+			rm, err := icmp.ParseMessage(1, msg.Msg)
 			if err != nil {
 				log.Println(err)
 				continue
@@ -246,14 +248,14 @@ func (t *UDPTracer) listenICMP(ctx context.Context) {
 			}
 
 			dstip := net.IP(data[16:20])
-			if dstip.Equal(t.DestIP) || dstip.Equal(net.IPv4zero) {
+			if dstip.Equal(t.DstIP) || dstip.Equal(net.IPv4zero) {
 				t.handleICMPMessage(msg, data)
 			}
 		}
 	}
 }
 
-func (t *UDPTracer) handleICMPMessage(msg ReceivedMessage, data []byte) {
+func (t *UDPTracer) handleICMPMessage(msg internal.ReceivedMessage, data []byte) {
 	mpls := extractMPLS(msg)
 
 	header, err := util.GetICMPResponsePayload(data)
@@ -290,6 +292,7 @@ func (t *UDPTracer) handleICMPMessage(msg ReceivedMessage, data []byte) {
 
 func (t *UDPTracer) send(ctx context.Context, ttl, i int) error {
 	defer t.wg.Done()
+
 	if t.ttlComp(ttl) {
 		// 快路径短路：若该 TTL 已完成，直接返回避免竞争信号量与无谓发包
 		return nil
@@ -329,22 +332,19 @@ func (t *UDPTracer) send(ctx context.Context, ttl, i int) error {
 		if !util.RandomPortEnabled() && t.SrcPort > 0 {
 			return nil, t.SrcPort
 		}
-		return util.LocalIPPort(t.DestIP, t.SrcIP, "udp")
+		return util.LocalIPPort(t.DstIP, t.SrcIP, "udp")
 	}()
-	//var payload []byte
-	//if t.Quic {
-	//	payload = GenerateQuicPayloadWithRandomIds()
-	//} else {
+
 	ipHeader := &layers.IPv4{
 		SrcIP:    t.SrcIP,
-		DstIP:    t.DestIP,
+		DstIP:    t.DstIP,
 		Protocol: layers.IPProtocolUDP,
 		TTL:      uint8(ttl),
 	}
 
 	udpHeader := &layers.UDP{
 		SrcPort: layers.UDPPort(SrcPort),
-		DstPort: layers.UDPPort(t.DestPort),
+		DstPort: layers.UDPPort(t.DstPort),
 	}
 	_ = udpHeader.SetNetworkLayerForChecksum(ipHeader)
 
@@ -354,7 +354,7 @@ func (t *UDPTracer) send(ctx context.Context, ttl, i int) error {
 		FixLengths:       true,
 	}
 
-	desiredPayloadSize := t.Config.PktSize
+	desiredPayloadSize := t.PktSize
 	payload := make([]byte, desiredPayloadSize)
 
 	// 设置随机种子
@@ -364,9 +364,7 @@ func (t *UDPTracer) send(ctx context.Context, ttl, i int) error {
 	}
 
 	// 通过 payload[0:2] 补偿，使 UDP.Checksum 精确等于 seq
-	if err := util.MakePayloadWithTargetChecksum(
-		payload, t.SrcIP, t.DestIP, SrcPort, t.DestPort, seq,
-	); err != nil {
+	if err := util.MakePayloadWithTargetChecksum(payload, t.SrcIP, t.DstIP, SrcPort, t.DstPort, seq); err != nil {
 		return err
 	}
 
@@ -382,7 +380,7 @@ func (t *UDPTracer) send(ctx context.Context, ttl, i int) error {
 		return err
 	}
 	start := time.Now()
-	if _, err := t.udp.WriteTo(buf.Bytes(), &net.IPAddr{IP: t.DestIP}); err != nil {
+	if _, err := t.udp.WriteTo(buf.Bytes(), &net.IPAddr{IP: t.DstIP}); err != nil {
 		t.hopLimitLock.Unlock()
 		return err
 	}
@@ -398,7 +396,7 @@ func (t *UDPTracer) send(ctx context.Context, ttl, i int) error {
 			return nil
 		}
 
-		if ip := util.AddrIP(h.Address); ip != nil && ip.Equal(t.DestIP) {
+		if ip := util.AddrIP(h.Address); ip != nil && ip.Equal(t.DstIP) {
 			for {
 				old := t.final.Load()
 				if old != -1 && ttl >= int(old) {

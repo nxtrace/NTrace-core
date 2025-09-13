@@ -53,7 +53,7 @@ func RealtimePrinterWithRouter(res *trace.Result, ttl int) {
 			fmt.Printf("%4s", "")
 		}
 		ipStr := ip
-		if util.EnableHidDstIP && ip == util.DestIP {
+		if util.EnableHidDstIP && ip == util.DstIP {
 			ipStr = util.HideIPPart(ip)
 		}
 		if net.ParseIP(ip).To4() == nil {
@@ -90,7 +90,7 @@ func RealtimePrinterWithRouter(res *trace.Result, ttl int) {
 		}
 
 		hostname := res.Hops[ttl][i].Hostname
-		if util.EnableHidDstIP && ip == util.DestIP {
+		if util.EnableHidDstIP && ip == util.DstIP {
 			hostname = ""
 		}
 

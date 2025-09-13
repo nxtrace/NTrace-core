@@ -131,9 +131,9 @@ jobs:
       fail-fast: false
       matrix: { goarch: [ amd64, arm64 ] }
     env:
+      CGO_ENABLED: 1
       GOOS: darwin
       GOARCH: ${{ matrix.goarch }}
-      CGO_ENABLED: 1
     steps:
       - name: Checkout codebase
         uses: actions/checkout@v5

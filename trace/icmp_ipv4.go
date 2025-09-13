@@ -41,7 +41,7 @@ type ICMPTracer struct {
 func (t *ICMPTracer) PrintFunc(ctx context.Context, cancel context.CancelCauseFunc) {
 	defer t.wg.Done()
 
-	ttl := t.Config.BeginHop - 1
+	ttl := t.BeginHop - 1
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -98,7 +98,7 @@ func (t *ICMPTracer) launchTTL(ctx context.Context, ttl int) {
 			select {
 			case <-ctx.Done():
 				return
-			case <-time.After(time.Millisecond * time.Duration(t.Config.PacketInterval)):
+			case <-time.After(time.Millisecond * time.Duration(t.PacketInterval)):
 			}
 		}
 	}(ttl)
@@ -123,6 +123,7 @@ func (t *ICMPTracer) Execute() (res *Result, err error) {
 
 	// 初始化 Result.Hops，并预分配到 MaxHops
 	t.res.Hops = make([][]Hop, t.MaxHops)
+	t.res.tailDone = make([]bool, t.MaxHops)
 
 	// 解析并校验用户指定的 IPv4 源地址
 	SrcAddr := net.ParseIP(t.SrcAddr).To4()
@@ -163,7 +164,7 @@ func (t *ICMPTracer) Execute() (res *Result, err error) {
 		t.launchTTL(ctx, t.BeginHop)
 
 		// 之后按 TTLInterval 周期启动后续 TTL 组
-		ticker := time.NewTicker(time.Millisecond * time.Duration(t.Config.TTLInterval))
+		ticker := time.NewTicker(time.Millisecond * time.Duration(t.TTLInterval))
 		defer ticker.Stop()
 
 		for ttl := t.BeginHop + 1; ttl <= t.MaxHops; ttl++ {
@@ -201,7 +202,7 @@ func (t *ICMPTracer) Execute() (res *Result, err error) {
 
 func (t *ICMPTracer) listenICMP(ctx context.Context) {
 	defer t.wg.Done()
-	lc := NewPacketListener(t.icmp)
+	lc := internal.NewPacketListener(t.icmp)
 	go lc.Start(ctx)
 	for {
 		select {
@@ -212,11 +213,11 @@ func (t *ICMPTracer) listenICMP(ctx context.Context) {
 				return
 			}
 
-			if msg.N == nil {
+			if msg.Err != nil {
 				continue
 			}
 
-			rm, err := icmp.ParseMessage(1, msg.Msg[:*msg.N])
+			rm, err := icmp.ParseMessage(1, msg.Msg)
 			if err != nil {
 				log.Println(err)
 				continue
@@ -233,7 +234,7 @@ func (t *ICMPTracer) listenICMP(ctx context.Context) {
 				}
 
 				// 只在 Peer 是目的地址时分发，用 seq 作为通道 key
-				if ip := util.AddrIP(msg.Peer); ip != nil && ip.Equal(t.DestIP) {
+				if ip := util.AddrIP(msg.Peer); ip != nil && ip.Equal(t.DstIP) {
 					id := uint16(echo.ID)
 					if uint8(id>>8) != t.echoIDTag || uint8(id&0xFF) != t.pidLow {
 						continue
@@ -271,7 +272,7 @@ func (t *ICMPTracer) listenICMP(ctx context.Context) {
 			}
 
 			dstip := net.IP(data[16:20])
-			if dstip.Equal(t.DestIP) || dstip.Equal(net.IPv4zero) {
+			if dstip.Equal(t.DstIP) || dstip.Equal(net.IPv4zero) {
 				inner, err := util.GetICMPResponsePayload(data)
 				if err != nil || len(inner) < 8 {
 					continue
@@ -287,7 +288,7 @@ func (t *ICMPTracer) listenICMP(ctx context.Context) {
 	}
 }
 
-func (t *ICMPTracer) handleICMPMessage(msg ReceivedMessage, seq int) {
+func (t *ICMPTracer) handleICMPMessage(msg internal.ReceivedMessage, seq int) {
 	mpls := extractMPLS(msg)
 
 	// 取出通道后立刻解锁
@@ -314,6 +315,7 @@ func (t *ICMPTracer) handleICMPMessage(msg ReceivedMessage, seq int) {
 
 func (t *ICMPTracer) send(ctx context.Context, ttl, i int) error {
 	defer t.wg.Done()
+
 	if t.ttlComp(ttl) {
 		// 快路径短路：若该 TTL 已完成，直接返回避免竞争信号量与无谓发包
 		return nil
@@ -350,10 +352,10 @@ func (t *ICMPTracer) send(ctx context.Context, ttl, i int) error {
 	id := int(uint16(t.echoIDTag)<<8 | uint16(t.pidLow))
 
 	var data []byte
-	if t.Config.PktSize < 3 {
-		data = bytes.Repeat([]byte{0}, t.Config.PktSize)
+	if t.PktSize < 3 {
+		data = bytes.Repeat([]byte{0}, t.PktSize)
 	} else {
-		data = bytes.Repeat([]byte{0}, t.Config.PktSize-3)
+		data = bytes.Repeat([]byte{0}, t.PktSize-3)
 		data = append(data, 0x6e, 0x74, 0x72) // "ntr" 作为标识
 	}
 
@@ -379,7 +381,7 @@ func (t *ICMPTracer) send(ctx context.Context, ttl, i int) error {
 		return err
 	}
 	start := time.Now()
-	if _, err := t.icmp.WriteTo(wb, &net.IPAddr{IP: t.DestIP}); err != nil {
+	if _, err := t.icmp.WriteTo(wb, &net.IPAddr{IP: t.DstIP}); err != nil {
 		t.hopLimitLock.Unlock()
 		return err
 	}
@@ -395,7 +397,7 @@ func (t *ICMPTracer) send(ctx context.Context, ttl, i int) error {
 			return nil
 		}
 
-		if ip := util.AddrIP(h.Address); ip != nil && ip.Equal(t.DestIP) {
+		if ip := util.AddrIP(h.Address); ip != nil && ip.Equal(t.DstIP) {
 			for {
 				old := t.final.Load()
 				if old != -1 && ttl >= int(old) {

@@ -52,7 +52,7 @@ func RealtimePrinter(res *trace.Result, ttl int) {
 			fmt.Printf("%4s", "")
 		}
 		ipStr := ip
-		if util.EnableHidDstIP && ip == util.DestIP {
+		if util.EnableHidDstIP && ip == util.DstIP {
 			ipStr = util.HideIPPart(ip)
 		}
 		if net.ParseIP(ip).To4() == nil {
@@ -148,7 +148,7 @@ func RealtimePrinter(res *trace.Result, ttl int) {
 		applyLangSetting(&res.Hops[ttl][i]) // 应用语言设置
 
 		hostname := res.Hops[ttl][i].Hostname
-		if util.EnableHidDstIP && ip == util.DestIP {
+		if util.EnableHidDstIP && ip == util.DstIP {
 			hostname = ""
 		}
 

@@ -30,8 +30,8 @@ func (f *FastTracer) tracert_v6(location string, ispCollection ISPCollection) {
 	}
 	var conf = trace.Config{
 		BeginHop:         f.ParamsFastTrace.BeginHop,
-		DestIP:           ip,
-		DestPort:         f.ParamsFastTrace.DestPort,
+		DstIP:            ip,
+		DstPort:          f.ParamsFastTrace.DstPort,
 		MaxHops:          f.ParamsFastTrace.MaxHops,
 		NumMeasurements:  3,
 		ParallelRequests: 18,

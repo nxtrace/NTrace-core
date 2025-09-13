@@ -13,10 +13,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"golang.org/x/net/icmp"
-	"golang.org/x/net/ipv4"
 	"golang.org/x/sync/semaphore"
 
 	"github.com/nxtrace/NTrace-core/trace/internal"
@@ -25,25 +23,49 @@ import (
 
 type TCPTracer struct {
 	Config
-	wg                  sync.WaitGroup
-	res                 Result
-	inflightRequest     map[int]chan Hop
-	inflightRequestLock sync.RWMutex
-	SrcIP               net.IP
-	icmp                net.PacketConn
-	tcp                 net.PacketConn
-	tcpConn             *ipv4.PacketConn
-	hopLimitLock        sync.Mutex
-	final               atomic.Int32
-	sem                 *semaphore.Weighted
+	wg         sync.WaitGroup
+	res        Result
+	pendingMu  sync.Mutex
+	pending    map[int]struct{}
+	sentMu     sync.RWMutex
+	sentAt     map[int]sentInfo
+	SrcIP      net.IP
+	icmp       net.PacketConn
+	final      atomic.Int32
+	sem        *semaphore.Weighted
+	matchQ     chan matchTask
+	readyICMP  chan struct{}
+	readyTCP   chan struct{}
+	readyPrint chan struct{}
 }
 
-func (t *TCPTracer) PrintFunc(ctx context.Context, cancel context.CancelCauseFunc) {
+func (t *TCPTracer) waitAllReady(ctx context.Context) {
+	timeout := time.After(5 * time.Second)
+	waiting := 3
+	for waiting > 0 {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.readyICMP:
+			waiting--
+		case <-t.readyTCP:
+			waiting--
+		case <-t.readyPrint:
+			waiting--
+		case <-timeout:
+			return
+		}
+	}
+	<-time.After(100 * time.Millisecond)
+}
+
+func (t *TCPTracer) PrintFunc(ctx context.Context, ready chan struct{}, cancel context.CancelCauseFunc) {
 	defer t.wg.Done()
 
-	ttl := t.Config.BeginHop - 1
+	ttl := t.BeginHop - 1
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
+	close(ready)
 
 	for {
 		if t.AsyncPrinter != nil {
@@ -77,7 +99,7 @@ func (t *TCPTracer) ttlComp(ttl int) bool {
 	return idx < len(t.res.Hops) && len(t.res.Hops[idx]) >= t.NumMeasurements
 }
 
-func (t *TCPTracer) launchTTL(ctx context.Context, ttl int) {
+func (t *TCPTracer) launchTTL(ctx context.Context, s *internal.TCPSpec, ttl int) {
 	go func(ttl int) {
 		for i := 0; i < t.MaxAttempts; i++ {
 			// 若此 TTL 已完成或 ctx 已取消，则不再发起新的尝试
@@ -87,7 +109,7 @@ func (t *TCPTracer) launchTTL(ctx context.Context, ttl int) {
 
 			t.wg.Add(1)
 			go func(ttl, i int) {
-				if err := t.send(ctx, ttl, i); err != nil && !errors.Is(err, context.Canceled) {
+				if err := t.send(ctx, s, ttl, i); err != nil && !errors.Is(err, context.Canceled) {
 					if util.EnvDevMode {
 						panic(err)
 					}
@@ -98,15 +120,140 @@ func (t *TCPTracer) launchTTL(ctx context.Context, ttl int) {
 			select {
 			case <-ctx.Done():
 				return
-			case <-time.After(time.Millisecond * time.Duration(t.Config.PacketInterval)):
+			case <-time.After(time.Millisecond * time.Duration(t.PacketInterval)):
 			}
 		}
 	}(ttl)
 }
 
+func (t *TCPTracer) markPending(seq int) {
+	t.pendingMu.Lock()
+	defer t.pendingMu.Unlock()
+	t.pending[seq] = struct{}{}
+}
+
+func (t *TCPTracer) clearPending(seq int) bool {
+	t.pendingMu.Lock()
+	defer t.pendingMu.Unlock()
+	_, ok := t.pending[seq]
+	delete(t.pending, seq)
+	return ok
+}
+
+func (t *TCPTracer) storeSent(seq, srcPort int, start time.Time) {
+	t.sentMu.Lock()
+	defer t.sentMu.Unlock()
+	t.sentAt[seq] = sentInfo{srcPort: srcPort, start: start}
+}
+
+func (t *TCPTracer) lookupSent(seq int) (srcPort int, start time.Time, ok bool) {
+	t.sentMu.RLock()
+	defer t.sentMu.RUnlock()
+	si, ok := t.sentAt[seq]
+	if !ok {
+		return 0, time.Time{}, false
+	}
+	return si.srcPort, si.start, true
+}
+
+func (t *TCPTracer) dropSent(seq int) {
+	t.sentMu.Lock()
+	defer t.sentMu.Unlock()
+	delete(t.sentAt, seq)
+}
+
+func (t *TCPTracer) addHopWithIndex(peer net.Addr, ttl, i int, rtt time.Duration, mpls []string) {
+	if f := t.final.Load(); f != -1 && ttl > int(f) {
+		return
+	}
+
+	if ip := util.AddrIP(peer); ip != nil && ip.Equal(t.DstIP) {
+		for {
+			old := t.final.Load()
+			if old != -1 && ttl >= int(old) {
+				break
+			}
+			if t.final.CompareAndSwap(old, int32(ttl)) {
+				break
+			}
+		}
+	}
+
+	h := Hop{
+		Success: true,
+		Address: peer,
+		TTL:     ttl,
+		RTT:     rtt,
+		MPLS:    mpls,
+	}
+
+	_ = h.fetchIPData(t.Config) // 忽略错误，继续添加结果
+
+	t.res.add(h, i, t.NumMeasurements, t.MaxAttempts)
+}
+
+func (t *TCPTracer) matchWorker(ctx context.Context) {
+	defer t.wg.Done()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case task, ok := <-t.matchQ:
+			if !ok {
+				return
+			}
+
+			// 固定等待 10ms，缓解登记竞态
+			timer := time.NewTimer(10 * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return
+			case <-timer.C:
+			}
+			timer.Stop()
+
+			// 尝试一次匹配
+			srcPort, start, ok := t.lookupSent(task.seq)
+			if !ok {
+				continue
+			}
+
+			if task.srcPort != srcPort {
+				continue
+			}
+
+			if !t.clearPending(task.seq) {
+				t.dropSent(task.seq)
+				continue
+			}
+
+			// 将 task.seq 转为 32 位无符号数
+			u := uint32(task.seq)
+
+			// 高 8 位是 TTL
+			ttl := int((u >> 24) & 0xFF)
+
+			// 低 24 位是索引 i
+			i := int(u & 0xFFFFFF)
+			rtt := task.finish.Sub(start)
+			t.addHopWithIndex(task.peer, ttl, i, rtt, task.mpls)
+			t.dropSent(task.seq)
+		}
+	}
+}
+
 func (t *TCPTracer) Execute() (res *Result, err error) {
-	// 初始化 inflightRequest map
-	t.inflightRequest = make(map[int]chan Hop)
+	// 初始化 pending、sentAt 和 matchQ
+	t.pending = make(map[int]struct{})
+	t.sentAt = make(map[int]sentInfo)
+	t.matchQ = make(chan matchTask, 60)
+
+	// 创建就绪通道
+	t.readyICMP = make(chan struct{})
+	t.readyTCP = make(chan struct{})
+	t.readyPrint = make(chan struct{})
 
 	if len(t.res.Hops) > 0 {
 		return &t.res, errTracerouteExecuted
@@ -114,27 +261,17 @@ func (t *TCPTracer) Execute() (res *Result, err error) {
 
 	// 初始化 Result.Hops，并预分配到 MaxHops
 	t.res.Hops = make([][]Hop, t.MaxHops)
+	t.res.tailDone = make([]bool, t.MaxHops)
 
 	// 解析并校验用户指定的 IPv4 源地址
 	SrcAddr := net.ParseIP(t.SrcAddr).To4()
 	if t.SrcAddr != "" && SrcAddr == nil {
 		return nil, errors.New("invalid IPv4 SrcAddr:" + t.SrcAddr)
 	}
-	t.SrcIP, _ = util.LocalIPPort(t.DestIP, SrcAddr, "tcp")
+	t.SrcIP, _ = util.LocalIPPort(t.DstIP, SrcAddr, "tcp")
 	if t.SrcIP == nil {
 		return nil, errors.New("cannot determine local IPv4 address")
 	}
-
-	t.tcp, err = net.ListenPacket("ip4:tcp", t.SrcIP.String())
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if c := t.tcp; c != nil { // 先拷一份引用，避免 defer 执行时 t.tcp 已被并发改写
-			_ = c.Close()
-		}
-	}()
-	t.tcpConn = ipv4.NewPacketConn(t.tcp)
 
 	t.icmp, err = icmp.ListenPacket("ip4:icmp", t.SrcIP.String())
 	if err != nil {
@@ -146,47 +283,52 @@ func (t *TCPTracer) Execute() (res *Result, err error) {
 		}
 	}()
 
+	s := internal.NewTCPSpec(
+		4,
+		t.SrcIP,
+		t.DstIP,
+		t.DstPort,
+		t.icmp,
+		t.PktSize,
+	)
+
+	s.InitTCP()
+	defer s.Close()
+
 	sigCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	ctx, cancel := context.WithCancelCause(sigCtx)
 	t.final.Store(-1)
 
-	t.wg.Add(1)
-	go t.listenICMP(ctx)
+	workerN := 16
+	for i := 0; i < workerN; i++ {
+		t.wg.Add(1)
+		go t.matchWorker(ctx)
+	}
 	t.wg.Add(1)
 	go func() {
 		defer t.wg.Done()
-		internal.ListenTCP(ctx, t.tcp, 4, t.SrcIP, t.DestIP, func(ack uint32, peer net.Addr, ackType int) {
-			// 依据报文类型还原原始探测 seq：1=RST+ACK => ack-1-PktSize；2=SYN+ACK => ack-1
-			var seq int
-			if ackType == 1 {
-				seq = int(ack) - 1 - t.Config.PktSize
-			} else {
-				seq = int(ack) - 1
-			}
-
-			// 取出通道后立刻解锁
-			t.inflightRequestLock.RLock()
-			ch, ok := t.inflightRequest[seq]
-			t.inflightRequestLock.RUnlock()
-			if !ok || ch == nil {
-				return
-			}
-
-			h := Hop{
-				Success: true,
-				Address: peer,
-			}
-
-			// 非阻塞发送，避免重复回包把缓冲塞满导致阻塞
+		s.ListenICMP(ctx, t.readyICMP, func(msg internal.ReceivedMessage, finish time.Time, data []byte) {
+			t.handleICMPMessage(msg, finish, data)
+		},
+		)
+	}()
+	t.wg.Add(1)
+	go func() {
+		defer t.wg.Done()
+		s.ListenTCP(ctx, t.readyTCP, func(srcPort, seq int, peer net.Addr, finish time.Time) {
+			// 非阻塞投递，队列满则丢弃任务（由超时协程兜底）
 			select {
-			case ch <- h:
+			case t.matchQ <- matchTask{
+				srcPort: srcPort, seq: seq, peer: peer, finish: finish, mpls: nil,
+			}:
 			default:
-				// 丢弃重复/迟到的相同 seq 回包，避免阻塞
+				// 丢弃以避免阻塞抓包循环
 			}
 		})
 	}()
 	t.wg.Add(1)
-	go t.PrintFunc(ctx, cancel)
+	go t.PrintFunc(ctx, t.readyPrint, cancel)
+	t.waitAllReady(ctx)
 
 	t.sem = semaphore.NewWeighted(int64(t.ParallelRequests))
 
@@ -194,10 +336,10 @@ func (t *TCPTracer) Execute() (res *Result, err error) {
 	go func() {
 		defer t.wg.Done()
 		// 立即启动 BeginHop 对应的 TTL 组
-		t.launchTTL(ctx, t.BeginHop)
+		t.launchTTL(ctx, s, t.BeginHop)
 
 		// 之后按 TTLInterval 周期启动后续 TTL 组
-		ticker := time.NewTicker(time.Millisecond * time.Duration(t.Config.TTLInterval))
+		ticker := time.NewTicker(time.Millisecond * time.Duration(t.TTLInterval))
 		defer ticker.Stop()
 
 		for ttl := t.BeginHop + 1; ttl <= t.MaxHops; ttl++ {
@@ -213,7 +355,7 @@ func (t *TCPTracer) Execute() (res *Result, err error) {
 			}
 
 			// 并发启动这个 TTL 的所有测量
-			t.launchTTL(ctx, ttl)
+			t.launchTTL(ctx, s, ttl)
 		}
 	}()
 
@@ -233,65 +375,20 @@ func (t *TCPTracer) Execute() (res *Result, err error) {
 	return &t.res, nil
 }
 
-func (t *TCPTracer) listenICMP(ctx context.Context) {
-	defer t.wg.Done()
-	lc := NewPacketListener(t.icmp)
-	go lc.Start(ctx)
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case msg, ok := <-lc.Messages:
-			if !ok {
-				return
-			}
-
-			if msg.N == nil {
-				continue
-			}
-
-			rm, err := icmp.ParseMessage(1, msg.Msg[:*msg.N])
-			if err != nil {
-				log.Println(err)
-				continue
-			}
-
-			var data []byte
-			switch rm.Type {
-			case ipv4.ICMPTypeTimeExceeded:
-				body, ok := rm.Body.(*icmp.TimeExceeded)
-				if !ok || body == nil {
-					continue
-				}
-				data = body.Data
-			case ipv4.ICMPTypeDestinationUnreachable:
-				body, ok := rm.Body.(*icmp.DstUnreach)
-				if !ok || body == nil {
-					continue
-				}
-				data = body.Data
-			default:
-				continue
-				//log.Println("received icmp message of unknown type", rm.Type)
-			}
-
-			if len(data) < 20 || data[0]>>4 != 4 {
-				continue
-			}
-
-			dstip := net.IP(data[16:20])
-			if dstip.Equal(t.DestIP) || dstip.Equal(net.IPv4zero) {
-				t.handleICMPMessage(msg, data)
-			}
-		}
-	}
-}
-
-func (t *TCPTracer) handleICMPMessage(msg ReceivedMessage, data []byte) {
+func (t *TCPTracer) handleICMPMessage(msg internal.ReceivedMessage, finish time.Time, data []byte) {
 	mpls := extractMPLS(msg)
 
 	header, err := util.GetICMPResponsePayload(data)
 	if err != nil {
+		return
+	}
+
+	srcPort, dstPort, err := util.GetTCPPorts(header)
+	if err != nil {
+		return
+	}
+
+	if dstPort != t.DstPort {
 		return
 	}
 
@@ -300,30 +397,19 @@ func (t *TCPTracer) handleICMPMessage(msg ReceivedMessage, data []byte) {
 		return
 	}
 
-	// 取出通道后立刻解锁
-	t.inflightRequestLock.RLock()
-	ch, ok := t.inflightRequest[int(seq)]
-	t.inflightRequestLock.RUnlock()
-	if !ok || ch == nil {
-		return
-	}
-
-	h := Hop{
-		Success: true,
-		Address: msg.Peer,
-		MPLS:    mpls,
-	}
-
-	// 非阻塞发送，避免重复回包把缓冲塞满导致阻塞
+	// 非阻塞投递；如果队列已满则直接丢弃该任务
 	select {
-	case ch <- h:
+	case t.matchQ <- matchTask{
+		srcPort: srcPort, seq: int(seq), peer: msg.Peer, finish: finish, mpls: mpls,
+	}:
 	default:
-		// 丢弃重复/迟到的相同 seq 回包，避免阻塞
+		// 丢弃以避免阻塞抓包循环
 	}
 }
 
-func (t *TCPTracer) send(ctx context.Context, ttl, i int) error {
+func (t *TCPTracer) send(ctx context.Context, s *internal.TCPSpec, ttl, i int) error {
 	defer t.wg.Done()
+
 	if t.ttlComp(ttl) {
 		// 快路径短路：若该 TTL 已完成，直接返回避免竞争信号量与无谓发包
 		return nil
@@ -346,114 +432,81 @@ func (t *TCPTracer) send(ctx context.Context, ttl, i int) error {
 	// 将 TTL 编码到高 8 位；将索引 i 编码到低 24 位
 	seq := (ttl << 24) | (i & 0xFFFFFF)
 
-	t.inflightRequestLock.Lock()
-	hopCh := make(chan Hop, 1)
-	t.inflightRequest[seq] = hopCh
-	t.inflightRequestLock.Unlock()
-	defer func() {
-		t.inflightRequestLock.Lock()
-		delete(t.inflightRequest, seq)
-		t.inflightRequestLock.Unlock()
-	}()
-
 	_, SrcPort := func() (net.IP, int) {
 		if !util.RandomPortEnabled() && t.SrcPort > 0 {
 			return nil, t.SrcPort
 		}
-		return util.LocalIPPort(t.DestIP, t.SrcIP, "tcp")
+		return util.LocalIPPort(t.DstIP, t.SrcIP, "tcp")
 	}()
 
 	ipHeader := &layers.IPv4{
+		Version:  4,
+		IHL:      5,
 		SrcIP:    t.SrcIP,
-		DstIP:    t.DestIP,
+		DstIP:    t.DstIP,
 		Protocol: layers.IPProtocolTCP,
 		TTL:      uint8(ttl),
 	}
 
 	tcpHeader := &layers.TCP{
 		SrcPort: layers.TCPPort(SrcPort),
-		DstPort: layers.TCPPort(t.DestPort),
+		DstPort: layers.TCPPort(t.DstPort),
 		Seq:     uint32(seq),
 		SYN:     true,
 		Window:  14600,
-	}
-	_ = tcpHeader.SetNetworkLayerForChecksum(ipHeader)
-
-	buf := gopacket.NewSerializeBuffer()
-	opts := gopacket.SerializeOptions{
-		ComputeChecksums: true,
-		FixLengths:       true,
+		Options: []layers.TCPOption{
+			{OptionType: layers.TCPOptionKindMSS, OptionLength: 4, OptionData: []byte{0x05, 0xb4}}, // MSS=1460
+		},
 	}
 
-	desiredPayloadSize := t.Config.PktSize
+	desiredPayloadSize := t.PktSize
 	payload := make([]byte, desiredPayloadSize)
 
 	// 设置随机种子
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	for i := range payload {
-		payload[i] = byte(r.Intn(256))
+	for k := range payload {
+		payload[k] = byte(r.Intn(256))
 	}
 
-	// 序列化 TCP 头与 payload 到缓冲区
-	if err := gopacket.SerializeLayers(buf, opts, tcpHeader, gopacket.Payload(payload)); err != nil {
-		return err
-	}
-
-	// 串行设置 TTL + 发送，放在同一把锁里保证并发安全
-	t.hopLimitLock.Lock()
-	if err := t.tcpConn.SetTTL(ttl); err != nil {
-		t.hopLimitLock.Unlock()
-		return err
-	}
-	start := time.Now()
-	if _, err := t.tcp.WriteTo(buf.Bytes(), &net.IPAddr{IP: t.DestIP}); err != nil {
-		t.hopLimitLock.Unlock()
-		return err
-	}
-	t.hopLimitLock.Unlock()
-
-	select {
-	case <-ctx.Done():
-		return context.Canceled
-	case h := <-hopCh:
-		rtt := time.Since(start)
-
-		if f := t.final.Load(); f != -1 && ttl > int(f) {
-			return nil
-		}
-
-		if ip := util.AddrIP(h.Address); ip != nil && ip.Equal(t.DestIP) {
-			for {
-				old := t.final.Load()
-				if old != -1 && ttl >= int(old) {
-					break
-				}
-				if t.final.CompareAndSwap(old, int32(ttl)) {
-					break
-				}
+	// 登记 pending，并启动超时守护
+	t.markPending(seq)
+	go func(seq, ttl, i int) {
+		select {
+		case <-ctx.Done():
+			_ = t.clearPending(seq)
+			return
+		case <-time.After(t.Timeout):
+			// 仍未完成且未超出 final/未达成 ttlComp 才补位
+			if !t.clearPending(seq) {
+				return
 			}
+
+			if f := t.final.Load(); f != -1 && ttl > int(f) {
+				return
+			}
+
+			if t.ttlComp(ttl) {
+				return
+			}
+
+			h := Hop{
+				Success: false,
+				Address: nil,
+				TTL:     ttl,
+				RTT:     0,
+				Error:   errHopLimitTimeout,
+			}
+
+			t.res.add(h, i, t.NumMeasurements, t.MaxAttempts)
+			t.dropSent(seq)
 		}
+	}(seq, ttl, i)
 
-		h.TTL = ttl
-		h.RTT = rtt
-
-		_ = h.fetchIPData(t.Config) // 忽略错误，继续添加结果
-
-		t.res.add(h, i, t.NumMeasurements, t.MaxAttempts)
-	case <-time.After(t.Timeout):
-		if f := t.final.Load(); f != -1 && ttl > int(f) {
-			return nil
-		}
-
-		h := Hop{
-			Success: false,
-			Address: nil,
-			TTL:     ttl,
-			RTT:     0,
-			Error:   errHopLimitTimeout,
-		}
-
-		t.res.add(h, i, t.NumMeasurements, t.MaxAttempts)
+	start, err := s.SendTCP(ctx, ipHeader, tcpHeader, payload)
+	if err != nil {
+		_ = t.clearPending(seq)
+		return err
 	}
+	t.storeSent(seq, SrcPort, start)
 	return nil
 }

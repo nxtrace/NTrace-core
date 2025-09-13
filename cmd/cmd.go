@@ -131,7 +131,7 @@ func Execute() {
 		var paramsFastTrace = fastTrace.ParamsFastTrace{
 			SrcDev:         *srcDev,
 			SrcAddr:        *srcAddr,
-			DestPort:       *port,
+			DstPort:        *port,
 			BeginHop:       *beginHop,
 			MaxHops:        *maxHops,
 			RDns:           !*noRdns,
@@ -180,10 +180,6 @@ func Execute() {
 	// return
 
 	var ip net.IP
-
-	if runtime.GOOS == "windows" && (*tcp) {
-		fmt.Println("NextTrace 基于 Windows 的路由跟踪还在早期开发阶段，目前还存在诸多问题，TCP SYN 包请求可能不能正常运行")
-	}
 
 	if *dn42 {
 		// 初始化配置
@@ -260,14 +256,14 @@ func Execute() {
 	}
 
 	util.SrcPort = *srcPort
-	util.DestIP = ip.String()
+	util.DstIP = ip.String()
 	var conf = trace.Config{
 		DN42:             *dn42,
 		SrcAddr:          *srcAddr,
 		SrcPort:          *srcPort,
 		BeginHop:         *beginHop,
-		DestIP:           ip,
-		DestPort:         *port,
+		DstIP:            ip,
+		DstPort:          *port,
 		MaxHops:          *maxHops,
 		PacketInterval:   *packetInterval,
 		TTLInterval:      *ttlInterval,

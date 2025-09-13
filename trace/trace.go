@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/nxtrace/NTrace-core/trace/internal"
 	"golang.org/x/net/idna"
 	"golang.org/x/sync/singleflight"
 
@@ -37,8 +38,8 @@ type Config struct {
 	MaxAttempts      int
 	ParallelRequests int
 	Timeout          time.Duration
-	DestIP           net.IP
-	DestPort         int
+	DstIP            net.IP
+	DstPort          int
 	Quic             bool
 	IPGeoSource      ipgeo.Source
 	RDns             bool
@@ -61,6 +62,19 @@ const (
 	TCPTrace  Method = "tcp"
 )
 
+type sentInfo struct {
+	srcPort int
+	start   time.Time
+}
+
+type matchTask struct {
+	srcPort int
+	seq     int
+	peer    net.Addr
+	finish  time.Time
+	mpls    []string
+}
+
 type Tracer interface {
 	Execute() (*Result, error)
 }
@@ -71,12 +85,15 @@ func Traceroute(method Method, config Config) (*Result, error) {
 	if config.MaxHops == 0 {
 		config.MaxHops = 30
 	}
+
 	if config.NumMeasurements == 0 {
 		config.NumMeasurements = 3
 	}
+
 	if config.ParallelRequests == 0 {
 		config.ParallelRequests = config.NumMeasurements * 5
 	}
+
 	// 若 CLI 未给或给了非正数，则尝试用环境变量
 	if config.MaxAttempts <= 0 && util.EnvMaxAttempts > 0 {
 		config.MaxAttempts = util.EnvMaxAttempts
@@ -96,20 +113,19 @@ func Traceroute(method Method, config Config) (*Result, error) {
 
 	switch method {
 	case ICMPTrace:
-		if config.DestIP.To4() != nil {
+		if config.DstIP.To4() != nil {
 			tracer = &ICMPTracer{Config: config}
 		} else {
 			tracer = &ICMPTracerv6{Config: config}
 		}
-
 	case UDPTrace:
-		if config.DestIP.To4() != nil {
+		if config.DstIP.To4() != nil {
 			tracer = &UDPTracer{Config: config}
 		} else {
 			tracer = &UDPTracerIPv6{Config: config}
 		}
 	case TCPTrace:
-		if config.DestIP.To4() != nil {
+		if config.DstIP.To4() != nil {
 			tracer = &TCPTracer{Config: config}
 		} else {
 			tracer = &TCPTracerIPv6{Config: config}
@@ -127,6 +143,7 @@ func Traceroute(method Method, config Config) (*Result, error) {
 type Result struct {
 	Hops        [][]Hop
 	lock        sync.RWMutex
+	tailDone    []bool
 	TraceMapUrl string
 }
 
@@ -138,30 +155,31 @@ func isValidHop(h Hop) bool {
 // add 带审计/限容
 // - N = numMeasurements（每个 TTL 组的最小输出条数）
 // - M = maxAttempts（每个 TTL 组的最大尝试条数）
-// 规则：对同一 TTL，attemptIdx < N 无条件放行；第 N 条进行审计（已有有效 / 当次有效 / 达到最后一次尝试 任一成立即放行）；超过 N 条一律忽略
+// 规则：对同一 TTL，attemptIdx < N-1（索引 i 从 0 开始）无条件放行；第 N 条进行审计（已有有效 / 当次有效 / 达到最后一次尝试 任一成立即放行）；超过 N 条一律忽略
 func (s *Result) add(hop Hop, attemptIdx, numMeasurements, maxAttempts int) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
 	k := hop.TTL - 1
 	bucket := s.Hops[k]
-
 	n := numMeasurements
 
 	switch {
-	case attemptIdx < n:
-		// 前 N-1：无条件放行
-		if len(bucket) < n {
-			s.Hops[k] = append(bucket, hop)
-		}
+	case attemptIdx < n-1:
+		// attemptIdx < N-1：无条件放行
+		s.Hops[k] = append(bucket, hop)
 		return
-	case attemptIdx >= n:
+	case attemptIdx >= n-1:
 		// 正在决定第 N 条：审计
 		// 放行条件（三选一）：
 		// (1) 前 N-1 中已存在有效值
 		// (2) 当前 hop 为有效值
 		// (3) 已到最后一次尝试
 		if len(bucket) >= n {
+			return
+		}
+
+		if s.tailDone[k] {
 			return
 		}
 
@@ -172,8 +190,9 @@ func (s *Result) add(hop Hop, attemptIdx, numMeasurements, maxAttempts int) {
 				break
 			}
 		}
-		if hasValid || isValidHop(hop) || attemptIdx >= maxAttempts {
+		if hasValid || isValidHop(hop) || attemptIdx >= maxAttempts-1 {
 			s.Hops[k] = append(bucket, hop) // 填满第 N 个
+			s.tailDone[k] = true
 		}
 		// 否则丢弃，等待后续更优候选（长度仍保持 N-1）
 		return
@@ -216,15 +235,15 @@ func CanonicalHostname(s string) string {
 	if s == "" {
 		return ""
 	}
-	// 去掉末尾点
+	// 去掉尾点
 	if strings.HasSuffix(s, ".") {
 		s = strings.TrimSuffix(s, ".")
 	}
-	// 按标签逐个处理，确保仅对“需要”的标签做 IDNA 转换
+	// 按标签逐个处理，确保仅对需要的标签做 IDNA 转换
 	parts := strings.Split(s, ".")
 	for i, label := range parts {
 		if label == "" {
-			continue // 防御：跳过空标签
+			continue
 		}
 		if isLDHASCII(label) {
 			// 纯 ASCII 且仅含 LDH：保留原大小写，不做大小写折叠
@@ -232,9 +251,9 @@ func CanonicalHostname(s string) string {
 		}
 		// 含非 ASCII 或不满足 LDH：对该标签做 IDNA 转 ASCII
 		if ascii, err := idna.Lookup.ToASCII(label); err == nil && ascii != "" {
-			parts[i] = ascii // punycode 一般小写；这是期望行为
+			parts[i] = ascii
 		}
-		// 若转换失败，保留原标签，不在此处返回错误（由调用链决定是否需要处理）
+		// 若转换失败，保留原标签
 	}
 	return strings.Join(parts, ".")
 }
@@ -381,12 +400,12 @@ func (h *Hop) fetchIPData(c Config) (err error) {
 	return <-ipGeoCh
 }
 
-func extractMPLS(msg ReceivedMessage) []string {
+func extractMPLS(msg internal.ReceivedMessage) []string {
 	if util.DisableMPLS {
 		return nil
 	}
 
-	tmp := fmt.Sprintf("%x", msg.Msg[:*msg.N])
+	tmp := fmt.Sprintf("%x", msg.Msg)
 
 	var findValid func(tmp, sub string, from int) string
 	findValid = func(tmp, sub string, from int) string {
@@ -408,12 +427,9 @@ func extractMPLS(msg ReceivedMessage) []string {
 		return nil
 	}
 	xdata[2], xdata[3] = 0, 0
-	if !util.ChecksumOK(xdata) {
-		return nil
-	}
 	// 判断此处这个ICMP Multi-Part Extensions的CLass为MPLS Label Stack Class (1)
-	if tmp[14:16] != "01" {
-		//fmt.Println("CLASS:", tmp[14:16], ",不是MPLS标签栈类")
+	if tmp[12:14] != "01" {
+		//fmt.Println("CLASS:", tmp[12:14], ",不是MPLS标签栈类")
 		return nil
 	}
 	l := len(tmp)/8 - 2
