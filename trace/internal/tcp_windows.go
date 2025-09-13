@@ -52,7 +52,7 @@ func (s *TCPSpec) Close() {
 	_ = s.handle.Close()
 }
 
-func (s *TCPSpec) ListenICMP(ctx context.Context, onICMP func(msg ReceivedMessage, finish time.Time, data []byte)) {
+func (s *TCPSpec) ListenICMP(ctx context.Context, ready chan struct{}, onICMP func(msg ReceivedMessage, finish time.Time, data []byte)) {
 	// 选择捕获设备与本地接口
 	dev, err := util.PcapDeviceByIP(s.SrcIP)
 	if err != nil {
@@ -89,6 +89,7 @@ func (s *TCPSpec) ListenICMP(ctx context.Context, onICMP func(msg ReceivedMessag
 
 	src := gopacket.NewPacketSource(handle, handle.LinkType())
 	pktCh := src.Packets()
+	close(ready)
 
 	for {
 		select {
@@ -189,7 +190,7 @@ func (s *TCPSpec) ListenICMP(ctx context.Context, onICMP func(msg ReceivedMessag
 	}
 }
 
-func (s *TCPSpec) ListenTCP(ctx context.Context, onTCP func(srcPort, seq int, peer net.Addr, finish time.Time)) {
+func (s *TCPSpec) ListenTCP(ctx context.Context, ready chan struct{}, onTCP func(srcPort, seq int, peer net.Addr, finish time.Time)) {
 	// 选择捕获设备与本地接口
 	dev, err := util.PcapDeviceByIP(s.SrcIP)
 	if err != nil {
@@ -226,6 +227,7 @@ func (s *TCPSpec) ListenTCP(ctx context.Context, onTCP func(srcPort, seq int, pe
 
 	src := gopacket.NewPacketSource(handle, handle.LinkType())
 	pktCh := src.Packets()
+	close(ready)
 
 	for {
 		select {

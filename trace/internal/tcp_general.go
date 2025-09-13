@@ -63,9 +63,11 @@ func (s *TCPSpec) Close() {
 	_ = s.tcp.Close()
 }
 
-func (s *TCPSpec) ListenICMP(ctx context.Context, onICMP func(msg ReceivedMessage, finish time.Time, data []byte)) {
+func (s *TCPSpec) ListenICMP(ctx context.Context, ready chan struct{}, onICMP func(msg ReceivedMessage, finish time.Time, data []byte)) {
 	lc := NewPacketListener(s.icmp)
 	go lc.Start(ctx)
+	close(ready)
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -147,9 +149,11 @@ func (s *TCPSpec) ListenICMP(ctx context.Context, onICMP func(msg ReceivedMessag
 	}
 }
 
-func (s *TCPSpec) ListenTCP(ctx context.Context, onTCP func(srcPort, seq int, peer net.Addr, finish time.Time)) {
+func (s *TCPSpec) ListenTCP(ctx context.Context, ready chan struct{}, onTCP func(srcPort, seq int, peer net.Addr, finish time.Time)) {
 	lc := NewPacketListener(s.tcp)
 	go lc.Start(ctx)
+	close(ready)
+
 	for {
 		select {
 		case <-ctx.Done():

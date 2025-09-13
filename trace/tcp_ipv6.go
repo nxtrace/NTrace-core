@@ -23,25 +23,49 @@ import (
 
 type TCPTracerIPv6 struct {
 	Config
-	wg        sync.WaitGroup
-	res       Result
-	pendingMu sync.Mutex
-	pending   map[int]struct{}
-	sentMu    sync.RWMutex
-	sentAt    map[int]sentInfo
-	SrcIP     net.IP
-	icmp      net.PacketConn
-	final     atomic.Int32
-	sem       *semaphore.Weighted
-	matchQ    chan matchTask
+	wg         sync.WaitGroup
+	res        Result
+	pendingMu  sync.Mutex
+	pending    map[int]struct{}
+	sentMu     sync.RWMutex
+	sentAt     map[int]sentInfo
+	SrcIP      net.IP
+	icmp       net.PacketConn
+	final      atomic.Int32
+	sem        *semaphore.Weighted
+	matchQ     chan matchTask
+	readyICMP  chan struct{}
+	readyTCP   chan struct{}
+	readyPrint chan struct{}
 }
 
-func (t *TCPTracerIPv6) PrintFunc(ctx context.Context, cancel context.CancelCauseFunc) {
+func (t *TCPTracerIPv6) waitAllReady(ctx context.Context) {
+	timeout := time.After(5 * time.Second)
+	waiting := 3
+	for waiting > 0 {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.readyICMP:
+			waiting--
+		case <-t.readyTCP:
+			waiting--
+		case <-t.readyPrint:
+			waiting--
+		case <-timeout:
+			return
+		}
+	}
+	<-time.After(100 * time.Millisecond)
+}
+
+func (t *TCPTracerIPv6) PrintFunc(ctx context.Context, ready chan struct{}, cancel context.CancelCauseFunc) {
 	defer t.wg.Done()
 
 	ttl := t.BeginHop - 1
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
+	close(ready)
 
 	for {
 		if t.AsyncPrinter != nil {
@@ -77,7 +101,7 @@ func (t *TCPTracerIPv6) ttlComp(ttl int) bool {
 
 func (t *TCPTracerIPv6) launchTTL(ctx context.Context, s *internal.TCPSpec, ttl int) {
 	go func(ttl int) {
-		for i := 1; i <= t.MaxAttempts; i++ {
+		for i := 0; i < t.MaxAttempts; i++ {
 			// 若此 TTL 已完成或 ctx 已取消，则不再发起新的尝试
 			if t.ttlComp(ttl) || ctx.Err() != nil {
 				return
@@ -226,6 +250,11 @@ func (t *TCPTracerIPv6) Execute() (res *Result, err error) {
 	t.sentAt = make(map[int]sentInfo)
 	t.matchQ = make(chan matchTask, 60)
 
+	// 创建就绪通道
+	t.readyICMP = make(chan struct{})
+	t.readyTCP = make(chan struct{})
+	t.readyPrint = make(chan struct{})
+
 	if len(t.res.Hops) > 0 {
 		return &t.res, errTracerouteExecuted
 	}
@@ -278,7 +307,7 @@ func (t *TCPTracerIPv6) Execute() (res *Result, err error) {
 	t.wg.Add(1)
 	go func() {
 		defer t.wg.Done()
-		s.ListenICMP(ctx, func(msg internal.ReceivedMessage, finish time.Time, data []byte) {
+		s.ListenICMP(ctx, t.readyICMP, func(msg internal.ReceivedMessage, finish time.Time, data []byte) {
 			t.handleICMPMessage(msg, finish, data)
 		},
 		)
@@ -286,7 +315,7 @@ func (t *TCPTracerIPv6) Execute() (res *Result, err error) {
 	t.wg.Add(1)
 	go func() {
 		defer t.wg.Done()
-		s.ListenTCP(ctx, func(srcPort, seq int, peer net.Addr, finish time.Time) {
+		s.ListenTCP(ctx, t.readyTCP, func(srcPort, seq int, peer net.Addr, finish time.Time) {
 			// 非阻塞投递，队列满则丢弃任务（由超时协程兜底）
 			select {
 			case t.matchQ <- matchTask{
@@ -298,7 +327,8 @@ func (t *TCPTracerIPv6) Execute() (res *Result, err error) {
 		})
 	}()
 	t.wg.Add(1)
-	go t.PrintFunc(ctx, cancel)
+	go t.PrintFunc(ctx, t.readyPrint, cancel)
+	t.waitAllReady(ctx)
 
 	t.sem = semaphore.NewWeighted(int64(t.ParallelRequests))
 

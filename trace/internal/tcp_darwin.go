@@ -63,9 +63,11 @@ func (s *TCPSpec) Close() {
 	_ = s.tcp.Close()
 }
 
-func (s *TCPSpec) ListenICMP(ctx context.Context, onICMP func(msg ReceivedMessage, finish time.Time, data []byte)) {
+func (s *TCPSpec) ListenICMP(ctx context.Context, ready chan struct{}, onICMP func(msg ReceivedMessage, finish time.Time, data []byte)) {
 	lc := NewPacketListener(s.icmp)
 	go lc.Start(ctx)
+	close(ready)
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -147,7 +149,7 @@ func (s *TCPSpec) ListenICMP(ctx context.Context, onICMP func(msg ReceivedMessag
 	}
 }
 
-func (s *TCPSpec) ListenTCP(ctx context.Context, onTCP func(srcPort, seq int, peer net.Addr, finish time.Time)) {
+func (s *TCPSpec) ListenTCP(ctx context.Context, ready chan struct{}, onTCP func(srcPort, seq int, peer net.Addr, finish time.Time)) {
 	// 选择捕获设备与本地接口
 	dev := "en0"
 	if util.SrcDev != "" {
@@ -186,6 +188,7 @@ func (s *TCPSpec) ListenTCP(ctx context.Context, onTCP func(srcPort, seq int, pe
 
 	src := gopacket.NewPacketSource(handle, handle.LinkType())
 	pktCh := src.Packets()
+	close(ready)
 
 	for {
 		select {

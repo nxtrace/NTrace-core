@@ -155,7 +155,7 @@ func isValidHop(h Hop) bool {
 // add 带审计/限容
 // - N = numMeasurements（每个 TTL 组的最小输出条数）
 // - M = maxAttempts（每个 TTL 组的最大尝试条数）
-// 规则：对同一 TTL，attemptIdx < N 无条件放行；第 N 条进行审计（已有有效 / 当次有效 / 达到最后一次尝试 任一成立即放行）；超过 N 条一律忽略
+// 规则：对同一 TTL，attemptIdx < N-1（索引 i 从 0 开始）无条件放行；第 N 条进行审计（已有有效 / 当次有效 / 达到最后一次尝试 任一成立即放行）；超过 N 条一律忽略
 func (s *Result) add(hop Hop, attemptIdx, numMeasurements, maxAttempts int) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -165,11 +165,11 @@ func (s *Result) add(hop Hop, attemptIdx, numMeasurements, maxAttempts int) {
 	n := numMeasurements
 
 	switch {
-	case attemptIdx < n:
-		// 前 N-1：无条件放行
+	case attemptIdx < n-1:
+		// attemptIdx < N-1：无条件放行
 		s.Hops[k] = append(bucket, hop)
 		return
-	case attemptIdx >= n:
+	case attemptIdx >= n-1:
 		// 正在决定第 N 条：审计
 		// 放行条件（三选一）：
 		// (1) 前 N-1 中已存在有效值
@@ -190,7 +190,7 @@ func (s *Result) add(hop Hop, attemptIdx, numMeasurements, maxAttempts int) {
 				break
 			}
 		}
-		if hasValid || isValidHop(hop) || attemptIdx >= maxAttempts {
+		if hasValid || isValidHop(hop) || attemptIdx >= maxAttempts-1 {
 			s.Hops[k] = append(bucket, hop) // 填满第 N 个
 			s.tailDone[k] = true
 		}

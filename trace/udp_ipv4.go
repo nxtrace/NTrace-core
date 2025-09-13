@@ -79,7 +79,7 @@ func (t *UDPTracer) ttlComp(ttl int) bool {
 
 func (t *UDPTracer) launchTTL(ctx context.Context, ttl int) {
 	go func(ttl int) {
-		for i := 1; i <= t.MaxAttempts; i++ {
+		for i := 0; i < t.MaxAttempts; i++ {
 			// 若此 TTL 已完成或 ctx 已取消，则不再发起新的尝试
 			if t.ttlComp(ttl) || ctx.Err() != nil {
 				return
