@@ -9,8 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-
-	"golang.org/x/sys/windows"
 )
 
 //go:embed x64/WinDivert.dll
@@ -53,9 +51,6 @@ func PrepareWinDivertRuntime() error {
 	if err := writeIfChecksumDiff(filepath.Join(exeDir, sysName), sysBytes); err != nil {
 		return err
 	}
-
-	// 采用较安全的默认 DLL 搜索策略（包含应用目录）
-	_ = windows.SetDefaultDllDirectories(windows.LOAD_LIBRARY_SEARCH_DEFAULT_DIRS)
 	return nil
 }
 
