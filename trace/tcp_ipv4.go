@@ -23,25 +23,24 @@ import (
 
 type TCPTracer struct {
 	Config
-	wg         sync.WaitGroup
-	res        Result
-	pendingMu  sync.Mutex
-	pending    map[int]struct{}
-	sentMu     sync.RWMutex
-	sentAt     map[int]sentInfo
-	SrcIP      net.IP
-	icmp       net.PacketConn
-	final      atomic.Int32
-	sem        *semaphore.Weighted
-	matchQ     chan matchTask
-	readyICMP  chan struct{}
-	readyTCP   chan struct{}
-	readyPrint chan struct{}
+	wg        sync.WaitGroup
+	res       Result
+	pendingMu sync.Mutex
+	pending   map[int]struct{}
+	sentMu    sync.RWMutex
+	sentAt    map[int]sentInfo
+	SrcIP     net.IP
+	icmp      net.PacketConn
+	final     atomic.Int32
+	sem       *semaphore.Weighted
+	matchQ    chan matchTask
+	readyICMP chan struct{}
+	readyTCP  chan struct{}
 }
 
 func (t *TCPTracer) waitAllReady(ctx context.Context) {
 	timeout := time.After(5 * time.Second)
-	waiting := 3
+	waiting := 2
 	for waiting > 0 {
 		select {
 		case <-ctx.Done():
@@ -50,8 +49,6 @@ func (t *TCPTracer) waitAllReady(ctx context.Context) {
 			waiting--
 		case <-t.readyTCP:
 			waiting--
-		case <-t.readyPrint:
-			waiting--
 		case <-timeout:
 			return
 		}
@@ -59,13 +56,19 @@ func (t *TCPTracer) waitAllReady(ctx context.Context) {
 	<-time.After(100 * time.Millisecond)
 }
 
-func (t *TCPTracer) PrintFunc(ctx context.Context, ready chan struct{}, cancel context.CancelCauseFunc) {
+func (t *TCPTracer) ttlComp(ttl int) bool {
+	idx := ttl - 1
+	t.res.lock.RLock()
+	defer t.res.lock.RUnlock()
+	return idx < len(t.res.Hops) && len(t.res.Hops[idx]) >= t.NumMeasurements
+}
+
+func (t *TCPTracer) PrintFunc(ctx context.Context, cancel context.CancelCauseFunc) {
 	defer t.wg.Done()
 
 	ttl := t.BeginHop - 1
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
-	close(ready)
 
 	for {
 		if t.AsyncPrinter != nil {
@@ -90,13 +93,6 @@ func (t *TCPTracer) PrintFunc(ctx context.Context, ready chan struct{}, cancel c
 		case <-ticker.C:
 		}
 	}
-}
-
-func (t *TCPTracer) ttlComp(ttl int) bool {
-	idx := ttl - 1
-	t.res.lock.RLock()
-	defer t.res.lock.RUnlock()
-	return idx < len(t.res.Hops) && len(t.res.Hops[idx]) >= t.NumMeasurements
 }
 
 func (t *TCPTracer) launchTTL(ctx context.Context, s *internal.TCPSpec, ttl int) {
@@ -224,11 +220,6 @@ func (t *TCPTracer) matchWorker(ctx context.Context) {
 				continue
 			}
 
-			if !t.clearPending(task.seq) {
-				t.dropSent(task.seq)
-				continue
-			}
-
 			// 将 task.seq 转为 32 位无符号数
 			u := uint32(task.seq)
 
@@ -237,8 +228,11 @@ func (t *TCPTracer) matchWorker(ctx context.Context) {
 
 			// 低 24 位是索引 i
 			i := int(u & 0xFFFFFF)
-			rtt := task.finish.Sub(start)
-			t.addHopWithIndex(task.peer, ttl, i, rtt, task.mpls)
+
+			if t.clearPending(task.seq) {
+				rtt := task.finish.Sub(start)
+				t.addHopWithIndex(task.peer, ttl, i, rtt, task.mpls)
+			}
 			t.dropSent(task.seq)
 		}
 	}
@@ -253,7 +247,6 @@ func (t *TCPTracer) Execute() (res *Result, err error) {
 	// 创建就绪通道
 	t.readyICMP = make(chan struct{})
 	t.readyTCP = make(chan struct{})
-	t.readyPrint = make(chan struct{})
 
 	if len(t.res.Hops) > 0 {
 		return &t.res, errTracerouteExecuted
@@ -316,7 +309,7 @@ func (t *TCPTracer) Execute() (res *Result, err error) {
 	go func() {
 		defer t.wg.Done()
 		s.ListenTCP(ctx, t.readyTCP, func(srcPort, seq int, peer net.Addr, finish time.Time) {
-			// 非阻塞投递，队列满则丢弃任务（由超时协程兜底）
+			// 非阻塞投递，队列满则丢弃任务
 			select {
 			case t.matchQ <- matchTask{
 				srcPort: srcPort, seq: seq, peer: peer, finish: finish, mpls: nil,
@@ -326,9 +319,9 @@ func (t *TCPTracer) Execute() (res *Result, err error) {
 			}
 		})
 	}()
-	t.wg.Add(1)
-	go t.PrintFunc(ctx, t.readyPrint, cancel)
 	t.waitAllReady(ctx)
+	t.wg.Add(1)
+	go t.PrintFunc(ctx, cancel)
 
 	t.sem = semaphore.NewWeighted(int64(t.ParallelRequests))
 
@@ -338,15 +331,12 @@ func (t *TCPTracer) Execute() (res *Result, err error) {
 		// 立即启动 BeginHop 对应的 TTL 组
 		t.launchTTL(ctx, s, t.BeginHop)
 
-		// 之后按 TTLInterval 周期启动后续 TTL 组
-		ticker := time.NewTicker(time.Millisecond * time.Duration(t.TTLInterval))
-		defer ticker.Stop()
-
 		for ttl := t.BeginHop + 1; ttl <= t.MaxHops; ttl++ {
+			// 之后按 TTLInterval 周期启动后续 TTL 组
 			select {
 			case <-ctx.Done():
 				return
-			case <-ticker.C:
+			case <-time.After(time.Millisecond * time.Duration(t.TTLInterval)):
 			}
 
 			// 如果到达最终跳，则退出

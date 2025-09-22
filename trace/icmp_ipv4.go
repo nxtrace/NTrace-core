@@ -38,6 +38,13 @@ type ICMPTracer struct {
 	sem                 *semaphore.Weighted
 }
 
+func (t *ICMPTracer) ttlComp(ttl int) bool {
+	idx := ttl - 1
+	t.res.lock.RLock()
+	defer t.res.lock.RUnlock()
+	return idx < len(t.res.Hops) && len(t.res.Hops[idx]) >= t.NumMeasurements
+}
+
 func (t *ICMPTracer) PrintFunc(ctx context.Context, cancel context.CancelCauseFunc) {
 	defer t.wg.Done()
 
@@ -68,13 +75,6 @@ func (t *ICMPTracer) PrintFunc(ctx context.Context, cancel context.CancelCauseFu
 		case <-ticker.C:
 		}
 	}
-}
-
-func (t *ICMPTracer) ttlComp(ttl int) bool {
-	idx := ttl - 1
-	t.res.lock.RLock()
-	defer t.res.lock.RUnlock()
-	return idx < len(t.res.Hops) && len(t.res.Hops[idx]) >= t.NumMeasurements
 }
 
 func (t *ICMPTracer) launchTTL(ctx context.Context, ttl int) {
@@ -163,15 +163,12 @@ func (t *ICMPTracer) Execute() (res *Result, err error) {
 		// 立即启动 BeginHop 对应的 TTL 组
 		t.launchTTL(ctx, t.BeginHop)
 
-		// 之后按 TTLInterval 周期启动后续 TTL 组
-		ticker := time.NewTicker(time.Millisecond * time.Duration(t.TTLInterval))
-		defer ticker.Stop()
-
 		for ttl := t.BeginHop + 1; ttl <= t.MaxHops; ttl++ {
+			// 之后按 TTLInterval 周期启动后续 TTL 组
 			select {
 			case <-ctx.Done():
 				return
-			case <-ticker.C:
+			case <-time.After(time.Millisecond * time.Duration(t.TTLInterval)):
 			}
 
 			// 如果到达最终跳，则退出

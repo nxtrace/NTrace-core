@@ -10,7 +10,7 @@ func TestTrace(t *testing.T) {
 	//	SrcAddr:        "",
 	//	BeginHop:       1,
 	//	MaxHops:        30,
-	//	RDns:           false,
+	//	RDNS:           false,
 	//	AlwaysWaitRDNS: false,
 	//	Lang:           "",
 	//	PktSize:        52,

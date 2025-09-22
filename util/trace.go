@@ -107,9 +107,33 @@ func GetTCPSeq(data []byte) (uint32, error) {
 	return binary.BigEndian.Uint32(seqBytes), nil
 }
 
+func GetUDPPorts(data []byte) (int, int, error) {
+	if len(data) < 4 {
+		return 0, 0, errors.New("length of udp header too short for ports")
+	}
+	srcPort := int(binary.BigEndian.Uint16(data[0:2]))
+	dstPort := int(binary.BigEndian.Uint16(data[2:4]))
+	return srcPort, dstPort, nil
+}
+
 func GetUDPSeq(data []byte) (uint16, error) {
+	if len(data) < 1 {
+		return 0, errors.New("received invalid IP header")
+	}
+	hdrLen, err := GetIPHeaderLength(data)
+	if err != nil {
+		return 0, err
+	}
+	if len(data) < hdrLen {
+		return 0, errors.New("length of IPv4 header too short for seq")
+	}
+	seqBytes := data[4:6]
+	return binary.BigEndian.Uint16(seqBytes), nil
+}
+
+func GetUDPSeqv6(data []byte) (uint16, error) {
 	if len(data) < 8 {
-		return 0, errors.New("length of udp header too short")
+		return 0, errors.New("length of udp header too short for seq")
 	}
 	seqBytes := data[6:8]
 	return binary.BigEndian.Uint16(seqBytes), nil

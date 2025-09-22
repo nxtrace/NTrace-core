@@ -16,33 +16,27 @@ import (
 	"github.com/nxtrace/NTrace-core/util"
 )
 
-type TCPSpec struct {
+type UDPSpec struct {
 	IPVersion int
 	SrcIP     net.IP
 	DstIP     net.IP
 	DstPort   int
 	icmp      net.PacketConn
-	PktSize   int
 	addr      wd.Address
 	handle    wd.Handle
 }
 
-type ipLayer interface {
-	gopacket.NetworkLayer
-	gopacket.SerializableLayer
+func NewUDPSpec(IPVersion int, srcIP, dstIP net.IP, dstPort int, icmp net.PacketConn) *UDPSpec {
+	return &UDPSpec{IPVersion: IPVersion, SrcIP: srcIP, DstIP: dstIP, DstPort: dstPort, icmp: icmp}
 }
 
-func NewTCPSpec(IPVersion int, srcIP, dstIP net.IP, dstPort int, icmp net.PacketConn, pktSize int) *TCPSpec {
-	return &TCPSpec{IPVersion: IPVersion, SrcIP: srcIP, DstIP: dstIP, DstPort: dstPort, icmp: icmp, PktSize: pktSize}
-}
-
-func (s *TCPSpec) InitTCP() {
+func (s *UDPSpec) InitUDP() {
 	handle, err := wd.Open("false", wd.LayerNetwork, 0, 0)
 	if err != nil {
 		if util.EnvDevMode {
-			panic(fmt.Errorf("(InitTCP) WinDivert open failed: %v", err))
+			panic(fmt.Errorf("(InitUDP) WinDivert open failed: %v", err))
 		}
-		log.Fatalf("(InitTCP) WinDivert open failed: %v", err)
+		log.Fatalf("(InitUDP) WinDivert open failed: %v", err)
 	}
 	s.handle = handle
 
@@ -52,11 +46,14 @@ func (s *TCPSpec) InitTCP() {
 	s.addr.SetOutbound()
 }
 
-func (s *TCPSpec) Close() {
+func (s *UDPSpec) Close() {
 	_ = s.handle.Close()
 }
 
-func (s *TCPSpec) ListenICMP(ctx context.Context, ready chan struct{}, onICMP func(msg ReceivedMessage, finish time.Time, data []byte)) {
+func (s *UDPSpec) ListenOut(_ context.Context, _ chan struct{}, _ func(srcPort, seq, ttl int, start time.Time)) {
+}
+
+func (s *UDPSpec) ListenICMP(ctx context.Context, ready chan struct{}, onICMP func(msg ReceivedMessage, finish time.Time, data []byte)) {
 	// 选择捕获设备与本地接口
 	dev, err := util.PcapDeviceByIP(s.SrcIP)
 	if err != nil {
@@ -194,112 +191,14 @@ func (s *TCPSpec) ListenICMP(ctx context.Context, ready chan struct{}, onICMP fu
 	}
 }
 
-func (s *TCPSpec) ListenTCP(ctx context.Context, ready chan struct{}, onTCP func(srcPort, seq int, peer net.Addr, finish time.Time)) {
-	// 选择捕获设备与本地接口
-	dev, err := util.PcapDeviceByIP(s.SrcIP)
-	if err != nil {
-		return
-	}
-
-	ipPrefix := "ip"
-	if s.IPVersion == 6 {
-		ipPrefix = "ip6"
-	}
-
-	// 以“立即模式”打开 pcap，降低首包丢失概率
-	handle, err := util.OpenLiveImmediate(dev, 65535, true, 4<<20)
-	if err != nil {
-		if util.EnvDevMode {
-			panic(fmt.Errorf("(ListenTCP) pcap open failed on %s: %v", dev, err))
-		}
-		log.Fatalf("(ListenTCP) pcap open failed on %s: %v", dev, err)
-	}
-	defer handle.Close()
-
-	// 过滤：只抓 {ip/ip6} + tcp，来自目标 s.DstIP → 本机 s.SrcIP，且源端口为 s.DstPort
-	filter := fmt.Sprintf(
-		"%s and tcp and src host %s and dst host %s and src port %d",
-		ipPrefix, s.DstIP.String(), s.SrcIP.String(), s.DstPort,
-	)
-
-	if err := handle.SetBPFFilter(filter); err != nil {
-		if util.EnvDevMode {
-			panic(fmt.Errorf("(ListenTCP) set BPF failed: %v (filter=%q)", err, filter))
-		}
-		log.Fatalf("(ListenTCP) set BPF failed: %v (filter=%q)", err, filter)
-	}
-
-	src := gopacket.NewPacketSource(handle, handle.LinkType())
-	pktCh := src.Packets()
-	close(ready)
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case pkt, ok := <-pktCh:
-			if !ok {
-				return
-			}
-
-			// 解包
-			packet := pkt.NetworkLayer()
-			if packet == nil {
-				continue
-			}
-			finish := pkt.Metadata().Timestamp
-
-			// 从包中获取 TCP 层信息
-			tl, ok := pkt.Layer(layers.LayerTypeTCP).(*layers.TCP)
-			if !ok || tl == nil {
-				continue
-			}
-
-			if int(tl.SrcPort) != s.DstPort {
-				continue
-			}
-
-			// 依据报文类型还原原始探测 seq：1=RST+ACK => ack-1-s.PktSize；2=SYN+ACK => ack-1
-			var seq int
-			if tl.ACK && tl.RST {
-				seq = int(tl.Ack) - 1 - s.PktSize
-			} else if tl.ACK && tl.SYN {
-				seq = int(tl.Ack) - 1
-			} else {
-				continue
-			}
-
-			var peerIP net.IP // 提取对端 IP（按族别）
-			if s.IPVersion == 4 {
-				// 从包中获取 IPv4 层信息
-				ip4, ok := pkt.Layer(layers.LayerTypeIPv4).(*layers.IPv4)
-				if !ok || ip4 == nil {
-					continue
-				}
-				peerIP = ip4.SrcIP
-			} else {
-				// 从包中获取 IPv6 层信息
-				ip6, ok := pkt.Layer(layers.LayerTypeIPv6).(*layers.IPv6)
-				if !ok || ip6 == nil {
-					continue
-				}
-				peerIP = ip6.SrcIP
-			}
-			peer := &net.IPAddr{IP: peerIP}
-			srcPort := int(tl.DstPort)
-			onTCP(srcPort, seq, peer, finish)
-		}
-	}
-}
-
-func (s *TCPSpec) SendTCP(ctx context.Context, ipHdr ipLayer, tcpHdr *layers.TCP, payload []byte) (time.Time, error) {
+func (s *UDPSpec) SendUDP(ctx context.Context, ipHdr ipLayer, udpHdr *layers.UDP, payload []byte) (time.Time, error) {
 	select {
 	case <-ctx.Done():
 		return time.Time{}, context.Canceled
 	default:
 	}
 
-	_ = tcpHdr.SetNetworkLayerForChecksum(ipHdr)
+	_ = udpHdr.SetNetworkLayerForChecksum(ipHdr)
 
 	buf := gopacket.NewSerializeBuffer()
 	opts := gopacket.SerializeOptions{
@@ -307,8 +206,8 @@ func (s *TCPSpec) SendTCP(ctx context.Context, ipHdr ipLayer, tcpHdr *layers.TCP
 		FixLengths:       true,
 	}
 
-	// 序列化 IP 与 TCP 头以及 payload 到缓冲区
-	if err := gopacket.SerializeLayers(buf, opts, ipHdr, tcpHdr, gopacket.Payload(payload)); err != nil {
+	// 序列化 IP 与 UDP 头以及 payload 到缓冲区
+	if err := gopacket.SerializeLayers(buf, opts, ipHdr, udpHdr, gopacket.Payload(payload)); err != nil {
 		return time.Time{}, err
 	}
 
