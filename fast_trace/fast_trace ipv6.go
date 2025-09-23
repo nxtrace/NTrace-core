@@ -29,13 +29,14 @@ func (f *FastTracer) tracert_v6(location string, ispCollection ISPCollection) {
 		log.Fatal(err)
 	}
 	var conf = trace.Config{
+		OSKind:           f.ParamsFastTrace.OSKind,
 		BeginHop:         f.ParamsFastTrace.BeginHop,
 		DstIP:            ip,
 		DstPort:          f.ParamsFastTrace.DstPort,
 		MaxHops:          f.ParamsFastTrace.MaxHops,
 		NumMeasurements:  3,
 		ParallelRequests: 18,
-		RDns:             f.ParamsFastTrace.RDns,
+		RDNS:             f.ParamsFastTrace.RDNS,
 		AlwaysWaitRDNS:   f.ParamsFastTrace.AlwaysWaitRDNS,
 		PacketInterval:   100,
 		TTLInterval:      500,

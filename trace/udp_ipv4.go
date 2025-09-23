@@ -13,10 +13,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"golang.org/x/net/icmp"
-	"golang.org/x/net/ipv4"
 	"golang.org/x/sync/semaphore"
 
 	"github.com/nxtrace/NTrace-core/trace/internal"
@@ -25,17 +23,49 @@ import (
 
 type UDPTracer struct {
 	Config
-	wg                  sync.WaitGroup
-	res                 Result
-	inflightRequest     map[int]chan Hop
-	inflightRequestLock sync.RWMutex
-	SrcIP               net.IP
-	icmp                net.PacketConn
-	udp                 net.PacketConn
-	udpConn             *ipv4.PacketConn
-	hopLimitLock        sync.Mutex
-	final               atomic.Int32
-	sem                 *semaphore.Weighted
+	wg        sync.WaitGroup
+	res       Result
+	ttlQMu    sync.Mutex
+	ttlQueues map[int][]attemptPort
+	pendingMu sync.Mutex
+	pending   map[attemptKey]struct{}
+	sentMu    sync.RWMutex
+	sentAt    map[int]sentInfo
+	SrcIP     net.IP
+	icmp      net.PacketConn
+	final     atomic.Int32
+	sem       *semaphore.Weighted
+	matchQ    chan matchTask
+	readyOut  chan struct{}
+	readyICMP chan struct{}
+	readyUDP  chan struct{}
+}
+
+func (t *UDPTracer) waitAllReady(ctx context.Context) {
+	timeout := time.After(5 * time.Second)
+	waiting := 3
+	for waiting > 0 {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.readyOut:
+			waiting--
+		case <-t.readyICMP:
+			waiting--
+		case <-t.readyUDP:
+			waiting--
+		case <-timeout:
+			return
+		}
+	}
+	<-time.After(100 * time.Millisecond)
+}
+
+func (t *UDPTracer) ttlComp(ttl int) bool {
+	idx := ttl - 1
+	t.res.lock.RLock()
+	defer t.res.lock.RUnlock()
+	return idx < len(t.res.Hops) && len(t.res.Hops[idx]) >= t.NumMeasurements
 }
 
 func (t *UDPTracer) PrintFunc(ctx context.Context, cancel context.CancelCauseFunc) {
@@ -70,14 +100,7 @@ func (t *UDPTracer) PrintFunc(ctx context.Context, cancel context.CancelCauseFun
 	}
 }
 
-func (t *UDPTracer) ttlComp(ttl int) bool {
-	idx := ttl - 1
-	t.res.lock.RLock()
-	defer t.res.lock.RUnlock()
-	return idx < len(t.res.Hops) && len(t.res.Hops[idx]) >= t.NumMeasurements
-}
-
-func (t *UDPTracer) launchTTL(ctx context.Context, ttl int) {
+func (t *UDPTracer) launchTTL(ctx context.Context, s *internal.UDPSpec, ttl int) {
 	go func(ttl int) {
 		for i := 0; i < t.MaxAttempts; i++ {
 			// 若此 TTL 已完成或 ctx 已取消，则不再发起新的尝试
@@ -87,7 +110,7 @@ func (t *UDPTracer) launchTTL(ctx context.Context, ttl int) {
 
 			t.wg.Add(1)
 			go func(ttl, i int) {
-				if err := t.send(ctx, ttl, i); err != nil && !errors.Is(err, context.Canceled) {
+				if err := t.send(ctx, s, ttl, i); err != nil && !errors.Is(err, context.Canceled) {
 					if util.EnvDevMode {
 						panic(err)
 					}
@@ -104,9 +127,174 @@ func (t *UDPTracer) launchTTL(ctx context.Context, ttl int) {
 	}(ttl)
 }
 
+func (t *UDPTracer) tryMatchTTLPort(ttl, srcPort int) (int, bool) {
+	t.ttlQMu.Lock()
+	defer t.ttlQMu.Unlock()
+	q := t.ttlQueues[ttl]
+	if len(q) == 0 {
+		return 0, false
+	}
+	head := q[0]
+	if head.srcPort != srcPort {
+		return 0, false
+	}
+	t.ttlQueues[ttl] = q[1:]
+	return head.i, true
+}
+
+func (t *UDPTracer) enqueueTTLPort(ttl, i, srcPort int) {
+	ap := attemptPort{srcPort: srcPort, i: i}
+	t.ttlQMu.Lock()
+	defer t.ttlQMu.Unlock()
+	t.ttlQueues[ttl] = append(t.ttlQueues[ttl], ap)
+}
+
+func (t *UDPTracer) markPending(ttl, i int) {
+	key := attemptKey{ttl: ttl, i: i}
+	t.pendingMu.Lock()
+	defer t.pendingMu.Unlock()
+	t.pending[key] = struct{}{}
+}
+
+func (t *UDPTracer) clearPending(ttl, i int) bool {
+	key := attemptKey{ttl: ttl, i: i}
+	t.pendingMu.Lock()
+	defer t.pendingMu.Unlock()
+	_, ok := t.pending[key]
+	delete(t.pending, key)
+	return ok
+}
+
+func (t *UDPTracer) storeSent(seq, ttl, i, srcPort int, start time.Time) {
+	t.sentMu.Lock()
+	defer t.sentMu.Unlock()
+	if t.OSKind != 1 {
+		t.sentAt[seq] = sentInfo{srcPort: srcPort, start: start}
+	} else {
+		t.sentAt[seq] = sentInfo{ttl: ttl, i: i, srcPort: srcPort, start: start}
+	}
+}
+
+func (t *UDPTracer) lookupSent(seq int) (ttl, i, srcPort int, start time.Time, ok bool) {
+	t.sentMu.RLock()
+	defer t.sentMu.RUnlock()
+	si, ok := t.sentAt[seq]
+	if !ok {
+		return 0, 0, 0, time.Time{}, false
+	}
+	return si.ttl, si.i, si.srcPort, si.start, true
+}
+
+func (t *UDPTracer) dropSent(seq int) {
+	t.sentMu.Lock()
+	defer t.sentMu.Unlock()
+	delete(t.sentAt, seq)
+}
+
+func (t *UDPTracer) dropByAttempt(ttl, i int) {
+	t.sentMu.Lock()
+	defer t.sentMu.Unlock()
+	for k, si := range t.sentAt {
+		if si.ttl == ttl && si.i == i {
+			delete(t.sentAt, k)
+			return
+		}
+	}
+}
+
+func (t *UDPTracer) addHopWithIndex(peer net.Addr, ttl, i int, rtt time.Duration, mpls []string) {
+	if f := t.final.Load(); f != -1 && ttl > int(f) {
+		return
+	}
+
+	if ip := util.AddrIP(peer); ip != nil && ip.Equal(t.DstIP) {
+		for {
+			old := t.final.Load()
+			if old != -1 && ttl >= int(old) {
+				break
+			}
+			if t.final.CompareAndSwap(old, int32(ttl)) {
+				break
+			}
+		}
+	}
+
+	h := Hop{
+		Success: true,
+		Address: peer,
+		TTL:     ttl,
+		RTT:     rtt,
+		MPLS:    mpls,
+	}
+
+	_ = h.fetchIPData(t.Config) // 忽略错误，继续添加结果
+
+	t.res.add(h, i, t.NumMeasurements, t.MaxAttempts)
+}
+
+func (t *UDPTracer) matchWorker(ctx context.Context) {
+	defer t.wg.Done()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case task, ok := <-t.matchQ:
+			if !ok {
+				return
+			}
+
+			// 固定等待 10ms，缓解登记竞态
+			timer := time.NewTimer(10 * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return
+			case <-timer.C:
+			}
+			timer.Stop()
+
+			// 尝试一次匹配
+			ttl, i, srcPort, start, ok := t.lookupSent(task.seq)
+			if !ok {
+				continue
+			}
+
+			if task.srcPort != srcPort {
+				continue
+			}
+
+			if t.OSKind != 1 {
+				// 将 task.seq 转为 16 位无符号数
+				u := uint16(task.seq)
+
+				// 高 8 位是 TTL
+				ttl = int((u >> 8) & 0xFF)
+
+				// 低 8 位是索引 i
+				i = int(u & 0xFF)
+			}
+
+			if t.clearPending(ttl, i) {
+				rtt := task.finish.Sub(start)
+				t.addHopWithIndex(task.peer, ttl, i, rtt, task.mpls)
+			}
+			t.dropSent(task.seq)
+		}
+	}
+}
+
 func (t *UDPTracer) Execute() (res *Result, err error) {
-	// 初始化 inflightRequest map
-	t.inflightRequest = make(map[int]chan Hop)
+	// 初始化 ttlQueues、pending、sentAt 和 matchQ
+	t.ttlQueues = make(map[int][]attemptPort)
+	t.pending = make(map[attemptKey]struct{})
+	t.sentAt = make(map[int]sentInfo)
+	t.matchQ = make(chan matchTask, 60)
+
+	// 创建就绪通道
+	t.readyOut = make(chan struct{})
+	t.readyICMP = make(chan struct{})
+	t.readyUDP = make(chan struct{})
 
 	if len(t.res.Hops) > 0 {
 		return &t.res, errTracerouteExecuted
@@ -126,17 +314,6 @@ func (t *UDPTracer) Execute() (res *Result, err error) {
 		return nil, errors.New("cannot determine local IPv4 address")
 	}
 
-	t.udp, err = net.ListenPacket("ip4:udp", t.SrcIP.String())
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if c := t.udp; c != nil { // 先拷一份引用，避免 defer 执行时 t.udp 已被并发改写
-			_ = c.Close()
-		}
-	}()
-	t.udpConn = ipv4.NewPacketConn(t.udp)
-
 	t.icmp, err = icmp.ListenPacket("ip4:icmp", t.SrcIP.String())
 	if err != nil {
 		return &t.res, err
@@ -147,12 +324,51 @@ func (t *UDPTracer) Execute() (res *Result, err error) {
 		}
 	}()
 
+	s := internal.NewUDPSpec(
+		4,
+		t.SrcIP,
+		t.DstIP,
+		t.DstPort,
+		t.icmp,
+	)
+
+	s.InitUDP()
+	defer s.Close()
+
 	sigCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	ctx, cancel := context.WithCancelCause(sigCtx)
 	t.final.Store(-1)
 
+	workerN := 16
+	for i := 0; i < workerN; i++ {
+		t.wg.Add(1)
+		go t.matchWorker(ctx)
+	}
+	if t.OSKind == 1 {
+		t.wg.Add(1)
+		go func() {
+			defer t.wg.Done()
+			s.ListenOut(ctx, t.readyOut, func(srcPort, seq, ttl int, start time.Time) {
+				// 严格按队列头端口匹配；不匹配就丢弃，避免混入其它进程/杂包
+				i, ok := t.tryMatchTTLPort(ttl, srcPort)
+				if !ok {
+					return
+				}
+				t.storeSent(seq, ttl, i, srcPort, start)
+			})
+		}()
+	} else {
+		close(t.readyOut)
+	}
 	t.wg.Add(1)
-	go t.listenICMP(ctx)
+	go func() {
+		defer t.wg.Done()
+		s.ListenICMP(ctx, t.readyICMP, func(msg internal.ReceivedMessage, finish time.Time, data []byte) {
+			t.handleICMPMessage(msg, finish, data)
+		},
+		)
+	}()
+	t.waitAllReady(ctx)
 	t.wg.Add(1)
 	go t.PrintFunc(ctx, cancel)
 
@@ -162,17 +378,14 @@ func (t *UDPTracer) Execute() (res *Result, err error) {
 	go func() {
 		defer t.wg.Done()
 		// 立即启动 BeginHop 对应的 TTL 组
-		t.launchTTL(ctx, t.BeginHop)
-
-		// 之后按 TTLInterval 周期启动后续 TTL 组
-		ticker := time.NewTicker(time.Millisecond * time.Duration(t.TTLInterval))
-		defer ticker.Stop()
+		t.launchTTL(ctx, s, t.BeginHop)
 
 		for ttl := t.BeginHop + 1; ttl <= t.MaxHops; ttl++ {
+			// 之后按 TTLInterval 周期启动后续 TTL 组
 			select {
 			case <-ctx.Done():
 				return
-			case <-ticker.C:
+			case <-time.After(time.Millisecond * time.Duration(t.TTLInterval)):
 			}
 
 			// 如果到达最终跳，则退出
@@ -181,7 +394,7 @@ func (t *UDPTracer) Execute() (res *Result, err error) {
 			}
 
 			// 并发启动这个 TTL 的所有测量
-			t.launchTTL(ctx, ttl)
+			t.launchTTL(ctx, s, ttl)
 		}
 	}()
 
@@ -201,96 +414,39 @@ func (t *UDPTracer) Execute() (res *Result, err error) {
 	return &t.res, nil
 }
 
-func (t *UDPTracer) listenICMP(ctx context.Context) {
-	defer t.wg.Done()
-	lc := internal.NewPacketListener(t.icmp)
-	go lc.Start(ctx)
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case msg, ok := <-lc.Messages:
-			if !ok {
-				return
-			}
-
-			if msg.Err != nil {
-				continue
-			}
-
-			rm, err := icmp.ParseMessage(1, msg.Msg)
-			if err != nil {
-				log.Println(err)
-				continue
-			}
-
-			var data []byte
-			switch rm.Type {
-			case ipv4.ICMPTypeTimeExceeded:
-				body, ok := rm.Body.(*icmp.TimeExceeded)
-				if !ok || body == nil {
-					continue
-				}
-				data = body.Data
-			case ipv4.ICMPTypeDestinationUnreachable:
-				body, ok := rm.Body.(*icmp.DstUnreach)
-				if !ok || body == nil {
-					continue
-				}
-				data = body.Data
-			default:
-				continue
-				//log.Println("received icmp message of unknown type", rm.Type)
-			}
-
-			if len(data) < 20 || data[0]>>4 != 4 {
-				continue
-			}
-
-			dstip := net.IP(data[16:20])
-			if dstip.Equal(t.DstIP) || dstip.Equal(net.IPv4zero) {
-				t.handleICMPMessage(msg, data)
-			}
-		}
-	}
-}
-
-func (t *UDPTracer) handleICMPMessage(msg internal.ReceivedMessage, data []byte) {
+func (t *UDPTracer) handleICMPMessage(msg internal.ReceivedMessage, finish time.Time, data []byte) {
 	mpls := extractMPLS(msg)
+
+	seq, err := util.GetUDPSeq(data)
+	if err != nil {
+		return
+	}
 
 	header, err := util.GetICMPResponsePayload(data)
 	if err != nil {
 		return
 	}
 
-	seq, err := util.GetUDPSeq(header)
+	srcPort, dstPort, err := util.GetUDPPorts(header)
 	if err != nil {
 		return
 	}
 
-	// 取出通道后立刻解锁
-	t.inflightRequestLock.RLock()
-	ch, ok := t.inflightRequest[int(seq)]
-	t.inflightRequestLock.RUnlock()
-	if !ok || ch == nil {
+	if dstPort != t.DstPort {
 		return
 	}
 
-	h := Hop{
-		Success: true,
-		Address: msg.Peer,
-		MPLS:    mpls,
-	}
-
-	// 非阻塞发送，避免重复回包把缓冲塞满导致阻塞
+	// 非阻塞投递；如果队列已满则直接丢弃该任务
 	select {
-	case ch <- h:
+	case t.matchQ <- matchTask{
+		srcPort: srcPort, seq: int(seq), peer: msg.Peer, finish: finish, mpls: mpls,
+	}:
 	default:
-		// 丢弃重复/迟到的相同 seq 回包，避免阻塞
+		// 丢弃以避免阻塞抓包循环
 	}
 }
 
-func (t *UDPTracer) send(ctx context.Context, ttl, i int) error {
+func (t *UDPTracer) send(ctx context.Context, s *internal.UDPSpec, ttl, i int) error {
 	defer t.wg.Done()
 
 	if t.ttlComp(ttl) {
@@ -313,20 +469,7 @@ func (t *UDPTracer) send(ctx context.Context, ttl, i int) error {
 	}
 
 	// 将 TTL 编码到高 8 位；将索引 i 编码到低 8 位
-	seq := uint16((ttl << 8) | (i & 0xFF))
-	if seq == 0xFFFF {
-		seq = 0xFFFE
-	}
-
-	t.inflightRequestLock.Lock()
-	hopCh := make(chan Hop, 1)
-	t.inflightRequest[int(seq)] = hopCh
-	t.inflightRequestLock.Unlock()
-	defer func() {
-		t.inflightRequestLock.Lock()
-		delete(t.inflightRequest, int(seq))
-		t.inflightRequestLock.Unlock()
-	}()
+	seq := (ttl << 8) | (i & 0xFF)
 
 	_, SrcPort := func() (net.IP, int) {
 		if !util.RandomPortEnabled() && t.SrcPort > 0 {
@@ -336,6 +479,9 @@ func (t *UDPTracer) send(ctx context.Context, ttl, i int) error {
 	}()
 
 	ipHeader := &layers.IPv4{
+		Version:  4,
+		IHL:      5,
+		Id:       uint16(seq),
 		SrcIP:    t.SrcIP,
 		DstIP:    t.DstIP,
 		Protocol: layers.IPProtocolUDP,
@@ -346,88 +492,65 @@ func (t *UDPTracer) send(ctx context.Context, ttl, i int) error {
 		SrcPort: layers.UDPPort(SrcPort),
 		DstPort: layers.UDPPort(t.DstPort),
 	}
-	_ = udpHeader.SetNetworkLayerForChecksum(ipHeader)
-
-	buf := gopacket.NewSerializeBuffer()
-	opts := gopacket.SerializeOptions{
-		ComputeChecksums: true,
-		FixLengths:       true,
-	}
 
 	desiredPayloadSize := t.PktSize
 	payload := make([]byte, desiredPayloadSize)
 
 	// 设置随机种子
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	for k := 2; k < desiredPayloadSize; k++ {
+	for k := range payload {
 		payload[k] = byte(r.Intn(256))
 	}
 
-	// 通过 payload[0:2] 补偿，使 UDP.Checksum 精确等于 seq
-	if err := util.MakePayloadWithTargetChecksum(payload, t.SrcIP, t.DstIP, SrcPort, t.DstPort, seq); err != nil {
-		return err
-	}
+	// 记录 TTL 队列
+	t.enqueueTTLPort(ttl, i, SrcPort)
 
-	// 序列化 UDP 头与 payload 到缓冲区
-	if err := gopacket.SerializeLayers(buf, opts, udpHeader, gopacket.Payload(payload)); err != nil {
-		return err
-	}
+	// 登记 pending，并启动超时守护
+	t.markPending(ttl, i)
+	go func(seq, ttl, i int) {
+		select {
+		case <-ctx.Done():
+			_ = t.clearPending(ttl, i)
+			return
+		case <-time.After(t.Timeout):
+			// 仍未完成且未超出 final/未达成 ttlComp 才补位
+			if !t.clearPending(ttl, i) {
+				return
+			}
 
-	// 串行设置 TTL + 发送，放在同一把锁里保证并发安全
-	t.hopLimitLock.Lock()
-	if err := t.udpConn.SetTTL(ttl); err != nil {
-		t.hopLimitLock.Unlock()
-		return err
-	}
-	start := time.Now()
-	if _, err := t.udp.WriteTo(buf.Bytes(), &net.IPAddr{IP: t.DstIP}); err != nil {
-		t.hopLimitLock.Unlock()
-		return err
-	}
-	t.hopLimitLock.Unlock()
+			if f := t.final.Load(); f != -1 && ttl > int(f) {
+				return
+			}
 
-	select {
-	case <-ctx.Done():
-		return context.Canceled
-	case h := <-hopCh:
-		rtt := time.Since(start)
+			if t.ttlComp(ttl) {
+				return
+			}
 
-		if f := t.final.Load(); f != -1 && ttl > int(f) {
-			return nil
-		}
+			h := Hop{
+				Success: false,
+				Address: nil,
+				TTL:     ttl,
+				RTT:     0,
+				Error:   errHopLimitTimeout,
+			}
 
-		if ip := util.AddrIP(h.Address); ip != nil && ip.Equal(t.DstIP) {
-			for {
-				old := t.final.Load()
-				if old != -1 && ttl >= int(old) {
-					break
-				}
-				if t.final.CompareAndSwap(old, int32(ttl)) {
-					break
-				}
+			t.res.add(h, i, t.NumMeasurements, t.MaxAttempts)
+			if t.OSKind != 1 {
+				t.dropSent(seq)
+			} else {
+				t.dropByAttempt(ttl, i)
 			}
 		}
+	}(seq, ttl, i)
 
-		h.TTL = ttl
-		h.RTT = rtt
+	start, err := s.SendUDP(ctx, ipHeader, udpHeader, payload)
+	if err != nil {
+		_ = t.clearPending(ttl, i)
+		return err
+	}
 
-		_ = h.fetchIPData(t.Config) // 忽略错误，继续添加结果
-
-		t.res.add(h, i, t.NumMeasurements, t.MaxAttempts)
-	case <-time.After(t.Timeout):
-		if f := t.final.Load(); f != -1 && ttl > int(f) {
-			return nil
-		}
-
-		h := Hop{
-			Success: false,
-			Address: nil,
-			TTL:     ttl,
-			RTT:     0,
-			Error:   errHopLimitTimeout,
-		}
-
-		t.res.add(h, i, t.NumMeasurements, t.MaxAttempts)
+	if t.OSKind != 1 {
+		t.storeSent(seq, 0, 0, SrcPort, start)
 	}
 	return nil
 }

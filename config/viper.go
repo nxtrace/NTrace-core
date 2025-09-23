@@ -7,7 +7,6 @@ import (
 )
 
 func InitConfig() {
-
 	// 配置文件名， 不加扩展
 	viper.SetConfigName("nt_config") // name of config file (without extension)
 	// 设置文件的扩展名

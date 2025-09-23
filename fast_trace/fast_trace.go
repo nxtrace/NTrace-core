@@ -26,12 +26,13 @@ type FastTracer struct {
 }
 
 type ParamsFastTrace struct {
+	OSKind         int
 	SrcDev         string
 	SrcAddr        string
 	DstPort        int
 	BeginHop       int
 	MaxHops        int
-	RDns           bool
+	RDNS           bool
 	AlwaysWaitRDNS bool
 	Lang           string
 	PktSize        int
@@ -58,13 +59,14 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 		log.Fatal(err)
 	}
 	var conf = trace.Config{
+		OSKind:           f.ParamsFastTrace.OSKind,
 		BeginHop:         f.ParamsFastTrace.BeginHop,
 		DstIP:            ip,
 		DstPort:          f.ParamsFastTrace.DstPort,
 		MaxHops:          f.ParamsFastTrace.MaxHops,
 		NumMeasurements:  3,
 		ParallelRequests: 18,
-		RDns:             f.ParamsFastTrace.RDns,
+		RDNS:             f.ParamsFastTrace.RDNS,
 		AlwaysWaitRDNS:   f.ParamsFastTrace.AlwaysWaitRDNS,
 		PacketInterval:   100,
 		TTLInterval:      500,
@@ -338,13 +340,14 @@ func testFile(paramsFastTrace ParamsFastTrace, traceMode trace.Method) {
 		}
 
 		var conf = trace.Config{
+			OSKind:           paramsFastTrace.OSKind,
 			BeginHop:         paramsFastTrace.BeginHop,
 			DstIP:            net.ParseIP(ip.Ip),
 			DstPort:          paramsFastTrace.DstPort,
 			MaxHops:          paramsFastTrace.MaxHops,
 			NumMeasurements:  3,
 			ParallelRequests: 18,
-			RDns:             paramsFastTrace.RDns,
+			RDNS:             paramsFastTrace.RDNS,
 			AlwaysWaitRDNS:   paramsFastTrace.AlwaysWaitRDNS,
 			PacketInterval:   100,
 			TTLInterval:      500,

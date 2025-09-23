@@ -33,8 +33,8 @@ type TCPSpec struct {
 	hopLimitLock sync.Mutex
 }
 
-func NewTCPSpec(ipv int, srcIP, dstIP net.IP, dstPort int, icmp net.PacketConn, pktSize int) *TCPSpec {
-	return &TCPSpec{IPVersion: ipv, SrcIP: srcIP, DstIP: dstIP, DstPort: dstPort, icmp: icmp, PktSize: pktSize}
+func NewTCPSpec(IPVersion int, srcIP, dstIP net.IP, dstPort int, icmp net.PacketConn, pktSize int) *TCPSpec {
+	return &TCPSpec{IPVersion: IPVersion, SrcIP: srcIP, DstIP: dstIP, DstPort: dstPort, icmp: icmp, PktSize: pktSize}
 }
 
 func (s *TCPSpec) InitTCP() {
@@ -46,9 +46,9 @@ func (s *TCPSpec) InitTCP() {
 	tcp, err := net.ListenPacket(network, s.SrcIP.String())
 	if err != nil {
 		if util.EnvDevMode {
-			panic(fmt.Errorf("InitTCP: ListenPacket(%s, %s) failed: %v", network, s.SrcIP, err))
+			panic(fmt.Errorf("(InitTCP) ListenPacket(%s, %s) failed: %v", network, s.SrcIP, err))
 		}
-		log.Fatalf("InitTCP: ListenPacket(%s, %s) failed: %v", network, s.SrcIP, err)
+		log.Fatalf("(InitTCP) ListenPacket(%s, %s) failed: %v", network, s.SrcIP, err)
 	}
 	s.tcp = tcp
 
@@ -167,9 +167,9 @@ func (s *TCPSpec) ListenTCP(ctx context.Context, ready chan struct{}, onTCP func
 	handle, err := util.OpenLiveImmediate(dev, 65535, true, 4<<20)
 	if err != nil {
 		if util.EnvDevMode {
-			panic(fmt.Errorf("ListenTCP: pcap open failed on %s: %v", dev, err))
+			panic(fmt.Errorf("(ListenTCP) pcap open failed on %s: %v", dev, err))
 		}
-		log.Fatalf("ListenTCP: pcap open failed on %s: %v", dev, err)
+		log.Fatalf("(ListenTCP) pcap open failed on %s: %v", dev, err)
 	}
 	defer handle.Close()
 
@@ -181,9 +181,9 @@ func (s *TCPSpec) ListenTCP(ctx context.Context, ready chan struct{}, onTCP func
 
 	if err := handle.SetBPFFilter(filter); err != nil {
 		if util.EnvDevMode {
-			panic(fmt.Errorf("ListenTCP: set BPF failed: %v (filter=%q)", err, filter))
+			panic(fmt.Errorf("(ListenTCP) set BPF failed: %v (filter=%q)", err, filter))
 		}
-		log.Fatalf("ListenTCP: set BPF failed: %v (filter=%q)", err, filter)
+		log.Fatalf("(ListenTCP) set BPF failed: %v (filter=%q)", err, filter)
 	}
 
 	src := gopacket.NewPacketSource(handle, handle.LinkType())
@@ -204,6 +204,7 @@ func (s *TCPSpec) ListenTCP(ctx context.Context, ready chan struct{}, onTCP func
 			if packet == nil {
 				continue
 			}
+			finish := pkt.Metadata().Timestamp
 
 			// 从包中获取 TCP 层信息
 			tl, ok := pkt.Layer(layers.LayerTypeTCP).(*layers.TCP)
@@ -243,39 +244,34 @@ func (s *TCPSpec) ListenTCP(ctx context.Context, ready chan struct{}, onTCP func
 			}
 			peer := &net.IPAddr{IP: peerIP}
 			srcPort := int(tl.DstPort)
-			finish := pkt.Metadata().Timestamp
 			onTCP(srcPort, seq, peer, finish)
 		}
 	}
 }
 
-func (s *TCPSpec) SendTCP(ctx context.Context, ipHdr interface{}, tcpHdr *layers.TCP, payload []byte) (time.Time, error) {
+func (s *TCPSpec) SendTCP(ctx context.Context, ipHdr gopacket.NetworkLayer, tcpHdr *layers.TCP, payload []byte) (time.Time, error) {
 	select {
 	case <-ctx.Done():
 		return time.Time{}, context.Canceled
 	default:
 	}
 
-	// 统一持有网络层接口
-	var (
-		netL gopacket.NetworkLayer
-		ttl  int
-	)
+	var ttl int // 提取 IP 头中的 TTL（按族别）
 	if s.IPVersion == 4 {
 		ip4, ok := ipHdr.(*layers.IPv4)
 		if !ok || ip4 == nil {
-			return time.Time{}, errors.New("SendTCP: expect *layers.IPv4 when ipv==4")
+			return time.Time{}, errors.New("SendTCP: expect *layers.IPv4 when s.IPVersion==4")
 		}
-		netL, ttl = ip4, int(ip4.TTL)
+		ttl = int(ip4.TTL)
 	} else {
 		ip6, ok := ipHdr.(*layers.IPv6)
 		if !ok || ip6 == nil {
-			return time.Time{}, errors.New("SendTCP: expect *layers.IPv6 when ipv==6")
+			return time.Time{}, errors.New("SendTCP: expect *layers.IPv6 when s.IPVersion==6")
 		}
-		netL, ttl = ip6, int(ip6.HopLimit)
+		ttl = int(ip6.HopLimit)
 	}
 
-	_ = tcpHdr.SetNetworkLayerForChecksum(netL)
+	_ = tcpHdr.SetNetworkLayerForChecksum(ipHdr)
 
 	buf := gopacket.NewSerializeBuffer()
 	opts := gopacket.SerializeOptions{

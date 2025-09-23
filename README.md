@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="asset/logo.png" height="200px" alt="NextTrace Logo"/>
+<img src="assets/logo.png" height="200px" alt="NextTrace Logo"/>
 
 </div>
 

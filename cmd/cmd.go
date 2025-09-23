@@ -17,6 +17,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/syndtr/gocapability/capability"
 
+	"github.com/nxtrace/NTrace-core/assets/windivert"
 	"github.com/nxtrace/NTrace-core/config"
 	fastTrace "github.com/nxtrace/NTrace-core/fast_trace"
 	"github.com/nxtrace/NTrace-core/ipgeo"
@@ -32,6 +33,7 @@ import (
 func Execute() {
 	parser := argparse.NewParser("nexttrace", "An open source visual route tracking CLI tool")
 	// Create string flag
+	init := parser.Flag("", "init", &argparse.Options{Help: "Extract WinDivert runtime to current directory (Windows)"})
 	ipv4Only := parser.Flag("4", "ipv4", &argparse.Options{Help: "Use IPv4 only"})
 	ipv6Only := parser.Flag("6", "ipv6", &argparse.Options{Help: "Use IPv6 only"})
 	tcp := parser.Flag("T", "tcp", &argparse.Options{Help: "Use TCP SYN for tracerouting (default port is 80)"})
@@ -46,8 +48,8 @@ func Execute() {
 		Help: "Choose IP Geograph Data Provider [IP.SB, IPInfo, IPInsight, IP-API.com, Ip2region, IPInfoLocal, CHUNZHEN, disable-geoip]"})
 	powProvider := parser.Selector("", "pow-provider", []string{"api.nxtrace.org", "sakura"}, &argparse.Options{Default: "api.nxtrace.org",
 		Help: "Choose PoW Provider [api.nxtrace.org, sakura] For China mainland users, please use sakura"})
-	noRdns := parser.Flag("n", "no-rdns", &argparse.Options{Help: "Do not resolve IP addresses to their domain names"})
-	alwaysRdns := parser.Flag("a", "always-rdns", &argparse.Options{Help: "Always resolve IP addresses to their domain names"})
+	norDNS := parser.Flag("n", "no-rdns", &argparse.Options{Help: "Do not resolve IP addresses to their domain names"})
+	alwaysrDNS := parser.Flag("a", "always-rdns", &argparse.Options{Help: "Always resolve IP addresses to their domain names"})
 	routePath := parser.Flag("P", "route-path", &argparse.Options{Help: "Print traceroute hop path by ASN and location"})
 	report := parser.Flag("r", "report", &argparse.Options{Help: "output using report mode"})
 	dn42 := parser.Flag("", "dn42", &argparse.Options{Help: "DN42 Mode"})
@@ -99,9 +101,28 @@ func Execute() {
 		os.Exit(0)
 	}
 
-	//if !*tcp && *port == 80 {
-	//	*port = 33494
-	//}
+	OSKind := 3
+	switch runtime.GOOS {
+	case "darwin":
+		OSKind = 1
+	case "windows":
+		OSKind = 2
+	}
+
+	if *init && OSKind == 2 {
+		if err := windivert.PrepareWinDivertRuntime(); err != nil {
+			if util.EnvDevMode {
+				panic(err)
+			}
+			log.Fatal(err)
+		}
+		fmt.Println("WinDivert runtime is ready.")
+		return
+	}
+
+	if *udp && *port == 80 {
+		*port = 33494
+	}
 
 	if *maxAttempts > 255 {
 		fmt.Println("MaxAttempts 最大值为 255，已自动调整为 255")
@@ -117,7 +138,6 @@ func Execute() {
 	}
 
 	var m trace.Method
-
 	switch {
 	case *tcp:
 		m = trace.TCPTrace
@@ -129,13 +149,14 @@ func Execute() {
 
 	if *fast_trace || *file != "" {
 		var paramsFastTrace = fastTrace.ParamsFastTrace{
+			OSKind:         OSKind,
 			SrcDev:         *srcDev,
 			SrcAddr:        *srcAddr,
 			DstPort:        *port,
 			BeginHop:       *beginHop,
 			MaxHops:        *maxHops,
-			RDns:           !*noRdns,
-			AlwaysWaitRDNS: *alwaysRdns,
+			RDNS:           !*norDNS,
+			AlwaysWaitRDNS: *alwaysrDNS,
 			Lang:           *lang,
 			PktSize:        *packetSize,
 			Timeout:        time.Duration(*timeout) * time.Millisecond,
@@ -179,8 +200,6 @@ func Execute() {
 	capabilitiesCheck()
 	// return
 
-	var ip net.IP
-
 	if *dn42 {
 		// 初始化配置
 		config.InitConfig()
@@ -216,6 +235,7 @@ func Execute() {
 		}
 	}
 
+	var ip net.IP
 	if *ipv6Only {
 		ip, err = util.DomainLookUp(domain, "6", *dot, *jsonPrint)
 	} else if *ipv4Only {
@@ -258,6 +278,7 @@ func Execute() {
 	util.SrcPort = *srcPort
 	util.DstIP = ip.String()
 	var conf = trace.Config{
+		OSKind:           OSKind,
 		DN42:             *dn42,
 		SrcAddr:          *srcAddr,
 		SrcPort:          *srcPort,
@@ -271,8 +292,8 @@ func Execute() {
 		MaxAttempts:      *maxAttempts,
 		ParallelRequests: *parallelRequests,
 		Lang:             *lang,
-		RDns:             !*noRdns,
-		AlwaysWaitRDNS:   *alwaysRdns,
+		RDNS:             !*norDNS,
+		AlwaysWaitRDNS:   *alwaysrDNS,
 		IPGeoSource:      ipgeo.GetSource(*dataOrigin),
 		Timeout:          time.Duration(*timeout) * time.Millisecond,
 		PktSize:          *packetSize,

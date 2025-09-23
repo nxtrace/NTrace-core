@@ -90,6 +90,7 @@ fabric.properties
 *.iml
 out
 gen
+
 ### Go template
 # Binaries for programs and plugins
 *.exe
@@ -97,6 +98,9 @@ gen
 *.dll
 *.so
 *.dylib
+
+# Unignore DLLs under assets/windivert
+!assets/windivert/**/*.dll
 
 # Test binary, built with `go test -c`
 *.test

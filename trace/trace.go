@@ -26,10 +26,11 @@ var (
 	errTracerouteExecuted = errors.New("traceroute already executed")
 	geoCache              = sync.Map{}
 	ipGeoSF               singleflight.Group
-	rdnsSF                singleflight.Group
+	rDNSSF                singleflight.Group
 )
 
 type Config struct {
+	OSKind           int
 	SrcAddr          string
 	SrcPort          int
 	BeginHop         int
@@ -42,7 +43,7 @@ type Config struct {
 	DstPort          int
 	Quic             bool
 	IPGeoSource      ipgeo.Source
-	RDns             bool
+	RDNS             bool
 	AlwaysWaitRDNS   bool
 	PacketInterval   int
 	TTLInterval      int
@@ -62,7 +63,19 @@ const (
 	TCPTrace  Method = "tcp"
 )
 
+type attemptKey struct {
+	ttl int
+	i   int
+}
+
+type attemptPort struct {
+	srcPort int
+	i       int
+}
+
 type sentInfo struct {
+	ttl     int
+	i       int
 	srcPort int
 	start   time.Time
 }
@@ -155,7 +168,7 @@ func isValidHop(h Hop) bool {
 // add 带审计/限容
 // - N = numMeasurements（每个 TTL 组的最小输出条数）
 // - M = maxAttempts（每个 TTL 组的最大尝试条数）
-// 规则：对同一 TTL，attemptIdx < N-1（索引 i 从 0 开始）无条件放行；第 N 条进行审计（已有有效 / 当次有效 / 达到最后一次尝试 任一成立即放行）；超过 N 条一律忽略
+// 规则：对同一 TTL，attemptIdx < N-1 无条件放行（索引 i 从 0 开始）；第 N 条进行审计（已有有效 / 当次有效 / 达到最后一次尝试 任一成立即放行）；超过 N 条一律忽略
 func (s *Result) add(hop Hop, attemptIdx, numMeasurements, maxAttempts int) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -263,9 +276,9 @@ func (h *Hop) fetchIPData(c Config) (err error) {
 	// DN42
 	if c.DN42 {
 		var combined string
-		if c.RDns && h.Hostname == "" {
+		if c.RDNS && h.Hostname == "" {
 			// singleflight 避免同一 IP 并发重复查询 PTR
-			v, _, _ := rdnsSF.Do(ipStr, func() (any, error) {
+			v, _, _ := rDNSSF.Do(ipStr, func() (any, error) {
 				return util.LookupAddr(ipStr)
 			})
 			if ptrs, _ := v.([]string); len(ptrs) > 0 {
@@ -350,26 +363,26 @@ func (h *Hop) fetchIPData(c Config) (err error) {
 		ipGeoCh <- nil
 	}()
 
-	rdnsStarted := c.RDns && h.Hostname == ""
-	rdnsCh := make(chan []string, 1)
-	if rdnsStarted {
+	rDNSStarted := c.RDNS && h.Hostname == ""
+	rDNSCh := make(chan []string, 1)
+	if rDNSStarted {
 		go func() {
-			v, _, _ := rdnsSF.Do(ipStr, func() (any, error) {
+			v, _, _ := rDNSSF.Do(ipStr, func() (any, error) {
 				return util.LookupAddr(ipStr)
 			})
 			if ptrs, _ := v.([]string); len(ptrs) > 0 {
-				rdnsCh <- ptrs
+				rDNSCh <- ptrs
 			} else {
-				rdnsCh <- nil
+				rDNSCh <- nil
 			}
 		}()
 	}
 
 	if c.AlwaysWaitRDNS {
 		// 必须等 PTR（1s 超时），然后再确保 IPGeo 完成
-		if rdnsStarted {
+		if rDNSStarted {
 			select {
-			case ptrs := <-rdnsCh:
+			case ptrs := <-rDNSCh:
 				if len(ptrs) > 0 {
 					h.Hostname = CanonicalHostname(ptrs[0])
 				}
@@ -383,12 +396,12 @@ func (h *Hop) fetchIPData(c Config) (err error) {
 		return nil
 	}
 	// 非强制等待 PTR：依据率先完成者决定是否还等 PTR
-	if rdnsStarted {
+	if rDNSStarted {
 		select {
 		case err := <-ipGeoCh:
 			// 地理信息先完成：不再等待 PTR
 			return err
-		case ptrs := <-rdnsCh:
+		case ptrs := <-rDNSCh:
 			if len(ptrs) > 0 {
 				h.Hostname = CanonicalHostname(ptrs[0])
 			}
