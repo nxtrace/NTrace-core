@@ -24,6 +24,7 @@ var (
 	errInvalidMethod      = errors.New("invalid method")
 	errNaturalDone        = errors.New("trace natural done")
 	errTracerouteExecuted = errors.New("traceroute already executed")
+	lastErr               error
 	geoCache              = sync.Map{}
 	ipGeoSF               singleflight.Group
 	rDNSSF                singleflight.Group
@@ -314,23 +315,42 @@ func (h *Hop) fetchIPData(c Config) error {
 				}
 			}
 			// singleflight 合并相同 key 的并发查询
-			v, err, _ := ipGeoSF.Do(combined, func() (any, error) {
-				timeout := c.Timeout
-				if timeout < 2*time.Second {
-					timeout = 2 * time.Second
+			maxRetries := c.NumMeasurements - 1
+			if maxRetries < 0 {
+				maxRetries = 0
+			}
+			if maxRetries > 5 {
+				maxRetries = 5
+			}
+
+			for attempt := 0; attempt <= maxRetries; attempt++ {
+				// 超时：2s 起，每次 +1s，上限 6s
+				timeout := time.Duration(2+attempt) * time.Second
+				if timeout > 6*time.Second {
+					timeout = 6 * time.Second
 				}
-				return c.IPGeoSource(combined, timeout, c.Lang, c.Maptrace)
-			})
-			if err != nil {
-				return err
+
+				v, err, _ := ipGeoSF.Do(combined, func() (any, error) {
+					return c.IPGeoSource(combined, timeout, c.Lang, c.Maptrace)
+				})
+				if err != nil {
+					lastErr = err
+					continue
+				}
+
+				geo, ok := v.(*ipgeo.IPGeoData)
+				if !ok || geo == nil {
+					lastErr = errors.New("ipgeo: nil or bad type from singleflight (DN42)")
+					continue
+				}
+
+				// 成功：写入结果与缓存，结束
+				h.Geo = geo
+				geoCache.Store(combined, h.Geo)
+				return nil
 			}
-			geo, ok := v.(*ipgeo.IPGeoData)
-			if !ok || geo == nil {
-				return errors.New("ipgeo: nil or bad type from singleflight (DN42)")
-			}
-			h.Geo = geo
-			// 如果缓存中无结果，进行查询并将结果存入缓存
-			geoCache.Store(combined, h.Geo)
+			// 所有尝试均失败
+			return lastErr
 		}
 		return nil
 	}
@@ -357,25 +377,43 @@ func (h *Hop) fetchIPData(c Config) error {
 			}
 		}
 		// (3) singleflight 去重
-		timeout := c.Timeout
-		if timeout < 2*time.Second {
-			timeout = 2 * time.Second
+		maxRetries := c.NumMeasurements - 1
+		if maxRetries < 0 {
+			maxRetries = 0
 		}
-		v, err, _ := ipGeoSF.Do(ipStr, func() (any, error) {
-			return c.IPGeoSource(ipStr, timeout, c.Lang, c.Maptrace)
-		})
-		if err != nil {
-			ipGeoCh <- err
+		if maxRetries > 5 {
+			maxRetries = 5
+		}
+
+		for attempt := 0; attempt <= maxRetries; attempt++ {
+			// 超时：2s 起，每次 +1s，上限 6s
+			timeout := time.Duration(2+attempt) * time.Second
+			if timeout > 6*time.Second {
+				timeout = 6 * time.Second
+			}
+
+			v, err, _ := ipGeoSF.Do(ipStr, func() (any, error) {
+				return c.IPGeoSource(ipStr, timeout, c.Lang, c.Maptrace)
+			})
+			if err != nil {
+				lastErr = err
+				continue
+			}
+
+			geo, ok := v.(*ipgeo.IPGeoData)
+			if !ok || geo == nil {
+				lastErr = errors.New("ipgeo: nil or bad type from singleflight")
+				continue
+			}
+
+			// 成功：写入结果与缓存，结束
+			h.Geo = geo
+			geoCache.Store(ipStr, h.Geo)
+			ipGeoCh <- nil
 			return
 		}
-		geo, ok := v.(*ipgeo.IPGeoData)
-		if !ok || geo == nil {
-			ipGeoCh <- errors.New("ipgeo: nil or bad type from singleflight")
-			return
-		}
-		h.Geo = geo
-		geoCache.Store(ipStr, h.Geo)
-		ipGeoCh <- nil
+		// 所有尝试均失败
+		ipGeoCh <- lastErr
 	}()
 
 	rDNSStarted := c.RDNS && h.Hostname == ""
@@ -385,10 +423,14 @@ func (h *Hop) fetchIPData(c Config) error {
 			v, _, _ := rDNSSF.Do(ipStr, func() (any, error) {
 				return util.LookupAddr(ipStr)
 			})
-			if ptrs, _ := v.([]string); len(ptrs) > 0 {
-				rDNSCh <- ptrs
-			} else {
-				rDNSCh <- nil
+			var ptrs []string
+			if p, _ := v.([]string); len(p) > 0 {
+				ptrs = p
+			}
+			// 非阻塞发送：没人收或通道已满就丢弃，保证不阻塞
+			select {
+			case rDNSCh <- ptrs:
+			default:
 			}
 		}()
 	}

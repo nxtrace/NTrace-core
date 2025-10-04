@@ -107,8 +107,8 @@ var receiveParseOnce sync.Once
 func LeoIP(ip string, timeout time.Duration, lang string, maptrace bool) (*IPGeoData, error) {
 	// TODO: 根据lang的值请求中文/英文API
 	// TODO: 根据maptrace的值决定是否请求经纬度信息
-	if timeout < 5*time.Second {
-		timeout = 5 * time.Second
+	if timeout < 2*time.Second {
+		timeout = 2 * time.Second
 	}
 
 	// 确保对应 IP 的通道已存在（读锁快速路径 + 写锁惰性创建）
