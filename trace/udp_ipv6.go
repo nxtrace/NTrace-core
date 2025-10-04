@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/google/gopacket/layers"
-	"golang.org/x/net/icmp"
 	"golang.org/x/sync/semaphore"
 
 	"github.com/nxtrace/NTrace-core/trace/internal"
@@ -25,12 +24,11 @@ type UDPTracerIPv6 struct {
 	Config
 	wg        sync.WaitGroup
 	res       Result
-	pendingMu sync.Mutex
 	pending   map[int]struct{}
-	sentMu    sync.RWMutex
+	pendingMu sync.Mutex
 	sentAt    map[int]sentInfo
+	sentMu    sync.RWMutex
 	SrcIP     net.IP
-	icmp      net.PacketConn
 	final     atomic.Int32
 	sem       *semaphore.Weighted
 	matchQ    chan matchTask
@@ -252,7 +250,7 @@ func (t *UDPTracerIPv6) Execute() (res *Result, err error) {
 		return &t.res, errTracerouteExecuted
 	}
 
-	// 初始化 Result.Hops，并预分配到 MaxHops
+	// 初始化 res.Hops 和 res.tailDone，并预分配到 MaxHops
 	t.res.Hops = make([][]Hop, t.MaxHops)
 	t.res.tailDone = make([]bool, t.MaxHops)
 
@@ -266,24 +264,15 @@ func (t *UDPTracerIPv6) Execute() (res *Result, err error) {
 		return nil, errors.New("cannot determine local IPv6 address")
 	}
 
-	t.icmp, err = icmp.ListenPacket("ip6:ipv6-icmp", t.SrcIP.String())
-	if err != nil {
-		return &t.res, err
-	}
-	defer func() {
-		if c := t.icmp; c != nil { // 先拷一份引用，避免 defer 执行时 t.icmp 已被并发改写
-			_ = c.Close()
-		}
-	}()
-
 	s := internal.NewUDPSpec(
 		6,
+		t.ICMPMode,
 		t.SrcIP,
 		t.DstIP,
 		t.DstPort,
-		t.icmp,
 	)
 
+	s.InitICMP()
 	s.InitUDP()
 	defer s.Close()
 
@@ -338,11 +327,11 @@ func (t *UDPTracerIPv6) Execute() (res *Result, err error) {
 	stop()
 	t.wg.Wait()
 
-	bound := int(t.final.Load())
-	if bound == -1 {
-		bound = t.MaxHops
+	final := int(t.final.Load())
+	if final == -1 {
+		final = t.MaxHops
 	}
-	t.res.reduce(bound)
+	t.res.reduce(final)
 
 	if cause := context.Cause(ctx); !errors.Is(cause, errNaturalDone) {
 		return &t.res, cause
@@ -375,7 +364,7 @@ func (t *UDPTracerIPv6) handleICMPMessage(msg internal.ReceivedMessage, finish t
 	// 非阻塞投递；如果队列已满则直接丢弃该任务
 	select {
 	case t.matchQ <- matchTask{
-		srcPort: srcPort, seq: int(seq), peer: msg.Peer, finish: finish, mpls: mpls,
+		srcPort: srcPort, seq: seq, peer: msg.Peer, finish: finish, mpls: mpls,
 	}:
 	default:
 		// 丢弃以避免阻塞抓包循环

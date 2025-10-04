@@ -75,7 +75,11 @@ func LookupAddr(addr string) ([]string, error) {
 
 // getLocalIPPort（仅用于 IPv4）：
 // (1) 若 srcIP 非空，则以其为绑定源 IP；否则先通过 DialUDP 到 dstIP 获取实际出站源 IP
-// (2) 根据 proto("tcp"/"udp") 做一次本地端口可用性测试（Listen* 绑定 Port=0，让内核挑一个可用端口）
+// (2) 根据 proto：
+//
+//	"icmp"     ：直接返回 bindIP，bindPort=0（表示“无端口”）；
+//	"tcp"/"udp"：使用 Listen* 以 Port=0 做一次本地绑定测试，让内核分配可用端口，并在记录后立即关闭
+//
 // (3) 立即关闭监听并返回 (bindIP, bindPort)，若出错则返回 (nil, -1)
 func getLocalIPPort(dstIP net.IP, srcIP net.IP, proto string) (net.IP, int) {
 	if dstIP == nil || dstIP.To4() == nil {
@@ -102,6 +106,8 @@ func getLocalIPPort(dstIP net.IP, srcIP net.IP, proto string) (net.IP, int) {
 
 	// (2) 按需求测试端口可用性（仅本地 bind，不做网络握手）
 	switch proto {
+	case "icmp":
+		return bindIP, 0
 	case "tcp":
 		ln, err := net.ListenTCP("tcp4", &net.TCPAddr{IP: bindIP, Port: 0})
 		if err != nil {
@@ -124,7 +130,11 @@ func getLocalIPPort(dstIP net.IP, srcIP net.IP, proto string) (net.IP, int) {
 
 // getLocalIPPortv6（仅用于 IPv6）：
 // (1) 若 srcIP 非空，则以其为绑定源 IP；否则先通过 DialUDP 到 dstIP 获取实际出站源 IP
-// (2) 根据 proto("tcp6"/"udp6") 做一次本地端口可用性测试（Listen* 绑定 Port=0，让内核挑一个可用端口）
+// (2) 根据 proto：
+//
+//	"icmp6"      ：直接返回 bindIP，bindPort=0（表示“无端口”）；
+//	"tcp6"/"udp6"：使用 Listen* 以 Port=0 做一次本地绑定测试，让内核分配可用端口，并在记录后立即关闭
+//
 // (3) 立即关闭监听并返回 (bindIP, bindPort)，若出错则返回 (nil, -1)
 func getLocalIPPortv6(dstIP net.IP, srcIP net.IP, proto string) (net.IP, int) {
 	if !IsIPv6(dstIP) {
@@ -151,6 +161,8 @@ func getLocalIPPortv6(dstIP net.IP, srcIP net.IP, proto string) (net.IP, int) {
 
 	// (2) 按需求测试端口可用性（仅本地 bind，不做网络握手）
 	switch proto {
+	case "icmp6":
+		return bindIP, 0
 	case "tcp6":
 		ln, err := net.ListenTCP("tcp6", &net.TCPAddr{IP: bindIP, Port: 0})
 		if err != nil {

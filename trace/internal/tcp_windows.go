@@ -18,6 +18,7 @@ import (
 
 type TCPSpec struct {
 	IPVersion int
+	ICMPMode  int
 	SrcIP     net.IP
 	DstIP     net.IP
 	DstPort   int
@@ -25,15 +26,6 @@ type TCPSpec struct {
 	PktSize   int
 	addr      wd.Address
 	handle    wd.Handle
-}
-
-type ipLayer interface {
-	gopacket.NetworkLayer
-	gopacket.SerializableLayer
-}
-
-func NewTCPSpec(IPVersion int, srcIP, dstIP net.IP, dstPort int, icmp net.PacketConn, pktSize int) *TCPSpec {
-	return &TCPSpec{IPVersion: IPVersion, SrcIP: srcIP, DstIP: dstIP, DstPort: dstPort, icmp: icmp, PktSize: pktSize}
 }
 
 func (s *TCPSpec) InitTCP() {
@@ -53,10 +45,43 @@ func (s *TCPSpec) InitTCP() {
 }
 
 func (s *TCPSpec) Close() {
+	_ = s.icmp.Close()
 	_ = s.handle.Close()
 }
 
+// resolveICMPMode 进行最终模式判定
+func (s *TCPSpec) resolveICMPMode() int {
+	icmpMode := s.ICMPMode
+	if icmpMode != 1 && icmpMode != 2 {
+		icmpMode = 0 // 统一成 Auto
+	}
+
+	// 指定 1=Socket：直接返回
+	if icmpMode == 1 {
+		return 1
+	}
+
+	// Auto(0) 或强制 PCAP(2) → 尝试 PCAP
+	ok, err := pcapAvailable()
+	if !ok {
+		if icmpMode == 2 {
+			log.Printf("PCAP mode requested, but Npcap is not available: %v; falling back to Socket mode.", err)
+		}
+		return 1
+	}
+	return 2
+}
+
 func (s *TCPSpec) ListenICMP(ctx context.Context, ready chan struct{}, onICMP func(msg ReceivedMessage, finish time.Time, data []byte)) {
+	switch s.resolveICMPMode() {
+	case 1:
+		s.listenICMPSock(ctx, ready, onICMP)
+	case 2:
+		s.listenICMPPcap(ctx, ready, onICMP)
+	}
+}
+
+func (s *TCPSpec) listenICMPPcap(ctx context.Context, ready chan struct{}, onICMP func(msg ReceivedMessage, finish time.Time, data []byte)) {
 	// 选择捕获设备与本地接口
 	dev, err := util.PcapDeviceByIP(s.SrcIP)
 	if err != nil {
@@ -117,7 +142,7 @@ func (s *TCPSpec) ListenICMP(ctx context.Context, ready chan struct{}, onICMP fu
 			outer = append(outer, packet.LayerPayload()...)
 
 			var peerIP net.IP // 提取对端 IP（按族别）
-			var data []byte   // 提取 ICMP 负载
+			var data []byte   // 提取 ICMP 的负载
 			if s.IPVersion == 4 {
 				// 从包中获取 IPv4 层信息
 				ip4, ok := pkt.Layer(layers.LayerTypeIPv4).(*layers.IPv4)
@@ -146,7 +171,7 @@ func (s *TCPSpec) ListenICMP(ctx context.Context, ready chan struct{}, onICMP fu
 				}
 
 				dstIP := net.IP(data[16:20])
-				if !(dstIP.Equal(s.DstIP) || dstIP.Equal(net.IPv4zero)) {
+				if !dstIP.Equal(s.DstIP) {
 					continue
 				}
 			} else {
@@ -178,7 +203,7 @@ func (s *TCPSpec) ListenICMP(ctx context.Context, ready chan struct{}, onICMP fu
 				}
 
 				dstIP := net.IP(data[24:40])
-				if !(dstIP.Equal(s.DstIP) || dstIP.Equal(net.IPv6zero)) {
+				if !dstIP.Equal(s.DstIP) {
 					continue
 				}
 			}

@@ -1,9 +1,7 @@
 package trace
 
 import (
-	"bytes"
 	"context"
-	"encoding/binary"
 	"errors"
 	"log"
 	"math/rand"
@@ -15,8 +13,7 @@ import (
 	"syscall"
 	"time"
 
-	"golang.org/x/net/icmp"
-	"golang.org/x/net/ipv4"
+	"github.com/google/gopacket/layers"
 	"golang.org/x/sync/semaphore"
 
 	"github.com/nxtrace/NTrace-core/trace/internal"
@@ -25,17 +22,34 @@ import (
 
 type ICMPTracer struct {
 	Config
-	wg                  sync.WaitGroup
-	res                 Result
-	echoIDTag           uint8
-	pidLow              uint8
-	inflightRequest     map[int]chan Hop
-	inflightRequestLock sync.RWMutex
-	icmp                net.PacketConn
-	icmpConn            *ipv4.PacketConn
-	hopLimitLock        sync.Mutex
-	final               atomic.Int32
-	sem                 *semaphore.Weighted
+	wg        sync.WaitGroup
+	res       Result
+	echoID    int
+	pending   map[int]struct{}
+	pendingMu sync.Mutex
+	sentAt    map[int]time.Time
+	sentMu    sync.RWMutex
+	SrcIP     net.IP
+	final     atomic.Int32
+	sem       *semaphore.Weighted
+	matchQ    chan matchTask
+	readyICMP chan struct{}
+}
+
+func (t *ICMPTracer) waitAllReady(ctx context.Context) {
+	timeout := time.After(5 * time.Second)
+	waiting := 1
+	for waiting > 0 {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.readyICMP:
+			waiting--
+		case <-timeout:
+			return
+		}
+	}
+	<-time.After(100 * time.Millisecond)
 }
 
 func (t *ICMPTracer) ttlComp(ttl int) bool {
@@ -77,7 +91,7 @@ func (t *ICMPTracer) PrintFunc(ctx context.Context, cancel context.CancelCauseFu
 	}
 }
 
-func (t *ICMPTracer) launchTTL(ctx context.Context, ttl int) {
+func (t *ICMPTracer) launchTTL(ctx context.Context, s *internal.ICMPSpec, ttl int) {
 	go func(ttl int) {
 		for i := 0; i < t.MaxAttempts; i++ {
 			// 若此 TTL 已完成或 ctx 已取消，则不再发起新的尝试
@@ -87,7 +101,7 @@ func (t *ICMPTracer) launchTTL(ctx context.Context, ttl int) {
 
 			t.wg.Add(1)
 			go func(ttl, i int) {
-				if err := t.send(ctx, ttl, i); err != nil && !errors.Is(err, context.Canceled) {
+				if err := t.send(ctx, s, ttl, i); err != nil && !errors.Is(err, context.Canceled) {
 					if util.EnvDevMode {
 						panic(err)
 					}
@@ -105,23 +119,148 @@ func (t *ICMPTracer) launchTTL(ctx context.Context, ttl int) {
 }
 
 func (t *ICMPTracer) initEchoID() {
+	// 设置随机种子
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	t.echoIDTag = uint8(r.Intn(256))     // 高 8 位为随机 tag
-	t.pidLow = uint8(os.Getpid() & 0xFF) // 低 8 位为 pid
+
+	// 生成一个 8 位的随机 tag
+	echoIDTag := r.Intn(256)
+
+	// 获取当前进程的 pid
+	pid := os.Getpid()
+
+	// 将随机 tag 编码到高 8 位；将 pid 的低 8 位编码到低 8 位
+	t.echoID = (echoIDTag << 8) | (pid & 0xFF)
+}
+
+func (t *ICMPTracer) markPending(seq int) {
+	t.pendingMu.Lock()
+	defer t.pendingMu.Unlock()
+	t.pending[seq] = struct{}{}
+}
+
+func (t *ICMPTracer) clearPending(seq int) bool {
+	t.pendingMu.Lock()
+	defer t.pendingMu.Unlock()
+	_, ok := t.pending[seq]
+	delete(t.pending, seq)
+	return ok
+}
+
+func (t *ICMPTracer) storeSent(seq int, start time.Time) {
+	t.sentMu.Lock()
+	defer t.sentMu.Unlock()
+	t.sentAt[seq] = start
+}
+
+func (t *ICMPTracer) lookupSent(seq int) (start time.Time, ok bool) {
+	t.sentMu.RLock()
+	defer t.sentMu.RUnlock()
+	start, ok = t.sentAt[seq]
+	if !ok {
+		return time.Time{}, false
+	}
+	return start, true
+}
+
+func (t *ICMPTracer) dropSent(seq int) {
+	t.sentMu.Lock()
+	defer t.sentMu.Unlock()
+	delete(t.sentAt, seq)
+}
+
+func (t *ICMPTracer) addHopWithIndex(peer net.Addr, ttl, i int, rtt time.Duration, mpls []string) {
+	if f := t.final.Load(); f != -1 && ttl > int(f) {
+		return
+	}
+
+	if ip := util.AddrIP(peer); ip != nil && ip.Equal(t.DstIP) {
+		for {
+			old := t.final.Load()
+			if old != -1 && ttl >= int(old) {
+				break
+			}
+			if t.final.CompareAndSwap(old, int32(ttl)) {
+				break
+			}
+		}
+	}
+
+	h := Hop{
+		Success: true,
+		Address: peer,
+		TTL:     ttl,
+		RTT:     rtt,
+		MPLS:    mpls,
+	}
+
+	_ = h.fetchIPData(t.Config) // 忽略错误，继续添加结果
+
+	t.res.add(h, i, t.NumMeasurements, t.MaxAttempts)
+}
+
+func (t *ICMPTracer) matchWorker(ctx context.Context) {
+	defer t.wg.Done()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case task, ok := <-t.matchQ:
+			if !ok {
+				return
+			}
+
+			// 固定等待 10ms，缓解登记竞态
+			timer := time.NewTimer(10 * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return
+			case <-timer.C:
+			}
+			timer.Stop()
+
+			// 尝试一次匹配
+			start, ok := t.lookupSent(task.seq)
+			if !ok {
+				continue
+			}
+
+			// 将 task.seq 转为 16 位无符号数
+			u := uint16(task.seq)
+
+			// 高 8 位是 TTL
+			ttl := int((u >> 8) & 0xFF)
+
+			// 低 8 位是索引 i
+			i := int(u & 0xFF)
+
+			if t.clearPending(task.seq) {
+				rtt := task.finish.Sub(start)
+				t.addHopWithIndex(task.peer, ttl, i, rtt, task.mpls)
+			}
+			t.dropSent(task.seq)
+		}
+	}
 }
 
 func (t *ICMPTracer) Execute() (res *Result, err error) {
 	// 初始化 Echo.ID
 	t.initEchoID()
 
-	// 初始化 inflightRequest map
-	t.inflightRequest = make(map[int]chan Hop)
+	// 初始化 pending、sentAt 和 matchQ
+	t.pending = make(map[int]struct{})
+	t.sentAt = make(map[int]time.Time)
+	t.matchQ = make(chan matchTask, 60)
+
+	// 创建就绪通道
+	t.readyICMP = make(chan struct{})
 
 	if len(t.res.Hops) > 0 {
 		return &t.res, errTracerouteExecuted
 	}
 
-	// 初始化 Result.Hops，并预分配到 MaxHops
+	// 初始化 res.Hops 和 res.tailDone，并预分配到 MaxHops
 	t.res.Hops = make([][]Hop, t.MaxHops)
 	t.res.tailDone = make([]bool, t.MaxHops)
 
@@ -130,28 +269,40 @@ func (t *ICMPTracer) Execute() (res *Result, err error) {
 	if t.SrcAddr != "" && SrcAddr == nil {
 		return nil, errors.New("invalid IPv4 SrcAddr:" + t.SrcAddr)
 	}
-	SrcIP := ""
-	if SrcAddr != nil {
-		SrcIP = SrcAddr.String()
+	t.SrcIP, _ = util.LocalIPPort(t.DstIP, SrcAddr, "icmp")
+	if t.SrcIP == nil {
+		return nil, errors.New("cannot determine local IPv4 address")
 	}
 
-	t.icmp, err = internal.ListenPacket("ip4:icmp", SrcIP)
-	if err != nil {
-		return &t.res, err
-	}
-	defer func() {
-		if c := t.icmp; c != nil { // 先拷一份引用，避免 defer 执行时 t.icmp 已被并发改写
-			_ = c.Close()
-		}
-	}()
-	t.icmpConn = ipv4.NewPacketConn(t.icmp)
+	s := internal.NewICMPSpec(
+		4,
+		t.ICMPMode,
+		t.echoID,
+		t.SrcIP,
+		t.DstIP,
+	)
+
+	s.InitICMP()
+	defer s.Close()
 
 	sigCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	ctx, cancel := context.WithCancelCause(sigCtx)
 	t.final.Store(-1)
 
+	workerN := 16
+	for i := 0; i < workerN; i++ {
+		t.wg.Add(1)
+		go t.matchWorker(ctx)
+	}
 	t.wg.Add(1)
-	go t.listenICMP(ctx)
+	go func() {
+		defer t.wg.Done()
+		s.ListenICMP(ctx, t.readyICMP, func(msg internal.ReceivedMessage, finish time.Time, seq int) {
+			t.handleICMPMessage(msg, finish, seq)
+		},
+		)
+	}()
+	t.waitAllReady(ctx)
 	t.wg.Add(1)
 	go t.PrintFunc(ctx, cancel)
 
@@ -161,7 +312,7 @@ func (t *ICMPTracer) Execute() (res *Result, err error) {
 	go func() {
 		defer t.wg.Done()
 		// 立即启动 BeginHop 对应的 TTL 组
-		t.launchTTL(ctx, t.BeginHop)
+		t.launchTTL(ctx, s, t.BeginHop)
 
 		for ttl := t.BeginHop + 1; ttl <= t.MaxHops; ttl++ {
 			// 之后按 TTLInterval 周期启动后续 TTL 组
@@ -177,7 +328,7 @@ func (t *ICMPTracer) Execute() (res *Result, err error) {
 			}
 
 			// 并发启动这个 TTL 的所有测量
-			t.launchTTL(ctx, ttl)
+			t.launchTTL(ctx, s, ttl)
 		}
 	}()
 
@@ -185,11 +336,11 @@ func (t *ICMPTracer) Execute() (res *Result, err error) {
 	stop()
 	t.wg.Wait()
 
-	bound := int(t.final.Load())
-	if bound == -1 {
-		bound = t.MaxHops
+	final := int(t.final.Load())
+	if final == -1 {
+		final = t.MaxHops
 	}
-	t.res.reduce(bound)
+	t.res.reduce(final)
 
 	if cause := context.Cause(ctx); !errors.Is(cause, errNaturalDone) {
 		return &t.res, cause
@@ -197,120 +348,20 @@ func (t *ICMPTracer) Execute() (res *Result, err error) {
 	return &t.res, nil
 }
 
-func (t *ICMPTracer) listenICMP(ctx context.Context) {
-	defer t.wg.Done()
-	lc := internal.NewPacketListener(t.icmp)
-	go lc.Start(ctx)
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case msg, ok := <-lc.Messages:
-			if !ok {
-				return
-			}
-
-			if msg.Err != nil {
-				continue
-			}
-
-			rm, err := icmp.ParseMessage(1, msg.Msg)
-			if err != nil {
-				log.Println(err)
-				continue
-			}
-
-			var (
-				data []byte
-			)
-			switch rm.Type {
-			case ipv4.ICMPTypeEchoReply:
-				echo, ok := rm.Body.(*icmp.Echo)
-				if !ok || echo == nil {
-					continue
-				}
-
-				// 只在 Peer 是目的地址时分发，用 seq 作为通道 key
-				if ip := util.AddrIP(msg.Peer); ip != nil && ip.Equal(t.DstIP) {
-					id := uint16(echo.ID)
-					if uint8(id>>8) != t.echoIDTag || uint8(id&0xFF) != t.pidLow {
-						continue
-					}
-					// 从 Echo.Seq 恢复出先前编码的 (ttl<<8)|index
-					seq := echo.Seq
-					// 高 8 位是真正的 TTL
-					ttl := seq >> 8
-					// TTL 越界时舍弃
-					if ttl < t.BeginHop || ttl > t.MaxHops {
-						continue
-					}
-					t.handleICMPMessage(msg, seq)
-				}
-				continue
-			case ipv4.ICMPTypeTimeExceeded:
-				body, ok := rm.Body.(*icmp.TimeExceeded)
-				if !ok || body == nil {
-					continue
-				}
-				data = body.Data
-			case ipv4.ICMPTypeDestinationUnreachable:
-				body, ok := rm.Body.(*icmp.DstUnreach)
-				if !ok || body == nil {
-					continue
-				}
-				data = body.Data
-			default:
-				continue
-				//log.Println("received icmp message of unknown type", rm.Type)
-			}
-
-			if len(data) < 20 || data[0]>>4 != 4 {
-				continue
-			}
-
-			dstip := net.IP(data[16:20])
-			if dstip.Equal(t.DstIP) || dstip.Equal(net.IPv4zero) {
-				inner, err := util.GetICMPResponsePayload(data)
-				if err != nil || len(inner) < 8 {
-					continue
-				}
-				id := binary.BigEndian.Uint16(inner[4:6])
-				if uint8(id>>8) != t.echoIDTag || uint8(id&0xFF) != t.pidLow {
-					continue
-				}
-				seq := int(binary.BigEndian.Uint16(inner[6:8]))
-				t.handleICMPMessage(msg, seq)
-			}
-		}
-	}
-}
-
-func (t *ICMPTracer) handleICMPMessage(msg internal.ReceivedMessage, seq int) {
+func (t *ICMPTracer) handleICMPMessage(msg internal.ReceivedMessage, finish time.Time, seq int) {
 	mpls := extractMPLS(msg)
 
-	// 取出通道后立刻解锁
-	t.inflightRequestLock.RLock()
-	ch, ok := t.inflightRequest[seq]
-	t.inflightRequestLock.RUnlock()
-	if !ok || ch == nil {
-		return
-	}
-
-	h := Hop{
-		Success: true,
-		Address: msg.Peer,
-		MPLS:    mpls,
-	}
-
-	// 非阻塞发送，避免重复回包把缓冲塞满导致阻塞
+	// 非阻塞投递；如果队列已满则直接丢弃该任务
 	select {
-	case ch <- h:
+	case t.matchQ <- matchTask{
+		seq: seq, peer: msg.Peer, finish: finish, mpls: mpls,
+	}:
 	default:
-		// 丢弃重复/迟到的相同 seq 回包，避免阻塞
+		// 丢弃以避免阻塞抓包循环
 	}
 }
 
-func (t *ICMPTracer) send(ctx context.Context, ttl, i int) error {
+func (t *ICMPTracer) send(ctx context.Context, s *internal.ICMPSpec, ttl, i int) error {
 	defer t.wg.Done()
 
 	if t.ttlComp(ttl) {
@@ -335,97 +386,66 @@ func (t *ICMPTracer) send(ctx context.Context, ttl, i int) error {
 	// 将 TTL 编码到高 8 位；将索引 i 编码到低 8 位
 	seq := (ttl << 8) | (i & 0xFF)
 
-	t.inflightRequestLock.Lock()
-	hopCh := make(chan Hop, 1)
-	t.inflightRequest[seq] = hopCh
-	t.inflightRequestLock.Unlock()
-	defer func() {
-		t.inflightRequestLock.Lock()
-		delete(t.inflightRequest, seq)
-		t.inflightRequestLock.Unlock()
-	}()
-
-	// 将随机 tag 编码到高 8 位；将 pid 的低 8 位编码到低 8 位
-	id := int(uint16(t.echoIDTag)<<8 | uint16(t.pidLow))
-
-	var data []byte
-	if t.PktSize < 3 {
-		data = bytes.Repeat([]byte{0}, t.PktSize)
-	} else {
-		data = bytes.Repeat([]byte{0}, t.PktSize-3)
-		data = append(data, 0x6e, 0x74, 0x72) // "ntr" 作为标识
+	ipHeader := &layers.IPv4{
+		Version:  4,
+		SrcIP:    t.SrcIP,
+		DstIP:    t.DstIP,
+		Protocol: layers.IPProtocolICMPv4,
+		TTL:      uint8(ttl),
 	}
 
-	icmpHeader := icmp.Message{
-		Type: ipv4.ICMPTypeEcho,
-		Code: 0,
-		Body: &icmp.Echo{
-			ID:   id,
-			Data: data,
-			Seq:  seq,
-		},
+	icmpHeader := &layers.ICMPv4{
+		TypeCode: layers.CreateICMPv4TypeCode(layers.ICMPv4TypeEchoRequest, 0),
+		Id:       uint16(t.echoID),
+		Seq:      uint16(seq),
 	}
 
-	// 串行设置 TTL + 发送，放在同一把锁里保证并发安全
-	t.hopLimitLock.Lock()
-	if err := t.icmpConn.SetTTL(ttl); err != nil {
-		t.hopLimitLock.Unlock()
-		return err
-	}
-	wb, err := icmpHeader.Marshal(nil)
-	if err != nil {
-		t.hopLimitLock.Unlock()
-		return err
-	}
-	start := time.Now()
-	if _, err := t.icmp.WriteTo(wb, &net.IPAddr{IP: t.DstIP}); err != nil {
-		t.hopLimitLock.Unlock()
-		return err
-	}
-	t.hopLimitLock.Unlock()
+	desiredPayloadSize := t.PktSize
+	payload := make([]byte, desiredPayloadSize)
 
-	select {
-	case <-ctx.Done():
-		return context.Canceled
-	case h := <-hopCh:
-		rtt := time.Since(start)
+	if desiredPayloadSize >= 3 {
+		copy(payload[desiredPayloadSize-3:], []byte{'n', 't', 'r'}) // "ntr" 作为标识
+	}
 
-		if f := t.final.Load(); f != -1 && ttl > int(f) {
-			return nil
-		}
-
-		if ip := util.AddrIP(h.Address); ip != nil && ip.Equal(t.DstIP) {
-			for {
-				old := t.final.Load()
-				if old != -1 && ttl >= int(old) {
-					break
-				}
-				if t.final.CompareAndSwap(old, int32(ttl)) {
-					break
-				}
+	// 登记 pending，并启动超时守护
+	t.markPending(seq)
+	go func(seq, ttl, i int) {
+		select {
+		case <-ctx.Done():
+			_ = t.clearPending(seq)
+			return
+		case <-time.After(t.Timeout):
+			// 仍未完成且未超出 final/未达成 ttlComp 才补位
+			if !t.clearPending(seq) {
+				return
 			}
+
+			if f := t.final.Load(); f != -1 && ttl > int(f) {
+				return
+			}
+
+			if t.ttlComp(ttl) {
+				return
+			}
+
+			h := Hop{
+				Success: false,
+				Address: nil,
+				TTL:     ttl,
+				RTT:     0,
+				Error:   errHopLimitTimeout,
+			}
+
+			t.res.add(h, i, t.NumMeasurements, t.MaxAttempts)
+			t.dropSent(seq)
 		}
+	}(seq, ttl, i)
 
-		h.TTL = ttl
-		h.RTT = rtt
-
-		_ = h.fetchIPData(t.Config) // 忽略错误，继续添加结果
-
-		t.res.add(h, i, t.NumMeasurements, t.MaxAttempts)
-	case <-time.After(t.Timeout):
-		if f := t.final.Load(); f != -1 && ttl > int(f) {
-			return nil
-		}
-
-		h := Hop{
-			Success: false,
-			Address: nil,
-			TTL:     ttl,
-			RTT:     0,
-			Error:   errHopLimitTimeout,
-		}
-
-		t.res.add(h, i, t.NumMeasurements, t.MaxAttempts)
+	start, err := s.SendICMP(ctx, ipHeader, icmpHeader, nil, payload)
+	if err != nil {
+		_ = t.clearPending(seq)
+		return err
 	}
+	t.storeSent(seq, start)
 	return nil
 }

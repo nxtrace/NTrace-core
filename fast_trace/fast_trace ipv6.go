@@ -29,7 +29,8 @@ func (f *FastTracer) tracert_v6(location string, ispCollection ISPCollection) {
 		log.Fatal(err)
 	}
 	var conf = trace.Config{
-		OSKind:           f.ParamsFastTrace.OSKind,
+		OSType:           f.ParamsFastTrace.OSType,
+		ICMPMode:         f.ParamsFastTrace.ICMPMode,
 		BeginHop:         f.ParamsFastTrace.BeginHop,
 		DstIP:            ip,
 		DstPort:          f.ParamsFastTrace.DstPort,

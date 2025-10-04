@@ -90,6 +90,22 @@ func GetICMPResponsePayload(data []byte) ([]byte, error) {
 	}
 }
 
+func GetICMPID(data []byte) (int, error) {
+	if len(data) < 6 {
+		return 0, errors.New("length of icmp header too short for ID")
+	}
+	seqBytes := data[4:6]
+	return int(binary.BigEndian.Uint16(seqBytes)), nil
+}
+
+func GetICMPSeq(data []byte) (int, error) {
+	if len(data) < 8 {
+		return 0, errors.New("length of icmp header too short for seq")
+	}
+	seqBytes := data[6:8]
+	return int(binary.BigEndian.Uint16(seqBytes)), nil
+}
+
 func GetTCPPorts(data []byte) (int, int, error) {
 	if len(data) < 4 {
 		return 0, 0, errors.New("length of tcp header too short for ports")
@@ -99,12 +115,12 @@ func GetTCPPorts(data []byte) (int, int, error) {
 	return srcPort, dstPort, nil
 }
 
-func GetTCPSeq(data []byte) (uint32, error) {
+func GetTCPSeq(data []byte) (int, error) {
 	if len(data) < 8 {
 		return 0, errors.New("length of tcp header too short for seq")
 	}
 	seqBytes := data[4:8]
-	return binary.BigEndian.Uint32(seqBytes), nil
+	return int(binary.BigEndian.Uint32(seqBytes)), nil
 }
 
 func GetUDPPorts(data []byte) (int, int, error) {
@@ -116,9 +132,9 @@ func GetUDPPorts(data []byte) (int, int, error) {
 	return srcPort, dstPort, nil
 }
 
-func GetUDPSeq(data []byte) (uint16, error) {
+func GetUDPSeq(data []byte) (int, error) {
 	if len(data) < 1 {
-		return 0, errors.New("received invalid IP header")
+		return 0, errors.New("received invalid IPv4 header")
 	}
 	hdrLen, err := GetIPHeaderLength(data)
 	if err != nil {
@@ -128,13 +144,13 @@ func GetUDPSeq(data []byte) (uint16, error) {
 		return 0, errors.New("length of IPv4 header too short for seq")
 	}
 	seqBytes := data[4:6]
-	return binary.BigEndian.Uint16(seqBytes), nil
+	return int(binary.BigEndian.Uint16(seqBytes)), nil
 }
 
-func GetUDPSeqv6(data []byte) (uint16, error) {
+func GetUDPSeqv6(data []byte) (int, error) {
 	if len(data) < 8 {
 		return 0, errors.New("length of udp header too short for seq")
 	}
 	seqBytes := data[6:8]
-	return binary.BigEndian.Uint16(seqBytes), nil
+	return int(binary.BigEndian.Uint16(seqBytes)), nil
 }
