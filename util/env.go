@@ -19,6 +19,7 @@ var (
 	EnvHostPort     = GetEnvDefault("NEXTTRACE_HOSTPORT", "api.nxtrace.org")
 	EnvPowProvider  = GetEnvDefault("NEXTTRACE_POWPROVIDER", "api.nxtrace.org")
 	EnvMaxAttempts  = GetEnvInt("NEXTTRACE_MAXATTEMPTS", 0)
+	EnvICMPMode     = GetEnvInt("NEXTTRACE_ICMPMODE", 0)
 )
 
 func GetEnvTrimmed(key string) (string, bool) {

@@ -11,11 +11,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/nxtrace/NTrace-core/trace/internal"
 	"golang.org/x/net/idna"
 	"golang.org/x/sync/singleflight"
 
 	"github.com/nxtrace/NTrace-core/ipgeo"
+	"github.com/nxtrace/NTrace-core/trace/internal"
 	"github.com/nxtrace/NTrace-core/util"
 )
 
@@ -30,7 +30,8 @@ var (
 )
 
 type Config struct {
-	OSKind           int
+	OSType           int
+	ICMPMode         int
 	SrcAddr          string
 	SrcPort          int
 	BeginHop         int
@@ -108,6 +109,19 @@ func Traceroute(method Method, config Config) (*Result, error) {
 	}
 
 	// 若 CLI 未给或给了非正数，则尝试用环境变量
+	if config.ICMPMode <= 0 && util.EnvICMPMode > 0 {
+		config.ICMPMode = util.EnvICMPMode
+	}
+
+	switch config.ICMPMode {
+	case 0, 1, 2:
+		// 合法，保持不变
+	default:
+		// 非法输入一律回退到 Auto
+		config.ICMPMode = 0
+	}
+
+	// 若 CLI 未给或给了非正数，则尝试用环境变量
 	if config.MaxAttempts <= 0 && util.EnvMaxAttempts > 0 {
 		config.MaxAttempts = util.EnvMaxAttempts
 	}
@@ -146,6 +160,7 @@ func Traceroute(method Method, config Config) (*Result, error) {
 	default:
 		return &Result{}, errInvalidMethod
 	}
+
 	result, err := tracer.Execute()
 	if err != nil && errors.Is(err, syscall.EPERM) {
 		err = fmt.Errorf("%w, please run as root", err)
@@ -271,7 +286,7 @@ func CanonicalHostname(s string) string {
 	return strings.Join(parts, ".")
 }
 
-func (h *Hop) fetchIPData(c Config) (err error) {
+func (h *Hop) fetchIPData(c Config) error {
 	ipStr := h.Address.String()
 	// DN42
 	if c.DN42 {

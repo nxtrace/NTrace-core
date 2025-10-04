@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/google/gopacket/layers"
-	"golang.org/x/net/icmp"
 	"golang.org/x/sync/semaphore"
 
 	"github.com/nxtrace/NTrace-core/trace/internal"
@@ -25,14 +24,13 @@ type UDPTracer struct {
 	Config
 	wg        sync.WaitGroup
 	res       Result
-	ttlQMu    sync.Mutex
 	ttlQueues map[int][]attemptPort
-	pendingMu sync.Mutex
+	ttlQMu    sync.Mutex
 	pending   map[attemptKey]struct{}
-	sentMu    sync.RWMutex
+	pendingMu sync.Mutex
 	sentAt    map[int]sentInfo
+	sentMu    sync.RWMutex
 	SrcIP     net.IP
-	icmp      net.PacketConn
 	final     atomic.Int32
 	sem       *semaphore.Weighted
 	matchQ    chan matchTask
@@ -168,7 +166,7 @@ func (t *UDPTracer) clearPending(ttl, i int) bool {
 func (t *UDPTracer) storeSent(seq, ttl, i, srcPort int, start time.Time) {
 	t.sentMu.Lock()
 	defer t.sentMu.Unlock()
-	if t.OSKind != 1 {
+	if t.OSType != 1 {
 		t.sentAt[seq] = sentInfo{srcPort: srcPort, start: start}
 	} else {
 		t.sentAt[seq] = sentInfo{ttl: ttl, i: i, srcPort: srcPort, start: start}
@@ -264,7 +262,7 @@ func (t *UDPTracer) matchWorker(ctx context.Context) {
 				continue
 			}
 
-			if t.OSKind != 1 {
+			if t.OSType != 1 {
 				// 将 task.seq 转为 16 位无符号数
 				u := uint16(task.seq)
 
@@ -300,7 +298,7 @@ func (t *UDPTracer) Execute() (res *Result, err error) {
 		return &t.res, errTracerouteExecuted
 	}
 
-	// 初始化 Result.Hops，并预分配到 MaxHops
+	// 初始化 res.Hops 和 res.tailDone，并预分配到 MaxHops
 	t.res.Hops = make([][]Hop, t.MaxHops)
 	t.res.tailDone = make([]bool, t.MaxHops)
 
@@ -314,24 +312,15 @@ func (t *UDPTracer) Execute() (res *Result, err error) {
 		return nil, errors.New("cannot determine local IPv4 address")
 	}
 
-	t.icmp, err = icmp.ListenPacket("ip4:icmp", t.SrcIP.String())
-	if err != nil {
-		return &t.res, err
-	}
-	defer func() {
-		if c := t.icmp; c != nil { // 先拷一份引用，避免 defer 执行时 t.icmp 已被并发改写
-			_ = c.Close()
-		}
-	}()
-
 	s := internal.NewUDPSpec(
 		4,
+		t.ICMPMode,
 		t.SrcIP,
 		t.DstIP,
 		t.DstPort,
-		t.icmp,
 	)
 
+	s.InitICMP()
 	s.InitUDP()
 	defer s.Close()
 
@@ -344,7 +333,7 @@ func (t *UDPTracer) Execute() (res *Result, err error) {
 		t.wg.Add(1)
 		go t.matchWorker(ctx)
 	}
-	if t.OSKind == 1 {
+	if t.OSType == 1 {
 		t.wg.Add(1)
 		go func() {
 			defer t.wg.Done()
@@ -402,11 +391,11 @@ func (t *UDPTracer) Execute() (res *Result, err error) {
 	stop()
 	t.wg.Wait()
 
-	bound := int(t.final.Load())
-	if bound == -1 {
-		bound = t.MaxHops
+	final := int(t.final.Load())
+	if final == -1 {
+		final = t.MaxHops
 	}
-	t.res.reduce(bound)
+	t.res.reduce(final)
 
 	if cause := context.Cause(ctx); !errors.Is(cause, errNaturalDone) {
 		return &t.res, cause
@@ -439,7 +428,7 @@ func (t *UDPTracer) handleICMPMessage(msg internal.ReceivedMessage, finish time.
 	// 非阻塞投递；如果队列已满则直接丢弃该任务
 	select {
 	case t.matchQ <- matchTask{
-		srcPort: srcPort, seq: int(seq), peer: msg.Peer, finish: finish, mpls: mpls,
+		srcPort: srcPort, seq: seq, peer: msg.Peer, finish: finish, mpls: mpls,
 	}:
 	default:
 		// 丢弃以避免阻塞抓包循环
@@ -480,7 +469,6 @@ func (t *UDPTracer) send(ctx context.Context, s *internal.UDPSpec, ttl, i int) e
 
 	ipHeader := &layers.IPv4{
 		Version:  4,
-		IHL:      5,
 		Id:       uint16(seq),
 		SrcIP:    t.SrcIP,
 		DstIP:    t.DstIP,
@@ -502,8 +490,10 @@ func (t *UDPTracer) send(ctx context.Context, s *internal.UDPSpec, ttl, i int) e
 		payload[k] = byte(r.Intn(256))
 	}
 
-	// 记录 TTL 队列
-	t.enqueueTTLPort(ttl, i, SrcPort)
+	if t.OSType == 1 {
+		// 记录 TTL 队列
+		t.enqueueTTLPort(ttl, i, SrcPort)
+	}
 
 	// 登记 pending，并启动超时守护
 	t.markPending(ttl, i)
@@ -535,7 +525,7 @@ func (t *UDPTracer) send(ctx context.Context, s *internal.UDPSpec, ttl, i int) e
 			}
 
 			t.res.add(h, i, t.NumMeasurements, t.MaxAttempts)
-			if t.OSKind != 1 {
+			if t.OSType != 1 {
 				t.dropSent(seq)
 			} else {
 				t.dropByAttempt(ttl, i)
@@ -549,7 +539,7 @@ func (t *UDPTracer) send(ctx context.Context, s *internal.UDPSpec, ttl, i int) e
 		return err
 	}
 
-	if t.OSKind != 1 {
+	if t.OSType != 1 {
 		t.storeSent(seq, 0, 0, SrcPort, start)
 	}
 	return nil

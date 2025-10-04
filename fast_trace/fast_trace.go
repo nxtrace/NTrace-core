@@ -26,7 +26,8 @@ type FastTracer struct {
 }
 
 type ParamsFastTrace struct {
-	OSKind         int
+	OSType         int
+	ICMPMode       int
 	SrcDev         string
 	SrcAddr        string
 	DstPort        int
@@ -59,7 +60,8 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 		log.Fatal(err)
 	}
 	var conf = trace.Config{
-		OSKind:           f.ParamsFastTrace.OSKind,
+		OSType:           f.ParamsFastTrace.OSType,
+		ICMPMode:         f.ParamsFastTrace.ICMPMode,
 		BeginHop:         f.ParamsFastTrace.BeginHop,
 		DstIP:            ip,
 		DstPort:          f.ParamsFastTrace.DstPort,
@@ -340,7 +342,8 @@ func testFile(paramsFastTrace ParamsFastTrace, traceMode trace.Method) {
 		}
 
 		var conf = trace.Config{
-			OSKind:           paramsFastTrace.OSKind,
+			OSType:           paramsFastTrace.OSType,
+			ICMPMode:         paramsFastTrace.ICMPMode,
 			BeginHop:         paramsFastTrace.BeginHop,
 			DstIP:            net.ParseIP(ip.Ip),
 			DstPort:          paramsFastTrace.DstPort,

@@ -18,16 +18,13 @@ import (
 
 type UDPSpec struct {
 	IPVersion int
+	ICMPMode  int
 	SrcIP     net.IP
 	DstIP     net.IP
 	DstPort   int
 	icmp      net.PacketConn
 	addr      wd.Address
 	handle    wd.Handle
-}
-
-func NewUDPSpec(IPVersion int, srcIP, dstIP net.IP, dstPort int, icmp net.PacketConn) *UDPSpec {
-	return &UDPSpec{IPVersion: IPVersion, SrcIP: srcIP, DstIP: dstIP, DstPort: dstPort, icmp: icmp}
 }
 
 func (s *UDPSpec) InitUDP() {
@@ -47,13 +44,46 @@ func (s *UDPSpec) InitUDP() {
 }
 
 func (s *UDPSpec) Close() {
+	_ = s.icmp.Close()
 	_ = s.handle.Close()
 }
 
 func (s *UDPSpec) ListenOut(_ context.Context, _ chan struct{}, _ func(srcPort, seq, ttl int, start time.Time)) {
 }
 
+// resolveICMPMode 进行最终模式判定
+func (s *UDPSpec) resolveICMPMode() int {
+	icmpMode := s.ICMPMode
+	if icmpMode != 1 && icmpMode != 2 {
+		icmpMode = 0 // 统一成 Auto
+	}
+
+	// 指定 1=Socket：直接返回
+	if icmpMode == 1 {
+		return 1
+	}
+
+	// Auto(0) 或强制 PCAP(2) → 尝试 PCAP
+	ok, err := pcapAvailable()
+	if !ok {
+		if icmpMode == 2 {
+			log.Printf("PCAP mode requested, but Npcap is not available: %v; falling back to Socket mode.", err)
+		}
+		return 1
+	}
+	return 2
+}
+
 func (s *UDPSpec) ListenICMP(ctx context.Context, ready chan struct{}, onICMP func(msg ReceivedMessage, finish time.Time, data []byte)) {
+	switch s.resolveICMPMode() {
+	case 1:
+		s.listenICMPSock(ctx, ready, onICMP)
+	case 2:
+		s.listenICMPPcap(ctx, ready, onICMP)
+	}
+}
+
+func (s *UDPSpec) listenICMPPcap(ctx context.Context, ready chan struct{}, onICMP func(msg ReceivedMessage, finish time.Time, data []byte)) {
 	// 选择捕获设备与本地接口
 	dev, err := util.PcapDeviceByIP(s.SrcIP)
 	if err != nil {
@@ -114,7 +144,7 @@ func (s *UDPSpec) ListenICMP(ctx context.Context, ready chan struct{}, onICMP fu
 			outer = append(outer, packet.LayerPayload()...)
 
 			var peerIP net.IP // 提取对端 IP（按族别）
-			var data []byte   // 提取 ICMP 负载
+			var data []byte   // 提取 ICMP 的负载
 			if s.IPVersion == 4 {
 				// 从包中获取 IPv4 层信息
 				ip4, ok := pkt.Layer(layers.LayerTypeIPv4).(*layers.IPv4)
@@ -143,7 +173,7 @@ func (s *UDPSpec) ListenICMP(ctx context.Context, ready chan struct{}, onICMP fu
 				}
 
 				dstIP := net.IP(data[16:20])
-				if !(dstIP.Equal(s.DstIP) || dstIP.Equal(net.IPv4zero)) {
+				if !dstIP.Equal(s.DstIP) {
 					continue
 				}
 			} else {
@@ -175,7 +205,7 @@ func (s *UDPSpec) ListenICMP(ctx context.Context, ready chan struct{}, onICMP fu
 				}
 
 				dstIP := net.IP(data[24:40])
-				if !(dstIP.Equal(s.DstIP) || dstIP.Equal(net.IPv6zero)) {
+				if !dstIP.Equal(s.DstIP) {
 					continue
 				}
 			}

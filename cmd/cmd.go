@@ -40,6 +40,7 @@ func Execute() {
 	udp := parser.Flag("U", "udp", &argparse.Options{Help: "Use UDP SYN for tracerouting (default port is 33494)"})
 	fast_trace := parser.Flag("F", "fast-trace", &argparse.Options{Help: "One-Key Fast Trace to China ISPs"})
 	port := parser.Int("p", "port", &argparse.Options{Help: "Set the destination port to use. With default of 80 for \"tcp\", 33494 for \"udp\"", Default: 0})
+	icmpMode := parser.Int("", "icmp-mode", &argparse.Options{Help: "Choose the method to listen for ICMP packets (1=Socket, 2=PCAP; 0=Auto)"})
 	numMeasurements := parser.Int("q", "queries", &argparse.Options{Default: 3, Help: "Set the number of probes per each hop"})
 	parallelRequests := parser.Int("", "parallel-requests", &argparse.Options{Default: 18, Help: "Set ParallelRequests number. It should be 1 when there is a multi-routing"})
 	maxHops := parser.Int("m", "max-hops", &argparse.Options{Default: 30, Help: "Set the max number of hops (max TTL to be reached)"})
@@ -61,7 +62,7 @@ func Execute() {
 	beginHop := parser.Int("f", "first", &argparse.Options{Default: 1, Help: "Start from the first_ttl hop (instead of 1)"})
 	disableMaptrace := parser.Flag("M", "map", &argparse.Options{Help: "Disable Print Trace Map"})
 	disableMPLS := parser.Flag("e", "disable-mpls", &argparse.Options{Help: "Disable MPLS"})
-	ver := parser.Flag("v", "version", &argparse.Options{Help: "Print version info and exit"})
+	ver := parser.Flag("V", "version", &argparse.Options{Help: "Print version info and exit"})
 	srcAddr := parser.String("s", "source", &argparse.Options{Help: "Use source address src_addr for outgoing packets"})
 	srcPort := parser.Int("", "source-port", &argparse.Options{Help: "Use source port src_port for outgoing packets"})
 	srcDev := parser.String("D", "dev", &argparse.Options{Help: "Use the following Network Devices as the source address in outgoing packets"})
@@ -101,15 +102,15 @@ func Execute() {
 		os.Exit(0)
 	}
 
-	OSKind := 3
+	OSType := 3
 	switch runtime.GOOS {
 	case "darwin":
-		OSKind = 1
+		OSType = 1
 	case "windows":
-		OSKind = 2
+		OSType = 2
 	}
 
-	if *init && OSKind == 2 {
+	if *init && OSType == 2 {
 		if err := windivert.PrepareWinDivertRuntime(); err != nil {
 			if util.EnvDevMode {
 				panic(err)
@@ -153,7 +154,8 @@ func Execute() {
 
 	if *fast_trace || *file != "" {
 		var paramsFastTrace = fastTrace.ParamsFastTrace{
-			OSKind:         OSKind,
+			OSType:         OSType,
+			ICMPMode:       *icmpMode,
 			SrcDev:         *srcDev,
 			SrcAddr:        *srcAddr,
 			DstPort:        *port,
@@ -282,7 +284,8 @@ func Execute() {
 	util.SrcPort = *srcPort
 	util.DstIP = ip.String()
 	var conf = trace.Config{
-		OSKind:           OSKind,
+		OSType:           OSType,
+		ICMPMode:         *icmpMode,
 		DN42:             *dn42,
 		SrcAddr:          *srcAddr,
 		SrcPort:          *srcPort,

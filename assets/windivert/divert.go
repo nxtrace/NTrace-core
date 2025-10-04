@@ -44,11 +44,12 @@ func PrepareWinDivertRuntime() error {
 	}
 
 	// DLL
-	if err := writeIfChecksumDiff(filepath.Join(exeDir, "WinDivert.dll"), dllBytes); err != nil {
+	if err = writeIfChecksumDiff(filepath.Join(exeDir, "WinDivert.dll"), dllBytes); err != nil {
 		return err
 	}
+
 	// SYS
-	if err := writeIfChecksumDiff(filepath.Join(exeDir, sysName), sysBytes); err != nil {
+	if err = writeIfChecksumDiff(filepath.Join(exeDir, sysName), sysBytes); err != nil {
 		return err
 	}
 	return nil
@@ -56,29 +57,22 @@ func PrepareWinDivertRuntime() error {
 
 // writeIfChecksumDiff 通过比较 SHA-256 来判断是否覆写目标文件
 func writeIfChecksumDiff(dst string, data []byte) error {
-	f, err := os.Open(dst)
+	file, err := os.Open(dst)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return os.WriteFile(dst, data, 0o644)
-		}
-		// 读失败，则尝试覆盖
-		return os.WriteFile(dst, data, 0o644)
+		return os.WriteFile(dst, data, 0o644) // 读失败，则尝试覆盖
 	}
-	defer func() {
-		_ = f.Close()
-	}()
 
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		// 读失败，则尝试覆盖
-		return os.WriteFile(dst, data, 0o644)
+	hash := sha256.New()
+	if _, err = io.Copy(hash, file); err != nil {
+		_ = file.Close()                      // 先关再写，避免 Windows 共享冲突
+		return os.WriteFile(dst, data, 0o644) // 读失败，则尝试覆盖
 	}
-	sumFile := h.Sum(nil)
+
+	sumFile := hash.Sum(nil)
+	_ = file.Close() // 先关再写，避免 Windows 共享冲突
 	sumMem := sha256.Sum256(data)
-
 	if bytes.Equal(sumFile, sumMem[:]) {
 		return nil // 一致，跳过
 	}
-	// 不一致，则尝试覆盖
-	return os.WriteFile(dst, data, 0o644)
+	return os.WriteFile(dst, data, 0o644) // 不一致，则尝试覆盖
 }

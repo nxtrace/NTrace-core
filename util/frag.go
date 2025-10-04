@@ -8,7 +8,7 @@ import (
 )
 
 type IPv4Fragment struct {
-	Hdr  *ipv4.Header
+	Hdr  ipv4.Header
 	Body []byte
 }
 
@@ -65,39 +65,60 @@ func GetMTUByIP(srcIP net.IP) int {
 
 // IPv4Fragmentize 将 base（IPv4 头）与 body（IPv4 负载：传输层头+数据）按 mtu 进行 IP 层分片
 func IPv4Fragmentize(base *ipv4.Header, body []byte, mtu int) ([]IPv4Fragment, error) {
-	const (
-		ipFlagMoreFragments = 0x2000
-		ipOffsetMask        = 0x1FFF
-	)
+	// 低 13 位为分片偏移（单位 8 字节）
+	const ipOffsetMask = 0x1FFF
 
+	// 提取 IPv4 头长度 ihl
 	ihl := base.Len
+
+	// MTU 至少要容纳一个完整 IPv4 头
 	if mtu <= ihl {
 		return nil, errors.New("IPv4Fragmentize: MTU too small (<= IHL)")
 	}
 	maxFragBody := mtu - ihl
-	aligned := (maxFragBody / 8) * 8
-	frags := make([]IPv4Fragment, 0, (len(body)+aligned-1)/aligned)
 
+	// 假如已经置位 DF=1，则直接报错并返回 nil
+	if (base.Flags & ipv4.DontFragment) != 0 {
+		return nil, errors.New("IPv4Fragmentize: DF set while fragmentation required")
+	}
+
+	// 非最后片的片内负载长度按 8 字节对齐
+	aligned := (maxFragBody / 8) * 8
+
+	// 预分配结果切片的容量
+	capacity := (len(body) + aligned - 1) / aligned
+	frags := make([]IPv4Fragment, 0, capacity)
+
+	// 按 aligned 切出所有的分片（最后片承载所有剩余字节）
 	for off := 0; off < len(body); {
-		remain := len(body) - off
-		fragLen, more := remain, false
-		if remain > aligned {
-			fragLen, more = aligned, true
+		more := off+aligned < len(body)
+		fragLen := len(body) - off
+		if more {
+			fragLen = aligned
 		}
 
+		// 为每片拷贝出独立头部
 		h := *base
 		h.Len = ihl
 		h.TotalLen = ihl + fragLen
 
-		// 偏移单位：8 字节；设置 MF/offset
-		h.FragOff &^= ipFlagMoreFragments | ipOffsetMask
+		// 先清除已有的 MF 标志
+		h.Flags &^= ipv4.MoreFragments
+
+		// 写入分片偏移（仅低 13 位，单位 8 字节）
+		h.FragOff &^= ipOffsetMask
 		h.FragOff |= (off / 8) & ipOffsetMask
+
+		// 非最后片，则置位 MF=1 到 Flags 字段中
 		if more {
-			h.FragOff |= ipFlagMoreFragments
+			h.Flags |= ipv4.MoreFragments
 		}
 
+		// 置 0 使 Marshal 重算 IPv4 头校验和
+		h.Checksum = 0
+
 		frags = append(frags, IPv4Fragment{
-			Hdr:  &h,
+			Hdr:  h,
 			Body: body[off : off+fragLen],
 		})
 		off += fragLen
