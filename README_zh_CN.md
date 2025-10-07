@@ -452,6 +452,11 @@ nexttrace --pow-provider sakura
 [https://github.com/nxtrace/NextTraceroute](https://github.com/nxtrace/NextTraceroute)  
 <a href='https://play.google.com/store/apps/details?id=com.surfaceocean.nexttraceroute&pcampaignid=pcampaignidMKT-Other-global-all-co-prtnr-py-PartBadge-Mar2515-1'><img alt='Get it on Google Play' width="128" height="48" src='https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png'/></a>
 
+## Cloudflare Support
+本项目受 [Alexandria 计划](http://www.cloudflare.com/oss-credits)赞助。
+
+<img src="https://cf-assets.www.cloudflare.com/slt3lc6tev37/2I3y49Uz9Y61lBS0kIPZu6/db6df1e6f99a8659267c442b75a0dff9/image.png" alt="Cloudflare Logo" width="331">
+
 ## AIWEN TECH Support
 
 本项目受 [埃文科技](https://www.ipplus360.com) 赞助。 很高兴使用`埃文科技城市级IP库`增强本项目 GEOIP 查询的准确性与完整性，并免费提供给公众。

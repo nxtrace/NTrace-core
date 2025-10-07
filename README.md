@@ -466,6 +466,10 @@ The LeoMoeAPI data is subject to copyright restrictions from multiple data sourc
 
 We hope you can give us as much feedback as possible on IP geolocation errors (see issue) so that it can be calibrated in the first place and others can benefit from it.
 
+## Cloudflare Support
+This project is sponsored by [Project Alexandria](http://www.cloudflare.com/oss-credits).
+
+<img src="https://cf-assets.www.cloudflare.com/slt3lc6tev37/2I3y49Uz9Y61lBS0kIPZu6/db6df1e6f99a8659267c442b75a0dff9/image.png" alt="Cloudflare Logo" width="331">
 
 ## AIWEN TECH Support
 
