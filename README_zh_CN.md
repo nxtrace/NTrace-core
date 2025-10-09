@@ -314,34 +314,40 @@ nexttrace -T -q 2 --parallel-requests 1 -t -P 2001:4860:4860::8888
 ### 全部用法详见 Usage 菜单
 
 ```shell
-Usage: nexttrace [-h|--help] [-4|--ipv4] [-6|--ipv6] [-T|--tcp] [-U|--udp]
-                 [-F|--fast-trace] [-p|--port <integer>] [-q|--queries
-                 <integer>] [--parallel-requests <integer>] [-m|--max-hops
-                 <integer>] [-d|--data-provider
-                 (Ip2region|ip2region|IP.SB|ip.sb|IPInfo|ipinfo|IPInsight|ipinsight|IPAPI.com|ip-api.com|IPInfoLocal|ipinfolocal|chunzhen|LeoMoeAPI|leomoeapi|disable-geoip)]
+Usage: nexttrace [-h|--help] [--init] [-4|--ipv4] [-6|--ipv6] [-T|--tcp]
+                 [-U|--udp] [-F|--fast-trace] [-p|--port <integer>]
+                 [--icmp-mode <integer>] [-q|--queries <integer>]
+                 [--parallel-requests <integer>] [-m|--max-hops <integer>]
+                 [--max-attempts <integer>] [-d|--data-provider
+                 (Ip2region|ip2region|IP.SB|ip.sb|IPInfo|ipinfo|IPInsight|ipinsight|IPAPI.com|ip-api.com|IPInfoLocal|ipinfolocal|chunzhen|LeoMoeAPI|leomoeapi|ipdb.one|disable-geoip)]
                  [--pow-provider (api.nxtrace.org|sakura)] [-n|--no-rdns]
                  [-a|--always-rdns] [-P|--route-path] [-r|--report] [--dn42]
                  [-o|--output] [-t|--table] [--raw] [-j|--json] [-c|--classic]
                  [-f|--first <integer>] [-M|--map] [-e|--disable-mpls]
-                 [-v|--version] [-s|--source "<value>"] [-D|--dev "<value>"]
-                 [-z|--send-time <integer>] [-i|--ttl-time <integer>]
-                 [--timeout <integer>] [--psize <integer>]
-                 [_positionalArg_nexttrace_32 "<value>"] [--dot-server
-                 (dnssb|aliyun|dnspod|google|cloudflare)] [-g|--language
-                 (en|cn)] [--file "<value>"] [-C|--no-color]
+                 [-V|--version] [-s|--source "<value>"] [--source-port
+                 <integer>] [-D|--dev "<value>"] [-z|--send-time <integer>]
+                 [-i|--ttl-time <integer>] [--timeout <integer>] [--psize
+                 <integer>] [_positionalArg_nexttrace_36 "<value>"]
+                 [--dot-server (dnssb|aliyun|dnspod|google|cloudflare)]
+                 [-g|--language (en|cn)] [--file "<value>"] [-C|--no-color]
 
 Arguments:
 
   -h  --help                         Print help information
+      --init                         Windows ONLY: Extract WinDivert runtime to
+                                     current directory
   -4  --ipv4                         Use IPv4 only
   -6  --ipv6                         Use IPv6 only
-  -T  --tcp                          Use TCP SYN for tracerouting (default port
-                                     is 80)
-  -U  --udp                          Use UDP SYN for tracerouting (default port
-                                     is 33494)
+  -T  --tcp                          Use TCP SYN for tracerouting (default
+                                     dest-port is 80)
+  -U  --udp                          Use UDP SYN for tracerouting (default
+                                     dest-port is 33494)
   -F  --fast-trace                   One-Key Fast Trace to China ISPs
   -p  --port                         Set the destination port to use. With
                                      default of 80 for "tcp", 33494 for "udp"
+      --icmp-mode                    Windows ONLY: Choose the method to listen
+                                     for ICMP packets (1=Socket, 2=PCAP;
+                                     0=Auto)
   -q  --queries                      Set the number of probes per each hop.
                                      Default: 3
       --parallel-requests            Set ParallelRequests number. It should be
@@ -349,6 +355,8 @@ Arguments:
                                      18
   -m  --max-hops                     Set the max number of hops (max TTL to be
                                      reached). Default: 30
+      --max-attempts                 Set the max number of attempts per TTL
+                                     (instead of a fixed auto value)
   -d  --data-provider                Choose IP Geograph Data Provider [IP.SB,
                                      IPInfo, IPInsight, IP-API.com, Ip2region,
                                      IPInfoLocal, CHUNZHEN, disable-geoip].
@@ -371,18 +379,19 @@ Arguments:
   -j  --json                         Output trace results as JSON
   -c  --classic                      Classic Output trace results like
                                      BestTrace
-  -f  --first                        Start from the first_ttl hop (instead from
+  -f  --first                        Start from the first_ttl hop (instead of
                                      1). Default: 1
   -M  --map                          Disable Print Trace Map
   -e  --disable-mpls                 Disable MPLS
-  -v  --version                      Print version info and exit
-  -s  --source                       Use source src_addr for outgoing packets
+  -V  --version                      Print version info and exit
+  -s  --source                       Use source address src_addr for outgoing
+                                     packets
       --source-port                  Use source port src_port for outgoing
                                      packets
   -D  --dev                          Use the following Network Devices as the
                                      source address in outgoing packets
   -z  --send-time                    Set how many [milliseconds] between
-                                     sending each packet.. Useful when some
+                                     sending each packet. Useful when some
                                      routers use rate-limit for ICMP messages.
                                      Default: 50
   -i  --ttl-time                     Set how many [milliseconds] between
@@ -391,15 +400,15 @@ Arguments:
                                      messages. Default: 50
       --timeout                      The number of [milliseconds] to keep probe
                                      sockets open before giving up on the
-                                     connection.. Default: 1000
+                                     connection. Default: 1000
       --psize                        Set the payload size. Default: 52
-      --_positionalArg_nexttrace_32  IP Address or domain name
+      --_positionalArg_nexttrace_36  IP Address or domain name
       --dot-server                   Use DoT Server for DNS Parse [dnssb,
                                      aliyun, dnspod, google, cloudflare]
   -g  --language                     Choose the language for displaying [en,
                                      cn]. Default: cn
       --file                         Read IP Address or domain name from file
-  -C  --no-color                      Disable Colorful Output
+  -C  --no-color                     Disable Colorful Output
 ```
 
 ## 项目截图
