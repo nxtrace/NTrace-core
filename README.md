@@ -175,13 +175,23 @@ nexttrace --disable-mpls example.com
 export NEXTTRACE_DISABLEMPLS=1
 ```
 
-PS: The routing visualization drawing module was written by [@tsosunchia](https://github.com/tsosunchia), and the specific code can be viewed at [tsosunchia/traceMap](https://github.com/tsosunchia/traceMap).
-
-Note that in LeoMoeAPI 2.0, due to the addition of geographical location data, **we have deprecated the online query part of the OpenStreetMap API in the traceMap plugin and are using location information from our own database**.
-
+PS: The route visualization module is an independent component, You can find its source code at [nxtrace/traceMap](https://github.com/nxtrace/traceMap).  
 The routing visualization function requires the geographical coordinates of each Hop, but third-party APIs generally do not provide this information, so this function is currently only supported when used with LeoMoeAPI.
 
-`NextTrace` now supports quick testing, and friends who have a one-time backhaul routing test requirement can use it
+#### Mandatory Configuration Steps for `Windows` Users
+
+- **For Normal User Mode:**  
+  Only **ICMP mode** can be used, and the firewall must allow `ICMP/ICMPv6` traffic.
+    ```powershell
+    netsh advfirewall firewall add rule name="All ICMP v4" dir=in action=allow protocol=icmpv4:any,any
+    netsh advfirewall firewall add rule name="All ICMP v6" dir=in action=allow protocol=icmpv6:any,any
+    ```  
+- **For Administrator Mode:**  
+  **TCP/UDP mode** requires additional installation of `npcap` and `WinDivert`.  
+  **ICMP mode** requires allowing `ICMP/ICMPv6` in the firewall if `npcap` and `WinDivert` are not installed.  
+  You can download and install `npcap` from the official website ([https://npcap.com/#download](https://npcap.com/#download)), and `WinDivert` can be automatically configured using the `--init` parameter.
+
+#### `NextTrace` now supports quick testing, and friends who have a one-time backhaul routing test requirement can use it
 
 ```bash
 # IPv4 ICMP Fast Test (Beijing + Shanghai + Guangzhou + Hangzhou) in China Telecom / Unicom / Mobile / Education Network
@@ -202,7 +212,7 @@ nexttrace --file /path/to/your/iplist.txt
 ## 223.5.5.5
 ```
 
-`NextTrace` already supports route tracing for specified Network Devices
+#### `NextTrace` already supports route tracing for specified Network Devices
 
 ```bash
 # Use eth0 network interface
@@ -213,7 +223,7 @@ nexttrace --dev eth0 2606:4700:4700::1111
 nexttrace --source 204.98.134.56 9.9.9.9
 ```
 
-`NextTrace` can also use `TCP` and `UDP` protocols to perform `Traceroute` requests
+#### `NextTrace` can also use `TCP` and `UDP` protocols to perform `Traceroute` requests
 
 ```bash
 # TCP SYN Trace
@@ -233,7 +243,7 @@ nexttrace --udp --port 5353 1.0.0.1
 nexttrace --tcp --source-port 14514 www.bing.com
 ```
 
-`NextTrace` also supports some advanced functions, such as ttl control, concurrent probe packet count control, mode switching, etc.
+#### `NextTrace` also supports some advanced functions, such as ttl control, concurrent probe packet count control, mode switching, etc.
 
 ```bash
 # Send 2 probe packets per hop
@@ -275,7 +285,7 @@ nexttrace --no-color 1.1.1.1
 export NO_COLOR=1
 ```
 
-`NextTrace` supports users to select their own IP API (currently supports: `LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`, `Ip2region`, `IPInfoLocal`, `CHUNZHEN`)
+#### `NextTrace` supports users to select their own IP API (currently supports: `LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`, `Ip2region`, `IPInfoLocal`, `CHUNZHEN`)
 
 ```bash
 # You can specify the IP database by yourself [IP-API.com here], if not specified, LeoMoeAPI will be used
@@ -300,7 +310,7 @@ export NEXTTRACE_CHUNZHENURL=http://127.0.0.1:2060
 export NEXTTRACE_DATAPROVIDER=ipinfo
 ```
 
-`NextTrace` supports mixed parameters and shortened parameters
+#### `NextTrace` supports mixed parameters and shortened parameters
 
 ```bash
 Example:
@@ -501,6 +511,8 @@ This Project uses [JetBrain Open-Source Project License](https://jb.gg/OpenSourc
 [sjlleo](https://github.com/sjlleo) The perpetual leader, founder, and core contributors
 
 [tsosunchia](https://github.com/tsosunchia) The project chair, infra maintainer, and core contributors
+
+[Yunlq](https://github.com/Yunlq) An active community contributor
 
 [Vincent Young](https://github.com/missuo)
 

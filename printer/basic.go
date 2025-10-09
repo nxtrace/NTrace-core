@@ -27,7 +27,7 @@ func Version() {
 
 func CopyRight() {
 	sponsor()
-	fmt.Fprintf(color.Output, "\n%s\n%s %s\n%s %s\n%s %s, %s, %s, %s\n%s %s\n",
+	fmt.Fprintf(color.Output, "\n%s\n%s %s\n%s %s\n%s %s, %s, %s, %s, %s\n%s %s\n",
 		color.New(color.FgCyan, color.Bold).Sprintf("%s", "NextTrace CopyRight"),
 		color.New(color.FgWhite, color.Bold).Sprintf("%s", "Honorary Founder:"),
 		color.New(color.FgHiBlue, color.Bold).Sprintf("%s", "Leo"),
@@ -37,6 +37,7 @@ func CopyRight() {
 		color.New(color.FgHiBlue, color.Bold).Sprintf("%s", "Leo"),
 		color.New(color.FgHiBlue, color.Bold).Sprintf("%s", "Vincent"),
 		color.New(color.FgHiBlue, color.Bold).Sprintf("%s", "zhshch"),
+		color.New(color.FgHiBlue, color.Bold).Sprintf("%s", "Yunlq"),
 		color.New(color.FgHiBlue, color.Bold).Sprintf("%s", "Tso"),
 		color.New(color.FgWhite, color.Bold).Sprintf("%s", "Infra Maintainer:"),
 		color.New(color.FgHiBlue, color.Bold).Sprintf("%s", "Tso"),
