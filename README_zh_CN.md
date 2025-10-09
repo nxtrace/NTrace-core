@@ -180,13 +180,22 @@ nexttrace --disable-mpls example.com
 export NEXTTRACE_DISABLEMPLS=1
 ```
 
-PS: 路由可视化的绘制模块由 [@tsosunchia](https://github.com/tsosunchia) 同学编写，具体代码可在 [tsosunchia/traceMap](https://github.com/tsosunchia/traceMap) 查看
-
-需要注意的是，在 LeoMoeAPI 2.0 中，由于新增了了地理位置数据，**我们已经弃用 traceMap 插件中 OpenStreetMap API 的在线查询的部分，并且使用自己数据库内的位置信息**。
-
+PS: 路由可视化的绘制模块为独立模块，具体代码可在 [nxtrace/traceMap](https://github.com/nxtrace/traceMap) 查看  
 路由可视化功能因为需要每个 Hop 的地理位置坐标，而第三方 API 通常不提供此类信息，所以此功能目前只支持搭配 LeoMoeAPI 使用。
 
-`NextTrace` 现已经支持快速测试，有一次性测试回程路由需求的朋友可以使用
+#### `Windows` 用户必须完成的配置步骤
+- 对于普通用户模式：  
+  只能使用 **ICMP mode**，且需防火墙配置允许`ICMP/ICMPv6`。
+    ```powershell
+    netsh advfirewall firewall add rule name="All ICMP v4" dir=in action=allow protocol=icmpv4:any,any
+    netsh advfirewall firewall add rule name="All ICMP v6" dir=in action=allow protocol=icmpv6:any,any
+    ```  
+- 对于管理员模式：  
+  **TCP/UDP mode** 需要额外安装 `npcap` 及 `WinDivert`，  
+  **ICMP mode** 若未安装 `npcap` 及 `WinDivert`，则需防火墙配置允许`ICMP/ICMPv6`。  
+  其中 `npcap` 请到官网下载并安装（https://npcap.com/#download），`WinDivert` 可使用 `--init` 参数自动配置环境。
+
+#### `NextTrace` 现已经支持快速测试，有一次性测试回程路由需求的朋友可以使用
 
 ```bash
 # 北上广（电信+联通+移动+教育网）IPv4 / IPv6 ICMP 快速测试
@@ -207,7 +216,7 @@ nexttrace --file /path/to/your/iplist.txt
 ## 223.5.5.5
 ```
 
-`NextTrace` 已支持指定网卡进行路由跟踪
+#### `NextTrace` 已支持指定网卡进行路由跟踪
 
 ```bash
 # 请注意 Lite 版本此参数不能和快速测试联用，如有需要请使用 enhanced 版本
@@ -220,7 +229,7 @@ nexttrace --dev eth0 2606:4700:4700::1111
 nexttrace --source 204.98.134.56 9.9.9.9
 ```
 
-`NextTrace` 也可以使用`TCP`和`UDP`协议发起`Traceroute`请求
+#### `NextTrace` 也可以使用`TCP`和`UDP`协议发起`Traceroute`请求
 
 ```bash
 # TCP SYN Trace
@@ -239,7 +248,7 @@ nexttrace --udp --port 5353 1.0.0.1
 nexttrace --tcp --source-port 14514 www.bing.com
 ```
 
-`NextTrace`也同样支持一些进阶功能，如 TTL 控制、并发数控制、模式切换等
+#### `NextTrace`也同样支持一些进阶功能，如 TTL 控制、并发数控制、模式切换等
 
 ```bash
 # 每一跳发送2个探测包
@@ -275,7 +284,7 @@ nexttrace --no-color 1.1.1.1
 export NO_COLOR=1
 ```
 
-`NextTrace`支持用户自主选择 IP 数据库（目前支持：`LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`, `Ip2region`, `IPInfoLocal`, `CHUNZHEN`)
+#### `NextTrace`支持用户自主选择 IP 数据库（目前支持：`LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`, `Ip2region`, `IPInfoLocal`, `CHUNZHEN`)
 
 ```bash
 # 可以自行指定IP数据库[此处为IP-API.com]，不指定则默认为LeoMoeAPI
@@ -299,7 +308,7 @@ export NEXTTRACE_CHUNZHENURL=http://127.0.0.1:2060
 export NEXTTRACE_DATAPROVIDER=ipinfo
 ```
 
-`NextTrace`支持使用混合参数和简略参数
+#### `NextTrace`支持使用混合参数和简略参数
 
 ```bash
 Example:
