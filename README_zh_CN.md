@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="asset/logo.png" height="200px" alt="NextTrace Logo"/>
+<img src="assets/logo.png" height="200px" alt="NextTrace Logo"/>
 
 </div>
 
@@ -16,14 +16,14 @@
 <h6 align="center">主页：www.nxtrace.org</h6>
 
 <p align="center">
-  <a href="https://github.com/nxtrace/Ntrace-V1/actions">
-    <img src="https://img.shields.io/github/actions/workflow/status/nxtrace/Ntrace-V1/build.yml?branch=main&style=flat-square" alt="Github Actions">
+  <a href="https://github.com/nxtrace/NTrace-V1/actions">
+    <img src="https://img.shields.io/github/actions/workflow/status/nxtrace/NTrace-V1/build.yml?branch=main&style=flat-square" alt="Github Actions">
   </a>
-  <a href="https://goreportcard.com/report/github.com/nxtrace/Ntrace-V1">
-    <img src="https://goreportcard.com/badge/github.com/nxtrace/Ntrace-V1?style=flat-square">
+  <a href="https://goreportcard.com/report/github.com/nxtrace/NTrace-V1">
+    <img src="https://goreportcard.com/badge/github.com/nxtrace/NTrace-V1?style=flat-square">
   </a>
-  <a href="https://www.nxtrace.org/downloads">
-    <img src="https://img.shields.io/github/release/nxtrace/Ntrace-V1/all.svg?style=flat-square">
+  <a href="https://github.com/nxtrace/NTrace-V1/releases">
+    <img src="https://img.shields.io/github/release/nxtrace/NTrace-V1/all.svg?style=flat-square">
   </a>
 </p>
 
@@ -93,7 +93,7 @@ Document Language: [English](README.md) | 简体中文
 
      同macOS Homebrew安装方法(homebrew-core版仅支持amd64)
 
-  * Deepin 安装命令
+  * deepin 安装命令
     ```shell
     apt install nexttrace
     ```
@@ -180,13 +180,22 @@ nexttrace --disable-mpls example.com
 export NEXTTRACE_DISABLEMPLS=1
 ```
 
-PS: 路由可视化的绘制模块由 [@tsosunchia](https://github.com/tsosunchia) 同学编写，具体代码可在 [tsosunchia/traceMap](https://github.com/tsosunchia/traceMap) 查看
-
-需要注意的是，在 LeoMoeAPI 2.0 中，由于新增了了地理位置数据，**我们已经弃用 traceMap 插件中 OpenStreetMap API 的在线查询的部分，并且使用自己数据库内的位置信息**。
-
+PS: 路由可视化的绘制模块为独立模块，具体代码可在 [nxtrace/traceMap](https://github.com/nxtrace/traceMap) 查看  
 路由可视化功能因为需要每个 Hop 的地理位置坐标，而第三方 API 通常不提供此类信息，所以此功能目前只支持搭配 LeoMoeAPI 使用。
 
-`NextTrace` 现已经支持快速测试，有一次性测试回程路由需求的朋友可以使用
+#### `Windows` 用户必须完成的配置步骤
+- 对于普通用户模式：  
+  只能使用 **ICMP mode**，且需防火墙配置允许`ICMP/ICMPv6`。
+    ```powershell
+    netsh advfirewall firewall add rule name="All ICMP v4" dir=in action=allow protocol=icmpv4:any,any
+    netsh advfirewall firewall add rule name="All ICMP v6" dir=in action=allow protocol=icmpv6:any,any
+    ```  
+- 对于管理员模式：  
+  **TCP/UDP mode** 需要额外安装 `npcap` 及 `WinDivert`，  
+  **ICMP mode** 若未安装 `npcap` 及 `WinDivert`，则需防火墙配置允许`ICMP/ICMPv6`。  
+  其中 `npcap` 请到官网下载并安装（https://npcap.com/#download），`WinDivert` 可使用 `--init` 参数自动配置环境。
+
+#### `NextTrace` 现已经支持快速测试，有一次性测试回程路由需求的朋友可以使用
 
 ```bash
 # 北上广（电信+联通+移动+教育网）IPv4 / IPv6 ICMP 快速测试
@@ -207,7 +216,7 @@ nexttrace --file /path/to/your/iplist.txt
 ## 223.5.5.5
 ```
 
-`NextTrace` 已支持指定网卡进行路由跟踪
+#### `NextTrace` 已支持指定网卡进行路由跟踪
 
 ```bash
 # 请注意 Lite 版本此参数不能和快速测试联用，如有需要请使用 enhanced 版本
@@ -220,7 +229,7 @@ nexttrace --dev eth0 2606:4700:4700::1111
 nexttrace --source 204.98.134.56 9.9.9.9
 ```
 
-`NextTrace` 也可以使用`TCP`和`UDP`协议发起`Traceroute`请求
+#### `NextTrace` 也可以使用`TCP`和`UDP`协议发起`Traceroute`请求
 
 ```bash
 # TCP SYN Trace
@@ -239,7 +248,7 @@ nexttrace --udp --port 5353 1.0.0.1
 nexttrace --tcp --source-port 14514 www.bing.com
 ```
 
-`NextTrace`也同样支持一些进阶功能，如 TTL 控制、并发数控制、模式切换等
+#### `NextTrace`也同样支持一些进阶功能，如 TTL 控制、并发数控制、模式切换等
 
 ```bash
 # 每一跳发送2个探测包
@@ -259,9 +268,6 @@ nexttrace --no-rdns www.bbix.net
 # 设置载荷大小为1024字节
 nexttrace --psize 1024 example.com
 
-# 设置载荷大小以及DF标志进行TCP Trace
-nexttrace --psize 1024 --dont-fragment --tcp example.com
-
 # 特色功能：打印Route-Path图
 # Route-Path图示例：
 # AS6453 塔塔通信「Singapore『Singapore』」
@@ -273,12 +279,12 @@ nexttrace --psize 1024 --dont-fragment --tcp example.com
 #  ╰AS37963 阿里云「ALIDNS.COM『ALIDNS.COM』」
 nexttrace --route-path www.time.com.my
 # 禁止色彩输出
-nexttrace --nocolor 1.1.1.1
+nexttrace --no-color 1.1.1.1
 # 或者使用环境变量
 export NO_COLOR=1
 ```
 
-`NextTrace`支持用户自主选择 IP 数据库（目前支持：`LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`, `Ip2region`, `IPInfoLocal`, `CHUNZHEN`)
+#### `NextTrace`支持用户自主选择 IP 数据库（目前支持：`LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`, `Ip2region`, `IPInfoLocal`, `CHUNZHEN`)
 
 ```bash
 # 可以自行指定IP数据库[此处为IP-API.com]，不指定则默认为LeoMoeAPI
@@ -302,7 +308,7 @@ export NEXTTRACE_CHUNZHENURL=http://127.0.0.1:2060
 export NEXTTRACE_DATAPROVIDER=ipinfo
 ```
 
-`NextTrace`支持使用混合参数和简略参数
+#### `NextTrace`支持使用混合参数和简略参数
 
 ```bash
 Example:
@@ -317,34 +323,40 @@ nexttrace -T -q 2 --parallel-requests 1 -t -P 2001:4860:4860::8888
 ### 全部用法详见 Usage 菜单
 
 ```shell
-Usage: nexttrace [-h|--help] [-4|--ipv4] [-6|--ipv6] [-T|--tcp] [-U|--udp]
-                 [-F|--fast-trace] [-p|--port <integer>] [-q|--queries
-                 <integer>] [--parallel-requests <integer>] [-m|--max-hops
-                 <integer>] [-d|--data-provider
-                 (Ip2region|ip2region|IP.SB|ip.sb|IPInfo|ipinfo|IPInsight|ipinsight|IPAPI.com|ip-api.com|IPInfoLocal|ipinfolocal|chunzhen|LeoMoeAPI|leomoeapi|disable-geoip)]
+Usage: nexttrace [-h|--help] [--init] [-4|--ipv4] [-6|--ipv6] [-T|--tcp]
+                 [-U|--udp] [-F|--fast-trace] [-p|--port <integer>]
+                 [--icmp-mode <integer>] [-q|--queries <integer>]
+                 [--parallel-requests <integer>] [-m|--max-hops <integer>]
+                 [--max-attempts <integer>] [-d|--data-provider
+                 (Ip2region|ip2region|IP.SB|ip.sb|IPInfo|ipinfo|IPInsight|ipinsight|IPAPI.com|ip-api.com|IPInfoLocal|ipinfolocal|chunzhen|LeoMoeAPI|leomoeapi|ipdb.one|disable-geoip)]
                  [--pow-provider (api.nxtrace.org|sakura)] [-n|--no-rdns]
                  [-a|--always-rdns] [-P|--route-path] [-r|--report] [--dn42]
                  [-o|--output] [-t|--table] [--raw] [-j|--json] [-c|--classic]
                  [-f|--first <integer>] [-M|--map] [-e|--disable-mpls]
-                 [-v|--version] [-s|--source "<value>"] [-D|--dev "<value>"]
-                 [-z|--send-time <integer>] [-i|--ttl-time <integer>]
-                 [--timeout <integer>] [--psize <integer>]
-                 [_positionalArg_nexttrace_32 "<value>"] [--dot-server
-                 (dnssb|aliyun|dnspod|google|cloudflare)] [-g|--language
-                 (en|cn)] [--file "<value>"] [-C|--nocolor]
+                 [-V|--version] [-s|--source "<value>"] [--source-port
+                 <integer>] [-D|--dev "<value>"] [-z|--send-time <integer>]
+                 [-i|--ttl-time <integer>] [--timeout <integer>] [--psize
+                 <integer>] [_positionalArg_nexttrace_36 "<value>"]
+                 [--dot-server (dnssb|aliyun|dnspod|google|cloudflare)]
+                 [-g|--language (en|cn)] [--file "<value>"] [-C|--no-color]
 
 Arguments:
 
   -h  --help                         Print help information
+      --init                         Windows ONLY: Extract WinDivert runtime to
+                                     current directory
   -4  --ipv4                         Use IPv4 only
   -6  --ipv6                         Use IPv6 only
-  -T  --tcp                          Use TCP SYN for tracerouting (default port
-                                     is 80)
-  -U  --udp                          Use UDP SYN for tracerouting (default port
-                                     is 33494)
+  -T  --tcp                          Use TCP SYN for tracerouting (default
+                                     dest-port is 80)
+  -U  --udp                          Use UDP SYN for tracerouting (default
+                                     dest-port is 33494)
   -F  --fast-trace                   One-Key Fast Trace to China ISPs
   -p  --port                         Set the destination port to use. With
                                      default of 80 for "tcp", 33494 for "udp"
+      --icmp-mode                    Windows ONLY: Choose the method to listen
+                                     for ICMP packets (1=Socket, 2=PCAP;
+                                     0=Auto)
   -q  --queries                      Set the number of probes per each hop.
                                      Default: 3
       --parallel-requests            Set ParallelRequests number. It should be
@@ -352,6 +364,8 @@ Arguments:
                                      18
   -m  --max-hops                     Set the max number of hops (max TTL to be
                                      reached). Default: 30
+      --max-attempts                 Set the max number of attempts per TTL
+                                     (instead of a fixed auto value)
   -d  --data-provider                Choose IP Geograph Data Provider [IP.SB,
                                      IPInfo, IPInsight, IP-API.com, Ip2region,
                                      IPInfoLocal, CHUNZHEN, disable-geoip].
@@ -374,18 +388,19 @@ Arguments:
   -j  --json                         Output trace results as JSON
   -c  --classic                      Classic Output trace results like
                                      BestTrace
-  -f  --first                        Start from the first_ttl hop (instead from
+  -f  --first                        Start from the first_ttl hop (instead of
                                      1). Default: 1
   -M  --map                          Disable Print Trace Map
   -e  --disable-mpls                 Disable MPLS
-  -v  --version                      Print version info and exit
-  -s  --source                       Use source src_addr for outgoing packets
+  -V  --version                      Print version info and exit
+  -s  --source                       Use source address src_addr for outgoing
+                                     packets
       --source-port                  Use source port src_port for outgoing
                                      packets
   -D  --dev                          Use the following Network Devices as the
                                      source address in outgoing packets
   -z  --send-time                    Set how many [milliseconds] between
-                                     sending each packet.. Useful when some
+                                     sending each packet. Useful when some
                                      routers use rate-limit for ICMP messages.
                                      Default: 50
   -i  --ttl-time                     Set how many [milliseconds] between
@@ -394,17 +409,15 @@ Arguments:
                                      messages. Default: 50
       --timeout                      The number of [milliseconds] to keep probe
                                      sockets open before giving up on the
-                                     connection.. Default: 1000
+                                     connection. Default: 1000
       --psize                        Set the payload size. Default: 52
-      --_positionalArg_nexttrace_32  IP Address or domain name
+      --_positionalArg_nexttrace_36  IP Address or domain name
       --dot-server                   Use DoT Server for DNS Parse [dnssb,
                                      aliyun, dnspod, google, cloudflare]
   -g  --language                     Choose the language for displaying [en,
                                      cn]. Default: cn
       --file                         Read IP Address or domain name from file
-  -C  --nocolor                      Disable Colorful Output
-      --dont-fragment                Set the Don't Fragment bit (IPv4 TCP
-                                     only). Default: false
+  -C  --no-color                     Disable Colorful Output
 ```
 
 ## 项目截图
@@ -457,6 +470,11 @@ nexttrace --pow-provider sakura
 [https://github.com/nxtrace/NextTraceroute](https://github.com/nxtrace/NextTraceroute)  
 <a href='https://play.google.com/store/apps/details?id=com.surfaceocean.nexttraceroute&pcampaignid=pcampaignidMKT-Other-global-all-co-prtnr-py-PartBadge-Mar2515-1'><img alt='Get it on Google Play' width="128" height="48" src='https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png'/></a>
 
+## Cloudflare Support
+本项目受 [Alexandria 计划](http://www.cloudflare.com/oss-credits)赞助。
+
+<img src="https://cf-assets.www.cloudflare.com/slt3lc6tev37/2I3y49Uz9Y61lBS0kIPZu6/db6df1e6f99a8659267c442b75a0dff9/image.png" alt="Cloudflare Logo" width="331">
+
 ## AIWEN TECH Support
 
 本项目受 [埃文科技](https://www.ipplus360.com) 赞助。 很高兴使用`埃文科技城市级IP库`增强本项目 GEOIP 查询的准确性与完整性，并免费提供给公众。
@@ -499,16 +517,24 @@ nexttrace --pow-provider sakura
 
 ## Others
 
-其他第三方 API 尽管集成在本项目内，但是具体的 TOS 以及 AUP，请详见第三方 API 官网。如遇到 IP 数据错误，也请直接联系他们纠错。
+- 其他第三方 API 尽管集成在本项目内，但是具体的 TOS 以及 AUP，请详见第三方 API 官网。如遇到 IP 数据错误，也请直接联系他们纠错。
 
-如何获取最新commit的新鲜出炉的二进制可执行文件？
->请前往GitHub Actions中最新一次 [Build & Release](https://github.com/nxtrace/Ntrace-V1/actions/workflows/build.yml) workflow.
+
+- 如何获取最新commit的新鲜出炉的二进制可执行文件？
+    >请前往GitHub Actions中最新一次 [Build & Release](https://github.com/nxtrace/NTrace-V1/actions/workflows/build.yml) workflow.
+
+
+- 一些已知问题
+    + Windows 平台下，ICMP 模式须手动放行ICMP/ICMPv6防火墙
+    + Windows 平台下，TCP 模式暂不可用
+    + macOS 平台下，仅 ICMP 模式不需要提权运行
+    + 在一些情况下，同时运行多个 NextTrace 实例可能会导致互相干扰结果(目前仅在 TCP 模式下有观察到)
 
 ## IP 数据以及精准度说明
 
 对于IP相关信息的纠错反馈，我们目前开放了两个渠道：
 >- 本项目的GITHUB ISSUES区中的[IP 错误报告汇总帖](https://github.com/orgs/nxtrace/discussions/222)
->- 本项目的纠错专用邮箱: `correction@nxtrace.org` （请注意此邮箱仅供IP相关信息纠错专用，其他反馈请发送ISSUE）
+>- 本项目的纠错专用邮箱: `correct#nxtrace.org` （请注意此邮箱仅供IP相关信息纠错专用，其他反馈请发送ISSUE）
 
 NextTrace 有多个数据源可以选择，目前默认使用的 LeoMoeAPI 为我们项目维护的数据源。
 

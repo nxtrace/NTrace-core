@@ -3,19 +3,21 @@ package fastTrace
 import (
 	"bufio"
 	"fmt"
-	"github.com/fatih/color"
-	"github.com/nxtrace/NTrace-core/ipgeo"
-	"github.com/nxtrace/NTrace-core/printer"
-	"github.com/nxtrace/NTrace-core/trace"
-	"github.com/nxtrace/NTrace-core/tracelog"
-	"github.com/nxtrace/NTrace-core/util"
-	"github.com/nxtrace/NTrace-core/wshandle"
 	"log"
 	"net"
 	"os"
 	"os/signal"
 	"strings"
 	"time"
+
+	"github.com/fatih/color"
+
+	"github.com/nxtrace/NTrace-core/ipgeo"
+	"github.com/nxtrace/NTrace-core/printer"
+	"github.com/nxtrace/NTrace-core/trace"
+	"github.com/nxtrace/NTrace-core/tracelog"
+	"github.com/nxtrace/NTrace-core/util"
+	"github.com/nxtrace/NTrace-core/wshandle"
 )
 
 type FastTracer struct {
@@ -24,18 +26,19 @@ type FastTracer struct {
 }
 
 type ParamsFastTrace struct {
+	OSType         int
+	ICMPMode       int
 	SrcDev         string
 	SrcAddr        string
-	DestPort       int
+	DstPort        int
 	BeginHop       int
 	MaxHops        int
-	RDns           bool
+	RDNS           bool
 	AlwaysWaitRDNS bool
 	Lang           string
 	PktSize        int
 	Timeout        time.Duration
 	File           string
-	DontFragment   bool
 	Dot            string
 }
 
@@ -57,13 +60,15 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 		log.Fatal(err)
 	}
 	var conf = trace.Config{
+		OSType:           f.ParamsFastTrace.OSType,
+		ICMPMode:         f.ParamsFastTrace.ICMPMode,
 		BeginHop:         f.ParamsFastTrace.BeginHop,
-		DestIP:           ip,
-		DestPort:         f.ParamsFastTrace.DestPort,
+		DstIP:            ip,
+		DstPort:          f.ParamsFastTrace.DstPort,
 		MaxHops:          f.ParamsFastTrace.MaxHops,
 		NumMeasurements:  3,
 		ParallelRequests: 18,
-		RDns:             f.ParamsFastTrace.RDns,
+		RDNS:             f.ParamsFastTrace.RDNS,
 		AlwaysWaitRDNS:   f.ParamsFastTrace.AlwaysWaitRDNS,
 		PacketInterval:   100,
 		TTLInterval:      500,
@@ -72,7 +77,6 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 		SrcAddr:          f.ParamsFastTrace.SrcAddr,
 		PktSize:          f.ParamsFastTrace.PktSize,
 		Lang:             f.ParamsFastTrace.Lang,
-		DontFragment:     f.ParamsFastTrace.DontFragment,
 	}
 
 	if oe {
@@ -291,7 +295,7 @@ func testFile(paramsFastTrace ParamsFastTrace, traceMode trace.Method) {
 		fmt.Fprintf(color.Output, "%s\n",
 			color.New(color.FgYellow, color.Bold).Sprint("『 "+ip.Desc+"』"),
 		)
-		if util.EnableHidDstIP == "" {
+		if !util.EnableHidDstIP {
 			fmt.Printf("traceroute to %s, %d hops max, %d bytes payload, %s mode\n", ip.Ip, paramsFastTrace.MaxHops, paramsFastTrace.PktSize, strings.ToUpper(string(tracerouteMethod)))
 		} else {
 			fmt.Printf("traceroute to %s, %d hops max, %d bytes payload, %s mode\n", util.HideIPPart(ip.Ip), paramsFastTrace.MaxHops, paramsFastTrace.PktSize, strings.ToUpper(string(tracerouteMethod)))
@@ -338,13 +342,15 @@ func testFile(paramsFastTrace ParamsFastTrace, traceMode trace.Method) {
 		}
 
 		var conf = trace.Config{
+			OSType:           paramsFastTrace.OSType,
+			ICMPMode:         paramsFastTrace.ICMPMode,
 			BeginHop:         paramsFastTrace.BeginHop,
-			DestIP:           net.ParseIP(ip.Ip),
-			DestPort:         paramsFastTrace.DestPort,
+			DstIP:            net.ParseIP(ip.Ip),
+			DstPort:          paramsFastTrace.DstPort,
 			MaxHops:          paramsFastTrace.MaxHops,
 			NumMeasurements:  3,
 			ParallelRequests: 18,
-			RDns:             paramsFastTrace.RDns,
+			RDNS:             paramsFastTrace.RDNS,
 			AlwaysWaitRDNS:   paramsFastTrace.AlwaysWaitRDNS,
 			PacketInterval:   100,
 			TTLInterval:      500,

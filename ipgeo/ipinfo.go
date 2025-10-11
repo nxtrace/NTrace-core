@@ -1,7 +1,6 @@
 package ipgeo
 
 import (
-	"github.com/nxtrace/NTrace-core/util"
 	"io"
 	"net/http"
 	"strconv"
@@ -9,6 +8,8 @@ import (
 	"time"
 
 	"github.com/tidwall/gjson"
+
+	"github.com/nxtrace/NTrace-core/util"
 )
 
 func IPInfo(ip string, timeout time.Duration, _ string, _ bool) (*IPGeoData, error) {

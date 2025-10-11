@@ -2,8 +2,6 @@ package wshandle
 
 import (
 	"crypto/tls"
-	"github.com/nxtrace/NTrace-core/pow"
-	"github.com/nxtrace/NTrace-core/util"
 	"log"
 	"net"
 	"net/http"
@@ -15,6 +13,9 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+
+	"github.com/nxtrace/NTrace-core/pow"
+	"github.com/nxtrace/NTrace-core/util"
 )
 
 type WsConn struct {
@@ -63,7 +64,13 @@ func (c *WsConn) keepAlive() {
 }
 
 func (c *WsConn) messageReceiveHandler() {
-	// defer close(c.Done)
+	defer func() {
+		select {
+		case <-c.Done:
+		default:
+			close(c.Done)
+		}
+	}()
 	for {
 		if c.Connected {
 			_, msg, err := c.Conn.ReadMessage()
@@ -85,7 +92,6 @@ func (c *WsConn) messageSendHandler() {
 		// 循环监听发送
 		select {
 		case <-c.Done:
-			log.Println("go-routine has been returned")
 			return
 		case t := <-c.MsgSendCh:
 			// log.Println(t)
@@ -103,9 +109,10 @@ func (c *WsConn) messageSendHandler() {
 			// 向 websocket 发起关闭连接任务
 			err := c.Conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 			if err != nil {
-				// log.Println("write close:", err)
-				//os.Exit(1)
-				panic(err)
+				if util.EnvDevMode {
+					panic(err)
+				}
+				log.Fatalf("write close: %v", err)
 			}
 			select {
 			// 等到了结果，直接退出
@@ -113,7 +120,7 @@ func (c *WsConn) messageSendHandler() {
 			// 如果等待 1s 还是拿不到结果，不再等待，超时退出
 			case <-time.After(1 * time.Second):
 			}
-			os.Exit(0)
+			return
 		}
 	}
 }
@@ -134,9 +141,10 @@ func (c *WsConn) recreateWsConn() {
 				jwtToken, err = pow.GetToken(util.GetPowProvider(), util.GetPowProvider(), port)
 			}
 			if err != nil {
-				//log.Println(err)
-				//os.Exit(1)
-				panic(err)
+				if util.EnvDevMode {
+					panic(err)
+				}
+				log.Fatalf("write close: %v", err)
 			}
 		} else {
 			// 使用 cacheToken
@@ -150,7 +158,8 @@ func (c *WsConn) recreateWsConn() {
 		"User-Agent":    ua,
 		"Authorization": []string{"Bearer " + jwtToken},
 	}
-	dialer := websocket.DefaultDialer
+	dialer := *websocket.DefaultDialer // 按值拷贝，变成独立实例
+	// 现在 dialer 是一个新的 Dialer（值），内部字段与 DefaultDialer 相同
 	dialer.TLSClientConfig = &tls.Config{
 		ServerName: host,
 	}
@@ -158,7 +167,7 @@ func (c *WsConn) recreateWsConn() {
 	if proxyUrl != nil {
 		dialer.Proxy = http.ProxyURL(proxyUrl)
 	}
-	ws, _, err := websocket.DefaultDialer.Dial(u.String(), requestHeader)
+	ws, _, err := dialer.Dial(u.String(), requestHeader)
 	c.Conn = ws
 	if err != nil {
 		log.Println("dial:", err)
@@ -207,9 +216,10 @@ func createWsConn() *WsConn {
 			jwtToken, err = pow.GetToken(util.GetPowProvider(), util.GetPowProvider(), port)
 		}
 		if err != nil {
-			//log.Println(err)
-			//os.Exit(1)
-			panic(err)
+			if util.EnvDevMode {
+				panic(err)
+			}
+			log.Fatalf("write close: %v", err)
 		}
 		ua = []string{util.UserAgent}
 	}
@@ -220,7 +230,8 @@ func createWsConn() *WsConn {
 		"User-Agent":    ua,
 		"Authorization": []string{"Bearer " + jwtToken},
 	}
-	dialer := websocket.DefaultDialer
+	dialer := *websocket.DefaultDialer // 按值拷贝，变成独立实例
+	// 现在 dialer 是一个新的 Dialer（值），内部字段与 DefaultDialer 相同
 	dialer.TLSClientConfig = &tls.Config{
 		ServerName: host,
 	}
@@ -230,7 +241,7 @@ func createWsConn() *WsConn {
 	u := url.URL{Scheme: "wss", Host: fastIp + ":" + port, Path: "/v3/ipGeoWs"}
 	// log.Printf("connecting to %s", u.String())
 
-	c, _, err := websocket.DefaultDialer.Dial(u.String(), requestHeader)
+	c, _, err := dialer.Dial(u.String(), requestHeader)
 
 	wsconn = &WsConn{
 		Conn:         c,

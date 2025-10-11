@@ -2,17 +2,19 @@ package fastTrace
 
 import (
 	"fmt"
+	"log"
+	"os"
+	"os/signal"
+	"strings"
+
 	"github.com/fatih/color"
+
 	"github.com/nxtrace/NTrace-core/ipgeo"
 	"github.com/nxtrace/NTrace-core/printer"
 	"github.com/nxtrace/NTrace-core/trace"
 	"github.com/nxtrace/NTrace-core/tracelog"
 	"github.com/nxtrace/NTrace-core/util"
 	"github.com/nxtrace/NTrace-core/wshandle"
-	"log"
-	"os"
-	"os/signal"
-	"strings"
 )
 
 //var pFastTracer ParamsFastTrace
@@ -27,13 +29,15 @@ func (f *FastTracer) tracert_v6(location string, ispCollection ISPCollection) {
 		log.Fatal(err)
 	}
 	var conf = trace.Config{
+		OSType:           f.ParamsFastTrace.OSType,
+		ICMPMode:         f.ParamsFastTrace.ICMPMode,
 		BeginHop:         f.ParamsFastTrace.BeginHop,
-		DestIP:           ip,
-		DestPort:         f.ParamsFastTrace.DestPort,
+		DstIP:            ip,
+		DstPort:          f.ParamsFastTrace.DstPort,
 		MaxHops:          f.ParamsFastTrace.MaxHops,
 		NumMeasurements:  3,
 		ParallelRequests: 18,
-		RDns:             f.ParamsFastTrace.RDns,
+		RDNS:             f.ParamsFastTrace.RDNS,
 		AlwaysWaitRDNS:   f.ParamsFastTrace.AlwaysWaitRDNS,
 		PacketInterval:   100,
 		TTLInterval:      500,
@@ -42,7 +46,6 @@ func (f *FastTracer) tracert_v6(location string, ispCollection ISPCollection) {
 		SrcAddr:          f.ParamsFastTrace.SrcAddr,
 		PktSize:          f.ParamsFastTrace.PktSize,
 		Lang:             f.ParamsFastTrace.Lang,
-		DontFragment:     f.ParamsFastTrace.DontFragment,
 	}
 
 	if oe {

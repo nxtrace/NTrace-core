@@ -7,8 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nxtrace/NTrace-core/wshandle"
 	"github.com/tidwall/gjson"
+
+	"github.com/nxtrace/NTrace-core/wshandle"
 )
 
 /***
@@ -22,7 +23,7 @@ import (
 // IPPool IP 查询池 map - ip - ip channel
 type IPPool struct {
 	pool    map[string]chan IPGeoData
-	poolMux sync.Mutex
+	poolMux sync.RWMutex
 }
 
 var IPPools = IPPool{
@@ -63,7 +64,8 @@ func receiveParse() {
 		lat, _ := strconv.ParseFloat(res.Get("lat").String(), 32)
 		lng, _ := strconv.ParseFloat(res.Get("lng").String(), 32)
 
-		IPPools.pool[gjson.Parse(data).Get("ip").String()] <- IPGeoData{
+		ip := res.Get("ip").String()
+		geo := IPGeoData{
 			Asnumber:  res.Get("asnumber").String(),
 			Country:   res.Get("country").String(),
 			CountryEn: res.Get("country_en").String(),
@@ -80,6 +82,20 @@ func receiveParse() {
 			Prefix:    res.Get("prefix").String(),
 			Router:    m,
 		}
+
+		// Safely load (or lazily create) the channel for this IP before sending
+		IPPools.poolMux.RLock()
+		ch, ok := IPPools.pool[ip]
+		IPPools.poolMux.RUnlock()
+		if !ok || ch == nil {
+			IPPools.poolMux.Lock()
+			if IPPools.pool[ip] == nil {
+				IPPools.pool[ip] = make(chan IPGeoData, 1)
+			}
+			ch = IPPools.pool[ip]
+			IPPools.poolMux.Unlock()
+		}
+		ch <- geo
 	}
 }
 
@@ -91,32 +107,36 @@ var receiveParseOnce sync.Once
 func LeoIP(ip string, timeout time.Duration, lang string, maptrace bool) (*IPGeoData, error) {
 	// TODO: 根据lang的值请求中文/英文API
 	// TODO: 根据maptrace的值决定是否请求经纬度信息
-	if timeout < 5*time.Second {
-		timeout = 5 * time.Second
+	if timeout < 2*time.Second {
+		timeout = 2 * time.Second
 	}
 
-	// 缓存中没有找到IP信息，需要请求API获取
-	IPPools.poolMux.Lock()
-	// 如果之前已经被别的协程初始化过了就不用初始化了
-	if IPPools.pool[ip] == nil {
-		IPPools.pool[ip] = make(chan IPGeoData)
+	// 确保对应 IP 的通道已存在（读锁快速路径 + 写锁惰性创建）
+	IPPools.poolMux.RLock()
+	ch, ok := IPPools.pool[ip]
+	IPPools.poolMux.RUnlock()
+	if !ok || ch == nil {
+		IPPools.poolMux.Lock()
+		if IPPools.pool[ip] == nil {
+			IPPools.pool[ip] = make(chan IPGeoData, 1)
+		}
+		ch = IPPools.pool[ip]
+		IPPools.poolMux.Unlock()
 	}
-	IPPools.poolMux.Unlock()
+
 	// 发送请求
 	sendIPRequest(ip)
-	// 同步开启监听
+
 	// 确保 receiveParse 只启动一次
 	receiveParseOnce.Do(func() {
 		go receiveParse()
 	})
 
-	// 拥塞，等待数据返回
+	// 等待数据返回或超时
 	select {
-	case res := <-IPPools.pool[ip]:
+	case res := <-ch:
 		return &res, nil
-	// 5秒后依旧没有接收到返回的IP数据，不再等待，超时异常处理
 	case <-time.After(timeout):
-		// 这里不可以返回一个 nil，否则在访问对象内部的键值的时候会报空指针的 Fatal Error
 		return &IPGeoData{}, errors.New("TimeOut")
 	}
 }

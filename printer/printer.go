@@ -4,9 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/nxtrace/NTrace-core/trace"
-
 	"github.com/nxtrace/NTrace-core/ipgeo"
+	"github.com/nxtrace/NTrace-core/trace"
 )
 
 // var dataOrigin string

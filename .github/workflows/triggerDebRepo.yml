@@ -1,13 +1,22 @@
 name: Trigger Deb Repo
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.release.id }}
+  cancel-in-progress: true
+
 on:
   release:
-    types: [published]
+    types: [published, prereleased]
+
 jobs:
   trigger-deb-repo:
     runs-on: ubuntu-latest
     steps:
       - env:
-          GITHUB_TOKEN: ${{ secrets.GT_Token }}  # 操作 deb 仓库的 PAT
+          GITHUB_TOKEN: ${{ secrets.GT_TOKEN }}  # 操作 deb 仓库的 PAT
         run: |
           curl -X POST -H "Authorization: Bearer $GITHUB_TOKEN" \
           -H "Accept: application/vnd.github+json" \

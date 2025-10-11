@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -11,9 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fatih/color"
-
 	"github.com/akamensky/argparse"
+	"github.com/fatih/color"
+	"github.com/syndtr/gocapability/capability"
+
+	"github.com/nxtrace/NTrace-core/assets/windivert"
 	"github.com/nxtrace/NTrace-core/config"
 	fastTrace "github.com/nxtrace/NTrace-core/fast_trace"
 	"github.com/nxtrace/NTrace-core/ipgeo"
@@ -24,27 +28,29 @@ import (
 	"github.com/nxtrace/NTrace-core/tracemap"
 	"github.com/nxtrace/NTrace-core/util"
 	"github.com/nxtrace/NTrace-core/wshandle"
-	"github.com/syndtr/gocapability/capability"
 )
 
-func Excute() {
+func Execute() {
 	parser := argparse.NewParser("nexttrace", "An open source visual route tracking CLI tool")
 	// Create string flag
+	init := parser.Flag("", "init", &argparse.Options{Help: "Windows ONLY: Extract WinDivert runtime to current directory"})
 	ipv4Only := parser.Flag("4", "ipv4", &argparse.Options{Help: "Use IPv4 only"})
 	ipv6Only := parser.Flag("6", "ipv6", &argparse.Options{Help: "Use IPv6 only"})
-	tcp := parser.Flag("T", "tcp", &argparse.Options{Help: "Use TCP SYN for tracerouting (default port is 80)"})
-	udp := parser.Flag("U", "udp", &argparse.Options{Help: "Use UDP SYN for tracerouting (default port is 33494)"})
+	tcp := parser.Flag("T", "tcp", &argparse.Options{Help: "Use TCP SYN for tracerouting (default dest-port is 80)"})
+	udp := parser.Flag("U", "udp", &argparse.Options{Help: "Use UDP SYN for tracerouting (default dest-port is 33494)"})
 	fast_trace := parser.Flag("F", "fast-trace", &argparse.Options{Help: "One-Key Fast Trace to China ISPs"})
-	port := parser.Int("p", "port", &argparse.Options{Help: "Set the destination port to use. With default of 80 for \"tcp\", 33494 for \"udp\"", Default: 80})
+	port := parser.Int("p", "port", &argparse.Options{Help: "Set the destination port to use. With default of 80 for \"tcp\", 33494 for \"udp\""})
+	icmpMode := parser.Int("", "icmp-mode", &argparse.Options{Help: "Windows ONLY: Choose the method to listen for ICMP packets (1=Socket, 2=PCAP; 0=Auto)"})
 	numMeasurements := parser.Int("q", "queries", &argparse.Options{Default: 3, Help: "Set the number of probes per each hop"})
 	parallelRequests := parser.Int("", "parallel-requests", &argparse.Options{Default: 18, Help: "Set ParallelRequests number. It should be 1 when there is a multi-routing"})
 	maxHops := parser.Int("m", "max-hops", &argparse.Options{Default: 30, Help: "Set the max number of hops (max TTL to be reached)"})
+	maxAttempts := parser.Int("", "max-attempts", &argparse.Options{Help: "Set the max number of attempts per TTL (instead of a fixed auto value)"})
 	dataOrigin := parser.Selector("d", "data-provider", []string{"Ip2region", "ip2region", "IP.SB", "ip.sb", "IPInfo", "ipinfo", "IPInsight", "ipinsight", "IPAPI.com", "ip-api.com", "IPInfoLocal", "ipinfolocal", "chunzhen", "LeoMoeAPI", "leomoeapi", "ipdb.one", "disable-geoip"}, &argparse.Options{Default: "LeoMoeAPI",
 		Help: "Choose IP Geograph Data Provider [IP.SB, IPInfo, IPInsight, IP-API.com, Ip2region, IPInfoLocal, CHUNZHEN, disable-geoip]"})
 	powProvider := parser.Selector("", "pow-provider", []string{"api.nxtrace.org", "sakura"}, &argparse.Options{Default: "api.nxtrace.org",
 		Help: "Choose PoW Provider [api.nxtrace.org, sakura] For China mainland users, please use sakura"})
-	noRdns := parser.Flag("n", "no-rdns", &argparse.Options{Help: "Do not resolve IP addresses to their domain names"})
-	alwaysRdns := parser.Flag("a", "always-rdns", &argparse.Options{Help: "Always resolve IP addresses to their domain names"})
+	norDNS := parser.Flag("n", "no-rdns", &argparse.Options{Help: "Do not resolve IP addresses to their domain names"})
+	alwaysrDNS := parser.Flag("a", "always-rdns", &argparse.Options{Help: "Always resolve IP addresses to their domain names"})
 	routePath := parser.Flag("P", "route-path", &argparse.Options{Help: "Print traceroute hop path by ASN and location"})
 	report := parser.Flag("r", "report", &argparse.Options{Help: "output using report mode"})
 	dn42 := parser.Flag("", "dn42", &argparse.Options{Help: "DN42 Mode"})
@@ -53,10 +59,10 @@ func Excute() {
 	rawPrint := parser.Flag("", "raw", &argparse.Options{Help: "An Output Easy to Parse"})
 	jsonPrint := parser.Flag("j", "json", &argparse.Options{Help: "Output trace results as JSON"})
 	classicPrint := parser.Flag("c", "classic", &argparse.Options{Help: "Classic Output trace results like BestTrace"})
-	beginHop := parser.Int("f", "first", &argparse.Options{Default: 1, Help: "Start from the first_ttl hop (instead from 1)"})
+	beginHop := parser.Int("f", "first", &argparse.Options{Default: 1, Help: "Start from the first_ttl hop (instead of 1)"})
 	disableMaptrace := parser.Flag("M", "map", &argparse.Options{Help: "Disable Print Trace Map"})
 	disableMPLS := parser.Flag("e", "disable-mpls", &argparse.Options{Help: "Disable MPLS"})
-	ver := parser.Flag("v", "version", &argparse.Options{Help: "Print version info and exit"})
+	ver := parser.Flag("V", "version", &argparse.Options{Help: "Print version info and exit"})
 	srcAddr := parser.String("s", "source", &argparse.Options{Help: "Use source address src_addr for outgoing packets"})
 	srcPort := parser.Int("", "source-port", &argparse.Options{Help: "Use source port src_port for outgoing packets"})
 	srcDev := parser.String("D", "dev", &argparse.Options{Help: "Use the following Network Devices as the source address in outgoing packets"})
@@ -71,8 +77,7 @@ func Excute() {
 	lang := parser.Selector("g", "language", []string{"en", "cn"}, &argparse.Options{Default: "cn",
 		Help: "Choose the language for displaying [en, cn]"})
 	file := parser.String("", "file", &argparse.Options{Help: "Read IP Address or domain name from file"})
-	nocolor := parser.Flag("C", "nocolor", &argparse.Options{Help: "Disable Colorful Output"})
-	dontFragment := parser.Flag("", "dont-fragment", &argparse.Options{Default: false, Help: "Set the Don't Fragment bit (IPv4 TCP only)"})
+	noColor := parser.Flag("C", "no-color", &argparse.Options{Help: "Disable Colorful Output"})
 
 	err := parser.Parse(os.Args)
 	if err != nil {
@@ -82,7 +87,7 @@ func Excute() {
 		return
 	}
 
-	if *nocolor {
+	if *noColor {
 		color.NoColor = true
 	} else {
 		color.NoColor = false
@@ -97,14 +102,47 @@ func Excute() {
 		os.Exit(0)
 	}
 
-	if !*tcp && *port == 80 {
-		*port = 33494
+	OSType := 3
+	switch runtime.GOOS {
+	case "darwin":
+		OSType = 1
+	case "windows":
+		OSType = 2
+	}
+
+	if *init && OSType == 2 {
+		if err := windivert.PrepareWinDivertRuntime(); err != nil {
+			if util.EnvDevMode {
+				panic(err)
+			}
+			log.Fatal(err)
+		}
+		fmt.Println("WinDivert runtime is ready.")
+		return
+	}
+
+	if *port == 0 {
+		if *udp {
+			*port = 33494
+		} else {
+			*port = 80
+		}
+	}
+
+	if *maxAttempts > 255 {
+		fmt.Println("MaxAttempts 最大值为 255，已自动调整为 255")
+		*maxAttempts = 255
 	}
 
 	domain := *str
 
-	var m trace.Method
+	// 仅在使用 UDP 探测时，确保 UDP 负载长度 ≥ 2
+	if *udp && *packetSize < 2 {
+		fmt.Println("UDP 模式下，数据包长度不能小于 2，已自动调整为 2")
+		*packetSize = 2
+	}
 
+	var m trace.Method
 	switch {
 	case *tcp:
 		m = trace.TCPTrace
@@ -116,18 +154,19 @@ func Excute() {
 
 	if *fast_trace || *file != "" {
 		var paramsFastTrace = fastTrace.ParamsFastTrace{
+			OSType:         OSType,
+			ICMPMode:       *icmpMode,
 			SrcDev:         *srcDev,
 			SrcAddr:        *srcAddr,
-			DestPort:       *port,
+			DstPort:        *port,
 			BeginHop:       *beginHop,
 			MaxHops:        *maxHops,
-			RDns:           !*noRdns,
-			AlwaysWaitRDNS: *alwaysRdns,
+			RDNS:           !*norDNS,
+			AlwaysWaitRDNS: *alwaysrDNS,
 			Lang:           *lang,
 			PktSize:        *packetSize,
 			Timeout:        time.Duration(*timeout) * time.Millisecond,
 			File:           *file,
-			DontFragment:   *dontFragment,
 			Dot:            *dot,
 		}
 
@@ -167,12 +206,6 @@ func Excute() {
 	capabilitiesCheck()
 	// return
 
-	var ip net.IP
-
-	if runtime.GOOS == "windows" && (*tcp || *udp) {
-		fmt.Println("NextTrace 基于 Windows 的路由跟踪还在早期开发阶段，目前还存在诸多问题，TCP/UDP SYN 包请求可能不能正常运行")
-	}
-
 	if *dn42 {
 		// 初始化配置
 		config.InitConfig()
@@ -189,29 +222,26 @@ func Excute() {
 	//
 	//go func() {
 	//	defer wg.Done()
-	if strings.ToUpper(*dataOrigin) == "LEOMOEAPI" {
-		val, ok := os.LookupEnv("NEXTTRACE_DATAPROVIDER")
-		if strings.ToUpper(*powProvider) != "API.NXTRACE.ORG" {
+	//}()
+	if strings.EqualFold(*dataOrigin, "LEOMOEAPI") {
+		if !strings.EqualFold(*powProvider, "api.nxtrace.org") {
 			util.PowProviderParam = *powProvider
 		}
-		if ok {
-			*dataOrigin = val
+		if util.EnvDataProvider != "" {
+			*dataOrigin = util.EnvDataProvider
 		} else {
 			w := wshandle.New()
 			w.Interrupt = make(chan os.Signal, 1)
 			signal.Notify(w.Interrupt, os.Interrupt)
 			defer func() {
 				if w.Conn != nil {
-					w.Conn.Close()
+					_ = w.Conn.Close()
 				}
 			}()
 		}
 	}
-	//}()
-	//
-	//go func() {
-	//	defer wg.Done()
 
+	var ip net.IP
 	if *ipv6Only {
 		ip, err = util.DomainLookUp(domain, "6", *dot, *jsonPrint)
 	} else if *ipv4Only {
@@ -221,16 +251,15 @@ func Excute() {
 	}
 
 	if err != nil {
-		//fmt.Println(err)
-		//os.Exit(1)
-		panic(err)
+		if util.EnvDevMode {
+			panic(err)
+		}
+		log.Fatal(err)
 	}
-	//}()
-	//
-	//wg.Wait()
 
 	if *srcDev != "" {
 		dev, _ := net.InterfaceByName(*srcDev)
+		util.SrcDev = dev.Name
 		if addrs, err := dev.Addrs(); err == nil {
 			for _, addr := range addrs {
 				if (addr.(*net.IPNet).IP.To4() == nil) == (ip.To4() == nil) {
@@ -252,26 +281,29 @@ func Excute() {
 		printer.PrintTraceRouteNav(ip, domain, *dataOrigin, *maxHops, *packetSize, *srcAddr, string(m))
 	}
 
-	util.DestIP = ip.String()
+	util.SrcPort = *srcPort
+	util.DstIP = ip.String()
 	var conf = trace.Config{
+		OSType:           OSType,
+		ICMPMode:         *icmpMode,
 		DN42:             *dn42,
 		SrcAddr:          *srcAddr,
 		SrcPort:          *srcPort,
 		BeginHop:         *beginHop,
-		DestIP:           ip,
-		DestPort:         *port,
+		DstIP:            ip,
+		DstPort:          *port,
 		MaxHops:          *maxHops,
 		PacketInterval:   *packetInterval,
 		TTLInterval:      *ttlInterval,
 		NumMeasurements:  *numMeasurements,
+		MaxAttempts:      *maxAttempts,
 		ParallelRequests: *parallelRequests,
 		Lang:             *lang,
-		RDns:             !*noRdns,
-		AlwaysWaitRDNS:   *alwaysRdns,
+		RDNS:             !*norDNS,
+		AlwaysWaitRDNS:   *alwaysrDNS,
 		IPGeoSource:      ipgeo.GetSource(*dataOrigin),
 		Timeout:          time.Duration(*timeout) * time.Millisecond,
 		PktSize:          *packetSize,
-		DontFragment:     *dontFragment,
 	}
 
 	// 暂时弃用
@@ -303,7 +335,7 @@ func Excute() {
 		conf.AsyncPrinter = nil
 	}
 
-	if util.Uninterrupted != "" && *rawPrint {
+	if util.Uninterrupted && *rawPrint {
 		for {
 			_, err := trace.Traceroute(m, conf)
 			if err != nil {
@@ -313,13 +345,17 @@ func Excute() {
 	}
 
 	if *disableMPLS {
-		util.DisableMPLS = "1"
+		util.DisableMPLS = true
 	}
 
 	res, err := trace.Traceroute(m, conf)
-
 	if err != nil {
-		log.Fatalln(err)
+		if !errors.Is(err, context.Canceled) {
+			// 用户主动中断：跳过后续的正常收尾
+			// os.Exit(130)
+			fmt.Println(err)
+		}
+		return
 	}
 
 	if *tablePrint {
@@ -340,7 +376,8 @@ func Excute() {
 		(util.StringInSlice(strings.ToUpper(*dataOrigin), []string{"LEOMOEAPI", "IPINFO", "IPINFO", "IP-API.COM", "IPAPI.COM"})) {
 		url, err := tracemap.GetMapUrl(string(r))
 		if err != nil {
-			log.Fatalln(err)
+			fmt.Println(err)
+			return
 		}
 		res.TraceMapUrl = url
 		if !*jsonPrint {
@@ -358,7 +395,6 @@ func Excute() {
 }
 
 func capabilitiesCheck() {
-
 	// Windows 判断放在前面，防止遇到一些奇奇怪怪的问题
 	if runtime.GOOS == "windows" {
 		// Running on Windows, skip checking capabilities

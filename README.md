@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="asset/logo.png" height="200px" alt="NextTrace Logo"/>
+<img src="assets/logo.png" height="200px" alt="NextTrace Logo"/>
 
 </div>
 
@@ -15,14 +15,14 @@
 <h6 align="center">HomePage: www.nxtrace.org</h6>
 
 <p align="center">
-  <a href="https://github.com/nxtrace/Ntrace-V1/actions">
-    <img src="https://img.shields.io/github/actions/workflow/status/nxtrace/Ntrace-V1/build.yml?branch=main&style=flat-square" alt="Github Actions">
+  <a href="https://github.com/nxtrace/NTrace-V1/actions">
+    <img src="https://img.shields.io/github/actions/workflow/status/nxtrace/NTrace-V1/build.yml?branch=main&style=flat-square" alt="Github Actions">
   </a>
-  <a href="https://goreportcard.com/report/github.com/nxtrace/Ntrace-V1">
-    <img src="https://goreportcard.com/badge/github.com/nxtrace/Ntrace-V1?style=flat-square">
+  <a href="https://goreportcard.com/report/github.com/nxtrace/NTrace-V1">
+    <img src="https://goreportcard.com/badge/github.com/nxtrace/NTrace-V1?style=flat-square">
   </a>
-  <a href="https://www.nxtrace.org/downloads">
-    <img src="https://img.shields.io/github/release/nxtrace/Ntrace-V1/all.svg?style=flat-square">
+  <a href="https://github.com/nxtrace/NTrace-V1/releases">
+    <img src="https://img.shields.io/github/release/nxtrace/NTrace-V1/all.svg?style=flat-square">
   </a>
 </p>
 
@@ -86,7 +86,7 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
 
       Same as the macOS Homebrew's installation method (homebrew-core version only supports amd64)
 
-    * Deepin installation command
+    * deepin installation command
       ```shell
       apt install nexttrace
       ```
@@ -163,6 +163,9 @@ nexttrace --ipv6 g.co
 # IPv6 ICMP Trace
 nexttrace 2606:4700:4700::1111
 
+# Developer mode: set the ENV variable NEXTTRACE_DEVMODE=1 to make fatal errors panic with a stack trace.
+export NEXTTRACE_DEVMODE=1
+
 # Disable Path Visualization With the -M parameter
 nexttrace koreacentral.blob.core.windows.net
 # MapTrace URL: https://api.nxtrace.org/tracemap/html/c14e439e-3250-5310-8965-42a1e3545266.html
@@ -172,13 +175,23 @@ nexttrace --disable-mpls example.com
 export NEXTTRACE_DISABLEMPLS=1
 ```
 
-PS: The routing visualization drawing module was written by [@tsosunchia](https://github.com/tsosunchia), and the specific code can be viewed at [tsosunchia/traceMap](https://github.com/tsosunchia/traceMap).
-
-Note that in LeoMoeAPI 2.0, due to the addition of geographical location data, **we have deprecated the online query part of the OpenStreetMap API in the traceMap plugin and are using location information from our own database**.
-
+PS: The route visualization module is an independent component, You can find its source code at [nxtrace/traceMap](https://github.com/nxtrace/traceMap).  
 The routing visualization function requires the geographical coordinates of each Hop, but third-party APIs generally do not provide this information, so this function is currently only supported when used with LeoMoeAPI.
 
-`NextTrace` now supports quick testing, and friends who have a one-time backhaul routing test requirement can use it
+#### Mandatory Configuration Steps for `Windows` Users
+
+- **For Normal User Mode:**  
+  Only **ICMP mode** can be used, and the firewall must allow `ICMP/ICMPv6` traffic.
+    ```powershell
+    netsh advfirewall firewall add rule name="All ICMP v4" dir=in action=allow protocol=icmpv4:any,any
+    netsh advfirewall firewall add rule name="All ICMP v6" dir=in action=allow protocol=icmpv6:any,any
+    ```  
+- **For Administrator Mode:**  
+  **TCP/UDP mode** requires additional installation of `npcap` and `WinDivert`.  
+  **ICMP mode** requires allowing `ICMP/ICMPv6` in the firewall if `npcap` and `WinDivert` are not installed.  
+  You can download and install `npcap` from the official website ([https://npcap.com/#download](https://npcap.com/#download)), and `WinDivert` can be automatically configured using the `--init` parameter.
+
+#### `NextTrace` now supports quick testing, and friends who have a one-time backhaul routing test requirement can use it
 
 ```bash
 # IPv4 ICMP Fast Test (Beijing + Shanghai + Guangzhou + Hangzhou) in China Telecom / Unicom / Mobile / Education Network
@@ -199,7 +212,7 @@ nexttrace --file /path/to/your/iplist.txt
 ## 223.5.5.5
 ```
 
-`NextTrace` already supports route tracing for specified Network Devices
+#### `NextTrace` already supports route tracing for specified Network Devices
 
 ```bash
 # Use eth0 network interface
@@ -210,7 +223,7 @@ nexttrace --dev eth0 2606:4700:4700::1111
 nexttrace --source 204.98.134.56 9.9.9.9
 ```
 
-`NextTrace` can also use `TCP` and `UDP` protocols to perform `Traceroute` requests
+#### `NextTrace` can also use `TCP` and `UDP` protocols to perform `Traceroute` requests
 
 ```bash
 # TCP SYN Trace
@@ -226,22 +239,27 @@ nexttrace --udp 1.0.0.1
 nexttrace --udp --port 5353 1.0.0.1
 
 # For TCP/UDP Trace, you can specify the source port; by default, a fixed random port is used 
-# (if you need to use a different random source port for each packet, please set the ENV variable NEXTTRACE_RANDOMPORT)
+# (If you need to use a different random source port for each packet, please set the ENV variable NEXTTRACE_RANDOMPORT, or set the source port to -1)
 nexttrace --tcp --source-port 14514 www.bing.com
 ```
 
-`NextTrace` also supports some advanced functions, such as ttl control, concurrent probe packet count control, mode switching, etc.
+#### `NextTrace` also supports some advanced functions, such as ttl control, concurrent probe packet count control, mode switching, etc.
 
 ```bash
 # Send 2 probe packets per hop
 nexttrace --queries 2 www.hkix.net
+
+# Set the maximum attempts per TTL
+nexttrace --max-attempts 10 www.hkix.net
+# or use the ENV variable NEXTTRACE_MAXATTEMPTS to persist across runs
+export NEXTTRACE_MAXATTEMPTS=10
 
 # No concurrent probe packets, only one probe packet is sent at a time
 nexttrace --parallel-requests 1 www.hkix.net
 
 # Start Trace with TTL of 5, end at TTL of 10
 nexttrace --first 5 --max-hops 10 www.decix.net
-# In addition, an ENV is provided to set whether to hide the destination IP
+# In addition, an ENV is provided to set whether to mask the destination IP and omit its hostname
 export NEXTTRACE_ENABLEHIDDENDSTIP=1
 
 # Turn off the IP reverse parsing function
@@ -249,9 +267,6 @@ nexttrace --no-rdns www.bbix.net
 
 # Set the payload size to 1024 bytes
 nexttrace --psize 1024 example.com
-
-# Set the payload size and DF flag for TCP Trace
-nexttrace --psize 1024 --dont-fragment --tcp example.com
 
 # Feature: print Route-Path diagram
 # Route-Path diagram example:
@@ -265,12 +280,12 @@ nexttrace --psize 1024 --dont-fragment --tcp example.com
 nexttrace --route-path www.time.com.my
 
 # Disable color output
-nexttrace --nocolor 1.1.1.1
+nexttrace --no-color 1.1.1.1
 # or use ENV
 export NO_COLOR=1
 ```
 
-`NextTrace` supports users to select their own IP API (currently supports: `LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`, `Ip2region`, `IPInfoLocal`, `CHUNZHEN`)
+#### `NextTrace` supports users to select their own IP API (currently supports: `LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`, `Ip2region`, `IPInfoLocal`, `CHUNZHEN`)
 
 ```bash
 # You can specify the IP database by yourself [IP-API.com here], if not specified, LeoMoeAPI will be used
@@ -295,7 +310,7 @@ export NEXTTRACE_CHUNZHENURL=http://127.0.0.1:2060
 export NEXTTRACE_DATAPROVIDER=ipinfo
 ```
 
-`NextTrace` supports mixed parameters and shortened parameters
+#### `NextTrace` supports mixed parameters and shortened parameters
 
 ```bash
 Example:
@@ -325,34 +340,40 @@ All NextTrace IP geolocation `API DEMO` can refer to [here](https://github.com/n
 ### For full usage list, please refer to the usage menu
 
 ```shell
-Usage: nexttrace [-h|--help] [-4|--ipv4] [-6|--ipv6] [-T|--tcp] [-U|--udp]
-                 [-F|--fast-trace] [-p|--port <integer>] [-q|--queries
-                 <integer>] [--parallel-requests <integer>] [-m|--max-hops
-                 <integer>] [-d|--data-provider
-                 (Ip2region|ip2region|IP.SB|ip.sb|IPInfo|ipinfo|IPInsight|ipinsight|IPAPI.com|ip-api.com|IPInfoLocal|ipinfolocal|chunzhen|LeoMoeAPI|leomoeapi|disable-geoip)]
+Usage: nexttrace [-h|--help] [--init] [-4|--ipv4] [-6|--ipv6] [-T|--tcp]
+                 [-U|--udp] [-F|--fast-trace] [-p|--port <integer>]
+                 [--icmp-mode <integer>] [-q|--queries <integer>]
+                 [--parallel-requests <integer>] [-m|--max-hops <integer>]
+                 [--max-attempts <integer>] [-d|--data-provider
+                 (Ip2region|ip2region|IP.SB|ip.sb|IPInfo|ipinfo|IPInsight|ipinsight|IPAPI.com|ip-api.com|IPInfoLocal|ipinfolocal|chunzhen|LeoMoeAPI|leomoeapi|ipdb.one|disable-geoip)]
                  [--pow-provider (api.nxtrace.org|sakura)] [-n|--no-rdns]
                  [-a|--always-rdns] [-P|--route-path] [-r|--report] [--dn42]
                  [-o|--output] [-t|--table] [--raw] [-j|--json] [-c|--classic]
                  [-f|--first <integer>] [-M|--map] [-e|--disable-mpls]
-                 [-v|--version] [-s|--source "<value>"] [-D|--dev "<value>"]
-                 [-z|--send-time <integer>] [-i|--ttl-time <integer>]
-                 [--timeout <integer>] [--psize <integer>]
-                 [_positionalArg_nexttrace_32 "<value>"] [--dot-server
-                 (dnssb|aliyun|dnspod|google|cloudflare)] [-g|--language
-                 (en|cn)] [--file "<value>"] [-C|--nocolor]
+                 [-V|--version] [-s|--source "<value>"] [--source-port
+                 <integer>] [-D|--dev "<value>"] [-z|--send-time <integer>]
+                 [-i|--ttl-time <integer>] [--timeout <integer>] [--psize
+                 <integer>] [_positionalArg_nexttrace_36 "<value>"]
+                 [--dot-server (dnssb|aliyun|dnspod|google|cloudflare)]
+                 [-g|--language (en|cn)] [--file "<value>"] [-C|--no-color]
 
 Arguments:
 
   -h  --help                         Print help information
+      --init                         Windows ONLY: Extract WinDivert runtime to
+                                     current directory
   -4  --ipv4                         Use IPv4 only
   -6  --ipv6                         Use IPv6 only
-  -T  --tcp                          Use TCP SYN for tracerouting (default port
-                                     is 80)
-  -U  --udp                          Use UDP SYN for tracerouting (default port
-                                     is 33494)
+  -T  --tcp                          Use TCP SYN for tracerouting (default
+                                     dest-port is 80)
+  -U  --udp                          Use UDP SYN for tracerouting (default
+                                     dest-port is 33494)
   -F  --fast-trace                   One-Key Fast Trace to China ISPs
   -p  --port                         Set the destination port to use. With
                                      default of 80 for "tcp", 33494 for "udp"
+      --icmp-mode                    Windows ONLY: Choose the method to listen
+                                     for ICMP packets (1=Socket, 2=PCAP;
+                                     0=Auto)
   -q  --queries                      Set the number of probes per each hop.
                                      Default: 3
       --parallel-requests            Set ParallelRequests number. It should be
@@ -360,6 +381,8 @@ Arguments:
                                      18
   -m  --max-hops                     Set the max number of hops (max TTL to be
                                      reached). Default: 30
+      --max-attempts                 Set the max number of attempts per TTL
+                                     (instead of a fixed auto value)
   -d  --data-provider                Choose IP Geograph Data Provider [IP.SB,
                                      IPInfo, IPInsight, IP-API.com, Ip2region,
                                      IPInfoLocal, CHUNZHEN, disable-geoip].
@@ -382,18 +405,19 @@ Arguments:
   -j  --json                         Output trace results as JSON
   -c  --classic                      Classic Output trace results like
                                      BestTrace
-  -f  --first                        Start from the first_ttl hop (instead from
+  -f  --first                        Start from the first_ttl hop (instead of
                                      1). Default: 1
   -M  --map                          Disable Print Trace Map
   -e  --disable-mpls                 Disable MPLS
-  -v  --version                      Print version info and exit
-  -s  --source                       Use source src_addr for outgoing packets
+  -V  --version                      Print version info and exit
+  -s  --source                       Use source address src_addr for outgoing
+                                     packets
       --source-port                  Use source port src_port for outgoing
                                      packets
   -D  --dev                          Use the following Network Devices as the
                                      source address in outgoing packets
   -z  --send-time                    Set how many [milliseconds] between
-                                     sending each packet.. Useful when some
+                                     sending each packet. Useful when some
                                      routers use rate-limit for ICMP messages.
                                      Default: 50
   -i  --ttl-time                     Set how many [milliseconds] between
@@ -402,17 +426,15 @@ Arguments:
                                      messages. Default: 50
       --timeout                      The number of [milliseconds] to keep probe
                                      sockets open before giving up on the
-                                     connection.. Default: 1000
+                                     connection. Default: 1000
       --psize                        Set the payload size. Default: 52
-      --_positionalArg_nexttrace_32  IP Address or domain name
+      --_positionalArg_nexttrace_36  IP Address or domain name
       --dot-server                   Use DoT Server for DNS Parse [dnssb,
                                      aliyun, dnspod, google, cloudflare]
   -g  --language                     Choose the language for displaying [en,
                                      cn]. Default: cn
       --file                         Read IP Address or domain name from file
-  -C  --nocolor                      Disable Colorful Output
-      --dont-fragment                Set the Don't Fragment bit (IPv4 TCP
-                                     only). Default: false
+  -C  --no-color                     Disable Colorful Output
 ```
 
 ## Project screenshot
@@ -459,6 +481,10 @@ The LeoMoeAPI data is subject to copyright restrictions from multiple data sourc
 
 We hope you can give us as much feedback as possible on IP geolocation errors (see issue) so that it can be calibrated in the first place and others can benefit from it.
 
+## Cloudflare Support
+This project is sponsored by [Project Alexandria](http://www.cloudflare.com/oss-credits).
+
+<img src="https://cf-assets.www.cloudflare.com/slt3lc6tev37/2I3y49Uz9Y61lBS0kIPZu6/db6df1e6f99a8659267c442b75a0dff9/image.png" alt="Cloudflare Logo" width="331">
 
 ## AIWEN TECH Support
 
@@ -502,14 +528,22 @@ This Project uses [JetBrain Open-Source Project License](https://jb.gg/OpenSourc
 
 ### Others
 
-Although other third-party APIs are integrated in this project, please refer to the official website of the third-party APIs for specific TOS and AUP. If you encounter IP data errors, please contact them directly to correct them.
+- Although other third-party APIs are integrated in this project, please refer to the official website of the third-party APIs for specific TOS and AUP. If you encounter IP data errors, please contact them directly to correct them.
 
-For feedback related to corrections about IP information, we currently have two channels available:
->- [IP 错误报告汇总帖](https://github.com/orgs/nxtrace/discussions/222) in the GITHUB ISSUES section of this project (Recommended)
->- This project's dedicated correction email: `correction@nxtrace.org` (Please note that this email is only for correcting IP-related information. For other feedback, please submit an ISSUE)
 
-How to obtain the freshly baked binary executable of the latest commit?
-> Please go to the most recent [Build & Release](https://github.com/nxtrace/Ntrace-V1/actions/workflows/build.yml) workflow in GitHub Actions.
+- For feedback related to corrections about IP information, we currently have two channels available:
+    >- [IP 错误报告汇总帖](https://github.com/orgs/nxtrace/discussions/222) in the GITHUB ISSUES section of this project (Recommended)
+    >- This project's dedicated correction email: `correct#nxtrace.org` (Please note that this email is only for correcting IP-related information. For other feedback, please submit an ISSUE)
+
+
+- How to obtain the freshly baked binary executable of the latest commit?
+    > Please go to the most recent [Build & Release](https://github.com/nxtrace/NTrace-V1/actions/workflows/build.yml) workflow in GitHub Actions.
+
+- Known Issues
+    + On Windows, ICMP mode requires manual firewall allowance for ICMP/ICMPv6
+    + On Windows, TCP modes are currently unavailable
+    + On macOS, only ICMP mode does not require elevated privileges
+    + In some cases, running multiple instances of NextTrace simultaneously may interfere with each other’s results (observed so far only in TCP mode)
 
 ## Star History
 

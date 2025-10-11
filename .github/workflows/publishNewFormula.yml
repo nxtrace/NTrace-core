@@ -1,5 +1,9 @@
 name: Publish New Formula
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 # Controls when the action will run. Workflow runs when manually triggered using the UI
 # or API.
 on:
@@ -17,13 +21,14 @@ jobs:
       # Runs a single command using the runners shell
       - name: config git
         run: |
-          git config --global user.email "${{ secrets.git_mail }}"
-          git config --global user.name "${{ secrets.git_name }}"
+          git config --global user.email "${{ secrets.GIT_MAIL }}"
+          git config --global user.name "${{ secrets.GIT_NAME }}"
       - name: Clone repo
         run: |
           git clone https://github.com/nxtrace/homebrew-nexttrace.git
-      - name: Exec scipt
+      - name: Exec script
         run: |
+          set -Eeuo pipefail
           cd homebrew-nexttrace
           bash genFormula.sh
       # - name: setup SSH keys and known_hosts
@@ -36,9 +41,11 @@ jobs:
       #     SSH_AUTH_SOCK: /tmp/ssh_agent.sock
       - name: Git Push
         run: |
+          set -Eeuo pipefail
           cd homebrew-nexttrace
-          git commit -am 'Publish a new version with Formula' || true
-          git remote set-url origin https://${{ secrets.gt_token }}@github.com/nxtrace/homebrew-nexttrace.git
+          git add -A
+          git commit -m 'Publish a new version with Formula' || true
+          git remote set-url origin https://${{ secrets.GT_TOKEN }}@github.com/nxtrace/homebrew-nexttrace.git
           git push
         # env:
         #   SSH_AUTH_SOCK: /tmp/ssh_agent.sock

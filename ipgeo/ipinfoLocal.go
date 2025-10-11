@@ -8,9 +8,10 @@ import (
 	"runtime"
 	"strings"
 	"time"
-	
-	"github.com/nxtrace/NTrace-core/util"
+
 	"github.com/oschwald/maxminddb-golang"
+
+	"github.com/nxtrace/NTrace-core/util"
 )
 
 const (
@@ -25,27 +26,27 @@ var ipinfoDataBasePath = ""
 // 2. Search in the current folder and the executable folder
 // 3. Search in /usr/local/share/nexttrace/ and /usr/share/nexttrace/ (for Unix/Linux)
 // If the file is found, the path will be stored in the ipinfoDataBasePath variable
-func getIPInfoLocalPath() (error) {
+func getIPInfoLocalPath() error {
 	if ipinfoDataBasePath != "" {
 		return nil
 	}
 	// NEXTTRACE_IPINFOLOCALPATH
-	if util.EnvIPInfoLocalPath != "" {
-		if _, err := os.Stat(util.EnvIPInfoLocalPath); err == nil {
-			ipinfoDataBasePath = util.EnvIPInfoLocalPath
+	path := util.GetEnvDefault("NEXTTRACE_IPINFOLOCALPATH", "")
+	if path != "" {
+		if _, err := os.Stat(path); err == nil {
+			ipinfoDataBasePath = path
 			return nil
-		} else {
-			return errors.New("NEXTTRACE_IPINFOLOCALPATH is set but the file does not exist")
 		}
+		return errors.New("NEXTTRACE_IPINFOLOCALPATH is set but the file does not exist")
 	}
-	folders := []string{}
+	var folders []string
 	// current folder
 	if cur, err := os.Getwd(); err == nil {
-		folders = append(folders, cur + string(filepath.Separator))
+		folders = append(folders, cur+string(filepath.Separator))
 	}
 	// exeutable folder
 	if exe, err := os.Executable(); err == nil {
-		folders = append(folders, filepath.Dir(exe) + string(filepath.Separator))
+		folders = append(folders, filepath.Dir(exe)+string(filepath.Separator))
 	}
 	if runtime.GOOS != "windows" {
 		folders = append(folders, "/usr/local/share/nexttrace/")
