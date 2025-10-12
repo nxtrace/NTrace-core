@@ -512,6 +512,8 @@ This Project uses [JetBrain Open-Source Project License](https://jb.gg/OpenSourc
 
 [tsosunchia](https://github.com/tsosunchia) The project chair, infra maintainer, and core contributors
 
+[Yunlq](https://github.com/Yunlq) An active community contributor
+
 [Vincent Young](https://github.com/missuo)
 
 [zhshch2002](https://github.com/zhshch2002)

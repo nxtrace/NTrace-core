@@ -193,7 +193,7 @@ PS: 路由可视化的绘制模块为独立模块，具体代码可在 [nxtrace/
 - 对于管理员模式：  
   **TCP/UDP mode** 需要额外安装 `npcap` 及 `WinDivert`，  
   **ICMP mode** 若未安装 `npcap` 及 `WinDivert`，则需防火墙配置允许`ICMP/ICMPv6`。  
-  其中 `npcap` 请到官网下载并安装（https://npcap.com/#download），`WinDivert` 可使用 `--init` 参数自动配置环境。
+  其中 `npcap` 请到官网下载并安装（[https://npcap.com/#download](https://npcap.com/#download)），`WinDivert` 可使用 `--init` 参数自动配置环境。
 
 #### `NextTrace` 现已经支持快速测试，有一次性测试回程路由需求的朋友可以使用
 
@@ -500,6 +500,8 @@ nexttrace --pow-provider sakura
 [sjlleo](https://github.com/sjlleo) 项目永远的领导者、创始人及核心贡献者
 
 [tsosunchia](https://github.com/tsosunchia) 项目现任管理、基础设施运维及核心贡献者
+
+[Yunlq](https://github.com/Yunlq) 活跃的社区贡献者
 
 [Vincent Young](https://github.com/missuo)
 
