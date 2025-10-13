@@ -16,9 +16,9 @@ require (
 	github.com/tidwall/gjson v1.18.0
 	github.com/tsosunchia/powclient v0.2.0
 	github.com/xjasonlyu/windivert-go v0.0.0-20201010013527-4239d0afa76f
-	golang.org/x/net v0.44.0
+	golang.org/x/net v0.46.0
 	golang.org/x/sync v0.17.0
-	golang.org/x/sys v0.36.0
+	golang.org/x/sys v0.37.0
 )
 
 require (
@@ -38,6 +38,6 @@ require (
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/text v0.29.0 // indirect
+	golang.org/x/text v0.30.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
