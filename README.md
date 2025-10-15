@@ -61,15 +61,18 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
       curl -sL nxtrace.org/nt |bash
       ```
 
-    * Install nxtrace from the APT repository
-        * Supports AMD64/ARM64 architectures
-          ```shell
-          echo "deb [trusted=yes] https://github.com/nxtrace/nexttrace-debs/releases/latest/download ./" |
-          sudo tee /etc/apt/sources.list.d/nexttrace.list
-          sudo apt update
-          sudo apt install nexttrace
-          ```
-        * APT repository maintained by wcbing and nxtrace
+      * Install nxtrace from the APT repository
+          * Supports AMD64/ARM64 architectures
+            ```shell
+            curl -fsSL https://github.com/nxtrace/nexttrace-debs/releases/latest/download/nexttrace-archive-keyring.gpg | sudo tee /etc/apt/keyrings/nexttrace.gpg >/dev/null
+            echo "Types: deb
+            URIs: https://github.com/nxtrace/nexttrace-debs/releases/latest/download/
+            Suites: ./
+            Signed-By: /etc/apt/keyrings/nexttrace.gpg" | sudo tee /etc/apt/sources.list.d/nexttrace.sources >/dev/null
+            sudo apt update
+            sudo apt install nexttrace
+            ```
+          * APT repository maintained by wcbing and nxtrace
 
     * Arch Linux AUR installation command
         * Directly download bin package (only supports amd64)
