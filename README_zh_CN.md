@@ -111,6 +111,11 @@ Document Language: [English](README.md) | 简体中文
     pkg install root-repo
     pkg install nexttrace
     ```
+  
+  * ImmortalWrt 安装命令
+    ```shell
+    opkg install nexttrace
+    ```
       
      
 * macOS
