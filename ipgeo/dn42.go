@@ -31,7 +31,7 @@ func DN42(ip string, _ time.Duration, _ string, _ bool) (*IPGeoData, error) {
 		data.Country = geo.LtdCode
 		data.City = geo.City
 		data.Asnumber = geo.ASN
-		data.Whois = geo.IPWhois
+		data.Owner = geo.IPWhois
 	}
 	// 如果没找到，查找 PTR
 	if len(ipTmp) > 1 {
