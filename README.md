@@ -104,6 +104,11 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
       pkg install root-repo
       pkg install nexttrace
       ```
+    
+    * ImmortalWrt installation command
+      ```shell
+      opkg install nexttrace
+      ```
 
 * macOS
     * macOS Homebrew's installation command
