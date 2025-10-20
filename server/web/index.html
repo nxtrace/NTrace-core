@@ -21,7 +21,7 @@
   </header>
 
   <main class="container">
-    <section class="panel">
+    <section class="panel panel--form">
       <form id="trace-form" class="form">
         <div class="form__group">
           <label for="target" id="label-target">目标地址</label>
@@ -63,9 +63,11 @@
       </form>
     </section>
 
-    <section class="panel">
-      <div id="status" class="status status--idle">准备就绪</div>
-      <div id="result-meta" class="result-meta hidden"></div>
+    <section class="panel panel--results">
+      <div class="results-header">
+        <div id="status" class="status status--idle">准备就绪</div>
+        <div id="result-meta" class="result-meta hidden"></div>
+      </div>
       <div id="result" class="result hidden"></div>
     </section>
   </main>

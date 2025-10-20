@@ -68,6 +68,12 @@ const uiText = {
     attemptLabelLatency: '延迟',
     attemptLabelError: '错误',
     attemptLabelMPLS: 'MPLS',
+    attemptLabelLoss: '丢包率',
+    attemptLabelFailure: '失败',
+    timeoutAll: '全部超时',
+    timeoutPartial: '部分超时',
+    unknownAddress: '未知地址',
+    unknownError: '未知错误',
     attemptBadge: '探测',
     noResult: '未获取到有效路由信息。',
     footer: '当前会话仅提供基础功能，更多高级选项请使用 CLI。',
@@ -108,6 +114,12 @@ const uiText = {
     attemptLabelLatency: 'Latency',
     attemptLabelError: 'Error',
     attemptLabelMPLS: 'MPLS',
+    attemptLabelLoss: 'Loss',
+    attemptLabelFailure: 'Failure',
+    timeoutAll: 'All timeout',
+    timeoutPartial: 'Partial timeout',
+    unknownAddress: 'Unknown',
+    unknownError: 'Unknown error',
     attemptBadge: 'Probe',
     noResult: 'No valid hops collected yet.',
     footer: 'For advanced options, please use the CLI.',
@@ -215,6 +227,150 @@ function renderMeta(summary = {}) {
   resultMetaNode.classList.remove('hidden');
 }
 
+function renderAttemptsGrouped(attempts) {
+  const groups = new Map();
+  let lastKey = null;
+  attempts.forEach((attempt, index) => {
+    const keyHost = attempt.hostname || '';
+    const keyIp = attempt.ip || '';
+    let key;
+    if (keyHost || keyIp) {
+      key = keyHost + '|' + keyIp;
+      lastKey = key;
+    } else if (lastKey) {
+      key = lastKey;
+    } else {
+      key = 'unknown|';
+      lastKey = key;
+    }
+    if (!groups.has(key)) {
+      groups.set(key, []);
+    }
+    groups.get(key).push(attempt);
+  });
+
+  const container = document.createElement('div');
+  container.className = 'attempts attempts--grouped';
+
+  groups.forEach((list, key) => {
+    const box = document.createElement('div');
+    box.className = 'attempt attempt--group';
+
+    const header = document.createElement('div');
+    header.className = 'attempt__header';
+    const mainLine = [];
+    const first = list[0] || {};
+    const [keyHost, keyIp] = key.split('|');
+    const displayHost = first.hostname || keyHost || '';
+    const displayIp = first.ip || keyIp || '';
+    if (displayHost) {
+      mainLine.push(createMetaItem(t('attemptLabelHost'), displayHost));
+    }
+    if (displayIp) {
+      mainLine.push(createMetaItem(t('attemptLabelAddress'), displayIp));
+    }
+    if (mainLine.length === 0) {
+      mainLine.push(createMetaItem(t('attemptLabelAddress'), t('unknownAddress')));
+    }
+    mainLine.forEach((el) => header.appendChild(el));
+
+    box.appendChild(header);
+
+    const metrics = document.createElement('div');
+    metrics.className = 'attempt__meta';
+    const rtts = list
+      .filter((item) => item.rtt_ms !== undefined && item.rtt_ms !== null)
+      .map((item) => Number(item.rtt_ms));
+    if (rtts.length > 0) {
+      const min = Math.min(...rtts).toFixed(2);
+      const max = Math.max(...rtts).toFixed(2);
+      const avg = (rtts.reduce((sum, v) => sum + v, 0) / rtts.length).toFixed(2);
+      metrics.appendChild(createMetaItem(t('attemptLabelLatency'), avg + ' ms (min ' + min + ', max ' + max + ')'));
+    }
+    const successes = list.filter((item) => item.success).length;
+    const lossCount = list.length - successes;
+    const lossRate = list.length > 0 ? (((lossCount) / list.length) * 100).toFixed(0) : '0';
+    metrics.appendChild(createMetaItem(t('attemptLabelLoss'), lossRate + '% (' + lossCount + '/' + list.length + ')'));
+
+    const failureItems = list.filter((item) => !item.success);
+    if (failureItems.length > 0) {
+      const failureGroups = new Map();
+      failureItems.forEach((item) => {
+        const raw = (item.error || '').trim();
+        const key = raw || 'unknown';
+        if (!failureGroups.has(key)) {
+          failureGroups.set(key, {label: raw, count: 0, timeout: raw.toLowerCase().includes('timeout')});
+        }
+        const entry = failureGroups.get(key);
+        entry.count += 1;
+      });
+
+      const entries = Array.from(failureGroups.values());
+      const allTimeout = entries.length > 0 && entries.every((entry) => entry.timeout || entry.label === '');
+      let failureText = '';
+      if (allTimeout) {
+        failureText = (successes === 0 ? t('timeoutAll') : t('timeoutPartial')) + ' (' + failureItems.length + '/' + list.length + ')';
+      } else {
+        failureText = entries
+          .map((entry) => {
+            let label = entry.label || t('unknownError');
+            return label + ' (' + entry.count + '/' + list.length + ')';
+          })
+          .join(' | ');
+      }
+      metrics.appendChild(createMetaItem(t('attemptLabelFailure'), failureText));
+    }
+
+    const mplsAll = list.flatMap((item) => item.mpls || []);
+    if (mplsAll.length > 0) {
+      metrics.appendChild(createMetaItem(t('attemptLabelMPLS'), Array.from(new Set(mplsAll)).join(', ')));
+    }
+    box.appendChild(metrics);
+
+    const geoLine = document.createElement('div');
+    geoLine.className = 'attempt__geo';
+    const segments = [];
+    if (first.geo) {
+      if (first.geo.asnumber) {
+        segments.push('AS' + first.geo.asnumber);
+      }
+      if (first.geo.country) {
+        segments.push(first.geo.country);
+      }
+      if (first.geo.prov) {
+        segments.push(first.geo.prov);
+      }
+      if (first.geo.city) {
+        segments.push(first.geo.city);
+      }
+      if (first.geo.owner || first.geo.isp) {
+        segments.push(first.geo.owner || first.geo.isp);
+      }
+    }
+    if (segments.length > 0) {
+      geoLine.textContent = segments.join(' · ');
+      box.appendChild(geoLine);
+    }
+
+    const probes = document.createElement('div');
+    probes.className = 'attempt__probes';
+    list.forEach((item, index) => {
+      const badge = document.createElement('span');
+      badge.className = 'attempt__badge';
+      badge.textContent = t('attemptBadge') + ' ' + (index + 1);
+      if (!item.success) {
+        badge.classList.add('attempt__badge--fail');
+      }
+      probes.appendChild(badge);
+    });
+    box.appendChild(probes);
+
+    container.appendChild(box);
+  });
+
+  return container;
+}
+
 function renderHops(hops) {
   if (!hops || hops.length === 0) {
     resultNode.innerHTML = `<p>${t('noResult')}</p>`;
@@ -240,7 +396,7 @@ function renderHops(hops) {
     tr.appendChild(ttlCell);
 
     const attemptsCell = document.createElement('td');
-    attemptsCell.appendChild(renderAttempts(hop.attempts));
+    attemptsCell.appendChild(renderAttemptsGrouped(hop.attempts));
     tr.appendChild(attemptsCell);
 
     tbody.appendChild(tr);
@@ -255,70 +411,6 @@ function renderHops(hops) {
 function renderHopsFromStore() {
   const hops = Array.from(hopStore.values()).sort((a, b) => a.ttl - b.ttl);
   renderHops(hops);
-}
-
-function renderAttempts(attempts) {
-  const container = document.createElement('div');
-  container.className = 'attempts';
-
-  attempts.forEach((attempt, idx) => {
-    const box = document.createElement('div');
-    box.className = 'attempt';
-
-    const badge = document.createElement('span');
-    badge.className = 'attempt__badge';
-    badge.textContent = `${t('attemptBadge')} ${idx + 1}`;
-    if (!attempt.success) {
-      badge.classList.add('attempt__badge--fail');
-    }
-    box.appendChild(badge);
-
-    const meta = document.createElement('div');
-    meta.className = 'attempt__meta';
-    if (attempt.hostname) {
-      meta.appendChild(createMetaItem(t('attemptLabelHost'), attempt.hostname));
-    }
-    if (attempt.ip) {
-      meta.appendChild(createMetaItem(t('attemptLabelAddress'), attempt.ip));
-    }
-    if (attempt.rtt_ms !== undefined && attempt.rtt_ms !== null) {
-      meta.appendChild(createMetaItem(t('attemptLabelLatency'), `${attempt.rtt_ms.toFixed(2)} ms`));
-    }
-    if (attempt.error) {
-      meta.appendChild(createMetaItem(t('attemptLabelError'), attempt.error));
-    }
-    if (attempt.mpls && attempt.mpls.length > 0) {
-      meta.appendChild(createMetaItem(t('attemptLabelMPLS'), attempt.mpls.join(', ')));
-    }
-    box.appendChild(meta);
-
-    if (attempt.geo && (attempt.geo.country || attempt.geo.owner || attempt.geo.asnumber)) {
-      const geo = document.createElement('div');
-      geo.className = 'attempt__geo';
-      const segments = [];
-      if (attempt.geo.asnumber) {
-        segments.push(`AS${attempt.geo.asnumber}`);
-      }
-      if (attempt.geo.country) {
-        segments.push(attempt.geo.country);
-      }
-      if (attempt.geo.prov) {
-        segments.push(attempt.geo.prov);
-      }
-      if (attempt.geo.city) {
-        segments.push(attempt.geo.city);
-      }
-      if (attempt.geo.owner || attempt.geo.isp) {
-        segments.push(attempt.geo.owner || attempt.geo.isp);
-      }
-      geo.textContent = segments.join(' · ');
-      box.appendChild(geo);
-    }
-
-    container.appendChild(box);
-  });
-
-  return container;
 }
 
 function createMetaItem(label, value) {
