@@ -23,37 +23,57 @@ a:hover {
 
 .header {
   padding: 2.5rem 1.5rem 1rem;
-  text-align: center;
 }
 
-.header__title {
-  display: inline-flex;
+.header__top {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.75rem;
+  justify-content: space-between;
+  gap: 1rem;
 }
 
-.header__logo {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 3rem;
-  height: 3rem;
-  border-radius: 0.75rem;
-  background: linear-gradient(135deg, #6366f1, #22d3ee);
-  font-weight: 700;
-  font-size: 1.25rem;
-  letter-spacing: 0.05em;
-}
-
-.header h1 {
+.header__title h1 {
   margin: 0;
   font-size: 1.75rem;
   font-weight: 600;
 }
 
 .header__subtitle {
-  margin: 0.5rem 0 0;
+  margin: 0.75rem 0 0;
   color: #94a3b8;
+}
+
+.header__actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.action-btn {
+  padding: 0.55rem 1.1rem;
+  border-radius: 0.6rem;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.6);
+  color: #e2e8f0;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.action-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 26px rgba(56, 189, 248, 0.15);
+}
+
+.action-btn--primary {
+  background: linear-gradient(135deg, #38bdf8, #6366f1);
+  color: #0f172a;
+  border-color: transparent;
+}
+
+.action-btn--ghost {
+  border-color: rgba(148, 163, 184, 0.45);
 }
 
 .container {
@@ -142,6 +162,7 @@ select:focus {
 .form__actions {
   display: flex;
   justify-content: flex-end;
+  gap: 0.75rem;
 }
 
 button[type="submit"] {

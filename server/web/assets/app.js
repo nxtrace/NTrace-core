@@ -8,17 +8,137 @@ const statusNode = document.getElementById('status');
 const resultNode = document.getElementById('result');
 const resultMetaNode = document.getElementById('result-meta');
 const submitBtn = document.getElementById('submit-btn');
+const langToggleBtn = document.getElementById('lang-toggle');
+const cacheBtn = document.getElementById('cache-btn');
+const titleText = document.getElementById('title-text');
+const subtitleText = document.getElementById('subtitle-text');
+const footerText = document.getElementById('footer-text');
+const labelTarget = document.getElementById('label-target');
+const labelProtocol = document.getElementById('label-protocol');
+const labelProvider = document.getElementById('label-provider');
+const labelQueries = document.getElementById('label-queries');
+const labelMaxHops = document.getElementById('label-maxhops');
+const labelDisableMap = document.getElementById('label-disable-map');
+const targetInput = document.getElementById('target');
 
 const wsScheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
 const wsUrl = `${wsScheme}://${window.location.host}/ws/trace`;
+
 let socket = null;
 let traceCompleted = false;
 const hopStore = new Map();
 let latestSummary = {};
+let currentLang = 'cn';
+let currentStatus = {state: 'idle', key: 'statusReady', custom: null};
 
-function setStatus(state, message) {
+const uiText = {
+  cn: {
+    title: 'NextTrace Web',
+    subtitle: '在浏览器中运行 NextTrace，实时查看路由探测结果。',
+    labelTarget: '目标地址',
+    placeholderTarget: '例如：1.1.1.1 或 www.example.com',
+    labelProtocol: '协议',
+    labelProvider: '地理信息源',
+    labelQueries: '每跳探测次数',
+    labelMaxHops: '最大跳数',
+    labelDisableMap: '禁用地图生成',
+    buttonStart: '开始探测',
+    buttonClearCache: '清空缓存',
+    langToggle: 'English',
+    tableTTL: 'TTL',
+    tableDetails: '探测详情',
+    statusReady: '准备就绪',
+    statusRunning: '正在探测，请稍候...',
+    statusSuccess: '探测完成',
+    statusCacheClearing: '正在清理缓存…',
+    statusCacheCleared: '缓存已清空',
+    statusCacheFailed: '清理缓存失败',
+    statusWsError: 'WebSocket 连接出错',
+    statusDisconnected: '连接已断开',
+    statusOptionsFailed: '无法加载选项:',
+    statusTargetMissing: '请填写目标地址',
+    statusTraceFailed: '探测失败',
+    metaResolved: '解析结果',
+    metaProvider: '数据源',
+    metaDuration: '耗时',
+    metaMap: '地图',
+    mapOpen: '打开地图',
+    attemptLabelHost: '主机',
+    attemptLabelAddress: '地址',
+    attemptLabelLatency: '延迟',
+    attemptLabelError: '错误',
+    attemptLabelMPLS: 'MPLS',
+    attemptBadge: '探测',
+    noResult: '未获取到有效路由信息。',
+    footer: '当前会话仅提供基础功能，更多高级选项请使用 CLI。',
+  },
+  en: {
+    title: 'NextTrace Web',
+    subtitle: 'Run NextTrace in your browser and watch the trace in real time.',
+    labelTarget: 'Target',
+    placeholderTarget: 'e.g. 1.1.1.1 or www.example.com',
+    labelProtocol: 'Protocol',
+    labelProvider: 'Geo provider',
+    labelQueries: 'Probes per hop',
+    labelMaxHops: 'Max hops',
+    labelDisableMap: 'Disable map generation',
+    buttonStart: 'Start Trace',
+    buttonClearCache: 'Clear Cache',
+    langToggle: '中文',
+    tableTTL: 'TTL',
+    tableDetails: 'Details',
+    statusReady: 'Ready',
+    statusRunning: 'Tracing…',
+    statusSuccess: 'Trace completed',
+    statusCacheClearing: 'Clearing cache…',
+    statusCacheCleared: 'Cache cleared',
+    statusCacheFailed: 'Failed to clear cache',
+    statusWsError: 'WebSocket error',
+    statusDisconnected: 'Connection closed',
+    statusOptionsFailed: 'Failed to load options:',
+    statusTargetMissing: 'Please enter a target',
+    statusTraceFailed: 'Trace failed',
+    metaResolved: 'Resolved IP',
+    metaProvider: 'Provider',
+    metaDuration: 'Duration',
+    metaMap: 'Map',
+    mapOpen: 'Open map',
+    attemptLabelHost: 'Host',
+    attemptLabelAddress: 'IP',
+    attemptLabelLatency: 'Latency',
+    attemptLabelError: 'Error',
+    attemptLabelMPLS: 'MPLS',
+    attemptBadge: 'Probe',
+    noResult: 'No valid hops collected yet.',
+    footer: 'For advanced options, please use the CLI.',
+  },
+};
+
+function t(key) {
+  return uiText[currentLang][key] || key || '';
+}
+
+function updateStatusDisplay(state, text) {
   statusNode.className = `status status--${state}`;
-  statusNode.textContent = message;
+  statusNode.textContent = text;
+}
+
+function setStatus(state, message, translate = true) {
+  if (translate) {
+    currentStatus = {state, key: message, custom: null};
+    updateStatusDisplay(state, t(message));
+  } else {
+    currentStatus = {state, key: null, custom: message};
+    updateStatusDisplay(state, message);
+  }
+}
+
+function refreshStatus() {
+  if (currentStatus.key) {
+    updateStatusDisplay(currentStatus.state, t(currentStatus.key));
+  } else if (currentStatus.custom !== null) {
+    updateStatusDisplay(currentStatus.state, currentStatus.custom);
+  }
 }
 
 async function loadOptions() {
@@ -34,7 +154,7 @@ async function loadOptions() {
     maxHopsInput.value = data.defaultOptions.max_hops;
     disableMaptraceInput.checked = data.defaultOptions.disable_maptrace;
   } catch (err) {
-    setStatus('error', `无法加载选项: ${err.message}`);
+    setStatus('error', `${t('statusOptionsFailed')} ${err.message}`, false);
     submitBtn.disabled = true;
   }
 }
@@ -72,19 +192,19 @@ function clearResult(resetState = false) {
   }
 }
 
-function renderMeta(summary) {
+function renderMeta(summary = {}) {
   const rows = [];
   if (summary.resolved_ip) {
-    rows.push(`解析结果：<strong>${summary.resolved_ip}</strong>`);
+    rows.push(`${t('metaResolved')}：<strong>${summary.resolved_ip}</strong>`);
   }
   if (summary.data_provider) {
-    rows.push(`数据源：<strong>${summary.data_provider}</strong>`);
+    rows.push(`${t('metaProvider')}：<strong>${summary.data_provider}</strong>`);
   }
   if (summary.duration_ms !== undefined) {
-    rows.push(`耗时：<strong>${summary.duration_ms} ms</strong>`);
+    rows.push(`${t('metaDuration')}：<strong>${summary.duration_ms} ms</strong>`);
   }
   if (summary.trace_map_url) {
-    rows.push(`地图：<a href="${summary.trace_map_url}" target="_blank" rel="noreferrer">打开地图</a>`);
+    rows.push(`${t('metaMap')}：<a href="${summary.trace_map_url}" target="_blank" rel="noreferrer">${t('mapOpen')}</a>`);
   }
   if (rows.length === 0) {
     resultMetaNode.classList.add('hidden');
@@ -97,7 +217,7 @@ function renderMeta(summary) {
 
 function renderHops(hops) {
   if (!hops || hops.length === 0) {
-    resultNode.innerHTML = '<p>未获取到有效路由信息。</p>';
+    resultNode.innerHTML = `<p>${t('noResult')}</p>`;
     resultNode.classList.remove('hidden');
     return;
   }
@@ -106,8 +226,8 @@ function renderHops(hops) {
   const thead = document.createElement('thead');
   thead.innerHTML = `
     <tr>
-      <th>TTL</th>
-      <th>探测详情</th>
+      <th>${t('tableTTL')}</th>
+      <th>${t('tableDetails')}</th>
     </tr>
   `;
   table.appendChild(thead);
@@ -147,7 +267,7 @@ function renderAttempts(attempts) {
 
     const badge = document.createElement('span');
     badge.className = 'attempt__badge';
-    badge.textContent = `探测 ${idx + 1}`;
+    badge.textContent = `${t('attemptBadge')} ${idx + 1}`;
     if (!attempt.success) {
       badge.classList.add('attempt__badge--fail');
     }
@@ -156,19 +276,19 @@ function renderAttempts(attempts) {
     const meta = document.createElement('div');
     meta.className = 'attempt__meta';
     if (attempt.hostname) {
-      meta.appendChild(createMetaItem('主机', attempt.hostname));
+      meta.appendChild(createMetaItem(t('attemptLabelHost'), attempt.hostname));
     }
     if (attempt.ip) {
-      meta.appendChild(createMetaItem('地址', attempt.ip));
+      meta.appendChild(createMetaItem(t('attemptLabelAddress'), attempt.ip));
     }
     if (attempt.rtt_ms !== undefined && attempt.rtt_ms !== null) {
-      meta.appendChild(createMetaItem('延迟', `${attempt.rtt_ms.toFixed(2)} ms`));
+      meta.appendChild(createMetaItem(t('attemptLabelLatency'), `${attempt.rtt_ms.toFixed(2)} ms`));
     }
     if (attempt.error) {
-      meta.appendChild(createMetaItem('错误', attempt.error));
+      meta.appendChild(createMetaItem(t('attemptLabelError'), attempt.error));
     }
     if (attempt.mpls && attempt.mpls.length > 0) {
-      meta.appendChild(createMetaItem('MPLS', attempt.mpls.join(', ')));
+      meta.appendChild(createMetaItem(t('attemptLabelMPLS'), attempt.mpls.join(', ')));
     }
     box.appendChild(meta);
 
@@ -213,6 +333,7 @@ function buildPayload() {
     protocol: protocolSelect.value,
     data_provider: providerSelect.value,
     disable_maptrace: disableMaptraceInput.checked,
+    language: currentLang,
   };
 
   const queries = readNumericValue(queriesInput);
@@ -246,7 +367,7 @@ function handleSocketMessage(event) {
   try {
     msg = JSON.parse(event.data);
   } catch (err) {
-    setStatus('error', '收到无法解析的数据');
+    setStatus('error', err.message, false);
     return;
   }
 
@@ -277,14 +398,15 @@ function handleSocketMessage(event) {
       latestSummary = {...latestSummary, ...msg.data};
       renderMeta(latestSummary);
       renderHopsFromStore();
-      setStatus('success', '探测完成');
+      setStatus('success', 'statusSuccess');
       closeExistingSocket();
       break;
     }
     case 'error': {
       traceCompleted = true;
       submitBtn.disabled = false;
-      setStatus('error', msg.error || '探测失败');
+      const text = msg.error || t('statusTraceFailed');
+      setStatus('error', text, !msg.error);
       closeExistingSocket();
       break;
     }
@@ -299,11 +421,11 @@ function runTrace(evt) {
 
   const payload = buildPayload();
   if (!payload.target) {
-    setStatus('error', '请填写目标地址');
+    setStatus('error', 'statusTargetMissing');
     return;
   }
 
-  setStatus('running', '正在探测，请稍候...');
+  setStatus('running', 'statusRunning');
   submitBtn.disabled = true;
   traceCompleted = false;
 
@@ -312,7 +434,7 @@ function runTrace(evt) {
   try {
     socket = new WebSocket(wsUrl);
   } catch (err) {
-    setStatus('error', `无法建立连接: ${err.message}`);
+    setStatus('error', `${t('statusWsError')} ${err.message}`, false);
     submitBtn.disabled = false;
     return;
   }
@@ -326,21 +448,72 @@ function runTrace(evt) {
   socket.onerror = () => {
     if (!traceCompleted) {
       traceCompleted = true;
-      setStatus('error', 'WebSocket 连接出错');
+      setStatus('error', 'statusWsError');
       submitBtn.disabled = false;
     }
   };
 
   socket.onclose = () => {
     if (!traceCompleted) {
-      setStatus('error', '连接已断开');
+      setStatus('error', 'statusDisconnected');
       submitBtn.disabled = false;
     }
     socket = null;
   };
 }
 
+async function clearCache(silent = false) {
+  if (!silent) {
+    setStatus('running', 'statusCacheClearing');
+  }
+  try {
+    const res = await fetch('/api/cache/clear', {method: 'POST'});
+    if (!res.ok) {
+      const errRes = await res.json().catch(() => ({}));
+      const message = errRes.error || `${t('statusCacheFailed')} HTTP ${res.status}`;
+      throw new Error(message);
+    }
+    if (!silent) {
+      setStatus('success', 'statusCacheCleared');
+    } else {
+      setStatus('idle', 'statusReady');
+    }
+  } catch (err) {
+    setStatus('error', err.message || t('statusCacheFailed'), false);
+  }
+}
+
+function toggleLanguage() {
+  currentLang = currentLang === 'cn' ? 'en' : 'cn';
+  applyTranslations();
+  clearCache(true);
+}
+
+function applyTranslations() {
+  titleText.textContent = t('title');
+  subtitleText.textContent = t('subtitle');
+  footerText.textContent = t('footer');
+  labelTarget.textContent = t('labelTarget');
+  labelProtocol.textContent = t('labelProtocol');
+  labelProvider.textContent = t('labelProvider');
+  labelQueries.textContent = t('labelQueries');
+  labelMaxHops.textContent = t('labelMaxHops');
+  labelDisableMap.textContent = t('labelDisableMap');
+  targetInput.placeholder = t('placeholderTarget');
+  submitBtn.textContent = t('buttonStart');
+  cacheBtn.textContent = t('buttonClearCache');
+  langToggleBtn.textContent = t('langToggle');
+  renderMeta(latestSummary);
+  renderHopsFromStore();
+  refreshStatus();
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+  applyTranslations();
+  setStatus('idle', 'statusReady');
   loadOptions();
   form.addEventListener('submit', runTrace);
+  langToggleBtn.addEventListener('click', toggleLanguage);
+  cacheBtn.addEventListener('click', () => clearCache(false));
+  providerSelect.addEventListener('change', () => clearCache(true));
 });
