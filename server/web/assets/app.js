@@ -171,7 +171,7 @@ async function loadOptions() {
     const data = await res.json();
     fillSelect(protocolSelect, data.protocols, data.defaultOptions.protocol);
     fillSelect(providerSelect, data.dataProviders, data.defaultOptions.data_provider);
-    queriesInput.value = data.defaultOptions.queries;
+    queriesInput.value = Math.min(63, data.defaultOptions.queries || 3);
     maxHopsInput.value = data.defaultOptions.max_hops;
     disableMaptraceInput.checked = data.defaultOptions.disable_maptrace;
     payloadSizeInput.value = data.defaultOptions.packet_size || payloadSizeInput.value || 52;
@@ -442,7 +442,7 @@ function buildPayload() {
 
   const queries = readNumericValue(queriesInput);
   if (queries !== undefined) {
-    payload.queries = queries;
+    payload.queries = Math.max(1, Math.min(63, queries));
   }
 
   const maxHops = readNumericValue(maxHopsInput);
