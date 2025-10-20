@@ -43,6 +43,7 @@ let currentLang = 'cn';
 let currentMode = 'single';
 let currentStatus = {state: 'idle', key: 'statusReady', custom: null};
 let mtrStatsStore = [];
+let singleModeQueriesValue = '';
 
 const uiText = {
   cn: {
@@ -214,11 +215,14 @@ async function loadOptions() {
     fillSelect(protocolSelect, data.protocols, data.defaultOptions.protocol);
     fillSelect(providerSelect, data.dataProviders, data.defaultOptions.data_provider);
     queriesInput.value = Math.min(63, data.defaultOptions.queries || 3);
+    singleModeQueriesValue = queriesInput.value;
+    queriesInput.dataset.defaultValue = queriesInput.value;
     maxHopsInput.value = data.defaultOptions.max_hops;
     disableMaptraceInput.checked = data.defaultOptions.disable_maptrace;
     payloadSizeInput.value = data.defaultOptions.packet_size || payloadSizeInput.value || 52;
     dstPortInput.value = data.defaultOptions.port || dstPortInput.value || '';
     updateDstPortState();
+    updateModeUI();
   } catch (err) {
     setStatus('error', `${t('statusOptionsFailed')} ${err.message}`, false);
     submitBtn.disabled = true;
@@ -288,40 +292,88 @@ function renderMeta(summary = {}) {
 }
 
 function renderAttemptsGrouped(attempts) {
+  const UNKNOWN_KEY = '__unknown__';
   const groups = new Map();
-  const UNKNOWN_KEY = 'unknown|';
-  let lastIdentifiedKey = '';
-  attempts.forEach((attempt) => {
-    const keyHost = (attempt.hostname || '').trim();
-    const keyIp = (attempt.ip || '').trim();
-    const hasIdentified = Boolean(keyHost || keyIp);
+  const ipIndex = new Map();
+  const hostIndex = new Map();
+  let pendingUnknown = [];
+  let lastGroup = null;
 
-    if (hasIdentified) {
-      const key = keyHost + '|' + keyIp;
-      let list = groups.get(key);
-      if (!list) {
-        list = [];
-        groups.set(key, list);
+  const createGroup = (key) => {
+    const group = {
+      key,
+      attempts: [],
+      hosts: new Set(),
+      ips: new Set(),
+      firstHost: '',
+      firstIP: '',
+    };
+    groups.set(key, group);
+    return group;
+  };
+
+  attempts.forEach((attempt) => {
+    const hostRaw = (attempt.hostname || '').trim();
+    const hostKey = hostRaw.toLowerCase();
+    const ip = (attempt.ip || '').trim();
+
+    if (!hostRaw && !ip) {
+      if (lastGroup) {
+        lastGroup.attempts.push(attempt);
+      } else {
+        pendingUnknown.push(attempt);
       }
-      if (groups.has(UNKNOWN_KEY)) {
-        const pendingUnknown = groups.get(UNKNOWN_KEY);
-        if (pendingUnknown && pendingUnknown.length > 0) {
-          list.push(...pendingUnknown);
-        }
-        groups.delete(UNKNOWN_KEY);
-      }
-      list.push(attempt);
-      lastIdentifiedKey = key;
-    } else {
-      const key = lastIdentifiedKey || UNKNOWN_KEY;
-      let list = groups.get(key);
-      if (!list) {
-        list = [];
-        groups.set(key, list);
-      }
-      list.push(attempt);
+      return;
     }
+
+    let group = null;
+    if (ip && ipIndex.has(ip)) {
+      group = groups.get(ipIndex.get(ip));
+    }
+    if (!group && hostRaw) {
+      if (hostIndex.has(hostKey)) {
+        group = groups.get(hostIndex.get(hostKey));
+      }
+    }
+
+    if (!group) {
+      const key = ip ? `ip:${ip}` : `host:${hostKey}`;
+      group = createGroup(key);
+    }
+
+    if (pendingUnknown.length > 0) {
+      group.attempts.push(...pendingUnknown);
+      pendingUnknown = [];
+    }
+
+    group.attempts.push(attempt);
+
+    if (ip) {
+      group.ips.add(ip);
+      if (!group.firstIP) {
+        group.firstIP = ip;
+      }
+      ipIndex.set(ip, group.key);
+    }
+    if (hostRaw) {
+      group.hosts.add(hostRaw);
+      if (!group.firstHost) {
+        group.firstHost = hostRaw;
+      }
+      if (hostKey) {
+        hostIndex.set(hostKey, group.key);
+      }
+    }
+
+    lastGroup = group;
   });
+
+  if (pendingUnknown.length > 0) {
+    const group = createGroup(UNKNOWN_KEY);
+    group.attempts.push(...pendingUnknown);
+  }
+
+  const orderedGroups = Array.from(groups.values()).filter((group) => group.attempts.length > 0);
 
   const container = document.createElement('div');
   container.className = 'attempts attempts--grouped';
@@ -329,12 +381,12 @@ function renderAttemptsGrouped(attempts) {
   let hasIdentifiedSummary = false;
   const summarySet = new Set();
   const summaryLabels = [];
-  groups.forEach((list, key) => {
-    const first = list[0] || {};
-    const [keyHost, keyIp] = key.split('|');
-    const isUnknownKey = key === UNKNOWN_KEY;
-    const displayHost = isUnknownKey ? '' : (first.hostname || keyHost || '').trim();
-    const displayIp = isUnknownKey ? '' : (first.ip || keyIp || '').trim();
+  orderedGroups.forEach((group) => {
+    const displayIp = group.firstIP || '';
+    let displayHost = group.firstHost || '';
+    if (displayHost && displayIp && displayHost === displayIp) {
+      displayHost = '';
+    }
     let label = '';
     if (displayIp && displayHost && displayHost !== displayIp) {
       label = `${displayIp} (${displayHost})`;
@@ -361,18 +413,19 @@ function renderAttemptsGrouped(attempts) {
     container.appendChild(summary);
   }
 
-  groups.forEach((list, key) => {
+  orderedGroups.forEach((group) => {
     const box = document.createElement('div');
     box.className = 'attempt attempt--group';
 
     const header = document.createElement('div');
     header.className = 'attempt__header';
     const mainLine = [];
-    const first = list[0] || {};
-    const [keyHost, keyIp] = key.split('|');
-    const isUnknownKey = key === UNKNOWN_KEY;
-    const displayHost = isUnknownKey ? '' : (first.hostname || keyHost || '');
-    const displayIp = isUnknownKey ? '' : (first.ip || keyIp || '');
+    const first = group.attempts[0] || {};
+    let displayHost = group.firstHost || '';
+    const displayIp = group.firstIP || '';
+    if (displayHost && displayIp && displayHost === displayIp) {
+      displayHost = '';
+    }
     if (displayHost) {
       mainLine.push(createMetaItem(t('attemptLabelHost'), displayHost));
     }
@@ -399,7 +452,7 @@ function renderAttemptsGrouped(attempts) {
 
     const metrics = document.createElement('div');
     metrics.className = 'attempt__meta';
-    const rtts = list
+    const rtts = group.attempts
       .filter((item) => item.rtt_ms !== undefined && item.rtt_ms !== null)
       .map((item) => Number(item.rtt_ms));
     if (rtts.length > 0) {
@@ -408,14 +461,24 @@ function renderAttemptsGrouped(attempts) {
       const avg = (rtts.reduce((sum, v) => sum + v, 0) / rtts.length).toFixed(2);
       metrics.appendChild(createMetaItem(t('attemptLabelLatency'), avg + ' ms (min ' + min + ', max ' + max + ')'));
     }
-    const successes = list.filter((item) => item.success).length;
-    const lossCount = list.length - successes;
-    const lossRate = list.length > 0 ? (((lossCount) / list.length) * 100).toFixed(0) : '0';
-    metrics.appendChild(createMetaItem(t('attemptLabelLoss'), lossRate + '% (' + lossCount + '/' + list.length + ')'));
+    const successes = group.attempts.filter((item) => item.success).length;
+    const lossCount = group.attempts.length - successes;
+    const lossRate = group.attempts.length > 0 ? (((lossCount) / group.attempts.length) * 100).toFixed(0) : '0';
+    metrics.appendChild(createMetaItem(t('attemptLabelLoss'), lossRate + '% (' + lossCount + '/' + group.attempts.length + ')'));
 
-    const mplsAll = list.flatMap((item) => item.mpls || []);
+    const mplsAll = group.attempts.flatMap((item) => item.mpls || []);
     if (mplsAll.length > 0) {
-      metrics.appendChild(createMetaItem(t('attemptLabelMPLS'), Array.from(new Set(mplsAll)).join(', ')));
+      const unique = Array.from(new Set(mplsAll.map((entry) => String(entry || '').trim()).filter(Boolean)));
+      if (unique.length > 0) {
+        const mplsContainer = document.createElement('div');
+        mplsContainer.className = 'attempt__mpls';
+        unique.forEach((entry) => {
+          const line = document.createElement('div');
+          line.textContent = entry;
+          mplsContainer.appendChild(line);
+        });
+        metrics.appendChild(mplsContainer);
+      }
     }
     box.appendChild(metrics);
 
@@ -446,7 +509,7 @@ function renderAttemptsGrouped(attempts) {
 
     const probes = document.createElement('div');
     probes.className = 'attempt__probes';
-    list.forEach((item, index) => {
+    group.attempts.forEach((item, index) => {
       const badge = document.createElement('span');
       badge.className = 'attempt__badge';
       badge.textContent = t('attemptBadge') + ' ' + (index + 1);
@@ -505,9 +568,24 @@ function renderHopsFromStore() {
   renderHops(hops);
 }
 
-function createMetaItem(label, value) {
+function escapeHTML(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function createMetaItem(label, value, allowHTML = false) {
   const span = document.createElement('span');
-  span.innerHTML = `<strong>${label}:</strong> ${value}`;
+  const safeLabel = escapeHTML(label);
+  const strValue = value === undefined || value === null ? '' : String(value);
+  if (allowHTML) {
+    span.innerHTML = `<strong>${safeLabel}:</strong> ${strValue}`;
+  } else {
+    span.innerHTML = `<strong>${safeLabel}:</strong> ${escapeHTML(strValue)}`;
+  }
   return span;
 }
 
@@ -521,9 +599,17 @@ function buildPayload() {
     mode: modeSelect.value || 'single',
   };
 
-  const queries = readNumericValue(queriesInput);
-  if (queries !== undefined) {
-    payload.queries = Math.max(1, Math.min(63, queries));
+  const isMtrMode = payload.mode === 'mtr';
+  if (isMtrMode) {
+    payload.queries = 10;
+    if (queriesInput.value !== '10') {
+      queriesInput.value = '10';
+    }
+  } else {
+    const queries = readNumericValue(queriesInput);
+    if (queries !== undefined) {
+      payload.queries = Math.max(1, Math.min(63, queries));
+    }
   }
 
   const maxHops = readNumericValue(maxHopsInput);
@@ -805,6 +891,11 @@ document.addEventListener('DOMContentLoaded', () => {
     clearCache(true);
   });
   payloadSizeInput.addEventListener('change', () => clearCache(true));
+  queriesInput.addEventListener('input', () => {
+    if (!queriesInput.disabled) {
+      singleModeQueriesValue = queriesInput.value;
+    }
+  });
   modeSelect.addEventListener('change', updateModeUI);
   stopBtn.addEventListener('click', stopTrace);
 });
@@ -825,10 +916,32 @@ function updateModeUI() {
   groupAdvancedParams.classList.toggle('hidden', isMtr);
   groupDisableMap.classList.toggle('hidden', isMtr);
   updateStartButtonText();
+
+  const queriesContainer = queriesInput.parentElement;
+
   if (isMtr) {
+    if (!queriesInput.disabled) {
+      const currentValue = queriesInput.value.trim();
+      if (currentValue) {
+        singleModeQueriesValue = currentValue;
+      } else if (!singleModeQueriesValue && queriesInput.dataset.defaultValue) {
+        singleModeQueriesValue = queriesInput.dataset.defaultValue;
+      }
+    }
+    queriesInput.value = '10';
+    queriesInput.disabled = true;
+    if (queriesContainer) {
+      queriesContainer.classList.add('disabled');
+    }
     stopBtn.classList.remove('hidden');
     stopBtn.disabled = true;
   } else {
+    queriesInput.disabled = false;
+    if (queriesContainer) {
+      queriesContainer.classList.remove('disabled');
+    }
+    const restoreValue = singleModeQueriesValue || queriesInput.dataset.defaultValue || queriesInput.value || '3';
+    queriesInput.value = restoreValue;
     stopBtn.classList.add('hidden');
     stopBtn.disabled = true;
   }
@@ -1000,7 +1113,7 @@ function renderMTRStats(stats) {
     if (mplsText) {
       const mplsDiv = document.createElement('div');
       mplsDiv.className = 'mtr-mpls';
-      mplsDiv.textContent = `${t('attemptLabelMPLS')}: ${mplsText}`;
+      mplsDiv.textContent = mplsText;
       hostCell.appendChild(mplsDiv);
     }
 
@@ -1078,7 +1191,7 @@ function formatMPLSText(mpls) {
     return '';
   }
   const unique = Array.from(new Set(mpls.map((item) => String(item || '').trim()).filter(Boolean)));
-  return unique.join(', ');
+  return unique.join('\n');
 }
 
 function formatLatency(value, received) {

@@ -417,6 +417,7 @@ body.mode-mtr .result table {
   font-size: 0.78em;
   color: rgba(148, 163, 184, 0.7);
   font-weight: 400;
+  white-space: pre-line;
 }
 
 .attempts {
@@ -489,6 +490,22 @@ body.mode-mtr .result table {
 .attempt__geo {
   font-size: 0.8rem;
   color: #94a3b8;
+}
+
+body:not(.mode-mtr) .attempt__meta {
+  font-size: 0.9rem;
+}
+
+body:not(.mode-mtr) .attempt__geo {
+  font-size: 0.9rem;
+  color: #e2e8f0;
+}
+
+body:not(.mode-mtr) .attempt__mpls {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  line-height: 1.35;
+  margin-top: 0.2rem;
 }
 
 .hidden {
