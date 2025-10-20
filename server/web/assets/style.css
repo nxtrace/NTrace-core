@@ -393,6 +393,32 @@ body.mode-mtr .result table {
   background: rgba(56, 189, 248, 0.08);
 }
 
+.mtr-host-cell {
+  font-weight: 500;
+  color: #e2e8f0;
+  line-height: 1.4;
+}
+
+.mtr-host-cell .mtr-hostname {
+  display: inline-block;
+  font-size: 0.82em;
+  color: rgba(148, 163, 184, 0.85);
+  font-weight: 500;
+}
+
+.mtr-host-cell .attempt__geo {
+  margin-top: 0.25rem;
+  display: block;
+}
+
+.mtr-host-cell .mtr-mpls {
+  margin-top: 0.2rem;
+  display: block;
+  font-size: 0.78em;
+  color: rgba(148, 163, 184, 0.7);
+  font-weight: 400;
+}
+
 .attempts {
   display: flex;
   flex-direction: column;

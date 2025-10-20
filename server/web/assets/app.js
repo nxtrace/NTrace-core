@@ -312,6 +312,36 @@ function renderAttemptsGrouped(attempts) {
   const container = document.createElement('div');
   container.className = 'attempts attempts--grouped';
 
+  const summarySet = new Set();
+  const summaryLabels = [];
+  groups.forEach((list, key) => {
+    const first = list[0] || {};
+    const [keyHost, keyIp] = key.split('|');
+    const displayHost = (first.hostname || keyHost || '').trim();
+    const displayIp = (first.ip || keyIp || '').trim();
+    let label = '';
+    if (displayIp && displayHost && displayHost !== displayIp) {
+      label = `${displayIp} (${displayHost})`;
+    } else if (displayIp) {
+      label = displayIp;
+    } else if (displayHost) {
+      label = displayHost;
+    } else {
+      label = t('unknownAddress');
+    }
+    if (!summarySet.has(label)) {
+      summarySet.add(label);
+      summaryLabels.push(label);
+    }
+  });
+
+  if (summaryLabels.length > 1) {
+    const summary = document.createElement('div');
+    summary.className = 'attempts__summary';
+    summary.textContent = summaryLabels.join(' | ');
+    container.appendChild(summary);
+  }
+
   groups.forEach((list, key) => {
     const box = document.createElement('div');
     box.className = 'attempt attempt--group';
@@ -351,35 +381,6 @@ function renderAttemptsGrouped(attempts) {
     const lossCount = list.length - successes;
     const lossRate = list.length > 0 ? (((lossCount) / list.length) * 100).toFixed(0) : '0';
     metrics.appendChild(createMetaItem(t('attemptLabelLoss'), lossRate + '% (' + lossCount + '/' + list.length + ')'));
-
-    const failureItems = list.filter((item) => !item.success);
-    if (failureItems.length > 0) {
-      const failureGroups = new Map();
-      failureItems.forEach((item) => {
-        const raw = (item.error || '').trim();
-        const key = raw || 'unknown';
-        if (!failureGroups.has(key)) {
-          failureGroups.set(key, {label: raw, count: 0, timeout: raw.toLowerCase().includes('timeout')});
-        }
-        const entry = failureGroups.get(key);
-        entry.count += 1;
-      });
-
-      const entries = Array.from(failureGroups.values());
-      const allTimeout = entries.length > 0 && entries.every((entry) => entry.timeout || entry.label === '');
-      let failureText = '';
-      if (allTimeout) {
-        failureText = (successes === 0 ? t('timeoutAll') : t('timeoutPartial')) + ' (' + failureItems.length + '/' + list.length + ')';
-      } else {
-        failureText = entries
-          .map((entry) => {
-            let label = entry.label || t('unknownError');
-            return label + ' (' + entry.count + '/' + list.length + ')';
-          })
-          .join(' | ');
-      }
-      metrics.appendChild(createMetaItem(t('attemptLabelFailure'), failureText));
-    }
 
     const mplsAll = list.flatMap((item) => item.mpls || []);
     if (mplsAll.length > 0) {
@@ -840,6 +841,7 @@ function renderMTRStats(stats) {
   table.appendChild(thead);
 
   const tbody = document.createElement('tbody');
+  let lastTTL = null;
   data.forEach((stat) => {
     const row = document.createElement('tr');
 
@@ -848,7 +850,8 @@ function renderMTRStats(stats) {
     const avgText = formatLatency(stat.avg_ms, stat.received);
     const bestText = formatLatency(stat.best_ms, stat.received);
     const worstText = formatLatency(stat.worst_ms, stat.received);
-    const displayHost = formatHostWithIP(stat);
+    const hostParts = getHostDisplayParts(stat);
+    const mplsText = formatMPLSText(stat.mpls);
     const geoText = formatGeoDisplay(stat.geo);
 
     const appendCell = (value) => {
@@ -858,19 +861,43 @@ function renderMTRStats(stats) {
       return td;
     };
 
-    appendCell(stat.ttl);
+    const displayTTL = lastTTL === stat.ttl ? '' : stat.ttl;
+    appendCell(displayTTL);
+    lastTTL = stat.ttl;
     appendCell(lossText);
     appendCell(lastText);
     appendCell(avgText);
     appendCell(bestText);
     appendCell(worstText);
 
-    const hostCell = appendCell(displayHost);
+    const hostCell = appendCell('');
+    hostCell.classList.add('mtr-host-cell');
+    if (hostParts.ip) {
+      hostCell.appendChild(document.createTextNode(hostParts.ip));
+    }
+    if (hostParts.ip && hostParts.host) {
+      hostCell.appendChild(document.createTextNode(' '));
+    }
+    if (hostParts.host) {
+      const hostSpan = document.createElement('span');
+      hostSpan.className = 'mtr-hostname';
+      hostSpan.textContent = hostParts.host;
+      hostCell.appendChild(hostSpan);
+    }
+    if (!hostParts.ip && !hostParts.host) {
+      hostCell.textContent = '--';
+    }
     if (geoText) {
       const geoDiv = document.createElement('div');
       geoDiv.className = 'attempt__geo';
       geoDiv.textContent = geoText;
       hostCell.appendChild(geoDiv);
+    }
+    if (mplsText) {
+      const mplsDiv = document.createElement('div');
+      mplsDiv.className = 'mtr-mpls';
+      mplsDiv.textContent = `${t('attemptLabelMPLS')}: ${mplsText}`;
+      hostCell.appendChild(mplsDiv);
     }
 
     tbody.appendChild(row);
@@ -882,19 +909,24 @@ function renderMTRStats(stats) {
   resultNode.classList.remove('hidden');
 }
 
-function formatHostWithIP(stat) {
+function getHostDisplayParts(stat) {
   const ip = stat && stat.ip ? String(stat.ip).trim() : '';
-  const host = stat && stat.host ? String(stat.host).trim() : '';
-  if (ip && host && host !== ip) {
-    return `${ip}(${host})`;
+  let host = stat && stat.host ? String(stat.host).trim() : '';
+  if (ip && host && host === ip) {
+    host = '';
   }
-  if (ip) {
-    return ip;
+  return {
+    ip,
+    host,
+  };
+}
+
+function formatMPLSText(mpls) {
+  if (!Array.isArray(mpls) || mpls.length === 0) {
+    return '';
   }
-  if (host) {
-    return host;
-  }
-  return '--';
+  const unique = Array.from(new Set(mpls.map((item) => String(item || '').trim()).filter(Boolean)));
+  return unique.join(', ');
 }
 
 function formatLatency(value, received) {
