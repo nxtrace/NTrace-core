@@ -292,7 +292,7 @@ nexttrace --no-color 1.1.1.1
 export NO_COLOR=1
 ```
 
-#### `NextTrace`支持用户自主选择 IP 数据库（目前支持：`LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`, `Ip2region`, `IPInfoLocal`, `CHUNZHEN`)
+#### `NextTrace`支持用户自主选择 IP 数据库（目前支持：`LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`, `IPInfoLocal`, `CHUNZHEN`)
 
 ```bash
 # 可以自行指定IP数据库[此处为IP-API.com]，不指定则默认为LeoMoeAPI
@@ -305,7 +305,6 @@ nexttrace --data-provider ip-api.com
 ##        默认搜索用户当前路径、程序所在路径、和 FHS 路径（Unix-like）
 ##        如果需要自定义路径，请设置环境变量
 export NEXTTRACE_IPINFOLOCALPATH=/xxx/yyy.mmdb
-##        对于离线库 Ip2region 可NextTrace自动下载，也可自行下载并命名为 ip2region.db
 ## 另外：由于IP.SB被滥用比较严重，会经常出现无法查询的问题，请知悉。
 ##      IP-API.com限制调用较为严格，如有查询不到的情况，请几分钟后再试。
 # 纯真IP数据库默认使用 http://127.0.0.1:2060 作为查询接口，如需自定义请使用环境变量
@@ -336,7 +335,7 @@ Usage: nexttrace [-h|--help] [--init] [-4|--ipv4] [-6|--ipv6] [-T|--tcp]
                  [--icmp-mode <integer>] [-q|--queries <integer>]
                  [--parallel-requests <integer>] [-m|--max-hops <integer>]
                  [--max-attempts <integer>] [-d|--data-provider
-                 (Ip2region|ip2region|IP.SB|ip.sb|IPInfo|ipinfo|IPInsight|ipinsight|IPAPI.com|ip-api.com|IPInfoLocal|ipinfolocal|chunzhen|LeoMoeAPI|leomoeapi|ipdb.one|disable-geoip)]
+                 (IP.SB|ip.sb|IPInfo|ipinfo|IPInsight|ipinsight|IPAPI.com|ip-api.com|IPInfoLocal|ipinfolocal|chunzhen|LeoMoeAPI|leomoeapi|ipdb.one|disable-geoip)]
                  [--pow-provider (api.nxtrace.org|sakura)] [-n|--no-rdns]
                  [-a|--always-rdns] [-P|--route-path] [-r|--report] [--dn42]
                  [-o|--output] [-t|--table] [--raw] [-j|--json] [-c|--classic]
@@ -375,8 +374,8 @@ Arguments:
       --max-attempts                 Set the max number of attempts per TTL
                                      (instead of a fixed auto value)
   -d  --data-provider                Choose IP Geograph Data Provider [IP.SB,
-                                     IPInfo, IPInsight, IP-API.com, Ip2region,
-                                     IPInfoLocal, CHUNZHEN, disable-geoip].
+                                     IPInfo, IPInsight, IP-API.com, IPInfoLocal,
+                                     CHUNZHEN, disable-geoip].
                                      Default: LeoMoeAPI
       --pow-provider                 Choose PoW Provider [api.nxtrace.org,
                                      sakura] For China mainland users, please

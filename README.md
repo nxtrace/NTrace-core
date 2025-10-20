@@ -293,7 +293,7 @@ nexttrace --no-color 1.1.1.1
 export NO_COLOR=1
 ```
 
-#### `NextTrace` supports users to select their own IP API (currently supports: `LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`, `Ip2region`, `IPInfoLocal`, `CHUNZHEN`)
+#### `NextTrace` supports users to select their own IP API (currently supports: `LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`, `IPInfoLocal`, `CHUNZHEN`)
 
 ```bash
 # You can specify the IP database by yourself [IP-API.com here], if not specified, LeoMoeAPI will be used
@@ -306,7 +306,6 @@ nexttrace --data-provider ip-api.com
 ##      Current directory, nexttrace binary directory and FHS directories (Unix-like) will be searched.
 ##      To customize it, please use environment variables,
 export NEXTTRACE_IPINFOLOCALPATH=/xxx/yyy.mmdb
-##      For the offline database Ip2region, you can download it manually and rename it to ip2region.db, or let NextTrace download it automatically
 ## Please be aware: Due to the serious abuse of IP.SB, you will often be not able to query IP data from this source
 ## IP-API.com has a stricter restiction on API calls, if you can't query IP data from this source, please try again in a few minutes
 
@@ -353,7 +352,7 @@ Usage: nexttrace [-h|--help] [--init] [-4|--ipv4] [-6|--ipv6] [-T|--tcp]
                  [--icmp-mode <integer>] [-q|--queries <integer>]
                  [--parallel-requests <integer>] [-m|--max-hops <integer>]
                  [--max-attempts <integer>] [-d|--data-provider
-                 (Ip2region|ip2region|IP.SB|ip.sb|IPInfo|ipinfo|IPInsight|ipinsight|IPAPI.com|ip-api.com|IPInfoLocal|ipinfolocal|chunzhen|LeoMoeAPI|leomoeapi|ipdb.one|disable-geoip)]
+                 (IP.SB|ip.sb|IPInfo|ipinfo|IPInsight|ipinsight|IPAPI.com|ip-api.com|IPInfoLocal|ipinfolocal|chunzhen|LeoMoeAPI|leomoeapi|ipdb.one|disable-geoip)]
                  [--pow-provider (api.nxtrace.org|sakura)] [-n|--no-rdns]
                  [-a|--always-rdns] [-P|--route-path] [-r|--report] [--dn42]
                  [-o|--output] [-t|--table] [--raw] [-j|--json] [-c|--classic]
@@ -392,8 +391,8 @@ Arguments:
       --max-attempts                 Set the max number of attempts per TTL
                                      (instead of a fixed auto value)
   -d  --data-provider                Choose IP Geograph Data Provider [IP.SB,
-                                     IPInfo, IPInsight, IP-API.com, Ip2region,
-                                     IPInfoLocal, CHUNZHEN, disable-geoip].
+                                     IPInfo, IPInsight, IP-API.com, IPInfoLocal,
+                                     CHUNZHEN, disable-geoip].
                                      Default: LeoMoeAPI
       --pow-provider                 Choose PoW Provider [api.nxtrace.org,
                                      sakura] For China mainland users, please

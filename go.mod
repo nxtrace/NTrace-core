@@ -8,7 +8,6 @@ require (
 	github.com/gin-gonic/gin v1.11.0
 	github.com/google/gopacket v1.1.19
 	github.com/gorilla/websocket v1.5.3
-	github.com/lionsoul2014/ip2region v3.7.0+incompatible
 	github.com/oschwald/maxminddb-golang v1.13.1
 	github.com/rodaine/table v1.3.0
 	github.com/spf13/viper v1.21.0
@@ -21,8 +20,6 @@ require (
 	golang.org/x/sync v0.17.0
 	golang.org/x/sys v0.37.0
 )
-
-replace github.com/lionsoul2014/ip2region => github.com/lionsoul2014/ip2region v2.11.2+incompatible
 
 require (
 	github.com/bytedance/gopkg v0.1.3 // indirect
