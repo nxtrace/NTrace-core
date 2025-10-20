@@ -112,7 +112,7 @@ func (c *WsConn) messageSendHandler() {
 				if util.EnvDevMode {
 					panic(err)
 				}
-				log.Fatalf("write close: %v", err)
+				log.Printf("write close: %v", err)
 			}
 			select {
 			// 等到了结果，直接退出
@@ -144,7 +144,12 @@ func (c *WsConn) recreateWsConn() {
 				if util.EnvDevMode {
 					panic(err)
 				}
-				log.Fatalf("write close: %v", err)
+				log.Printf("pow token fetch failed: %v", err)
+				cacheToken = ""
+				cacheTokenFailedTimes++
+				c.Connected = false
+				c.Connecting = false
+				return
 			}
 		} else {
 			// 使用 cacheToken
@@ -219,7 +224,18 @@ func createWsConn() *WsConn {
 			if util.EnvDevMode {
 				panic(err)
 			}
-			log.Fatalf("write close: %v", err)
+			log.Printf("pow token fetch failed: %v", err)
+			wsconn = &WsConn{
+				Connected:    false,
+				Connecting:   false,
+				MsgSendCh:    make(chan string, 10),
+				MsgReceiveCh: make(chan string, 10),
+				Done:         make(chan struct{}),
+				Interrupt:    interrupt,
+			}
+			go wsconn.keepAlive()
+			go wsconn.messageSendHandler()
+			return wsconn
 		}
 		ua = []string{util.UserAgent}
 	}
@@ -249,12 +265,14 @@ func createWsConn() *WsConn {
 		Connecting:   false,
 		MsgSendCh:    make(chan string, 10),
 		MsgReceiveCh: make(chan string, 10),
+		Interrupt:    interrupt,
 	}
 
 	if err != nil {
 		log.Println("dial:", err)
 		// <-time.After(time.Second * 1)
 		wsconn.Connected = false
+		cacheTokenFailedTimes++
 		wsconn.Done = make(chan struct{})
 		go wsconn.keepAlive()
 		go wsconn.messageSendHandler()

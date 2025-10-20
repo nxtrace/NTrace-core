@@ -1,0 +1,523 @@
+package server
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log"
+	"net"
+	"net/url"
+	"runtime"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/gin-gonic/gin"
+
+	"github.com/nxtrace/NTrace-core/config"
+	"github.com/nxtrace/NTrace-core/ipgeo"
+	"github.com/nxtrace/NTrace-core/trace"
+	"github.com/nxtrace/NTrace-core/tracemap"
+	"github.com/nxtrace/NTrace-core/util"
+	"github.com/nxtrace/NTrace-core/wshandle"
+)
+
+var traceMu sync.Mutex
+var leoConnMu sync.Mutex
+
+type traceRequest struct {
+	Target            string `json:"target"`
+	Protocol          string `json:"protocol"`
+	Port              int    `json:"port"`
+	Queries           int    `json:"queries"`
+	MaxHops           int    `json:"max_hops"`
+	TimeoutMs         int    `json:"timeout_ms"`
+	PacketSize        int    `json:"packet_size"`
+	ParallelRequests  int    `json:"parallel_requests"`
+	BeginHop          int    `json:"begin_hop"`
+	IPv4Only          bool   `json:"ipv4_only"`
+	IPv6Only          bool   `json:"ipv6_only"`
+	DataProvider      string `json:"data_provider"`
+	PowProvider       string `json:"pow_provider"`
+	DotServer         string `json:"dot_server"`
+	DisableRDNS       bool   `json:"disable_rdns"`
+	AlwaysRDNS        bool   `json:"always_rdns"`
+	DisableMaptrace   bool   `json:"disable_maptrace"`
+	DisableMPLS       bool   `json:"disable_mpls"`
+	Language          string `json:"language"`
+	DN42              bool   `json:"dn42"`
+	SourceAddress     string `json:"source_address"`
+	SourcePort        int    `json:"source_port"`
+	SourceDevice      string `json:"source_device"`
+	ICMPMode          int    `json:"icmp_mode"`
+	PacketInterval    int    `json:"packet_interval"`
+	TTLInterval       int    `json:"ttl_interval"`
+	MaxAttempts       int    `json:"max_attempts"`
+	AlwaysWaitRDNS    bool   `json:"always_wait_rdns"`
+	Maptrace          *bool  `json:"maptrace"` // deprecated toggle compatibility
+	LanguageOverride  string `json:"language_override"`
+	DataProviderAlias string `json:"data_provider_alias"`
+}
+
+type hopAttempt struct {
+	Success  bool             `json:"success"`
+	IP       string           `json:"ip,omitempty"`
+	Hostname string           `json:"hostname,omitempty"`
+	RTT      float64          `json:"rtt_ms,omitempty"`
+	Error    string           `json:"error,omitempty"`
+	MPLS     []string         `json:"mpls,omitempty"`
+	Geo      *ipgeo.IPGeoData `json:"geo,omitempty"`
+}
+
+type hopResponse struct {
+	TTL      int          `json:"ttl"`
+	Attempts []hopAttempt `json:"attempts"`
+}
+
+type traceResponse struct {
+	Target       string        `json:"target"`
+	ResolvedIP   string        `json:"resolved_ip"`
+	Protocol     string        `json:"protocol"`
+	DataProvider string        `json:"data_provider"`
+	TraceMapURL  string        `json:"trace_map_url,omitempty"`
+	Language     string        `json:"language"`
+	Hops         []hopResponse `json:"hops"`
+	DurationMs   int64         `json:"duration_ms"`
+}
+
+func traceHandler(c *gin.Context) {
+	var req traceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": "invalid request payload", "details": err.Error()})
+		return
+	}
+
+	if req.Maptrace != nil {
+		req.DisableMaptrace = !*req.Maptrace
+	}
+
+	target, err := normalizeTarget(req.Target)
+	if err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	if req.IPv4Only && req.IPv6Only {
+		c.JSON(400, gin.H{"error": "ipv4_only and ipv6_only cannot be true at the same time"})
+		return
+	}
+
+	protocol := strings.ToLower(strings.TrimSpace(req.Protocol))
+	if protocol == "" {
+		protocol = "icmp"
+	}
+	if !contains(supportedProtocols, protocol) {
+		c.JSON(400, gin.H{"error": fmt.Sprintf("unsupported protocol %q", protocol)})
+		return
+	}
+
+	dataProvider := normalizeDataProvider(req.DataProvider, req.DataProviderAlias)
+	if dataProvider == "" {
+		dataProvider = defaults["data_provider"].(string)
+	}
+
+	if strings.EqualFold(dataProvider, "DN42") {
+		req.DN42 = true
+	}
+
+	needsLeoWS := false
+	if strings.EqualFold(dataProvider, "LEOMOEAPI") {
+		if util.EnvDataProvider != "" {
+			dataProvider = util.EnvDataProvider
+		} else {
+			needsLeoWS = true
+		}
+	}
+
+	if req.DN42 {
+		config.InitConfig()
+		req.DisableMaptrace = true
+		dataProvider = "DN42"
+	}
+
+	log.Printf("[deploy] trace request target=%s proto=%s provider=%s lang=%s ipv4_only=%t ipv6_only=%t", target, protocol, dataProvider, strings.TrimSpace(req.Language), req.IPv4Only, req.IPv6Only)
+
+	ipVersion := "all"
+	if req.IPv4Only {
+		ipVersion = "4"
+	} else if req.IPv6Only {
+		ipVersion = "6"
+	}
+
+	ip, err := util.DomainLookUp(target, ipVersion, strings.ToLower(req.DotServer), true)
+	if err != nil {
+		log.Printf("[deploy] domain lookup failed target=%s error=%v", target, err)
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	log.Printf("[deploy] target resolved target=%s ip=%s via dot=%s", target, ip, strings.ToLower(req.DotServer))
+
+	method := trace.ICMPTrace
+	switch protocol {
+	case "udp":
+		method = trace.UDPTrace
+	case "tcp":
+		method = trace.TCPTrace
+	}
+
+	dstPort := req.Port
+	if dstPort == 0 {
+		switch method {
+		case trace.UDPTrace:
+			dstPort = 33494
+		case trace.TCPTrace:
+			dstPort = 80
+		default:
+			dstPort = 0
+		}
+	}
+
+	configured := buildTraceConfig(req, ip, dataProvider, dstPort)
+
+	traceMu.Lock()
+	defer traceMu.Unlock()
+
+	prevSrcPort := util.SrcPort
+	prevDstIP := util.DstIP
+	prevSrcDev := util.SrcDev
+	prevDisableMPLS := util.DisableMPLS
+	prevPowProvider := util.PowProviderParam
+	defer func() {
+		util.SrcPort = prevSrcPort
+		util.DstIP = prevDstIP
+		util.SrcDev = prevSrcDev
+		util.DisableMPLS = prevDisableMPLS
+		util.PowProviderParam = prevPowProvider
+	}()
+
+	powProvider := strings.TrimSpace(req.PowProvider)
+	if needsLeoWS {
+		if powProvider != "" {
+			log.Printf("[deploy] LeoMoeAPI using custom PoW provider=%s", powProvider)
+		} else {
+			log.Printf("[deploy] LeoMoeAPI using default PoW provider")
+		}
+		util.PowProviderParam = powProvider
+		ensureLeoMoeConnection()
+	} else if powProvider != "" {
+		log.Printf("[deploy] overriding PoW provider=%s", powProvider)
+		util.PowProviderParam = powProvider
+	}
+
+	util.SrcPort = req.SourcePort
+	util.DstIP = ip.String()
+	if req.SourceDevice != "" {
+		util.SrcDev = req.SourceDevice
+	} else {
+		util.SrcDev = ""
+	}
+	util.DisableMPLS = req.DisableMPLS
+
+	log.Printf("[deploy] starting trace target=%s resolved=%s method=%s lang=%s queries=%d maxHops=%d", target, ip.String(), string(method), configured.Lang, configured.NumMeasurements, configured.MaxHops)
+	start := time.Now()
+	res, err := trace.Traceroute(method, configured)
+	duration := time.Since(start)
+	if err != nil {
+		log.Printf("[deploy] trace failed target=%s error=%v", target, err)
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	traceMapURL := ""
+	if !configured.Maptrace {
+		traceMapURL = ""
+	} else if shouldGenerateMap(dataProvider) {
+		if payload, err := json.Marshal(res); err == nil {
+			if url, err := tracemap.GetMapUrl(string(payload)); err == nil {
+				traceMapURL = url
+				log.Printf("[deploy] trace map generated target=%s url=%s", target, traceMapURL)
+			}
+		}
+	}
+
+	response := traceResponse{
+		Target:       target,
+		ResolvedIP:   ip.String(),
+		Protocol:     protocol,
+		DataProvider: dataProvider,
+		TraceMapURL:  traceMapURL,
+		Language:     configured.Lang,
+		Hops:         convertHops(res, configured.Lang),
+		DurationMs:   duration.Milliseconds(),
+	}
+
+	log.Printf("[deploy] trace completed target=%s hops=%d duration=%s", target, len(response.Hops), duration)
+	c.JSON(200, response)
+}
+
+func buildTraceConfig(req traceRequest, ip net.IP, dataProvider string, port int) trace.Config {
+	lang := strings.TrimSpace(req.Language)
+	if lang == "" {
+		lang = defaults["language"].(string)
+	}
+
+	timeout := req.TimeoutMs
+	if timeout <= 0 {
+		timeout = defaults["timeout_ms"].(int)
+	}
+
+	packetSize := req.PacketSize
+	if packetSize <= 0 {
+		packetSize = defaults["packet_size"].(int)
+	}
+
+	if req.PacketInterval <= 0 {
+		req.PacketInterval = 50
+	}
+	if req.TTLInterval <= 0 {
+		req.TTLInterval = 50
+	}
+
+	maxHops := req.MaxHops
+	if maxHops <= 0 {
+		maxHops = defaults["max_hops"].(int)
+	}
+
+	queries := req.Queries
+	if queries <= 0 {
+		queries = defaults["queries"].(int)
+	}
+
+	parallel := req.ParallelRequests
+	if parallel <= 0 {
+		parallel = defaults["parallel_requests"].(int)
+	}
+
+	beginHop := req.BeginHop
+	if beginHop <= 0 {
+		beginHop = defaults["begin_hop"].(int)
+	}
+
+	alwaysWait := req.AlwaysWaitRDNS || req.AlwaysRDNS
+
+	ostype := 3
+	switch runtime.GOOS {
+	case "darwin":
+		ostype = 1
+	case "windows":
+		ostype = 2
+	}
+
+	return trace.Config{
+		OSType:           ostype,
+		ICMPMode:         req.ICMPMode,
+		SrcAddr:          req.SourceAddress,
+		SrcPort:          req.SourcePort,
+		BeginHop:         beginHop,
+		MaxHops:          maxHops,
+		NumMeasurements:  queries,
+		MaxAttempts:      req.MaxAttempts,
+		ParallelRequests: parallel,
+		Timeout:          time.Duration(timeout) * time.Millisecond,
+		DstIP:            ip,
+		DstPort:          port,
+		IPGeoSource:      ipgeo.GetSource(dataProvider),
+		RDNS:             !req.DisableRDNS,
+		AlwaysWaitRDNS:   alwaysWait,
+		PacketInterval:   req.PacketInterval,
+		TTLInterval:      req.TTLInterval,
+		Lang:             lang,
+		DN42:             req.DN42,
+		PktSize:          packetSize,
+		Maptrace:         !req.DisableMaptrace,
+	}
+}
+
+func convertHops(res *trace.Result, lang string) []hopResponse {
+	if res == nil || len(res.Hops) == 0 {
+		return nil
+	}
+
+	hops := make([]hopResponse, 0, len(res.Hops))
+	for idx, attempts := range res.Hops {
+		if len(attempts) == 0 {
+			continue
+		}
+
+		resp := hopResponse{
+			TTL:      idx + 1,
+			Attempts: make([]hopAttempt, 0, len(attempts)),
+		}
+
+		for _, attempt := range attempts {
+			ha := hopAttempt{
+				Success: attempt.Success,
+				MPLS:    attempt.MPLS,
+			}
+			if attempt.Address != nil {
+				ha.IP = attempt.Address.String()
+			}
+			if attempt.Hostname != "" {
+				ha.Hostname = attempt.Hostname
+			}
+			if attempt.RTT > 0 {
+				ha.RTT = float64(attempt.RTT) / float64(time.Millisecond)
+			}
+			if attempt.Error != nil {
+				ha.Error = attempt.Error.Error()
+			}
+			if attempt.Geo != nil {
+				ha.Geo = localizeGeo(attempt.Geo, lang)
+			}
+			resp.Attempts = append(resp.Attempts, ha)
+		}
+
+		hops = append(hops, resp)
+	}
+	return hops
+}
+
+func normalizeTarget(input string) (string, error) {
+	target := strings.TrimSpace(input)
+	if target == "" {
+		return "", errors.New("target is required")
+	}
+
+	if strings.Contains(target, "://") {
+		u, err := url.Parse(target)
+		if err == nil && u.Host != "" {
+			target = u.Host
+		}
+	}
+
+	if strings.Contains(target, "/") {
+		u, err := url.Parse(target)
+		if err == nil && u.Host != "" {
+			target = u.Host
+		} else {
+			target = "n" + target
+			parts := strings.Split(target, "/")
+			if len(parts) < 3 {
+				return "", errors.New("invalid target format")
+			}
+			target = parts[2]
+		}
+	}
+
+	if strings.Contains(target, "]") && strings.Contains(target, "[") {
+		target = strings.Split(strings.Split(target, "]")[0], "[")[1]
+	} else if strings.Count(target, ":") == 1 {
+		if host, _, err := net.SplitHostPort(target); err == nil {
+			target = host
+		} else {
+			target = strings.Split(target, ":")[0]
+		}
+	}
+
+	return strings.TrimSpace(target), nil
+}
+
+func normalizeDataProvider(provider string, alias string) string {
+	candidate := strings.TrimSpace(provider)
+	if candidate == "" {
+		candidate = strings.TrimSpace(alias)
+	}
+	if candidate == "" {
+		return ""
+	}
+
+	upper := strings.ToUpper(candidate)
+	switch upper {
+	case "IP.SB":
+		return "IP.SB"
+	case "IP-API.COM", "IPAPI.COM":
+		return "IPAPI.com"
+	case "IPINFO", "IP INFO":
+		return "IPInfo"
+	case "IPINSIGHT", "IP INSIGHT":
+		return "IPInsight"
+	case "IPINFOLOCAL", "IP INFO LOCAL":
+		return "IPInfoLocal"
+	case "LEOMOEAPI", "LEOMOE":
+		return "LeoMoeAPI"
+	case "IP2REGION", "IP2 REGION":
+		return "Ip2region"
+	case "CHUNZHEN":
+		return "chunzhen"
+	case "DN42":
+		return "DN42"
+	case "DISABLE-GEOIP", "DISABLE_GEOIP":
+		return "disable-geoip"
+	case "IPDB.ONE":
+		return "ipdb.one"
+	default:
+		return candidate
+	}
+}
+
+func contains(list []string, v string) bool {
+	for _, item := range list {
+		if strings.EqualFold(item, v) {
+			return true
+		}
+	}
+	return false
+}
+
+func shouldGenerateMap(provider string) bool {
+	allowed := []string{"LEOMOEAPI", "IPINFO", "IP-API.COM", "IPAPI.COM"}
+	for _, item := range allowed {
+		if strings.EqualFold(provider, item) {
+			return true
+		}
+	}
+	return false
+}
+
+func ensureLeoMoeConnection() {
+	leoConnMu.Lock()
+	defer leoConnMu.Unlock()
+
+	conn := wshandle.GetWsConn()
+	if conn == nil || conn.MsgSendCh == nil || conn.MsgReceiveCh == nil {
+		log.Println("[deploy] establishing initial LeoMoeAPI websocket")
+		wshandle.New()
+		return
+	}
+
+	if !conn.Connected && !conn.Connecting {
+		log.Println("[deploy] reconnecting LeoMoeAPI websocket")
+		wshandle.New()
+	}
+}
+
+func localizeGeo(src *ipgeo.IPGeoData, lang string) *ipgeo.IPGeoData {
+	if src == nil {
+		return nil
+	}
+
+	dst := *src
+	switch strings.ToLower(lang) {
+	case "en":
+		if dst.CountryEn != "" {
+			dst.Country = dst.CountryEn
+		}
+		if dst.ProvEn != "" {
+			dst.Prov = dst.ProvEn
+		}
+		if dst.CityEn != "" {
+			dst.City = dst.CityEn
+		}
+	default:
+		if dst.Country == "" && dst.CountryEn != "" {
+			dst.Country = dst.CountryEn
+		}
+		if dst.Prov == "" && dst.ProvEn != "" {
+			dst.Prov = dst.ProvEn
+		}
+		if dst.City == "" && dst.CityEn != "" {
+			dst.City = dst.CityEn
+		}
+	}
+	return &dst
+}

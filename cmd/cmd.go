@@ -23,6 +23,7 @@ import (
 	"github.com/nxtrace/NTrace-core/ipgeo"
 	"github.com/nxtrace/NTrace-core/printer"
 	"github.com/nxtrace/NTrace-core/reporter"
+	"github.com/nxtrace/NTrace-core/server"
 	"github.com/nxtrace/NTrace-core/trace"
 	"github.com/nxtrace/NTrace-core/tracelog"
 	"github.com/nxtrace/NTrace-core/tracemap"
@@ -66,6 +67,7 @@ func Execute() {
 	srcAddr := parser.String("s", "source", &argparse.Options{Help: "Use source address src_addr for outgoing packets"})
 	srcPort := parser.Int("", "source-port", &argparse.Options{Help: "Use source port src_port for outgoing packets"})
 	srcDev := parser.String("D", "dev", &argparse.Options{Help: "Use the following Network Devices as the source address in outgoing packets"})
+	deploy := parser.Flag("", "depoly", &argparse.Options{Help: "Start the Gin powered web console"})
 	//router := parser.Flag("R", "route", &argparse.Options{Help: "Show Routing Table [Provided By BGP.Tools]"})
 	packetInterval := parser.Int("z", "send-time", &argparse.Options{Default: 50, Help: "Set how many [milliseconds] between sending each packet. Useful when some routers use rate-limit for ICMP messages"})
 	ttlInterval := parser.Int("i", "ttl-time", &argparse.Options{Default: 50, Help: "Set how many [milliseconds] between sending packets groups by TTL. Useful when some routers use rate-limit for ICMP messages"})
@@ -100,6 +102,27 @@ func Execute() {
 	if *ver {
 		printer.CopyRight()
 		os.Exit(0)
+	}
+
+	if *deploy {
+		capabilitiesCheck()
+		listenAddr := os.Getenv("NEXTTRACE_DEPLOY_ADDR")
+		if listenAddr == "" {
+			listenAddr = os.Getenv("NTRACE_DEPLOY_ADDR")
+		}
+		fmt.Printf("启动 NextTrace Web 控制台，监听地址: %s\n", func(addr string) string {
+			if addr == "" {
+				return "(默认 :1080)"
+			}
+			return addr
+		}(listenAddr))
+		if err := server.Run(listenAddr); err != nil {
+			if util.EnvDevMode {
+				panic(err)
+			}
+			log.Fatal(err)
+		}
+		return
 	}
 
 	OSType := 3

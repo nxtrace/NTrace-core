@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>NextTrace Web</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+  <header class="header">
+    <div class="header__title">
+      <h1>NextTrace Web</h1>
+    </div>
+    <p class="header__subtitle">在浏览器中运行 NextTrace，实时查看路由探测结果。</p>
+  </header>
+
+  <main class="container">
+    <section class="panel">
+      <form id="trace-form" class="form">
+        <div class="form__group">
+          <label for="target">目标地址</label>
+          <input id="target" name="target" type="text" placeholder="例如：1.1.1.1 或 www.example.com" required>
+        </div>
+
+        <div class="form__group grid">
+          <div>
+            <label for="protocol">协议</label>
+            <select id="protocol" name="protocol"></select>
+          </div>
+          <div>
+            <label for="data-provider">地理信息源</label>
+            <select id="data-provider" name="dataProvider"></select>
+          </div>
+        </div>
+
+        <div class="form__group grid">
+          <div>
+            <label for="queries">每跳探测次数</label>
+            <input id="queries" name="queries" type="number" min="1" max="10">
+          </div>
+          <div>
+            <label for="max-hops">最大跳数</label>
+            <input id="max-hops" name="maxHops" type="number" min="1" max="64">
+          </div>
+        </div>
+
+        <div class="form__group">
+          <label class="checkbox">
+            <input type="checkbox" id="disable-maptrace" name="disableMaptrace">
+            <span>禁用地图生成</span>
+          </label>
+        </div>
+
+        <div class="form__actions">
+          <button type="submit" id="submit-btn">开始探测</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel">
+      <div id="status" class="status status--idle">准备就绪</div>
+      <div id="result-meta" class="result-meta hidden"></div>
+      <div id="result" class="result hidden"></div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span>当前会话仅提供基础功能，更多高级选项请使用 CLI。</span>
+  </footer>
+
+  <script src="/assets/app.js" defer></script>
+</body>
+</html>
