@@ -175,16 +175,14 @@ func Execute() {
 
 	if *deploy {
 		capabilitiesCheck()
-		envListen := os.Getenv("NEXTTRACE_DEPLOY_ADDR")
-		if envListen == "" {
-			envListen = os.Getenv("NTRACE_DEPLOY_ADDR")
-		}
-		listenAddr := envListen
-		if *deployListen != "" {
-			listenAddr = *deployListen
+		// 优先使用 CLI 参数，其次使用环境变量
+		listenAddr := *deployListen
+		if listenAddr == "" {
+			listenAddr = util.EnvDeployAddr
 		}
 		info := buildListenInfo(listenAddr)
-		if *deployListen == "" && envListen == "" {
+		// 判断是否同时未通过 CLI 和环境变量指定地址
+		if *deployListen == "" && util.EnvDeployAddr == "" {
 			if info.Access != "" {
 				fmt.Printf("启动 NextTrace Web 控制台，监听地址: %s\n", info.Access)
 			} else {
