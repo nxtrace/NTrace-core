@@ -453,6 +453,11 @@ body.mode-mtr .result table {
   color: #e2e8f0;
 }
 
+.attempt__star {
+  font-size: 1rem;
+  color: #e2e8f0;
+}
+
 .attempt__badge {
   padding: 0.1rem 0.45rem;
   border-radius: 999px;

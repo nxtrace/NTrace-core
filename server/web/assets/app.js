@@ -289,36 +289,52 @@ function renderMeta(summary = {}) {
 
 function renderAttemptsGrouped(attempts) {
   const groups = new Map();
-  let lastKey = null;
-  attempts.forEach((attempt, index) => {
-    const keyHost = attempt.hostname || '';
-    const keyIp = attempt.ip || '';
-    let key;
-    if (keyHost || keyIp) {
-      key = keyHost + '|' + keyIp;
-      lastKey = key;
-    } else if (lastKey) {
-      key = lastKey;
+  const UNKNOWN_KEY = 'unknown|';
+  let lastIdentifiedKey = '';
+  attempts.forEach((attempt) => {
+    const keyHost = (attempt.hostname || '').trim();
+    const keyIp = (attempt.ip || '').trim();
+    const hasIdentified = Boolean(keyHost || keyIp);
+
+    if (hasIdentified) {
+      const key = keyHost + '|' + keyIp;
+      let list = groups.get(key);
+      if (!list) {
+        list = [];
+        groups.set(key, list);
+      }
+      if (groups.has(UNKNOWN_KEY)) {
+        const pendingUnknown = groups.get(UNKNOWN_KEY);
+        if (pendingUnknown && pendingUnknown.length > 0) {
+          list.push(...pendingUnknown);
+        }
+        groups.delete(UNKNOWN_KEY);
+      }
+      list.push(attempt);
+      lastIdentifiedKey = key;
     } else {
-      key = 'unknown|';
-      lastKey = key;
+      const key = lastIdentifiedKey || UNKNOWN_KEY;
+      let list = groups.get(key);
+      if (!list) {
+        list = [];
+        groups.set(key, list);
+      }
+      list.push(attempt);
     }
-    if (!groups.has(key)) {
-      groups.set(key, []);
-    }
-    groups.get(key).push(attempt);
   });
 
   const container = document.createElement('div');
   container.className = 'attempts attempts--grouped';
 
+  let hasIdentifiedSummary = false;
   const summarySet = new Set();
   const summaryLabels = [];
   groups.forEach((list, key) => {
     const first = list[0] || {};
     const [keyHost, keyIp] = key.split('|');
-    const displayHost = (first.hostname || keyHost || '').trim();
-    const displayIp = (first.ip || keyIp || '').trim();
+    const isUnknownKey = key === UNKNOWN_KEY;
+    const displayHost = isUnknownKey ? '' : (first.hostname || keyHost || '').trim();
+    const displayIp = isUnknownKey ? '' : (first.ip || keyIp || '').trim();
     let label = '';
     if (displayIp && displayHost && displayHost !== displayIp) {
       label = `${displayIp} (${displayHost})`;
@@ -327,11 +343,14 @@ function renderAttemptsGrouped(attempts) {
     } else if (displayHost) {
       label = displayHost;
     } else {
-      label = t('unknownAddress');
+      label = '*';
     }
     if (!summarySet.has(label)) {
       summarySet.add(label);
       summaryLabels.push(label);
+    }
+    if (displayIp || displayHost) {
+      hasIdentifiedSummary = true;
     }
   });
 
@@ -351,8 +370,9 @@ function renderAttemptsGrouped(attempts) {
     const mainLine = [];
     const first = list[0] || {};
     const [keyHost, keyIp] = key.split('|');
-    const displayHost = first.hostname || keyHost || '';
-    const displayIp = first.ip || keyIp || '';
+    const isUnknownKey = key === UNKNOWN_KEY;
+    const displayHost = isUnknownKey ? '' : (first.hostname || keyHost || '');
+    const displayIp = isUnknownKey ? '' : (first.ip || keyIp || '');
     if (displayHost) {
       mainLine.push(createMetaItem(t('attemptLabelHost'), displayHost));
     }
@@ -360,9 +380,20 @@ function renderAttemptsGrouped(attempts) {
       mainLine.push(createMetaItem(t('attemptLabelAddress'), displayIp));
     }
     if (mainLine.length === 0) {
-      mainLine.push(createMetaItem(t('attemptLabelAddress'), t('unknownAddress')));
+      if (hasIdentifiedSummary) {
+        const label = document.createElement('span');
+        label.className = 'attempt__star';
+        label.textContent = '*';
+        header.appendChild(label);
+      } else {
+        const star = document.createElement('span');
+        star.className = 'attempt__star';
+        star.textContent = '*';
+        header.appendChild(star);
+      }
+    } else {
+      mainLine.forEach((el) => header.appendChild(el));
     }
-    mainLine.forEach((el) => header.appendChild(el));
 
     box.appendChild(header);
 
@@ -818,7 +849,80 @@ function stopTrace() {
 
 function renderMTRStats(stats) {
   mtrStatsStore = Array.isArray(stats) ? stats : [];
-  const data = mtrStatsStore;
+  const ttlGroups = new Map();
+  mtrStatsStore.forEach((stat) => {
+    if (!stat) {
+      return;
+    }
+    const ttl = stat.ttl;
+    let group = ttlGroups.get(ttl);
+    if (!group) {
+      group = {
+        known: [],
+        unknown: null,
+      };
+      ttlGroups.set(ttl, group);
+    }
+    const hasIp = stat.ip && String(stat.ip).trim();
+    const hasHost = stat.host && String(stat.host).trim();
+    if (hasIp || hasHost) {
+      group.known.push(stat);
+    } else {
+      const unknownSent = Number(stat.sent) || 0;
+      const unknownLoss = Number(stat.loss_count) || 0;
+      const unknownErrors = stat.errors || null;
+      const unknownType = stat.failure_type || '';
+      if (!group.unknown) {
+        group.unknown = {
+          sent: unknownSent,
+          loss: unknownLoss,
+          errors: cloneErrors(unknownErrors),
+          failureType: unknownType,
+        };
+      } else {
+        group.unknown.sent += unknownSent;
+        group.unknown.loss += unknownLoss;
+        group.unknown.errors = mergeErrorMaps(group.unknown.errors, unknownErrors);
+        group.unknown.failureType = pickFailureType(group.unknown.failureType, unknownType);
+      }
+    }
+  });
+
+  const ttlHasIdentified = new Map();
+  ttlGroups.forEach((group, ttl) => {
+    const hasKnown = group.known.length > 0;
+    ttlHasIdentified.set(ttl, hasKnown);
+    if (hasKnown && group.unknown) {
+      const primary = group.known[0];
+      const existingSent = Number(primary.sent) || 0;
+      const existingLoss = Number(primary.loss_count) || 0;
+      const existingReceived = Number(primary.received) || 0;
+      const totalSent = existingSent + group.unknown.sent;
+      const totalLoss = existingLoss + group.unknown.loss;
+      const totalReceived = Math.max(0, totalSent - totalLoss);
+      primary.sent = totalSent;
+      primary.loss_count = totalLoss;
+      primary.loss_percent = totalSent > 0 ? (totalLoss / totalSent) * 100 : 0;
+      primary.received = totalReceived;
+      primary.errors = mergeErrorMaps(primary.errors, group.unknown.errors);
+      primary.failure_type = pickFailureType(primary.failure_type, group.unknown.failureType);
+    }
+  });
+
+  const data = mtrStatsStore.filter((stat) => {
+    if (!stat) {
+      return false;
+    }
+    const hasIp = stat.ip && String(stat.ip).trim();
+    const hasHost = stat.host && String(stat.host).trim();
+    if (hasIp || hasHost) {
+      return true;
+    }
+    if (!ttlHasIdentified.get(stat.ttl)) {
+      return true;
+    }
+    return false;
+  });
   if (!data || data.length === 0) {
     resultNode.innerHTML = `<p>${t('noResult')}</p>`;
     resultNode.classList.remove('hidden');
@@ -907,6 +1011,54 @@ function renderMTRStats(stats) {
   resultNode.innerHTML = '';
   resultNode.appendChild(table);
   resultNode.classList.remove('hidden');
+}
+
+function mergeErrorMaps(target, source) {
+  const result = target ? { ...target } : {};
+  if (!source) {
+    return result;
+  }
+  Object.keys(source).forEach((key) => {
+    const trimmedKey = String(key || '').trim();
+    if (!trimmedKey) {
+      return;
+    }
+    const current = Number(result[trimmedKey]) || 0;
+    const addition = Number(source[key]) || 0;
+    result[trimmedKey] = current + addition;
+  });
+  return result;
+}
+
+function cloneErrors(source) {
+  if (!source) {
+    return null;
+  }
+  const result = {};
+  Object.keys(source).forEach((key) => {
+    const trimmedKey = String(key || '').trim();
+    if (!trimmedKey) {
+      return;
+    }
+    result[trimmedKey] = Number(source[key]) || 0;
+  });
+  return result;
+}
+
+function pickFailureType(current, candidate) {
+  const priority = {
+    all_timeout: 3,
+    partial_timeout: 2,
+    mixed: 1,
+  };
+  const normalizedCurrent = current || '';
+  const normalizedCandidate = candidate || '';
+  const currentPriority = priority[normalizedCurrent] || 0;
+  const candidatePriority = priority[normalizedCandidate] || 0;
+  if (candidatePriority > currentPriority) {
+    return normalizedCandidate;
+  }
+  return normalizedCurrent;
 }
 
 function getHostDisplayParts(stat) {

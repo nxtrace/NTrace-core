@@ -178,11 +178,7 @@ func (agg *mtrAggregator) Update(res *trace.Result, queries int) []mtrHopJSON {
 				acc.Geo = group.geo
 			}
 
-			if group.ip == "" && group.host == "" {
-				acc.Sent += group.count
-			} else {
-				acc.Sent += queries
-			}
+			acc.Sent += group.count
 
 			if group.received > 0 {
 				acc.Sum += group.sum
