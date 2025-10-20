@@ -12,11 +12,15 @@ func InitConfig() {
 	// 设置文件的扩展名
 	viper.SetConfigType("yaml") // REQUIRED if the config file does not have the extension in the name
 	// 查找配置文件所在路径
-	viper.AddConfigPath("/etc/bin/nexttrace/")
-	viper.AddConfigPath("/usr/local/bin/nexttrace/")
+	viper.AddConfigPath("/etc/nexttrace/")
+	viper.AddConfigPath("/usr/local/etc/nexttrace/")
+	viper.AddConfigPath("$HOME/.local/share/nexttrace/")
+	viper.AddConfigPath("$HOME/.nexttrace/")
+	viper.AddConfigPath("$HOME/")
+	viper.AddConfigPath("/usr/share/nexttrace")
+	viper.AddConfigPath("/usr/local/share/nexttrace")
 	// 在当前路径进行查找
 	viper.AddConfigPath(".")
-	// viper.AddConfigPath("./config/")
 
 	// 配置默认值
 	viper.SetDefault("ptrPath", "./ptr.csv")
