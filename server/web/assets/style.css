@@ -99,10 +99,10 @@ a:hover {
   align-items: flex-start;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1024px) {
   .container {
     flex-direction: column;
-    padding: 0 1rem 2rem;
+    padding: 0 1rem 2.1rem;
   }
 }
 
@@ -118,6 +118,9 @@ a:hover {
 .panel--form {
   flex: 0 0 320px;
   max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
 }
 
 .panel--results {
@@ -129,7 +132,7 @@ a:hover {
   min-height: calc(100vh - 260px);
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1024px) {
   .panel--form,
   .panel--results {
     flex: 1 1 100%;
@@ -148,6 +151,36 @@ a:hover {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
+}
+
+.panel--form .form__group {
+  padding: 0.35rem 0.75rem;
+  border-radius: 0.65rem;
+  background: rgba(15, 23, 42, 0.42);
+  border: 1px solid rgba(71, 85, 105, 0.35);
+}
+
+.panel--form .form__group.grid {
+  padding: 0;
+  border: none;
+  background: transparent;
+  gap: 0.8rem;
+}
+
+.panel--form .form__group.grid > div {
+  padding: 0.35rem 0.75rem;
+  border-radius: 0.65rem;
+  background: rgba(15, 23, 42, 0.42);
+  border: 1px solid rgba(71, 85, 105, 0.35);
+}
+
+.panel--form .form__group.checkbox-group {
+  display: flex;
+  align-items: center;
+  padding: 0.35rem 0.75rem;
+  border-radius: 0.65rem;
+  background: rgba(15, 23, 42, 0.42);
+  border: 1px solid rgba(71, 85, 105, 0.35);
 }
 
 .form__group small {
@@ -292,6 +325,7 @@ button[type="submit"]:disabled {
 
 .panel--results #result-meta {
   flex-shrink: 0;
+  max-width: 420px;
 }
 
 #result {
@@ -305,6 +339,42 @@ button[type="submit"]:disabled {
   width: 100%;
   border-collapse: collapse;
   min-width: 520px;
+}
+
+body.mode-mtr .container {
+  max-width: 1280px;
+  padding: 0 1.5rem 2.5rem;
+  gap: 1.5rem;
+}
+
+body.mode-mtr .panel--form {
+  flex: 0 0 clamp(320px, 28vw, 440px);
+  max-width: clamp(340px, 30vw, 460px);
+}
+
+body.mode-mtr .panel--results {
+  flex: 1 1 clamp(520px, 60vw, 920px);
+  min-width: clamp(360px, 55vw, 920px);
+  gap: 0.85rem;
+  min-height: calc(100vh - 240px);
+}
+
+body.mode-mtr #group-basic-params,
+body.mode-mtr #group-advanced-params,
+body.mode-mtr #group-disable-map {
+  display: none;
+}
+
+.hidden {
+  display: none !important;
+}
+
+body.mode-mtr .panel--results #result-meta {
+  max-width: 560px;
+}
+
+body.mode-mtr .result table {
+  min-width: 680px;
 }
 
 .result thead {

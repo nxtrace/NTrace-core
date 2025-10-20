@@ -69,6 +69,9 @@ type traceRequest struct {
 	Maptrace          *bool  `json:"maptrace"` // deprecated toggle compatibility
 	LanguageOverride  string `json:"language_override"`
 	DataProviderAlias string `json:"data_provider_alias"`
+	Mode              string `json:"mode"`
+	IntervalMs        int    `json:"interval_ms"`
+	MaxRounds         int    `json:"max_rounds"`
 }
 
 type hopAttempt struct {
@@ -102,6 +105,8 @@ func prepareTrace(req traceRequest) (*traceExecution, int, error) {
 		Req: req,
 	}
 
+	exec.Req.Mode = strings.ToLower(strings.TrimSpace(exec.Req.Mode))
+
 	if exec.Req.Maptrace != nil {
 		exec.Req.DisableMaptrace = !*exec.Req.Maptrace
 	}
@@ -114,6 +119,13 @@ func prepareTrace(req traceRequest) (*traceExecution, int, error) {
 
 	if exec.Req.IPv4Only && exec.Req.IPv6Only {
 		return nil, 400, errors.New("ipv4_only and ipv6_only cannot be true at the same time")
+	}
+
+	if exec.Req.IntervalMs <= 0 {
+		exec.Req.IntervalMs = 2000
+	}
+	if exec.Req.MaxRounds < 0 {
+		exec.Req.MaxRounds = 0
 	}
 
 	protocol := strings.ToLower(strings.TrimSpace(exec.Req.Protocol))

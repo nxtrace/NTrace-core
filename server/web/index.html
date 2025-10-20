@@ -24,6 +24,14 @@
     <section class="panel panel--form">
       <form id="trace-form" class="form">
         <div class="form__group">
+          <label for="mode" id="label-mode">探测模式</label>
+          <select id="mode" name="mode">
+            <option value="single">单次探测</option>
+            <option value="mtr">持续探测</option>
+          </select>
+        </div>
+
+        <div class="form__group">
           <label for="target" id="label-target">目标地址</label>
           <input id="target" name="target" type="text" placeholder="例如：1.1.1.1 或 www.example.com" required>
         </div>
@@ -39,7 +47,7 @@
           </div>
         </div>
 
-        <div class="form__group grid">
+        <div class="form__group grid" id="group-basic-params">
           <div>
             <label for="queries" id="label-queries">每跳探测次数</label>
             <input id="queries" name="queries" type="number" min="1" max="63">
@@ -50,7 +58,7 @@
           </div>
         </div>
 
-        <div class="form__group grid">
+        <div class="form__group grid" id="group-advanced-params">
           <div>
             <label for="dst-port" id="label-dst-port">目的端口</label>
             <input id="dst-port" name="dstPort" type="number" min="1" max="65535" disabled>
@@ -62,7 +70,7 @@
           </div>
         </div>
 
-        <div class="form__group">
+        <div class="form__group checkbox-group" id="group-disable-map">
           <label class="checkbox">
             <input type="checkbox" id="disable-maptrace" name="disableMaptrace">
             <span id="label-disable-map">禁用地图生成</span>
@@ -71,6 +79,7 @@
 
         <div class="form__actions">
           <button type="submit" id="submit-btn">开始探测</button>
+          <button type="button" id="stop-btn" class="action-btn action-btn--ghost hidden">停止</button>
         </div>
       </form>
     </section>

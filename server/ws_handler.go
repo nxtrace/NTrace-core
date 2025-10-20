@@ -104,9 +104,151 @@ func traceWebsocketHandler(c *gin.Context) {
 		log.Printf("[deploy] websocket send start failed: %v", err)
 	}
 
+	go func() {
+		for {
+			if _, _, err := conn.NextReader(); err != nil {
+				session.closed.Store(true)
+				return
+			}
+		}
+	}()
+
 	log.Printf("[deploy] (ws) trace request target=%s proto=%s provider=%s lang=%s ipv4_only=%t ipv6_only=%t", setup.Target, setup.Protocol, setup.DataProvider, setup.Config.Lang, setup.Req.IPv4Only, setup.Req.IPv6Only)
 	log.Printf("[deploy] (ws) target resolved target=%s ip=%s via dot=%s", setup.Target, setup.IP, strings.ToLower(setup.Req.DotServer))
 
+	mode := setup.Req.Mode
+	if mode == "" {
+		mode = "single"
+	}
+
+	switch mode {
+	case "mtr", "continuous":
+		runMTRTrace(session, setup)
+	default:
+		runSingleTrace(session, setup)
+	}
+}
+
+func runSingleTrace(session *wsTraceSession, setup *traceExecution) {
+	session.seen = make(map[int]int)
+
+	res, duration, err := executeTrace(session, setup, func(cfg *trace.Config) {
+		cfg.RealtimePrinter = nil
+		cfg.AsyncPrinter = func(result *trace.Result) {
+			for idx, attempts := range result.Hops {
+				if len(attempts) == 0 {
+					continue
+				}
+				if session.seen[idx] == len(attempts) {
+					continue
+				}
+				session.seen[idx] = len(attempts)
+
+				hop := buildHopResponse(attempts, idx, session.lang)
+				if len(hop.Attempts) == 0 {
+					continue
+				}
+				if err := session.send(wsEnvelope{Type: "hop", Data: hop}); err != nil {
+					log.Printf("[deploy] websocket hop send failed ttl=%d err=%v", hop.TTL, err)
+					return
+				}
+			}
+		}
+	})
+
+	if err != nil {
+		log.Printf("[deploy] websocket trace failed target=%s error=%v", setup.Target, err)
+		_ = session.send(wsEnvelope{Type: "error", Error: err.Error(), Status: 500})
+		return
+	}
+
+	if session.closed.Load() {
+		return
+	}
+
+	traceMapURL := ""
+	if setup.Config.Maptrace && shouldGenerateMap(setup.DataProvider) {
+		if payload, err := json.Marshal(res); err == nil {
+			if url, err := tracemap.GetMapUrl(string(payload)); err == nil {
+				traceMapURL = url
+				log.Printf("[deploy] (ws) trace map generated target=%s url=%s", setup.Target, traceMapURL)
+			}
+		}
+	}
+
+	final := traceResponse{
+		Target:       setup.Target,
+		ResolvedIP:   setup.IP.String(),
+		Protocol:     setup.Protocol,
+		DataProvider: setup.DataProvider,
+		TraceMapURL:  traceMapURL,
+		Language:     setup.Config.Lang,
+		Hops:         convertHops(res, setup.Config.Lang),
+		DurationMs:   duration.Milliseconds(),
+	}
+
+	if err := session.send(wsEnvelope{Type: "complete", Data: final}); err != nil {
+		log.Printf("[deploy] websocket send complete failed: %v", err)
+	}
+	log.Printf("[deploy] (ws) trace completed target=%s hops=%d duration=%s", setup.Target, len(final.Hops), duration)
+}
+
+func runMTRTrace(session *wsTraceSession, setup *traceExecution) {
+	interval := time.Duration(setup.Req.IntervalMs) * time.Millisecond
+	if interval <= 0 {
+		interval = 2 * time.Second
+	}
+	maxRounds := setup.Req.MaxRounds
+
+	aggregator := newMTRAggregator()
+	iteration := 0
+	queries := setup.Config.NumMeasurements
+	if queries <= 0 {
+		queries = 1
+	}
+
+	for {
+		if session.closed.Load() {
+			break
+		}
+
+		res, _, err := executeTrace(session, setup, func(cfg *trace.Config) {
+			cfg.RealtimePrinter = nil
+			cfg.AsyncPrinter = nil
+		})
+
+		if err != nil {
+			log.Printf("[deploy] websocket MTR trace failed target=%s error=%v", setup.Target, err)
+			_ = session.send(wsEnvelope{Type: "error", Error: err.Error(), Status: 500})
+			break
+		}
+
+		iteration++
+		stats := aggregator.Update(res, queries)
+		snapshot := mtrSnapshot{Iteration: iteration, Stats: stats}
+		if err := session.send(wsEnvelope{Type: "mtr", Data: snapshot}); err != nil {
+			session.closed.Store(true)
+			break
+		}
+
+		if maxRounds > 0 && iteration >= maxRounds {
+			break
+		}
+
+		if session.closed.Load() {
+			break
+		}
+
+		time.Sleep(interval)
+	}
+
+	finalStats := aggregator.Snapshot()
+	if !session.closed.Load() {
+		_ = session.send(wsEnvelope{Type: "complete", Data: mtrSnapshot{Iteration: iteration, Stats: finalStats}})
+	}
+}
+
+func executeTrace(session *wsTraceSession, setup *traceExecution, configure func(*trace.Config)) (*trace.Result, time.Duration, error) {
 	traceMu.Lock()
 	defer traceMu.Unlock()
 
@@ -147,61 +289,18 @@ func traceWebsocketHandler(c *gin.Context) {
 	}
 	util.DisableMPLS = setup.Req.DisableMPLS
 
-	configured := setup.Config
-	configured.RealtimePrinter = nil
-	configured.AsyncPrinter = func(res *trace.Result) {
-		for idx, attempts := range res.Hops {
-			if len(attempts) == 0 {
-				continue
-			}
-			if session.seen[idx] == len(attempts) {
-				continue
-			}
-			session.seen[idx] = len(attempts)
-			hop := buildHopResponse(attempts, idx, session.lang)
-			if len(hop.Attempts) == 0 {
-				continue
-			}
-			if err := session.send(wsEnvelope{Type: "hop", Data: hop}); err != nil {
-				log.Printf("[deploy] websocket hop send failed ttl=%d err=%v", hop.TTL, err)
-				return
-			}
-		}
+	config := setup.Config
+	if configure != nil {
+		configure(&config)
 	}
 
-	log.Printf("[deploy] (ws) starting trace target=%s resolved=%s method=%s lang=%s queries=%d maxHops=%d", setup.Target, setup.IP.String(), string(setup.Method), configured.Lang, configured.NumMeasurements, configured.MaxHops)
+	if session.closed.Load() {
+		return nil, 0, nil
+	}
+
+	log.Printf("[deploy] (ws) starting trace target=%s resolved=%s method=%s lang=%s queries=%d maxHops=%d", setup.Target, setup.IP.String(), string(setup.Method), config.Lang, config.NumMeasurements, config.MaxHops)
 	start := time.Now()
-	res, err := trace.Traceroute(setup.Method, configured)
+	res, err := trace.Traceroute(setup.Method, config)
 	duration := time.Since(start)
-	if err != nil {
-		log.Printf("[deploy] websocket trace failed target=%s error=%v", setup.Target, err)
-		_ = session.send(wsEnvelope{Type: "error", Error: err.Error(), Status: 500})
-		return
-	}
-
-	traceMapURL := ""
-	if configured.Maptrace && shouldGenerateMap(setup.DataProvider) {
-		if payload, err := json.Marshal(res); err == nil {
-			if url, err := tracemap.GetMapUrl(string(payload)); err == nil {
-				traceMapURL = url
-				log.Printf("[deploy] (ws) trace map generated target=%s url=%s", setup.Target, traceMapURL)
-			}
-		}
-	}
-
-	final := traceResponse{
-		Target:       setup.Target,
-		ResolvedIP:   setup.IP.String(),
-		Protocol:     setup.Protocol,
-		DataProvider: setup.DataProvider,
-		TraceMapURL:  traceMapURL,
-		Language:     configured.Lang,
-		Hops:         convertHops(res, configured.Lang),
-		DurationMs:   duration.Milliseconds(),
-	}
-
-	if err := session.send(wsEnvelope{Type: "complete", Data: final}); err != nil {
-		log.Printf("[deploy] websocket send complete failed: %v", err)
-	}
-	log.Printf("[deploy] (ws) trace completed target=%s hops=%d duration=%s", setup.Target, len(final.Hops), duration)
+	return res, duration, err
 }
