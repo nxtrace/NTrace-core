@@ -127,6 +127,10 @@ func (c *WsConn) messageSendHandler() {
 
 func (c *WsConn) recreateWsConn() {
 	// 尝试重新连线
+	if host != "" && net.ParseIP(host) == nil {
+		// 刷新一次最优 IP，防止旧 IP 已失效
+		fastIp = util.GetFastIP(host, port, true)
+	}
 	u := url.URL{Scheme: "wss", Host: fastIp + ":" + port, Path: "/v3/ipGeoWs"}
 	// log.Printf("connecting to %s", u.String())
 	jwtToken, ua := envToken, []string{"Privileged Client"}
@@ -179,10 +183,12 @@ func (c *WsConn) recreateWsConn() {
 		// <-time.After(time.Second * 1)
 		c.Connected = false
 		c.Connecting = false
+		cacheToken = ""
 		if cacheTokenFailedTimes > 3 {
 			cacheToken = ""
 		}
 		cacheTokenFailedTimes += 1
+		time.Sleep(1 * time.Second)
 		//fmt.Println("重连失败", cacheTokenFailedTimes, "次")
 		return
 	} else {

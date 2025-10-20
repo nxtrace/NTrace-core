@@ -55,6 +55,7 @@ func Run(listenAddr string) error {
 
 	router.GET("/api/options", optionsHandler)
 	router.POST("/api/trace", traceHandler)
+	router.GET("/ws/trace", traceWebsocketHandler)
 
 	srv := &http.Server{Addr: listenAddr, Handler: router}
 

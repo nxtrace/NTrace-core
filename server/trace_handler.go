@@ -25,6 +25,18 @@ import (
 var traceMu sync.Mutex
 var leoConnMu sync.Mutex
 
+type traceExecution struct {
+	Req          traceRequest
+	Target       string
+	Protocol     string
+	DataProvider string
+	Method       trace.Method
+	IP           net.IP
+	Config       trace.Config
+	NeedsLeoWS   bool
+	PowProvider  string
+}
+
 type traceRequest struct {
 	Target            string `json:"target"`
 	Protocol          string `json:"protocol"`
@@ -85,44 +97,41 @@ type traceResponse struct {
 	DurationMs   int64         `json:"duration_ms"`
 }
 
-func traceHandler(c *gin.Context) {
-	var req traceRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": "invalid request payload", "details": err.Error()})
-		return
+func prepareTrace(req traceRequest) (*traceExecution, int, error) {
+	exec := &traceExecution{
+		Req: req,
 	}
 
-	if req.Maptrace != nil {
-		req.DisableMaptrace = !*req.Maptrace
+	if exec.Req.Maptrace != nil {
+		exec.Req.DisableMaptrace = !*exec.Req.Maptrace
 	}
 
-	target, err := normalizeTarget(req.Target)
+	target, err := normalizeTarget(exec.Req.Target)
 	if err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
-		return
+		return nil, 400, err
+	}
+	exec.Target = target
+
+	if exec.Req.IPv4Only && exec.Req.IPv6Only {
+		return nil, 400, errors.New("ipv4_only and ipv6_only cannot be true at the same time")
 	}
 
-	if req.IPv4Only && req.IPv6Only {
-		c.JSON(400, gin.H{"error": "ipv4_only and ipv6_only cannot be true at the same time"})
-		return
-	}
-
-	protocol := strings.ToLower(strings.TrimSpace(req.Protocol))
+	protocol := strings.ToLower(strings.TrimSpace(exec.Req.Protocol))
 	if protocol == "" {
 		protocol = "icmp"
 	}
 	if !contains(supportedProtocols, protocol) {
-		c.JSON(400, gin.H{"error": fmt.Sprintf("unsupported protocol %q", protocol)})
-		return
+		return nil, 400, fmt.Errorf("unsupported protocol %q", protocol)
 	}
+	exec.Protocol = protocol
 
-	dataProvider := normalizeDataProvider(req.DataProvider, req.DataProviderAlias)
+	dataProvider := normalizeDataProvider(exec.Req.DataProvider, exec.Req.DataProviderAlias)
 	if dataProvider == "" {
 		dataProvider = defaults["data_provider"].(string)
 	}
 
 	if strings.EqualFold(dataProvider, "DN42") {
-		req.DN42 = true
+		exec.Req.DN42 = true
 	}
 
 	needsLeoWS := false
@@ -134,28 +143,24 @@ func traceHandler(c *gin.Context) {
 		}
 	}
 
-	if req.DN42 {
+	if exec.Req.DN42 {
 		config.InitConfig()
-		req.DisableMaptrace = true
+		exec.Req.DisableMaptrace = true
 		dataProvider = "DN42"
 	}
 
-	log.Printf("[deploy] trace request target=%s proto=%s provider=%s lang=%s ipv4_only=%t ipv6_only=%t", target, protocol, dataProvider, strings.TrimSpace(req.Language), req.IPv4Only, req.IPv6Only)
-
 	ipVersion := "all"
-	if req.IPv4Only {
+	if exec.Req.IPv4Only {
 		ipVersion = "4"
-	} else if req.IPv6Only {
+	} else if exec.Req.IPv6Only {
 		ipVersion = "6"
 	}
 
-	ip, err := util.DomainLookUp(target, ipVersion, strings.ToLower(req.DotServer), true)
+	ip, err := util.DomainLookUp(target, ipVersion, strings.ToLower(exec.Req.DotServer), true)
 	if err != nil {
-		log.Printf("[deploy] domain lookup failed target=%s error=%v", target, err)
-		c.JSON(500, gin.H{"error": err.Error()})
-		return
+		return nil, 500, err
 	}
-	log.Printf("[deploy] target resolved target=%s ip=%s via dot=%s", target, ip, strings.ToLower(req.DotServer))
+	exec.IP = ip
 
 	method := trace.ICMPTrace
 	switch protocol {
@@ -164,8 +169,9 @@ func traceHandler(c *gin.Context) {
 	case "tcp":
 		method = trace.TCPTrace
 	}
+	exec.Method = method
 
-	dstPort := req.Port
+	dstPort := exec.Req.Port
 	if dstPort == 0 {
 		switch method {
 		case trace.UDPTrace:
@@ -177,7 +183,33 @@ func traceHandler(c *gin.Context) {
 		}
 	}
 
-	configured := buildTraceConfig(req, ip, dataProvider, dstPort)
+	exec.DataProvider = dataProvider
+	exec.PowProvider = strings.TrimSpace(exec.Req.PowProvider)
+	exec.NeedsLeoWS = needsLeoWS
+	exec.Config = buildTraceConfig(exec.Req, ip, dataProvider, dstPort)
+
+	return exec, 0, nil
+}
+
+func traceHandler(c *gin.Context) {
+	var req traceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": "invalid request payload", "details": err.Error()})
+		return
+	}
+
+	setup, statusCode, err := prepareTrace(req)
+	if err != nil {
+		if statusCode == 0 {
+			statusCode = 500
+		}
+		log.Printf("[deploy] prepare trace failed target=%s error=%v", strings.TrimSpace(req.Target), err)
+		c.JSON(statusCode, gin.H{"error": err.Error()})
+		return
+	}
+
+	log.Printf("[deploy] trace request target=%s proto=%s provider=%s lang=%s ipv4_only=%t ipv6_only=%t", setup.Target, setup.Protocol, setup.DataProvider, setup.Config.Lang, setup.Req.IPv4Only, setup.Req.IPv6Only)
+	log.Printf("[deploy] target resolved target=%s ip=%s via dot=%s", setup.Target, setup.IP, strings.ToLower(setup.Req.DotServer))
 
 	traceMu.Lock()
 	defer traceMu.Unlock()
@@ -195,63 +227,64 @@ func traceHandler(c *gin.Context) {
 		util.PowProviderParam = prevPowProvider
 	}()
 
-	powProvider := strings.TrimSpace(req.PowProvider)
-	if needsLeoWS {
-		if powProvider != "" {
-			log.Printf("[deploy] LeoMoeAPI using custom PoW provider=%s", powProvider)
+	if setup.NeedsLeoWS {
+		if setup.PowProvider != "" {
+			log.Printf("[deploy] LeoMoeAPI using custom PoW provider=%s", setup.PowProvider)
 		} else {
 			log.Printf("[deploy] LeoMoeAPI using default PoW provider")
 		}
-		util.PowProviderParam = powProvider
+		util.PowProviderParam = setup.PowProvider
 		ensureLeoMoeConnection()
-	} else if powProvider != "" {
-		log.Printf("[deploy] overriding PoW provider=%s", powProvider)
-		util.PowProviderParam = powProvider
+	} else if setup.PowProvider != "" {
+		log.Printf("[deploy] overriding PoW provider=%s", setup.PowProvider)
+		util.PowProviderParam = setup.PowProvider
+	} else {
+		util.PowProviderParam = ""
 	}
 
-	util.SrcPort = req.SourcePort
-	util.DstIP = ip.String()
-	if req.SourceDevice != "" {
-		util.SrcDev = req.SourceDevice
+	util.SrcPort = setup.Req.SourcePort
+	util.DstIP = setup.IP.String()
+	if setup.Req.SourceDevice != "" {
+		util.SrcDev = setup.Req.SourceDevice
 	} else {
 		util.SrcDev = ""
 	}
-	util.DisableMPLS = req.DisableMPLS
+	util.DisableMPLS = setup.Req.DisableMPLS
 
-	log.Printf("[deploy] starting trace target=%s resolved=%s method=%s lang=%s queries=%d maxHops=%d", target, ip.String(), string(method), configured.Lang, configured.NumMeasurements, configured.MaxHops)
+	configured := setup.Config
+	log.Printf("[deploy] starting trace target=%s resolved=%s method=%s lang=%s queries=%d maxHops=%d", setup.Target, setup.IP.String(), string(setup.Method), configured.Lang, configured.NumMeasurements, configured.MaxHops)
+
 	start := time.Now()
-	res, err := trace.Traceroute(method, configured)
+	res, err := trace.Traceroute(setup.Method, configured)
 	duration := time.Since(start)
 	if err != nil {
-		log.Printf("[deploy] trace failed target=%s error=%v", target, err)
+		log.Printf("[deploy] trace failed target=%s error=%v", setup.Target, err)
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
 
 	traceMapURL := ""
-	if !configured.Maptrace {
-		traceMapURL = ""
-	} else if shouldGenerateMap(dataProvider) {
+	if configured.Maptrace && shouldGenerateMap(setup.DataProvider) {
 		if payload, err := json.Marshal(res); err == nil {
 			if url, err := tracemap.GetMapUrl(string(payload)); err == nil {
 				traceMapURL = url
-				log.Printf("[deploy] trace map generated target=%s url=%s", target, traceMapURL)
+				log.Printf("[deploy] trace map generated target=%s url=%s", setup.Target, traceMapURL)
 			}
 		}
 	}
 
 	response := traceResponse{
-		Target:       target,
-		ResolvedIP:   ip.String(),
-		Protocol:     protocol,
-		DataProvider: dataProvider,
+		Target:       setup.Target,
+		ResolvedIP:   setup.IP.String(),
+		Protocol:     setup.Protocol,
+		DataProvider: setup.DataProvider,
 		TraceMapURL:  traceMapURL,
 		Language:     configured.Lang,
 		Hops:         convertHops(res, configured.Lang),
 		DurationMs:   duration.Milliseconds(),
 	}
 
-	log.Printf("[deploy] trace completed target=%s hops=%d duration=%s", target, len(response.Hops), duration)
+	log.Printf("[deploy] trace completed target=%s hops=%d duration=%s", setup.Target, len(response.Hops), duration)
 	c.JSON(200, response)
 }
 
@@ -340,41 +373,44 @@ func convertHops(res *trace.Result, lang string) []hopResponse {
 
 	hops := make([]hopResponse, 0, len(res.Hops))
 	for idx, attempts := range res.Hops {
-		if len(attempts) == 0 {
+		resp := buildHopResponse(attempts, idx, lang)
+		if len(resp.Attempts) == 0 {
 			continue
 		}
-
-		resp := hopResponse{
-			TTL:      idx + 1,
-			Attempts: make([]hopAttempt, 0, len(attempts)),
-		}
-
-		for _, attempt := range attempts {
-			ha := hopAttempt{
-				Success: attempt.Success,
-				MPLS:    attempt.MPLS,
-			}
-			if attempt.Address != nil {
-				ha.IP = attempt.Address.String()
-			}
-			if attempt.Hostname != "" {
-				ha.Hostname = attempt.Hostname
-			}
-			if attempt.RTT > 0 {
-				ha.RTT = float64(attempt.RTT) / float64(time.Millisecond)
-			}
-			if attempt.Error != nil {
-				ha.Error = attempt.Error.Error()
-			}
-			if attempt.Geo != nil {
-				ha.Geo = localizeGeo(attempt.Geo, lang)
-			}
-			resp.Attempts = append(resp.Attempts, ha)
-		}
-
 		hops = append(hops, resp)
 	}
 	return hops
+}
+
+func buildHopResponse(attempts []trace.Hop, idx int, lang string) hopResponse {
+	resp := hopResponse{
+		TTL:      idx + 1,
+		Attempts: make([]hopAttempt, 0, len(attempts)),
+	}
+
+	for _, attempt := range attempts {
+		ha := hopAttempt{
+			Success: attempt.Success,
+			MPLS:    attempt.MPLS,
+		}
+		if attempt.Address != nil {
+			ha.IP = attempt.Address.String()
+		}
+		if attempt.Hostname != "" {
+			ha.Hostname = attempt.Hostname
+		}
+		if attempt.RTT > 0 {
+			ha.RTT = float64(attempt.RTT) / float64(time.Millisecond)
+		}
+		if attempt.Error != nil {
+			ha.Error = attempt.Error.Error()
+		}
+		if attempt.Geo != nil {
+			ha.Geo = localizeGeo(attempt.Geo, lang)
+		}
+		resp.Attempts = append(resp.Attempts, ha)
+	}
+	return resp
 }
 
 func normalizeTarget(input string) (string, error) {

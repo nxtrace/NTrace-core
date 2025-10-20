@@ -31,6 +31,74 @@ import (
 	"github.com/nxtrace/NTrace-core/wshandle"
 )
 
+type listenInfo struct {
+	Binding string
+	Access  string
+}
+
+func buildListenInfo(addr string) listenInfo {
+	effective := addr
+	if effective == "" {
+		effective = ":1080"
+	}
+
+	host, port, err := net.SplitHostPort(effective)
+	if err != nil {
+		if strings.HasPrefix(effective, ":") {
+			host = ""
+			port = strings.TrimPrefix(effective, ":")
+		} else {
+			return listenInfo{
+				Binding: effective,
+			}
+		}
+	}
+
+	if port == "" {
+		port = "1080"
+	}
+
+	rawHost := host
+	if rawHost == "" {
+		rawHost = "0.0.0.0"
+	}
+
+	bindingHost := rawHost
+	if strings.Contains(bindingHost, ":") && !strings.HasPrefix(bindingHost, "[") {
+		bindingHost = "[" + bindingHost + "]"
+	}
+
+	info := listenInfo{
+		Binding: fmt.Sprintf("http://%s:%s", bindingHost, port),
+	}
+
+	if host == "" || rawHost == "0.0.0.0" || rawHost == "::" {
+		guess := guessLocalIPv4()
+		if guess != "" {
+			if strings.Contains(guess, ":") && !strings.HasPrefix(guess, "[") {
+				guess = "[" + guess + "]"
+			}
+			info.Access = fmt.Sprintf("http://%s:%s", guess, port)
+		}
+	}
+
+	return info
+}
+
+func guessLocalIPv4() string {
+	addrs, err := net.InterfaceAddrs()
+	if err == nil {
+		for _, address := range addrs {
+			if ipNet, ok := address.(*net.IPNet); ok && !ipNet.IP.IsLoopback() {
+				if ip4 := ipNet.IP.To4(); ip4 != nil {
+					return ip4.String()
+				}
+			}
+		}
+	}
+	return "127.0.0.1"
+}
+
 func Execute() {
 	parser := argparse.NewParser("nexttrace", "An open source visual route tracking CLI tool")
 	// Create string flag
@@ -67,6 +135,7 @@ func Execute() {
 	srcAddr := parser.String("s", "source", &argparse.Options{Help: "Use source address src_addr for outgoing packets"})
 	srcPort := parser.Int("", "source-port", &argparse.Options{Help: "Use source port src_port for outgoing packets"})
 	srcDev := parser.String("D", "dev", &argparse.Options{Help: "Use the following Network Devices as the source address in outgoing packets"})
+	deployListen := parser.String("", "listen", &argparse.Options{Help: "Set listen address for web console (e.g. 127.0.0.1:30080)"})
 	deploy := parser.Flag("", "depoly", &argparse.Options{Help: "Start the Gin powered web console"})
 	//router := parser.Flag("R", "route", &argparse.Options{Help: "Show Routing Table [Provided By BGP.Tools]"})
 	packetInterval := parser.Int("z", "send-time", &argparse.Options{Default: 50, Help: "Set how many [milliseconds] between sending each packet. Useful when some routers use rate-limit for ICMP messages"})
@@ -106,16 +175,27 @@ func Execute() {
 
 	if *deploy {
 		capabilitiesCheck()
-		listenAddr := os.Getenv("NEXTTRACE_DEPLOY_ADDR")
-		if listenAddr == "" {
-			listenAddr = os.Getenv("NTRACE_DEPLOY_ADDR")
+		envListen := os.Getenv("NEXTTRACE_DEPLOY_ADDR")
+		if envListen == "" {
+			envListen = os.Getenv("NTRACE_DEPLOY_ADDR")
 		}
-		fmt.Printf("启动 NextTrace Web 控制台，监听地址: %s\n", func(addr string) string {
-			if addr == "" {
-				return "(默认 :1080)"
+		listenAddr := envListen
+		if *deployListen != "" {
+			listenAddr = *deployListen
+		}
+		info := buildListenInfo(listenAddr)
+		if *deployListen == "" && envListen == "" {
+			if info.Access != "" {
+				fmt.Printf("启动 NextTrace Web 控制台，监听地址: %s\n", info.Access)
+			} else {
+				fmt.Printf("启动 NextTrace Web 控制台，监听地址: %s\n", info.Binding)
 			}
-			return addr
-		}(listenAddr))
+		} else {
+			fmt.Printf("启动 NextTrace Web 控制台，监听地址: %s\n", info.Binding)
+			if info.Access != "" && info.Access != info.Binding {
+				fmt.Printf("如需远程访问，请尝试: %s\n", info.Access)
+			}
+		}
 		if err := server.Run(listenAddr); err != nil {
 			if util.EnvDevMode {
 				panic(err)

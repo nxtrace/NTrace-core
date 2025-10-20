@@ -9,6 +9,13 @@ const resultNode = document.getElementById('result');
 const resultMetaNode = document.getElementById('result-meta');
 const submitBtn = document.getElementById('submit-btn');
 
+const wsScheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+const wsUrl = `${wsScheme}://${window.location.host}/ws/trace`;
+let socket = null;
+let traceCompleted = false;
+const hopStore = new Map();
+let latestSummary = {};
+
 function setStatus(state, message) {
   statusNode.className = `status status--${state}`;
   statusNode.textContent = message;
@@ -54,27 +61,42 @@ function readNumericValue(inputEl) {
   return Number.isFinite(num) ? num : undefined;
 }
 
-function clearResult() {
+function clearResult(resetState = false) {
   resultNode.innerHTML = '';
   resultNode.classList.add('hidden');
   resultMetaNode.innerHTML = '';
   resultMetaNode.classList.add('hidden');
+  if (resetState) {
+    hopStore.clear();
+    latestSummary = {};
+  }
 }
 
-function renderMeta(response) {
+function renderMeta(summary) {
   const rows = [];
-  rows.push(`解析结果：<strong>${response.resolved_ip}</strong>`);
-  rows.push(`数据源：<strong>${response.data_provider}</strong>`);
-  rows.push(`耗时：<strong>${response.duration_ms} ms</strong>`);
-  if (response.trace_map_url) {
-    rows.push(`地图：<a href="${response.trace_map_url}" target="_blank" rel="noreferrer">打开地图</a>`);
+  if (summary.resolved_ip) {
+    rows.push(`解析结果：<strong>${summary.resolved_ip}</strong>`);
+  }
+  if (summary.data_provider) {
+    rows.push(`数据源：<strong>${summary.data_provider}</strong>`);
+  }
+  if (summary.duration_ms !== undefined) {
+    rows.push(`耗时：<strong>${summary.duration_ms} ms</strong>`);
+  }
+  if (summary.trace_map_url) {
+    rows.push(`地图：<a href="${summary.trace_map_url}" target="_blank" rel="noreferrer">打开地图</a>`);
+  }
+  if (rows.length === 0) {
+    resultMetaNode.classList.add('hidden');
+    resultMetaNode.innerHTML = '';
+    return;
   }
   resultMetaNode.innerHTML = rows.map((line) => `<div>${line}</div>`).join('');
   resultMetaNode.classList.remove('hidden');
 }
 
-function renderResult(response) {
-  if (!response.hops || response.hops.length === 0) {
+function renderHops(hops) {
+  if (!hops || hops.length === 0) {
     resultNode.innerHTML = '<p>未获取到有效路由信息。</p>';
     resultNode.classList.remove('hidden');
     return;
@@ -91,7 +113,7 @@ function renderResult(response) {
   table.appendChild(thead);
 
   const tbody = document.createElement('tbody');
-  response.hops.forEach((hop) => {
+  hops.forEach((hop) => {
     const tr = document.createElement('tr');
     const ttlCell = document.createElement('td');
     ttlCell.textContent = hop.ttl;
@@ -108,6 +130,11 @@ function renderResult(response) {
   resultNode.innerHTML = '';
   resultNode.appendChild(table);
   resultNode.classList.remove('hidden');
+}
+
+function renderHopsFromStore() {
+  const hops = Array.from(hopStore.values()).sort((a, b) => a.ttl - b.ttl);
+  renderHops(hops);
 }
 
 function renderAttempts(attempts) {
@@ -201,9 +228,74 @@ function buildPayload() {
   return payload;
 }
 
-async function runTrace(evt) {
+function closeExistingSocket() {
+  if (socket) {
+    socket.onclose = null;
+    socket.onerror = null;
+    try {
+      socket.close();
+    } catch (_) {
+      // ignore
+    }
+    socket = null;
+  }
+}
+
+function handleSocketMessage(event) {
+  let msg;
+  try {
+    msg = JSON.parse(event.data);
+  } catch (err) {
+    setStatus('error', '收到无法解析的数据');
+    return;
+  }
+
+  switch (msg.type) {
+    case 'start': {
+      latestSummary = {...latestSummary, ...msg.data};
+      renderMeta(latestSummary);
+      break;
+    }
+    case 'hop': {
+      if (msg.data && typeof msg.data.ttl === 'number') {
+        hopStore.set(msg.data.ttl, msg.data);
+        renderHopsFromStore();
+      }
+      break;
+    }
+    case 'complete': {
+      traceCompleted = true;
+      submitBtn.disabled = false;
+      if (msg.data && Array.isArray(msg.data.hops)) {
+        hopStore.clear();
+        msg.data.hops.forEach((hop) => {
+          if (hop && typeof hop.ttl === 'number') {
+            hopStore.set(hop.ttl, hop);
+          }
+        });
+      }
+      latestSummary = {...latestSummary, ...msg.data};
+      renderMeta(latestSummary);
+      renderHopsFromStore();
+      setStatus('success', '探测完成');
+      closeExistingSocket();
+      break;
+    }
+    case 'error': {
+      traceCompleted = true;
+      submitBtn.disabled = false;
+      setStatus('error', msg.error || '探测失败');
+      closeExistingSocket();
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+function runTrace(evt) {
   evt.preventDefault();
-  clearResult();
+  clearResult(true);
 
   const payload = buildPayload();
   if (!payload.target) {
@@ -213,27 +305,39 @@ async function runTrace(evt) {
 
   setStatus('running', '正在探测，请稍候...');
   submitBtn.disabled = true;
+  traceCompleted = false;
+
+  closeExistingSocket();
 
   try {
-    const res = await fetch('/api/trace', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) {
-      const error = await res.json().catch(() => ({}));
-      const message = error.error || `探测失败: HTTP ${res.status}`;
-      throw new Error(message);
-    }
-    const data = await res.json();
-    renderMeta(data);
-    renderResult(data);
-    setStatus('success', '探测完成');
+    socket = new WebSocket(wsUrl);
   } catch (err) {
-    setStatus('error', err.message);
-  } finally {
+    setStatus('error', `无法建立连接: ${err.message}`);
     submitBtn.disabled = false;
+    return;
   }
+
+  socket.onopen = () => {
+    socket.send(JSON.stringify(payload));
+  };
+
+  socket.onmessage = handleSocketMessage;
+
+  socket.onerror = () => {
+    if (!traceCompleted) {
+      traceCompleted = true;
+      setStatus('error', 'WebSocket 连接出错');
+      submitBtn.disabled = false;
+    }
+  };
+
+  socket.onclose = () => {
+    if (!traceCompleted) {
+      setStatus('error', '连接已断开');
+      submitBtn.disabled = false;
+    }
+    socket = null;
+  };
 }
 
 document.addEventListener('DOMContentLoaded', () => {
