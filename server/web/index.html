@@ -50,6 +50,18 @@
           </div>
         </div>
 
+        <div class="form__group grid">
+          <div>
+            <label for="dst-port" id="label-dst-port">目的端口</label>
+            <input id="dst-port" name="dstPort" type="number" min="1" max="65535" disabled>
+            <small id="dst-port-hint">仅 TCP/UDP 模式有效</small>
+          </div>
+          <div>
+            <label for="payload-size" id="label-psize">负载大小</label>
+            <input id="payload-size" name="payloadSize" type="number" min="16" max="2048">
+          </div>
+        </div>
+
         <div class="form__group">
           <label class="checkbox">
             <input type="checkbox" id="disable-maptrace" name="disableMaptrace">

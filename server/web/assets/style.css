@@ -150,6 +150,21 @@ a:hover {
   gap: 0.4rem;
 }
 
+.form__group small {
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.form__group.disabled input {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.form__group.disabled label,
+.form__group.disabled small {
+  opacity: 0.65;
+}
+
 .form__group.grid {
   display: grid;
   gap: 0.75rem;

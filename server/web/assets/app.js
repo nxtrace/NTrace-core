@@ -4,6 +4,9 @@ const providerSelect = document.getElementById('data-provider');
 const queriesInput = document.getElementById('queries');
 const maxHopsInput = document.getElementById('max-hops');
 const disableMaptraceInput = document.getElementById('disable-maptrace');
+const dstPortHint = document.getElementById('dst-port-hint');
+const dstPortInput = document.getElementById('dst-port');
+const payloadSizeInput = document.getElementById('payload-size');
 const statusNode = document.getElementById('status');
 const resultNode = document.getElementById('result');
 const resultMetaNode = document.getElementById('result-meta');
@@ -74,6 +77,9 @@ const uiText = {
     timeoutPartial: '部分超时',
     unknownAddress: '未知地址',
     unknownError: '未知错误',
+    labelDstPort: '目的端口',
+    labelPSize: '负载大小',
+    hintDstPort: '仅 TCP/UDP 模式有效',
     attemptBadge: '探测',
     noResult: '未获取到有效路由信息。',
     footer: '当前会话仅提供基础功能，更多高级选项请使用 CLI。',
@@ -120,6 +126,9 @@ const uiText = {
     timeoutPartial: 'Partial timeout',
     unknownAddress: 'Unknown',
     unknownError: 'Unknown error',
+    labelDstPort: 'Destination Port',
+    labelPSize: 'Payload Size',
+    hintDstPort: 'Active for TCP/UDP only',
     attemptBadge: 'Probe',
     noResult: 'No valid hops collected yet.',
     footer: 'For advanced options, please use the CLI.',
@@ -165,6 +174,9 @@ async function loadOptions() {
     queriesInput.value = data.defaultOptions.queries;
     maxHopsInput.value = data.defaultOptions.max_hops;
     disableMaptraceInput.checked = data.defaultOptions.disable_maptrace;
+    payloadSizeInput.value = data.defaultOptions.packet_size || payloadSizeInput.value || 52;
+    dstPortInput.value = data.defaultOptions.port || dstPortInput.value || '';
+    updateDstPortState();
   } catch (err) {
     setStatus('error', `${t('statusOptionsFailed')} ${err.message}`, false);
     submitBtn.disabled = true;
@@ -438,6 +450,16 @@ function buildPayload() {
     payload.max_hops = maxHops;
   }
 
+  const dstPort = readNumericValue(dstPortInput);
+  if (dstPort !== undefined) {
+    payload.port = dstPort;
+  }
+
+  const psize = readNumericValue(payloadSizeInput);
+  if (psize !== undefined) {
+    payload.packet_size = psize;
+  }
+
   return payload;
 }
 
@@ -591,6 +613,9 @@ function applyTranslations() {
   labelQueries.textContent = t('labelQueries');
   labelMaxHops.textContent = t('labelMaxHops');
   labelDisableMap.textContent = t('labelDisableMap');
+  document.getElementById('label-dst-port').textContent = t('labelDstPort');
+  document.getElementById('label-psize').textContent = t('labelPSize');
+  dstPortHint.textContent = t('hintDstPort');
   targetInput.placeholder = t('placeholderTarget');
   submitBtn.textContent = t('buttonStart');
   cacheBtn.textContent = t('buttonClearCache');
@@ -598,6 +623,19 @@ function applyTranslations() {
   renderMeta(latestSummary);
   renderHopsFromStore();
   refreshStatus();
+  updateDstPortState();
+}
+
+function updateDstPortState() {
+  const proto = (protocolSelect.value || '').toLowerCase();
+  const enabled = proto === 'tcp' || proto === 'udp';
+  dstPortInput.disabled = !enabled;
+  dstPortInput.parentElement.classList.toggle('disabled', !enabled);
+  if (!enabled) {
+    dstPortInput.value = '';
+  } else if (!dstPortInput.value) {
+    dstPortInput.value = proto === 'tcp' ? '80' : '33434';
+  }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -608,4 +646,9 @@ document.addEventListener('DOMContentLoaded', () => {
   langToggleBtn.addEventListener('click', toggleLanguage);
   cacheBtn.addEventListener('click', () => clearCache(false));
   providerSelect.addEventListener('change', () => clearCache(true));
+  protocolSelect.addEventListener('change', () => {
+    updateDstPortState();
+    clearCache(true);
+  });
+  payloadSizeInput.addEventListener('change', () => clearCache(true));
 });
