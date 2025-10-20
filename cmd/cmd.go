@@ -194,6 +194,7 @@ func Execute() {
 				fmt.Printf("如需远程访问，请尝试: %s\n", info.Access)
 			}
 		}
+		fmt.Println("注意：Web 控制台的安全性有限，请在确保安全的前提下使用，如有必要请使用ACL等方式加强安全性")
 		if err := server.Run(listenAddr); err != nil {
 			if util.EnvDevMode {
 				panic(err)
