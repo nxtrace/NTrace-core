@@ -149,7 +149,7 @@ func Execute() {
 		Help: "Choose the language for displaying [en, cn]"})
 	file := parser.String("", "file", &argparse.Options{Help: "Read IP Address or domain name from file"})
 	noColor := parser.Flag("C", "no-color", &argparse.Options{Help: "Disable Colorful Output"})
-	from := parser.String("", "from", &argparse.Options{Help: "Run traceroute via Globalping (globalping.io) from a specified location. The location field accepts continents, countries, regions, cities, ASNs, ISPs, or cloud regions."})
+	from := parser.String("", "from", &argparse.Options{Help: "Run traceroute via Globalping (https://globalping.io/network) from a specified location. The location field accepts continents, countries, regions, cities, ASNs, ISPs, or cloud regions."})
 
 	err := parser.Parse(os.Args)
 	if err != nil {

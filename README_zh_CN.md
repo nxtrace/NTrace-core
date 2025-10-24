@@ -504,6 +504,8 @@ nexttrace --pow-provider sakura
 
 [PeeringDB](https://www.peeringdb.com) 无偿提供了本项目的一些数据支持
 
+[Globalping](https://globalping.io) 一个开源且免费的项目，提供全球范围内运行 traceroute 等网络测试的访问服务
+
 [sjlleo](https://github.com/sjlleo) 项目永远的领导者、创始人及核心贡献者
 
 [tsosunchia](https://github.com/tsosunchia) 项目现任管理、基础设施运维及核心贡献者

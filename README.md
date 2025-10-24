@@ -537,6 +537,8 @@ This Project uses [JetBrain Open-Source Project License](https://jb.gg/OpenSourc
 
 [PeeringDB](https://www.peeringdb.com) Provided some data support for this project free of charge
 
+[Globalping](https://globalping.io) An open source and free project that provides global access to run network tests like traceroute
+
 [sjlleo](https://github.com/sjlleo) The perpetual leader, founder, and core contributors
 
 [tsosunchia](https://github.com/tsosunchia) The project chair, infra maintainer, and core contributors
