@@ -375,11 +375,12 @@ Usage: nexttrace [-h|--help] [--init] [-4|--ipv4] [-6|--ipv6] [-T|--tcp]
                  [-o|--output] [-t|--table] [--raw] [-j|--json] [-c|--classic]
                  [-f|--first <integer>] [-M|--map] [-e|--disable-mpls]
                  [-V|--version] [-s|--source "<value>"] [--source-port
-                 <integer>] [-D|--dev "<value>"] [-z|--send-time <integer>]
-                 [-i|--ttl-time <integer>] [--timeout <integer>] [--psize
-                 <integer>] [_positionalArg_nexttrace_36 "<value>"]
-                 [--dot-server (dnssb|aliyun|dnspod|google|cloudflare)]
-                 [-g|--language (en|cn)] [--file "<value>"] [-C|--no-color]
+                 <integer>] [-D|--dev "<value>"] [--listen "<value>"]
+                 [--depoly] [-z|--send-time <integer>] [-i|--ttl-time
+                 <integer>] [--timeout <integer>] [--psize <integer>]
+                 [_positionalArg_nexttrace_38 "<value>"] [--dot-server
+                 (dnssb|aliyun|dnspod|google|cloudflare)] [-g|--language
+                 (en|cn)] [--file "<value>"] [-C|--no-color] [--from "<value>"]
 
 Arguments:
 
@@ -408,8 +409,8 @@ Arguments:
       --max-attempts                 Set the max number of attempts per TTL
                                      (instead of a fixed auto value)
   -d  --data-provider                Choose IP Geograph Data Provider [IP.SB,
-                                     IPInfo, IPInsight, IP-API.com, IPInfoLocal,
-                                     CHUNZHEN, disable-geoip].
+                                     IPInfo, IPInsight, IP-API.com,
+                                     IPInfoLocal, CHUNZHEN, disable-geoip].
                                      Default: LeoMoeAPI
       --pow-provider                 Choose PoW Provider [api.nxtrace.org,
                                      sakura] For China mainland users, please
@@ -440,6 +441,9 @@ Arguments:
                                      packets
   -D  --dev                          Use the following Network Devices as the
                                      source address in outgoing packets
+      --listen                       Set listen address for web console (e.g.
+                                     127.0.0.1:30080)
+      --depoly                       Start the Gin powered web console
   -z  --send-time                    Set how many [milliseconds] between
                                      sending each packet. Useful when some
                                      routers use rate-limit for ICMP messages.
@@ -452,7 +456,7 @@ Arguments:
                                      sockets open before giving up on the
                                      connection. Default: 1000
       --psize                        Set the payload size. Default: 52
-      --_positionalArg_nexttrace_36  IP Address or domain name
+      --_positionalArg_nexttrace_38  IP Address or domain name
       --dot-server                   Use DoT Server for DNS Parse [dnssb,
                                      aliyun, dnspod, google, cloudflare]
   -g  --language                     Choose the language for displaying [en,
@@ -460,10 +464,10 @@ Arguments:
       --file                         Read IP Address or domain name from file
   -C  --no-color                     Disable Colorful Output
       --from                         Run traceroute via Globalping
-                                     (globalping.io) from a specified location.
-                                     The location field accepts continents,
-                                     countries, regions, cities, ASNs, ISPs, or
-                                     cloud regions.
+                                     (https://globalping.io/network) from a
+                                     specified location. The location field
+                                     accepts continents, countries, regions,
+                                     cities, ASNs, ISPs, or cloud regions.
 ```
 
 ## Project screenshot
