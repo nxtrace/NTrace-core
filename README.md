@@ -329,6 +329,23 @@ nexttrace -d ip-api.com -m 20 -T -p 443 -q 5 -n 1.1.1.1
 nexttrace -T -q 2 --parallel-requests 1 -t -P 2001:4860:4860::8888
 ```
 
+### Globalping
+
+[Globalping](https://globalping.io/) provides access to thousands of community hosted probes to run network tests and measurements.
+
+Run traceroute from a specified location by using the `--from` flag. The location field accepts continents, countries, regions, cities, ASNs, ISPs, or cloud regions.
+
+```bash
+nexttrace google.com --from Germany
+nexttrace google.com --from comcast+california
+```
+
+A limit of 250 tests per hour is set for all anonymous users. To double the limit to 500 per hour please set the `GLOBALPING_TOKEN` environment variable with your token.
+
+```bash
+export GLOBALPING_TOKEN=your_token_here
+```
+
 ### IP Database
 
 We use [bgp.tools](https://bgp.tools) as a data provider for routing tables.
@@ -442,6 +459,11 @@ Arguments:
                                      cn]. Default: cn
       --file                         Read IP Address or domain name from file
   -C  --no-color                     Disable Colorful Output
+      --from                         Run traceroute via Globalping
+                                     (globalping.io) from a specified location.
+                                     The location field accepts continents,
+                                     countries, regions, cities, ASNs, ISPs, or
+                                     cloud regions.
 ```
 
 ## Project screenshot

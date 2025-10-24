@@ -8,6 +8,8 @@ require (
 	github.com/gin-gonic/gin v1.11.0
 	github.com/google/gopacket v1.1.19
 	github.com/gorilla/websocket v1.5.3
+	github.com/jsdelivr/globalping-cli v1.5.1-0.20251021113849-e3a634e8349d
+	github.com/lionsoul2014/ip2region v2.11.2+incompatible
 	github.com/oschwald/maxminddb-golang v1.13.1
 	github.com/rodaine/table v1.3.0
 	github.com/spf13/viper v1.21.0
@@ -22,6 +24,7 @@ require (
 )
 
 require (
+	github.com/andybalholm/brotli v1.1.1 // indirect
 	github.com/bytedance/gopkg v0.1.3 // indirect
 	github.com/bytedance/sonic v1.14.1 // indirect
 	github.com/bytedance/sonic/loader v0.3.0 // indirect
