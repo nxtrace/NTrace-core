@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/jsdelivr/globalping-cli/globalping"
@@ -122,8 +123,18 @@ func GlobalpingTraceroute(opts *GlobalpingOptions, config *Config) (*Result, *gl
 }
 
 func mapGlobalpingHop(ttl int, gpHop *globalping.MTRHop, timing *globalping.MTRTiming, geoMap map[string]*ipgeo.IPGeoData, config *Config) Hop {
+	resolvedHostname := ""
+	if config.RDNS {
+		if raw := strings.TrimSpace(gpHop.ResolvedHostname); raw != "" {
+			trimmed := strings.TrimSuffix(raw, ".")
+			if net.ParseIP(trimmed) == nil {
+				resolvedHostname = CanonicalHostname(trimmed)
+			}
+		}
+	}
+
 	hop := Hop{
-		Hostname: gpHop.ResolvedHostname,
+		Hostname: resolvedHostname,
 		TTL:      ttl,
 		Lang:     config.Lang,
 	}
@@ -135,7 +146,8 @@ func mapGlobalpingHop(ttl int, gpHop *globalping.MTRHop, timing *globalping.MTRT
 		if geo, ok := geoMap[gpHop.ResolvedAddress]; ok {
 			hop.Geo = geo
 		} else {
-			hop.fetchIPData(*config)
+			// 此处不处理错误
+			_ = hop.fetchIPData(*config)
 			geoMap[gpHop.ResolvedAddress] = hop.Geo
 		}
 	}
