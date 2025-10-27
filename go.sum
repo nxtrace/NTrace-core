@@ -48,8 +48,8 @@ github.com/google/gopacket v1.1.19 h1:ves8RnFZPGiFnTS0uPQStjwru6uO6h+nlr9j6fL7kF
 github.com/google/gopacket v1.1.19/go.mod h1:iJ8V8n6KS+z2U1A8pUwu8bW5SyEMkXJB8Yo/Vo+TKTo=
 github.com/gorilla/websocket v1.5.3 h1:saDtZ6Pbx/0u+bgYQ3q96pZgCzfhKXGPqt7kZ72aNNg=
 github.com/gorilla/websocket v1.5.3/go.mod h1:YR8l580nyteQvAITg2hZ9XVh4b55+EU/adAjf1fMHhE=
-github.com/jsdelivr/globalping-cli v1.5.1-0.20251021113849-e3a634e8349d h1:dxJjKRuvysrgArYD++dieqh9hWtb0+upLgsgGW5saPM=
-github.com/jsdelivr/globalping-cli v1.5.1-0.20251021113849-e3a634e8349d/go.mod h1:Gw70OWvN6hIt0t4hftyUhcHuJQMTn4CvoobJiaTU0qg=
+github.com/jsdelivr/globalping-cli v1.5.1 h1:7RZNmIljSBXe0xBeOoGQHXZNwHo6zDuQ0BI9hF12gLY=
+github.com/jsdelivr/globalping-cli v1.5.1/go.mod h1:Gw70OWvN6hIt0t4hftyUhcHuJQMTn4CvoobJiaTU0qg=
 github.com/json-iterator/go v1.1.12 h1:PV8peI4a0ysnczrg+LtxykD8LfKY9ML6u2jnxaEnrnM=
 github.com/json-iterator/go v1.1.12/go.mod h1:e30LSqwooZae/UwlEbR2852Gd8hjQvJoHmT4TnhNGBo=
 github.com/klauspost/cpuid/v2 v2.3.0 h1:S4CRMLnYUhGeDFDqkGriYKdfoFlDnMtqTiI/sFzhA9Y=

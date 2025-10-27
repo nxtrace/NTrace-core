@@ -8,7 +8,7 @@ require (
 	github.com/gin-gonic/gin v1.11.0
 	github.com/google/gopacket v1.1.19
 	github.com/gorilla/websocket v1.5.3
-	github.com/jsdelivr/globalping-cli v1.5.1-0.20251021113849-e3a634e8349d
+	github.com/jsdelivr/globalping-cli v1.5.1
 	github.com/oschwald/maxminddb-golang v1.13.1
 	github.com/rodaine/table v1.3.0
 	github.com/spf13/viper v1.21.0
