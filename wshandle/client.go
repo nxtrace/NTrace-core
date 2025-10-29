@@ -131,6 +131,9 @@ func (c *WsConn) messageReceiveHandler() {
 			if string(msg) != "pong" {
 				c.MsgReceiveCh <- string(msg)
 			}
+		} else {
+			// 降低断线时期的 CPU 占用
+			time.Sleep(200 * time.Millisecond)
 		}
 	}
 }
