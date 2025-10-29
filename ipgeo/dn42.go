@@ -13,7 +13,7 @@ func LtdCodeToCountryOrAreaName(Code string) string {
 	Code = strings.ToLower(Code)
 	for i, v := range regionCode {
 		if strings.Contains(Code, v) {
-			return regionName[i]
+			return strings.TrimSpace(regionName[i])
 		}
 	}
 	return Code
