@@ -146,14 +146,10 @@ func prepareTrace(req traceRequest) (*traceExecution, int, error) {
 		exec.Req.DN42 = true
 	}
 
-	needsLeoWS := false
-	if strings.EqualFold(dataProvider, "LEOMOEAPI") {
-		if util.EnvDataProvider != "" {
-			dataProvider = util.EnvDataProvider
-		}
-	}
-	if strings.EqualFold(dataProvider, "LEOMOEAPI") {
-		needsLeoWS = true
+	needsLeoWS := strings.EqualFold(dataProvider, "LEOMOEAPI")
+	if needsLeoWS && util.EnvDataProvider != "" {
+		dataProvider = util.EnvDataProvider
+		needsLeoWS = strings.EqualFold(dataProvider, "LEOMOEAPI")
 	}
 
 	if exec.Req.DN42 {

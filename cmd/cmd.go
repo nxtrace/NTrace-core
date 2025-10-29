@@ -395,14 +395,16 @@ func Execute() {
 	//	defer wg.Done()
 	//}()
 	var leoWs *wshandle.WsConn
-	if strings.EqualFold(*dataOrigin, "LEOMOEAPI") {
+	needsLeoWS := strings.EqualFold(*dataOrigin, "LEOMOEAPI")
+	if needsLeoWS {
 		if !strings.EqualFold(*powProvider, "api.nxtrace.org") {
 			util.PowProviderParam = *powProvider
 		}
 		if util.EnvDataProvider != "" {
 			*dataOrigin = util.EnvDataProvider
 		}
-		if strings.EqualFold(*dataOrigin, "LEOMOEAPI") {
+		needsLeoWS = strings.EqualFold(*dataOrigin, "LEOMOEAPI")
+		if needsLeoWS {
 			leoWs = wshandle.New()
 			if leoWs != nil {
 				leoWs.Interrupt = make(chan os.Signal, 1)
