@@ -376,7 +376,7 @@ Usage: nexttrace [-h|--help] [--init] [-4|--ipv4] [-6|--ipv6] [-T|--tcp]
                  [-f|--first <integer>] [-M|--map] [-e|--disable-mpls]
                  [-V|--version] [-s|--source "<value>"] [--source-port
                  <integer>] [-D|--dev "<value>"] [--listen "<value>"]
-                 [--depoly] [-z|--send-time <integer>] [-i|--ttl-time
+                 [--deploy] [-z|--send-time <integer>] [-i|--ttl-time
                  <integer>] [--timeout <integer>] [--psize <integer>]
                  [_positionalArg_nexttrace_38 "<value>"] [--dot-server
                  (dnssb|aliyun|dnspod|google|cloudflare)] [-g|--language
@@ -443,7 +443,7 @@ Arguments:
                                      source address in outgoing packets
       --listen                       Set listen address for web console (e.g.
                                      127.0.0.1:30080)
-      --depoly                       Start the Gin powered web console
+      --deploy                       Start the Gin powered web console
   -z  --send-time                    Set how many [milliseconds] between
                                      sending each packet. Useful when some
                                      routers use rate-limit for ICMP messages.
