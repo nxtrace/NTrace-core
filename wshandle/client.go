@@ -18,6 +18,15 @@ import (
 	"github.com/nxtrace/NTrace-core/util"
 )
 
+func formatHostPort(addr, port string) string {
+	clean := strings.TrimSpace(addr)
+	clean = strings.Trim(clean, "[]")
+	if strings.Contains(clean, ":") {
+		return "[" + clean + "]:" + port
+	}
+	return clean + ":" + port
+}
+
 type WsConn struct {
 	Connecting   bool
 	Connected    bool            // 连接状态
@@ -171,7 +180,7 @@ func (c *WsConn) recreateWsConn() {
 		// 刷新一次最优 IP，防止旧 IP 已失效
 		fastIp = util.GetFastIP(host, port, true)
 	}
-	u := url.URL{Scheme: "wss", Host: fastIp + ":" + port, Path: "/v3/ipGeoWs"}
+	u := url.URL{Scheme: "wss", Host: formatHostPort(fastIp, port), Path: "/v3/ipGeoWs"}
 	// log.Printf("connecting to %s", u.String())
 	jwtToken, ua := envToken, []string{"Privileged Client"}
 	err := error(nil)
@@ -221,10 +230,6 @@ func (c *WsConn) recreateWsConn() {
 		log.Println("dial:", err)
 		// <-time.After(time.Second * 1)
 		c.setConnectionState(false, false)
-		cacheToken = ""
-		if cacheTokenFailedTimes > 3 {
-			cacheToken = ""
-		}
 		cacheTokenFailedTimes += 1
 		time.Sleep(1 * time.Second)
 		//fmt.Println("重连失败", cacheTokenFailedTimes, "次")
@@ -246,9 +251,6 @@ func createWsConn() *WsConn {
 	// 如果 host 是一个 IP 使用默认域名
 	if valid := net.ParseIP(host); valid != nil {
 		fastIp = host
-		if len(strings.Split(fastIp, ":")) > 1 {
-			fastIp = "[" + fastIp + "]"
-		}
 		host = "api.nxtrace.org"
 	} else {
 		// 默认配置完成，开始寻找最优 IP
@@ -295,7 +297,7 @@ func createWsConn() *WsConn {
 	if proxyUrl != nil {
 		dialer.Proxy = http.ProxyURL(proxyUrl)
 	}
-	u := url.URL{Scheme: "wss", Host: fastIp + ":" + port, Path: "/v3/ipGeoWs"}
+	u := url.URL{Scheme: "wss", Host: formatHostPort(fastIp, port), Path: "/v3/ipGeoWs"}
 	// log.Printf("connecting to %s", u.String())
 
 	c, _, err := dialer.Dial(u.String(), requestHeader)
@@ -311,7 +313,6 @@ func createWsConn() *WsConn {
 	if err != nil {
 		log.Println("dial:", err)
 		// <-time.After(time.Second * 1)
-		wsconn.setConnected(false)
 		cacheTokenFailedTimes++
 		wsconn.Done = make(chan struct{})
 		go wsconn.keepAlive()
