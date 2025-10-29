@@ -431,25 +431,47 @@ func normalizeTarget(input string) (string, error) {
 		return "", errors.New("target is required")
 	}
 
+	fallbackSource := target
+	host := ""
+
 	if strings.Contains(target, "://") {
 		u, err := url.Parse(target)
-		if err == nil && u.Host != "" {
-			target = u.Host
+		if err != nil {
+			return "", fmt.Errorf("invalid target format: %w", err)
+		}
+		if u.Host != "" {
+			host = u.Host
+		} else if u.Path != "" {
+			fallbackSource = strings.TrimPrefix(target, u.Scheme+"://")
 		}
 	}
 
-	if strings.Contains(target, "/") {
-		u, err := url.Parse(target)
-		if err == nil && u.Host != "" {
-			target = u.Host
-		} else {
-			target = "n" + target
-			parts := strings.Split(target, "/")
-			if len(parts) < 3 {
-				return "", errors.New("invalid target format")
-			}
-			target = parts[2]
+	if host == "" && strings.Contains(target, "/") {
+		parseTarget := target
+		if !strings.HasPrefix(parseTarget, "//") {
+			parseTarget = "//" + parseTarget
 		}
+		if u, err := url.Parse(parseTarget); err == nil && u.Host != "" {
+			host = u.Host
+		} else {
+			fallbackSource = target
+		}
+	}
+
+	if host == "" && strings.Contains(fallbackSource, "/") {
+		idx := strings.Index(fallbackSource, "/")
+		if idx <= 0 {
+			return "", errors.New("invalid target format")
+		}
+		candidate := strings.TrimSpace(fallbackSource[:idx])
+		if candidate == "" {
+			return "", errors.New("invalid target format")
+		}
+		host = candidate
+	}
+
+	if host != "" {
+		target = host
 	}
 
 	if strings.Contains(target, "]") && strings.Contains(target, "[") {
@@ -464,7 +486,6 @@ func normalizeTarget(input string) (string, error) {
 
 	return strings.TrimSpace(target), nil
 }
-
 func normalizeDataProvider(provider string, alias string) string {
 	candidate := strings.TrimSpace(provider)
 	if candidate == "" {
