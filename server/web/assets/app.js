@@ -1126,19 +1126,38 @@ function renderMTRStats(stats) {
   resultNode.classList.remove('hidden');
 }
 
+const PROTOTYPE_POLLUTION_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+function normalizeErrorKey(key) {
+  const trimmed = String(key || '').trim();
+  if (!trimmed || PROTOTYPE_POLLUTION_KEYS.has(trimmed)) {
+    return null;
+  }
+  return trimmed;
+}
+
 function mergeErrorMaps(target, source) {
-  const result = target ? { ...target } : {};
+  const result = Object.create(null);
+  if (target) {
+    Object.keys(target).forEach((key) => {
+      const normalizedKey = normalizeErrorKey(key);
+      if (!normalizedKey) {
+        return;
+      }
+      result[normalizedKey] = Number(target[key]) || 0;
+    });
+  }
   if (!source) {
     return result;
   }
   Object.keys(source).forEach((key) => {
-    const trimmedKey = String(key || '').trim();
-    if (!trimmedKey) {
+    const normalizedKey = normalizeErrorKey(key);
+    if (!normalizedKey) {
       return;
     }
-    const current = Number(result[trimmedKey]) || 0;
+    const current = Number(result[normalizedKey]) || 0;
     const addition = Number(source[key]) || 0;
-    result[trimmedKey] = current + addition;
+    result[normalizedKey] = current + addition;
   });
   return result;
 }
@@ -1147,13 +1166,13 @@ function cloneErrors(source) {
   if (!source) {
     return null;
   }
-  const result = {};
+  const result = Object.create(null);
   Object.keys(source).forEach((key) => {
-    const trimmedKey = String(key || '').trim();
-    if (!trimmedKey) {
+    const normalizedKey = normalizeErrorKey(key);
+    if (!normalizedKey) {
       return;
     }
-    result[trimmedKey] = Number(source[key]) || 0;
+    result[normalizedKey] = Number(source[key]) || 0;
   });
   return result;
 }
