@@ -394,22 +394,30 @@ func Execute() {
 	//go func() {
 	//	defer wg.Done()
 	//}()
-	if strings.EqualFold(*dataOrigin, "LEOMOEAPI") {
+	var leoWs *wshandle.WsConn
+	needsLeoWS := strings.EqualFold(*dataOrigin, "LEOMOEAPI")
+	if needsLeoWS {
 		if !strings.EqualFold(*powProvider, "api.nxtrace.org") {
 			util.PowProviderParam = *powProvider
 		}
 		if util.EnvDataProvider != "" {
 			*dataOrigin = util.EnvDataProvider
-		} else {
-			w := wshandle.New()
-			w.Interrupt = make(chan os.Signal, 1)
-			signal.Notify(w.Interrupt, os.Interrupt)
-			defer func() {
-				if w.Conn != nil {
-					_ = w.Conn.Close()
-				}
-			}()
 		}
+		needsLeoWS = strings.EqualFold(*dataOrigin, "LEOMOEAPI")
+		if needsLeoWS {
+			leoWs = wshandle.New()
+			if leoWs != nil {
+				leoWs.Interrupt = make(chan os.Signal, 1)
+				signal.Notify(leoWs.Interrupt, os.Interrupt)
+			}
+		}
+	}
+	if leoWs != nil {
+		defer func() {
+			if leoWs.Conn != nil {
+				_ = leoWs.Conn.Close()
+			}
+		}()
 	}
 
 	if *from != "" {
