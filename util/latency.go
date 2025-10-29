@@ -49,8 +49,9 @@ func GetFastIP(domain string, port string, enableOutput bool) string {
 	}
 
 	if len(ips) == 0 {
-		// 添加默认IP 45.88.195.154
+		// 添加默认IP 45.88.195.154 2605:52c0:2:954:114:514:1919:810
 		ips = append(ips, net.ParseIP("45.88.195.154"))
+		ips = append(ips, net.ParseIP("2605:52c0:2:954:114:514:1919:810"))
 	}
 
 	for _, ip := range ips {
