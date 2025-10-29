@@ -508,9 +508,6 @@ body:not(.mode-mtr) .attempt__mpls {
   margin-top: 0.2rem;
 }
 
-.hidden {
-  display: none;
-}
 
 .footer {
   padding: 1.5rem;
