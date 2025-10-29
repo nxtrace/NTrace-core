@@ -509,8 +509,6 @@ func normalizeDataProvider(provider string, alias string) string {
 		return "IPInfoLocal"
 	case "LEOMOEAPI", "LEOMOE":
 		return "LeoMoeAPI"
-	case "IP2REGION", "IP2 REGION":
-		return "Ip2region"
 	case "CHUNZHEN":
 		return "chunzhen"
 	case "DN42":
