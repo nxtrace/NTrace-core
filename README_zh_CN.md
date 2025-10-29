@@ -327,6 +327,23 @@ nexttrace -d ip-api.com -m 20 -T -p 443 -q 5 -n 1.1.1.1
 nexttrace -T -q 2 --parallel-requests 1 -t -P 2001:4860:4860::8888
 ```
 
+### Globalping
+
+[Globalping](https://globalping.io/) 提供了对成千上万由社区托管的探针的访问能力，可用于运行网络测试和测量。
+
+通过 `--from` 参数可以选择使用指定位置的探针来执行 traceroute。位置字段支持洲、国家、地区、城市、ASN、ISP 或云厂商区域等多种类型。
+
+```bash
+nexttrace google.com --from Germany
+nexttrace google.com --from comcast+california
+```
+
+匿名用户默认每小时限额为 250 次测试。将 `GLOBALPING_TOKEN` 环境变量设置为你的令牌后，可将限额提升至每小时 500 次。
+
+```bash
+export GLOBALPING_TOKEN=your_token_here
+```
+
 ### 全部用法详见 Usage 菜单
 
 ```shell
