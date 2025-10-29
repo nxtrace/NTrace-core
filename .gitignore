@@ -171,3 +171,4 @@ dist/
 NTrace-core
 
 .gocache
+.gomodcache

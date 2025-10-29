@@ -1,50 +1,56 @@
 package dn42
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
+
+	"github.com/spf13/viper"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestPTR(t *testing.T) {
+func TestFindPtrRecordMatchesCity(t *testing.T) {
+	dir := t.TempDir()
+	ptrPath := filepath.Join(dir, "ptr.csv")
+	content := "HKG,hk,Hong Kong,Hong Kong\nLAX,us,California,Los Angeles\n"
+	require.NoError(t, os.WriteFile(ptrPath, []byte(content), 0o644))
 
-	// example_mis := []string{
-	// 	"sloutravel.com",
-	// 	"memeslou.org",
-	// 	"followsloucity.net",
-	// 	"slouslou.slou",
-	// 	"slouslou8.slou",
-	// }
+	viper.Set("ptrPath", ptrPath)
+	t.Cleanup(viper.Reset)
 
-	// examples := []string{
+	row, err := FindPtrRecord("core.hongkong-1.example")
+	require.NoError(t, err)
 
-	// 	"1ge.slou.as1299.net",
-	// 	"1ge.slou2.as1299.net",
-	// 	"1ge-slou.as1299.net",
-	// 	"slou-1.as1299.net",
-	// 	"slou.as1299.com",
-	// 	"1ge-snge-6.as1299.net",
-	// 	"c-1.sin.sg.atlas.moeqing.com",
-	// 	"core.hkg1.hk.atlas.moeqing.com",
-	// 	"core.losangles.us.atlas.moeqing.com",
-	// }
+	assert.Equal(t, "hk", row.LtdCode)
+	assert.Equal(t, "Hong Kong", row.Region)
+	assert.Equal(t, "Hong Kong", row.City)
+}
 
-	// fmt.Println("容易误匹配的 PTR")
+func TestFindPtrRecordMatchesIATACode(t *testing.T) {
+	dir := t.TempDir()
+	ptrPath := filepath.Join(dir, "ptr.csv")
+	require.NoError(t, os.WriteFile(ptrPath, []byte("LAX,us,California,Los Angeles\n"), 0o644))
 
-	// for _, s := range example_mis {
-	// 	if r, err := FindPtrRecord("ptr.csv"); err == nil {
-	// 		fmt.Println(s, r)
-	// 	} else {
-	// 		fmt.Println(s, err)
-	// 	}
+	viper.Set("ptrPath", ptrPath)
+	t.Cleanup(viper.Reset)
 
-	// }
-	// fmt.Println("\n应该正常匹配的 PTR")
-	// for _, s := range examples {
-	// 	if r, err := FindPtrRecord("ptr.csv"); err == nil {
-	// 		fmt.Println(s, r)
-	// 	} else {
-	// 		fmt.Println(s, err)
-	// 	}
+	row, err := FindPtrRecord("edge.lax01.provider.test")
+	require.NoError(t, err)
 
-	// }
+	assert.Equal(t, "lax", row.IATACode)
+	assert.Equal(t, "us", row.LtdCode)
+	assert.Equal(t, "California", row.Region)
+}
 
+func TestFindPtrRecordNotFound(t *testing.T) {
+	dir := t.TempDir()
+	ptrPath := filepath.Join(dir, "ptr.csv")
+	require.NoError(t, os.WriteFile(ptrPath, []byte(""), 0o644))
+
+	viper.Set("ptrPath", ptrPath)
+	t.Cleanup(viper.Reset)
+
+	_, err := FindPtrRecord("unmatched.example")
+	require.Error(t, err)
 }

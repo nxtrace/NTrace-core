@@ -1,120 +1,54 @@
 package ipgeo
 
 import (
-	"errors"
-	"fmt"
-	"log"
-	"os"
-	"strconv"
+	"reflect"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-// import (
-// 	"testing"
-
-// 	"github.com/stretchr/testify/assert"
-// )
-
-func TestXxx(t *testing.T) {
-	const IdFixedHeader = "10"
-	var processID = fmt.Sprintf("%07b", os.Getpid()&0x7f) //取进程ID的前7位
-	var ttl = fmt.Sprintf("%06b", 95)                     //取TTL的后6位
-	fmt.Println(os.Getpid()&0x7f, 95)
-
-	var parity int
-	id := IdFixedHeader + processID + ttl
-	for _, c := range id {
-		if c == '1' {
-			parity++
-		}
+func TestGetSourceMappings(t *testing.T) {
+	t.Helper()
+	tests := []struct {
+		name  string
+		input string
+		want  Source
+	}{
+		{name: "dn42", input: "DN42", want: DN42},
+		{name: "leo default", input: "LEOMOEAPI", want: LeoIP},
+		{name: "ipsb", input: "ip.sb", want: IPSB},
+		{name: "ipinsight", input: "ipinsight", want: IPInSight},
+		{name: "ipapi alias", input: "ip-api.com", want: IPApiCom},
+		{name: "ipapi uppercase", input: "IPAPI.COM", want: IPApiCom},
+		{name: "ipinfo", input: "IPINFO", want: IPInfo},
+		{name: "ipinfo local", input: "ipinfolocal", want: IPInfoLocal},
+		{name: "chunzhen", input: "ChunZhen", want: Chunzhen},
+		{name: "disable geoip", input: "disable-geoip", want: disableGeoIP},
+		{name: "ipdb", input: "IPDB.One", want: IPDBOne},
+		{name: "fallback", input: "unknown", want: LeoIP},
 	}
-	if parity%2 == 0 {
-		id += "1"
-	} else {
-		id += "0"
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			got := GetSource(tc.input)
+			require.NotNil(t, got)
+			assert.Equal(t, reflect.ValueOf(tc.want).Pointer(), reflect.ValueOf(got).Pointer())
+		})
 	}
-	processId, ttlR, _ := reverseID(id)
-	log.Println(processId, ttlR)
 }
 
-func TestFilter(t *testing.T) {
-	res, err := Filter("fd11::1")
-	//打印whois信息
-	fmt.Println(res.Whois)
-	print(err)
+func TestLtdCodeToCountryOrAreaName(t *testing.T) {
+	assert.Equal(t, "United States", LtdCodeToCountryOrAreaName("US"))
+	assert.Equal(t, "China", LtdCodeToCountryOrAreaName("cn"))
+	assert.Equal(t, "Hong Kong", LtdCodeToCountryOrAreaName("HKG"))
+	assert.Equal(t, "unknown-code", LtdCodeToCountryOrAreaName("unknown-code"))
 }
 
-func reverseID(id string) (int64, int64, error) {
-	ttl, _ := strconv.ParseInt(id[9:15], 2, 32)
-	//process ID
-	processID, _ := strconv.ParseInt(id[2:9], 2, 32)
-
-	parity := 0
-	for i := 0; i < len(id)-1; i++ {
-		if id[i] == '1' {
-			parity++
-		}
-	}
-
-	if parity%2 == 1 {
-		if id[len(id)-1] == '0' {
-			fmt.Println("Parity check passed.")
-		} else {
-			fmt.Println("Parity check failed.")
-			return 0, 0, errors.New("err")
-		}
-	} else {
-		if id[len(id)-1] == '1' {
-			fmt.Println("Parity check passed.")
-		} else {
-			fmt.Println("Parity check failed.")
-			return 0, 0, errors.New("err")
-		}
-	}
-	return processID, ttl, nil
+func TestDisableGeoIP(t *testing.T) {
+	res, err := disableGeoIP("1.1.1.1", time.Second, "en", false)
+	require.NoError(t, err)
+	assert.Equal(t, &IPGeoData{}, res)
 }
-
-// func TestLeoIP(t *testing.T) {
-// 	// res, err := LeoIP("1.1.1.1")
-// 	// assert.Nil(t, err)
-// 	// assert.NotNil(t, res)
-// 	// assert.NotEmpty(t, res.Asnumber)
-// 	// assert.NotEmpty(t, res.Isp)
-// }
-
-// func TestIPSB(t *testing.T) {
-// 	// Not available
-// 	//res, err := IPSB("1.1.1.1")
-// 	//assert.Nil(t, err)
-// 	//assert.NotNil(t, res)
-// 	//assert.NotEmpty(t, res.Asnumber)
-// 	//assert.NotEmpty(t, res.Isp)
-// }
-
-// func TestIPInfo(t *testing.T) {
-// 	res, err := IPInfo("1.1.1.1")
-// 	assert.Nil(t, err)
-// 	assert.NotNil(t, res)
-// 	// assert.NotEmpty(t, res.Country)
-// 	assert.NotEmpty(t, res.City)
-// 	assert.NotEmpty(t, res.Prov)
-// }
-
-// func TestIPInSight(t *testing.T) {
-// 	// res, err := IPInSight("1.1.1.1")
-// 	// assert.Nil(t, err)
-// 	// assert.NotNil(t, res)
-// 	// assert.NotEmpty(t, res.Country)
-// 	// assert.NotEmpty(t, res.Prov)
-// 	// 这个库有时候不提供城市信息，返回值为""
-// 	//assert.NotEmpty(t, res.City)
-// }
-
-// func TestIPApiCom(t *testing.T) {
-// 	res, err := IPApiCom("1.1.1.1")
-// 	assert.Nil(t, err)
-// 	assert.NotNil(t, res)
-// 	assert.NotEmpty(t, res.Country)
-// 	assert.NotEmpty(t, res.City)
-// 	assert.NotEmpty(t, res.Prov)
-// }
