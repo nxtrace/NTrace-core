@@ -40,6 +40,18 @@ type WsConn struct {
 	stateMu      sync.RWMutex
 }
 
+func (c *WsConn) getConn() *websocket.Conn {
+	c.stateMu.RLock()
+	defer c.stateMu.RUnlock()
+	return c.Conn
+}
+
+func (c *WsConn) setConn(conn *websocket.Conn) {
+	c.stateMu.Lock()
+	c.Conn = conn
+	c.stateMu.Unlock()
+}
+
 var wsconn *WsConn
 var host, port, fastIp string
 var envToken = util.EnvToken
@@ -93,7 +105,12 @@ func (c *WsConn) keepAlive() {
 		for {
 			<-time.After(time.Second * 54)
 			if c.IsConnected() {
-				err := c.Conn.WriteMessage(websocket.TextMessage, []byte("ping"))
+				conn := c.getConn()
+				if conn == nil {
+					c.setConnected(false)
+					continue
+				}
+				err := conn.WriteMessage(websocket.TextMessage, []byte("ping"))
 				if err != nil {
 					log.Println(err)
 					c.setConnected(false)
@@ -121,7 +138,12 @@ func (c *WsConn) messageReceiveHandler() {
 	}()
 	for {
 		if c.IsConnected() {
-			_, msg, err := c.Conn.ReadMessage()
+			conn := c.getConn()
+			if conn == nil {
+				c.setConnected(false)
+				continue
+			}
+			_, msg, err := conn.ReadMessage()
 			if err != nil {
 				// 读取信息出错，连接已经意外断开
 				// log.Println(err)
@@ -146,11 +168,16 @@ func (c *WsConn) messageSendHandler() {
 			return
 		case t := <-c.MsgSendCh:
 			// log.Println(t)
-			if !c.IsConnected() || c.Conn == nil {
+			if !c.IsConnected() {
 				c.MsgReceiveCh <- `{"ip":"` + t + `", "asnumber":"API Server Error"}`
 				continue
 			}
-			if err := c.Conn.WriteMessage(websocket.TextMessage, []byte(t)); err != nil {
+			conn := c.getConn()
+			if conn == nil {
+				c.MsgReceiveCh <- `{"ip":"` + t + `", "asnumber":"API Server Error"}`
+				continue
+			}
+			if err := conn.WriteMessage(websocket.TextMessage, []byte(t)); err != nil {
 				log.Println("write:", err)
 				c.setConnected(false)
 				c.MsgReceiveCh <- `{"ip":"` + t + `", "asnumber":"API Server Error"}`
@@ -159,7 +186,11 @@ func (c *WsConn) messageSendHandler() {
 		// 来自终端的中断运行请求
 		case <-c.Interrupt:
 			// 向 websocket 发起关闭连接任务
-			err := c.Conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+			conn := c.getConn()
+			if conn == nil {
+				return
+			}
+			err := conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 			if err != nil {
 				if util.EnvDevMode {
 					panic(err)
@@ -229,7 +260,7 @@ func (c *WsConn) recreateWsConn() {
 		dialer.Proxy = http.ProxyURL(proxyUrl)
 	}
 	ws, _, err := dialer.Dial(u.String(), requestHeader)
-	c.Conn = ws
+	c.setConn(ws)
 	if err != nil {
 		log.Println("dial:", err)
 		// <-time.After(time.Second * 1)
