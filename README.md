@@ -331,7 +331,7 @@ nexttrace -T -q 2 --parallel-requests 1 -t -P 2001:4860:4860::8888
 
 ### Globalping
 
-[Globalping](https://globalping.io/) provides access to thousands of community hosted probes to run network tests and measurements.
+[Globalping](https://globalping.io/) provides access to thousands of community-hosted probes to run network tests and measurements.
 
 Run traceroute from a specified location by using the `--from` flag. The location field accepts continents, countries, regions, cities, ASNs, ISPs, or cloud regions.
 
@@ -541,7 +541,7 @@ This Project uses [JetBrain Open-Source Project License](https://jb.gg/OpenSourc
 
 [PeeringDB](https://www.peeringdb.com) Provided some data support for this project free of charge
 
-[Globalping](https://globalping.io) An open source and free project that provides global access to run network tests like traceroute
+[Globalping](https://globalping.io) An open-source and free project that provides global access to run network tests like traceroute
 
 [sjlleo](https://github.com/sjlleo) The perpetual leader, founder, and core contributors
 
