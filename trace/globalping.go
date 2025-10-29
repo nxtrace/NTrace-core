@@ -179,13 +179,47 @@ func mapGlobalpingHop(ttl int, gpHop *globalping.MTRHop, timing *globalping.MTRT
 }
 
 func GlobalpingFormatLocation(m *globalping.ProbeMeasurement) string {
-	state := ""
-	if m.Probe.State != "" {
-		state = " (" + m.Probe.State + ")"
+	if m == nil {
+		return ""
 	}
-	return m.Probe.City + state + ", " +
-		m.Probe.Country + ", " +
-		m.Probe.Continent + ", " +
-		m.Probe.Network + " " +
-		"(AS" + fmt.Sprint(m.Probe.ASN) + ")"
+
+	probe := m.Probe
+	if probe.City == "" &&
+		probe.State == "" &&
+		probe.Country == "" &&
+		probe.Continent == "" &&
+		probe.Network == "" &&
+		probe.ASN == 0 {
+		return ""
+	}
+
+	var parts []string
+
+	city := probe.City
+	if city != "" && probe.State != "" {
+		city += " (" + probe.State + ")"
+	} else if city == "" && probe.State != "" {
+		city = probe.State
+	}
+	if city != "" {
+		parts = append(parts, city)
+	}
+	if probe.Country != "" {
+		parts = append(parts, probe.Country)
+	}
+	if probe.Continent != "" {
+		parts = append(parts, probe.Continent)
+	}
+
+	network := strings.TrimSpace(probe.Network)
+	if network != "" {
+		if probe.ASN != 0 {
+			network += " (AS" + fmt.Sprint(probe.ASN) + ")"
+		}
+		parts = append(parts, network)
+	} else if probe.ASN != 0 {
+		parts = append(parts, "(AS"+fmt.Sprint(probe.ASN)+")")
+	}
+
+	return strings.Join(parts, ", ")
 }
