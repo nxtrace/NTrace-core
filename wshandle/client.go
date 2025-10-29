@@ -40,6 +40,30 @@ type WsConn struct {
 	stateMu      sync.RWMutex
 }
 
+func (c *WsConn) getConn() *websocket.Conn {
+	c.stateMu.RLock()
+	defer c.stateMu.RUnlock()
+	return c.Conn
+}
+
+func (c *WsConn) setConn(conn *websocket.Conn) {
+	c.stateMu.Lock()
+	c.Conn = conn
+	c.stateMu.Unlock()
+}
+
+func (c *WsConn) getDoneChan() chan struct{} {
+	c.stateMu.RLock()
+	defer c.stateMu.RUnlock()
+	return c.Done
+}
+
+func (c *WsConn) setDoneChan(done chan struct{}) {
+	c.stateMu.Lock()
+	c.Done = done
+	c.stateMu.Unlock()
+}
+
 var wsconn *WsConn
 var host, port, fastIp string
 var envToken = util.EnvToken
@@ -93,7 +117,12 @@ func (c *WsConn) keepAlive() {
 		for {
 			<-time.After(time.Second * 54)
 			if c.IsConnected() {
-				err := c.Conn.WriteMessage(websocket.TextMessage, []byte("ping"))
+				conn := c.getConn()
+				if conn == nil {
+					c.setConnected(false)
+					continue
+				}
+				err := conn.WriteMessage(websocket.TextMessage, []byte("ping"))
 				if err != nil {
 					log.Println(err)
 					c.setConnected(false)
@@ -112,16 +141,25 @@ func (c *WsConn) keepAlive() {
 }
 
 func (c *WsConn) messageReceiveHandler() {
+	done := c.getDoneChan()
 	defer func() {
+		if done == nil {
+			return
+		}
 		select {
-		case <-c.Done:
+		case <-done:
 		default:
-			close(c.Done)
+			close(done)
 		}
 	}()
 	for {
 		if c.IsConnected() {
-			_, msg, err := c.Conn.ReadMessage()
+			conn := c.getConn()
+			if conn == nil {
+				c.setConnected(false)
+				continue
+			}
+			_, msg, err := conn.ReadMessage()
 			if err != nil {
 				// 读取信息出错，连接已经意外断开
 				// log.Println(err)
@@ -131,31 +169,56 @@ func (c *WsConn) messageReceiveHandler() {
 			if string(msg) != "pong" {
 				c.MsgReceiveCh <- string(msg)
 			}
+		} else {
+			// 降低断线时期的 CPU 占用
+			time.Sleep(200 * time.Millisecond)
 		}
 	}
 }
 
 func (c *WsConn) messageSendHandler() {
+	doneCh := c.getDoneChan()
 	for {
+		if current := c.getDoneChan(); current != nil && current != doneCh {
+			doneCh = current
+		}
 		// 循环监听发送
 		select {
-		case <-c.Done:
-			return
+		case <-doneCh:
+			for {
+				newDone := c.getDoneChan()
+				if newDone != nil && newDone != doneCh {
+					doneCh = newDone
+					break
+				}
+				time.Sleep(50 * time.Millisecond)
+			}
+			continue
 		case t := <-c.MsgSendCh:
 			// log.Println(t)
 			if !c.IsConnected() {
 				c.MsgReceiveCh <- `{"ip":"` + t + `", "asnumber":"API Server Error"}`
-			} else {
-				err := c.Conn.WriteMessage(websocket.TextMessage, []byte(t))
-				if err != nil {
-					log.Println("write:", err)
-					return
-				}
+				continue
+			}
+			conn := c.getConn()
+			if conn == nil {
+				c.MsgReceiveCh <- `{"ip":"` + t + `", "asnumber":"API Server Error"}`
+				continue
+			}
+			if err := conn.WriteMessage(websocket.TextMessage, []byte(t)); err != nil {
+				log.Println("write:", err)
+				c.setConnected(false)
+				c.MsgReceiveCh <- `{"ip":"` + t + `", "asnumber":"API Server Error"}`
+				continue
 			}
 		// 来自终端的中断运行请求
 		case <-c.Interrupt:
 			// 向 websocket 发起关闭连接任务
-			err := c.Conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+			conn := c.getConn()
+			if conn == nil {
+				return
+			}
+			err := conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 			if err != nil {
 				if util.EnvDevMode {
 					panic(err)
@@ -164,7 +227,7 @@ func (c *WsConn) messageSendHandler() {
 			}
 			select {
 			// 等到了结果，直接退出
-			case <-c.Done:
+			case <-doneCh:
 			// 如果等待 1s 还是拿不到结果，不再等待，超时退出
 			case <-time.After(1 * time.Second):
 			}
@@ -225,7 +288,7 @@ func (c *WsConn) recreateWsConn() {
 		dialer.Proxy = http.ProxyURL(proxyUrl)
 	}
 	ws, _, err := dialer.Dial(u.String(), requestHeader)
-	c.Conn = ws
+	c.setConn(ws)
 	if err != nil {
 		log.Println("dial:", err)
 		// <-time.After(time.Second * 1)
@@ -237,7 +300,7 @@ func (c *WsConn) recreateWsConn() {
 	}
 	c.setConnectionState(err == nil, false)
 
-	c.Done = make(chan struct{})
+	c.setDoneChan(make(chan struct{}))
 	go c.messageReceiveHandler()
 }
 
@@ -314,14 +377,14 @@ func createWsConn() *WsConn {
 		log.Println("dial:", err)
 		// <-time.After(time.Second * 1)
 		cacheTokenFailedTimes++
-		wsconn.Done = make(chan struct{})
+		wsconn.setDoneChan(make(chan struct{}))
 		go wsconn.keepAlive()
 		go wsconn.messageSendHandler()
 		return wsconn
 	}
 	// defer c.Close()
 	// 将连接写入WsConn，方便随时可取
-	wsconn.Done = make(chan struct{})
+	wsconn.setDoneChan(make(chan struct{}))
 	go wsconn.keepAlive()
 	go wsconn.messageReceiveHandler()
 	go wsconn.messageSendHandler()

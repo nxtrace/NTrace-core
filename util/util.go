@@ -7,10 +7,10 @@ import (
 	"log"
 	"net"
 	"net/url"
-	"os"
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/fatih/color"
 
@@ -240,22 +240,29 @@ func DomainLookUp(host string, ipVersion string, dotServer string, disableOutput
 	default:
 		r = newUDPResolver()
 	}
-	ipsStr, err := r.LookupHost(context.Background(), host)
-	for _, v := range ipsStr {
-		ips = append(ips, net.ParseIP(v))
-	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	ipsStr, err := r.LookupHost(ctx, host)
 	if err != nil {
-		return nil, errors.New("DNS lookup failed")
+		return nil, fmt.Errorf("DNS lookup failed: %w", err)
+	}
+	for _, v := range ipsStr {
+		if parsed := net.ParseIP(v); parsed != nil {
+			ips = append(ips, parsed)
+		}
 	}
 
 	// Filter by IPv4/IPv6
 	if ipVersion != "all" {
 		var filteredIPs []net.IP
 		for _, ip := range ips {
+			if ip == nil {
+				continue
+			}
 			if ipVersion == "4" && ip.To4() != nil {
 				filteredIPs = []net.IP{ip}
 				break
-			} else if ipVersion == "6" && strings.Contains(ip.String(), ":") {
+			} else if ipVersion == "6" && ip.To4() == nil {
 				filteredIPs = []net.IP{ip}
 				break
 			}
@@ -263,28 +270,43 @@ func DomainLookUp(host string, ipVersion string, dotServer string, disableOutput
 		ips = filteredIPs
 	}
 
+	if len(ips) == 0 {
+		var familyLabel string
+		switch ipVersion {
+		case "4":
+			familyLabel = "IPv4"
+		case "6":
+			familyLabel = "IPv6"
+		case "all", "":
+			familyLabel = "IPv4/IPv6"
+		default:
+			familyLabel = ipVersion
+		}
+		return nil, fmt.Errorf("no %s DNS records found for %s", familyLabel, host)
+	}
+
 	if (len(ips) == 1) || (disableOutput) {
 		return ips[0], nil
-	} else {
-		fmt.Println("Please Choose the IP You Want To TraceRoute")
-		for i, ip := range ips {
-			_, _ = fmt.Fprintf(color.Output, "%s %s\n",
-				color.New(color.FgHiYellow, color.Bold).Sprintf("%d.", i),
-				color.New(color.FgWhite, color.Bold).Sprintf("%s", ip),
-			)
-		}
-		var index int
-		fmt.Printf("Your Option: ")
-		_, err := fmt.Scanln(&index)
-		if err != nil {
-			index = 0
-		}
-		if index >= len(ips) || index < 0 {
-			fmt.Println("Your Option is invalid")
-			os.Exit(3)
-		}
-		return ips[index], nil
 	}
+
+	fmt.Println("Please Choose the IP You Want To TraceRoute")
+	for i, ip := range ips {
+		_, _ = fmt.Fprintf(color.Output, "%s %s\n",
+			color.New(color.FgHiYellow, color.Bold).Sprintf("%d.", i),
+			color.New(color.FgWhite, color.Bold).Sprintf("%s", ip),
+		)
+	}
+	var index int
+	fmt.Printf("Your Option: ")
+	_, err = fmt.Scanln(&index)
+	if err != nil {
+		index = 0
+	}
+	if index >= len(ips) || index < 0 {
+		fmt.Println("Your Option is invalid")
+		return nil, fmt.Errorf("invalid selection: %d", index)
+	}
+	return ips[index], nil
 }
 
 func GetHostAndPort() (host string, port string) {
