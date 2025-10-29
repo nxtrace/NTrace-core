@@ -268,19 +268,20 @@ function clearResult(resetState = false) {
 function renderMeta(summary = {}) {
   const rows = [];
   if (summary.resolved_ip) {
-    rows.push(`${t('metaResolved')}：<strong>${summary.resolved_ip}</strong>`);
+    rows.push(`${t('metaResolved')}：<strong>${escapeHTML(summary.resolved_ip)}</strong>`);
   }
   if (summary.data_provider) {
-    rows.push(`${t('metaProvider')}：<strong>${summary.data_provider}</strong>`);
+    rows.push(`${t('metaProvider')}：<strong>${escapeHTML(summary.data_provider)}</strong>`);
   }
   if (summary.duration_ms !== undefined) {
-    rows.push(`${t('metaDuration')}：<strong>${summary.duration_ms} ms</strong>`);
+    rows.push(`${t('metaDuration')}：<strong>${escapeHTML(summary.duration_ms)} ms</strong>`);
   }
   if (summary.iteration) {
-    rows.push(`${t('metaIterations')}：<strong>${summary.iteration}</strong>`);
+    rows.push(`${t('metaIterations')}：<strong>${escapeHTML(summary.iteration)}</strong>`);
   }
   if (summary.trace_map_url) {
-    rows.push(`${t('metaMap')}：<a href="${summary.trace_map_url}" target="_blank" rel="noreferrer">${t('mapOpen')}</a>`);
+    // t('mapOpen') is assumed not user-supplied; escape only the URL
+    rows.push(`${t('metaMap')}：<a href="${escapeHTML(summary.trace_map_url)}" target="_blank" rel="noreferrer">${t('mapOpen')}</a>`);
   }
   if (rows.length === 0) {
     resultMetaNode.classList.add('hidden');
