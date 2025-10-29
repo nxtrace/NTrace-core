@@ -241,11 +241,11 @@ func DomainLookUp(host string, ipVersion string, dotServer string, disableOutput
 		r = newUDPResolver()
 	}
 	ipsStr, err := r.LookupHost(context.Background(), host)
+	if err != nil {
+		return nil, fmt.Errorf("DNS lookup failed: %w", err)
+	}
 	for _, v := range ipsStr {
 		ips = append(ips, net.ParseIP(v))
-	}
-	if err != nil {
-		return nil, errors.New("DNS lookup failed")
 	}
 
 	// Filter by IPv4/IPv6
@@ -263,28 +263,32 @@ func DomainLookUp(host string, ipVersion string, dotServer string, disableOutput
 		ips = filteredIPs
 	}
 
+	if len(ips) == 0 {
+		return nil, fmt.Errorf("no DNS records found for %s (family=%s)", host, ipVersion)
+	}
+
 	if (len(ips) == 1) || (disableOutput) {
 		return ips[0], nil
-	} else {
-		fmt.Println("Please Choose the IP You Want To TraceRoute")
-		for i, ip := range ips {
-			_, _ = fmt.Fprintf(color.Output, "%s %s\n",
-				color.New(color.FgHiYellow, color.Bold).Sprintf("%d.", i),
-				color.New(color.FgWhite, color.Bold).Sprintf("%s", ip),
-			)
-		}
-		var index int
-		fmt.Printf("Your Option: ")
-		_, err := fmt.Scanln(&index)
-		if err != nil {
-			index = 0
-		}
-		if index >= len(ips) || index < 0 {
-			fmt.Println("Your Option is invalid")
-			os.Exit(3)
-		}
-		return ips[index], nil
 	}
+
+	fmt.Println("Please Choose the IP You Want To TraceRoute")
+	for i, ip := range ips {
+		_, _ = fmt.Fprintf(color.Output, "%s %s\n",
+			color.New(color.FgHiYellow, color.Bold).Sprintf("%d.", i),
+			color.New(color.FgWhite, color.Bold).Sprintf("%s", ip),
+		)
+	}
+	var index int
+	fmt.Printf("Your Option: ")
+	_, err = fmt.Scanln(&index)
+	if err != nil {
+		index = 0
+	}
+	if index >= len(ips) || index < 0 {
+		fmt.Println("Your Option is invalid")
+		os.Exit(3)
+	}
+	return ips[index], nil
 }
 
 func GetHostAndPort() (host string, port string) {
