@@ -576,9 +576,8 @@ This Project uses [JetBrain Open-Source Project License](https://jb.gg/OpenSourc
 - How to obtain the freshly baked binary executable of the latest commit?
     > Please go to the most recent [Build & Release](https://github.com/nxtrace/NTrace-V1/actions/workflows/build.yml) workflow in GitHub Actions.
 
-- Known Issues
+- Common questions
     + On Windows, ICMP mode requires manual firewall allowance for ICMP/ICMPv6
-    + On Windows, TCP modes are currently unavailable
     + On macOS, only ICMP mode does not require elevated privileges
     + In some cases, running multiple instances of NextTrace simultaneously may interfere with each other’s results (observed so far only in TCP mode)
 

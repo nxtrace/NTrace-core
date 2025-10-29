@@ -544,9 +544,8 @@ nexttrace --pow-provider sakura
     >请前往GitHub Actions中最新一次 [Build & Release](https://github.com/nxtrace/NTrace-V1/actions/workflows/build.yml) workflow.
 
 
-- 一些已知问题
+- 常见疑问
     + Windows 平台下，ICMP 模式须手动放行ICMP/ICMPv6防火墙
-    + Windows 平台下，TCP 模式暂不可用
     + macOS 平台下，仅 ICMP 模式不需要提权运行
     + 在一些情况下，同时运行多个 NextTrace 实例可能会导致互相干扰结果(目前仅在 TCP 模式下有观察到)
 
