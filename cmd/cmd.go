@@ -37,7 +37,12 @@ type listenInfo struct {
 }
 
 func buildListenInfo(addr string) listenInfo {
-	effective := addr
+	trimmed := strings.TrimSpace(addr)
+	effective := trimmed
+	if trimmed != "" && isDigitsOnly(trimmed) {
+		effective = ":" + trimmed
+	}
+
 	if effective == "" {
 		effective = ":1080"
 	}
@@ -72,17 +77,34 @@ func buildListenInfo(addr string) listenInfo {
 		Binding: fmt.Sprintf("http://%s:%s", bindingHost, port),
 	}
 
-	if host == "" || rawHost == "0.0.0.0" || rawHost == "::" {
-		guess := guessLocalIPv4()
-		if guess != "" {
-			if strings.Contains(guess, ":") && !strings.HasPrefix(guess, "[") {
-				guess = "[" + guess + "]"
-			}
-			info.Access = fmt.Sprintf("http://%s:%s", guess, port)
+	wildcard := host == "" || host == "0.0.0.0" || host == "::"
+	var accessHost string
+	if wildcard {
+		accessHost = guessLocalIPv4()
+	} else {
+		accessHost = host
+	}
+
+	if accessHost != "" {
+		if strings.Contains(accessHost, ":") && !strings.HasPrefix(accessHost, "[") {
+			accessHost = "[" + accessHost + "]"
 		}
+		info.Access = fmt.Sprintf("http://%s:%s", accessHost, port)
 	}
 
 	return info
+}
+
+func isDigitsOnly(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func guessLocalIPv4() string {
