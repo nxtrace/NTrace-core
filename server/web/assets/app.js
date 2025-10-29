@@ -873,7 +873,7 @@ function updateDstPortState() {
   if (!enabled) {
     dstPortInput.value = '';
   } else if (!dstPortInput.value) {
-    dstPortInput.value = proto === 'tcp' ? '80' : '33434';
+    dstPortInput.value = proto === 'tcp' ? '80' : '33494';
   }
 }
 
