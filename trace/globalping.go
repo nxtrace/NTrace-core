@@ -113,14 +113,16 @@ func GlobalpingTraceroute(opts *GlobalpingOptions, config *Config) (*Result, *gl
 		if i >= opts.MaxHops {
 			break
 		}
-		maxTimings = max(maxTimings, len(gpHops[i].Timings))
+		if count := len(gpHops[i].Timings); count > maxTimings {
+			maxTimings = count
+		}
 	}
 	for i := range gpHops {
 		if i >= opts.MaxHops {
 			break
 		}
 		hops := make([]Hop, 0, maxTimings)
-		for j := range maxTimings {
+		for j := 0; j < maxTimings; j++ {
 			var timing *globalping.MTRTiming
 			if j < len(gpHops[i].Timings) {
 				timing = &gpHops[i].Timings[j]
