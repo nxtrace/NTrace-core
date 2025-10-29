@@ -278,9 +278,9 @@ func traceHandler(c *gin.Context) {
 	traceMapURL := ""
 	if configured.Maptrace && shouldGenerateMap(setup.DataProvider) {
 		if payload, err := json.Marshal(res); err == nil {
-			if url, err := tracemap.GetMapUrl(string(payload)); err == nil {
-				traceMapURL = url
-				log.Printf("[deploy] trace map generated target=%s url=%s", setup.Target, traceMapURL)
+			if mapUrl, err := tracemap.GetMapUrl(string(payload)); err == nil {
+				traceMapURL = mapUrl
+				log.Printf("[deploy] trace map generated target=%s mapUrl=%s", setup.Target, traceMapURL)
 			}
 		}
 	}
