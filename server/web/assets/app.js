@@ -265,15 +265,6 @@ function clearResult(resetState = false) {
   }
 }
 
-function escapeHTML(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
 function renderMeta(summary = {}) {
   const rows = [];
   if (summary.resolved_ip) {
