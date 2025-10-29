@@ -146,14 +146,15 @@ func (c *WsConn) messageSendHandler() {
 			return
 		case t := <-c.MsgSendCh:
 			// log.Println(t)
-			if !c.IsConnected() {
+			if !c.IsConnected() || c.Conn == nil {
 				c.MsgReceiveCh <- `{"ip":"` + t + `", "asnumber":"API Server Error"}`
-			} else {
-				err := c.Conn.WriteMessage(websocket.TextMessage, []byte(t))
-				if err != nil {
-					log.Println("write:", err)
-					return
-				}
+				continue
+			}
+			if err := c.Conn.WriteMessage(websocket.TextMessage, []byte(t)); err != nil {
+				log.Println("write:", err)
+				c.setConnected(false)
+				c.MsgReceiveCh <- `{"ip":"` + t + `", "asnumber":"API Server Error"}`
+				continue
 			}
 		// 来自终端的中断运行请求
 		case <-c.Interrupt:
@@ -242,6 +243,7 @@ func (c *WsConn) recreateWsConn() {
 
 	c.Done = make(chan struct{})
 	go c.messageReceiveHandler()
+	go c.messageSendHandler()
 }
 
 func createWsConn() *WsConn {
