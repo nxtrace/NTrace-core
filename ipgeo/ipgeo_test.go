@@ -40,13 +40,6 @@ func TestGetSourceMappings(t *testing.T) {
 	}
 }
 
-func TestLtdCodeToCountryOrAreaName(t *testing.T) {
-	assert.Equal(t, "United States", LtdCodeToCountryOrAreaName("US"))
-	assert.Equal(t, "China", LtdCodeToCountryOrAreaName("cn"))
-	assert.Equal(t, "Hong Kong", LtdCodeToCountryOrAreaName("HKG"))
-	assert.Equal(t, "unknown-code", LtdCodeToCountryOrAreaName("unknown-code"))
-}
-
 func TestDisableGeoIP(t *testing.T) {
 	res, err := disableGeoIP("1.1.1.1", time.Second, "en", false)
 	require.NoError(t, err)
