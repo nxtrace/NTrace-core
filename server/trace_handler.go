@@ -554,7 +554,7 @@ func ensureLeoMoeConnection() {
 		return
 	}
 
-	if !conn.Connected && !conn.Connecting {
+	if !conn.IsConnected() && !conn.IsConnecting() {
 		log.Println("[deploy] reconnecting LeoMoeAPI websocket")
 		wshandle.New()
 	}
