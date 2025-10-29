@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -62,17 +63,21 @@ func InitConfig() {
 	viper.SetDefault("geoFeedPath", "./geofeed.csv")
 
 	// 开始查找并读取配置文件
-	err = viper.ReadInConfig() // Find and read the config file
-	if err != nil {            // Handle errors reading the config file
-		fmt.Println("未能找到配置文件，我们将在您的运行目录为您创建 nt_config.yaml 默认配置")
-		err := viper.SafeWriteConfigAs("./nt_config.yaml")
-		if err != nil {
+	if err := viper.ReadInConfig(); err != nil {
+		var notFound viper.ConfigFileNotFoundError
+		if errors.As(err, &notFound) {
+			fmt.Println("未能找到配置文件，我们将在您的运行目录为您创建 nt_config.yaml 默认配置")
+			if err := viper.SafeWriteConfigAs("./nt_config.yaml"); err != nil {
+				fmt.Println("创建默认配置文件失败:", err)
+				return
+			}
+			if err := viper.ReadInConfig(); err != nil {
+				fmt.Println("加载默认配置失败:", err)
+			}
 			return
 		}
-	}
 
-	err = viper.ReadInConfig()
-	if err != nil {
+		fmt.Println("加载配置文件失败:", err)
 		return
 	}
 }
