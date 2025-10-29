@@ -68,10 +68,13 @@ func GlobalpingTraceroute(opts *GlobalpingOptions, config *Config) (*Result, *gl
 		o.Options.Protocol = "ICMP"
 	}
 
-	if opts.IPv4 {
+	switch {
+	case opts.IPv4 && !opts.IPv6:
 		o.Options.IPVersion = globalping.IPVersion4
-	} else if opts.IPv6 {
+	case opts.IPv6 && !opts.IPv4:
 		o.Options.IPVersion = globalping.IPVersion6
+	default:
+		// 两者均未指定或同时为 true：不设 IPVersion，交由平台选路
 	}
 
 	res, err := client.CreateMeasurement(o)
