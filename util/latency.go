@@ -133,7 +133,10 @@ func checkLatency(domain string, ip string, port string) {
 		// 防止后续对 nil Body 的读写导致 panic
 		return
 	}
-	defer resp.Body.Close()
+	defer func() {
+		// 明确忽略关闭时的错误，HTTP 客户端此时已经读完正文
+		_ = resp.Body.Close()
+	}()
 
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
