@@ -685,6 +685,11 @@ func executeGlobalpingTraceroute(opts *trace.GlobalpingOptions, config *trace.Co
 		return
 	}
 
+	if measurement == nil || len(measurement.Results) == 0 {
+		fmt.Println("Globalping 未返回可用的探测结果，已跳过输出。")
+		return
+	}
+
 	fmt.Fprintln(color.Output, color.New(color.FgGreen, color.Bold).Sprintf("> %s", trace.GlobalpingFormatLocation(&measurement.Results[0])))
 
 	if opts.TablePrint {

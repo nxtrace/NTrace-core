@@ -88,7 +88,16 @@ func GlobalpingTraceroute(opts *GlobalpingOptions, config *Config) (*Result, *gl
 		return nil, nil, fmt.Errorf("measurement did not complete successfully: %s", measurement.Status)
 	}
 
-	gpHops, err := globalping.DecodeMTRHops(measurement.Results[0].Result.HopsRaw)
+	if len(measurement.Results) == 0 {
+		return nil, measurement, fmt.Errorf("globalping measurement returned no probe results")
+	}
+
+	firstResult := measurement.Results[0]
+	if len(firstResult.Result.HopsRaw) == 0 {
+		return nil, measurement, fmt.Errorf("globalping measurement results did not include hop data")
+	}
+
+	gpHops, err := globalping.DecodeMTRHops(firstResult.Result.HopsRaw)
 	if err != nil {
 		return nil, nil, err
 	}
