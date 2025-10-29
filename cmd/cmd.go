@@ -121,6 +121,46 @@ func guessLocalIPv4() string {
 	return "127.0.0.1"
 }
 
+func defaultLocalListenAddr() string {
+	if hasIPv4Loopback() {
+		return "127.0.0.1:1080"
+	}
+	if hasIPv6Loopback() {
+		return "[::1]:1080"
+	}
+	return "127.0.0.1:1080"
+}
+
+func hasIPv4Loopback() bool {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return false
+	}
+	for _, address := range addrs {
+		if ipNet, ok := address.(*net.IPNet); ok && ipNet.IP.IsLoopback() {
+			if ip4 := ipNet.IP.To4(); ip4 != nil {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func hasIPv6Loopback() bool {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return false
+	}
+	for _, address := range addrs {
+		if ipNet, ok := address.(*net.IPNet); ok && ipNet.IP.IsLoopback() {
+			if ip := ipNet.IP; ip.To4() == nil && len(ip) == net.IPv6len {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func Execute() {
 	parser := argparse.NewParser("nexttrace", "An open source visual route tracking CLI tool")
 	// Create string flag
@@ -199,17 +239,23 @@ func Execute() {
 	if *deploy {
 		capabilitiesCheck()
 		// 优先使用 CLI 参数，其次使用环境变量
-		listenAddr := *deployListen
+		listenAddr := strings.TrimSpace(*deployListen)
+		envAddr := strings.TrimSpace(util.EnvDeployAddr)
+		userProvided := listenAddr != "" || envAddr != ""
 		if listenAddr == "" {
-			listenAddr = util.EnvDeployAddr
+			listenAddr = envAddr
 		}
+		if listenAddr == "" {
+			listenAddr = defaultLocalListenAddr()
+		}
+
 		info := buildListenInfo(listenAddr)
 		// 判断是否同时未通过 CLI 和环境变量指定地址
-		if *deployListen == "" && util.EnvDeployAddr == "" {
-			if info.Access != "" {
-				fmt.Printf("启动 NextTrace Web 控制台，监听地址: %s\n", info.Access)
-			} else {
-				fmt.Printf("启动 NextTrace Web 控制台，监听地址: %s\n", info.Binding)
+		if !userProvided {
+			fmt.Printf("启动 NextTrace Web 控制台，监听地址: %s\n", info.Binding)
+			fmt.Println("远程访问请显式设置 --listen（例如 --listen 0.0.0.0:1080）。")
+			if info.Access != "" && info.Access != info.Binding {
+				fmt.Printf("如需远程访问，请尝试: %s\n", info.Access)
 			}
 		} else {
 			fmt.Printf("启动 NextTrace Web 控制台，监听地址: %s\n", info.Binding)
