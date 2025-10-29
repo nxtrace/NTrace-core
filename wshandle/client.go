@@ -52,6 +52,18 @@ func (c *WsConn) setConn(conn *websocket.Conn) {
 	c.stateMu.Unlock()
 }
 
+func (c *WsConn) getDoneChan() chan struct{} {
+	c.stateMu.RLock()
+	defer c.stateMu.RUnlock()
+	return c.Done
+}
+
+func (c *WsConn) setDoneChan(done chan struct{}) {
+	c.stateMu.Lock()
+	c.Done = done
+	c.stateMu.Unlock()
+}
+
 var wsconn *WsConn
 var host, port, fastIp string
 var envToken = util.EnvToken
@@ -129,11 +141,15 @@ func (c *WsConn) keepAlive() {
 }
 
 func (c *WsConn) messageReceiveHandler() {
+	done := c.getDoneChan()
 	defer func() {
+		if done == nil {
+			return
+		}
 		select {
-		case <-c.Done:
+		case <-done:
 		default:
-			close(c.Done)
+			close(done)
 		}
 	}()
 	for {
@@ -161,11 +177,23 @@ func (c *WsConn) messageReceiveHandler() {
 }
 
 func (c *WsConn) messageSendHandler() {
+	doneCh := c.getDoneChan()
 	for {
+		if current := c.getDoneChan(); current != nil && current != doneCh {
+			doneCh = current
+		}
 		// 循环监听发送
 		select {
-		case <-c.Done:
-			return
+		case <-doneCh:
+			for {
+				newDone := c.getDoneChan()
+				if newDone != nil && newDone != doneCh {
+					doneCh = newDone
+					break
+				}
+				time.Sleep(50 * time.Millisecond)
+			}
+			continue
 		case t := <-c.MsgSendCh:
 			// log.Println(t)
 			if !c.IsConnected() {
@@ -199,7 +227,7 @@ func (c *WsConn) messageSendHandler() {
 			}
 			select {
 			// 等到了结果，直接退出
-			case <-c.Done:
+			case <-doneCh:
 			// 如果等待 1s 还是拿不到结果，不再等待，超时退出
 			case <-time.After(1 * time.Second):
 			}
@@ -272,9 +300,8 @@ func (c *WsConn) recreateWsConn() {
 	}
 	c.setConnectionState(err == nil, false)
 
-	c.Done = make(chan struct{})
+	c.setDoneChan(make(chan struct{}))
 	go c.messageReceiveHandler()
-	go c.messageSendHandler()
 }
 
 func createWsConn() *WsConn {
@@ -350,14 +377,14 @@ func createWsConn() *WsConn {
 		log.Println("dial:", err)
 		// <-time.After(time.Second * 1)
 		cacheTokenFailedTimes++
-		wsconn.Done = make(chan struct{})
+		wsconn.setDoneChan(make(chan struct{}))
 		go wsconn.keepAlive()
 		go wsconn.messageSendHandler()
 		return wsconn
 	}
 	// defer c.Close()
 	// 将连接写入WsConn，方便随时可取
-	wsconn.Done = make(chan struct{})
+	wsconn.setDoneChan(make(chan struct{}))
 	go wsconn.keepAlive()
 	go wsconn.messageReceiveHandler()
 	go wsconn.messageSendHandler()
