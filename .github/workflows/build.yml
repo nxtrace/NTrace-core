@@ -109,6 +109,18 @@ jobs:
       - name: Get project dependencies
         run: go mod download
 
+      - name: Install UPX (selected Linux targets)
+        if: >
+          matrix.goos == 'linux' && (
+            matrix.goarch == 'amd64' ||
+            matrix.goarch == '386'   ||
+            matrix.goarch == 'arm64' ||
+            (matrix.goarch == 'arm' && matrix.goarm == '7')
+          )
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y upx
+
       - name: Build
         run: |
           mkdir -p dist
@@ -117,9 +129,22 @@ jobs:
                       -X github.com/nxtrace/NTrace-core/config.BuildDate=${BUILD_DATE} \
                       -X github.com/nxtrace/NTrace-core/config.CommitID=${COMMIT_SHA1} \
                       -checklinkname=0 -w -s"
+          if command -v upx >/dev/null 2>&1; then
+            case "${GOOS}-${GOARCH}-${GOARM:-}" in
+              linux-amd64-*) upx -9 "dist/${ASSET_NAME}" ;;
+              linux-386-*)   upx -9 "dist/${ASSET_NAME}" ;;
+              linux-arm64-*) upx -9 "dist/${ASSET_NAME}" ;;
+              linux-arm-7)   upx -9 "dist/${ASSET_NAME}" ;;
+              *)
+                echo "skip upx for ${GOOS}/${GOARCH}${GOARM:+/v${GOARM}}"
+                ;;
+            esac
+          else
+            echo "upx not available; skipping compression for ${GOOS}/${GOARCH}${GOARM:+/v${GOARM}}"
+          fi
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ env.ASSET_NAME }}
           path: dist/${{ env.ASSET_NAME }}
@@ -197,7 +222,7 @@ jobs:
                       -checklinkname=0 -w -s"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ env.ASSET_NAME }}
           path: dist/${{ env.ASSET_NAME }}
@@ -209,7 +234,7 @@ jobs:
     needs: [ build-darwin ]
     steps:
       - name: Download darwin slices (flatten)
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           pattern: nexttrace_darwin_*
           merge-multiple: true
@@ -231,7 +256,7 @@ jobs:
           ls -l dist
 
       - name: Upload universal as artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: nexttrace_darwin_universal
           path: dist/nexttrace_darwin_universal
@@ -244,7 +269,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
       - name: Download all artifacts (flatten)
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           pattern: nexttrace_*
           merge-multiple: true

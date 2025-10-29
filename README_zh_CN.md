@@ -111,6 +111,11 @@ Document Language: [English](README.md) | 简体中文
     pkg install root-repo
     pkg install nexttrace
     ```
+  
+  * ImmortalWrt 安装命令
+    ```shell
+    opkg install nexttrace
+    ```
       
      
 * macOS
@@ -287,7 +292,7 @@ nexttrace --no-color 1.1.1.1
 export NO_COLOR=1
 ```
 
-#### `NextTrace`支持用户自主选择 IP 数据库（目前支持：`LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`, `Ip2region`, `IPInfoLocal`, `CHUNZHEN`)
+#### `NextTrace`支持用户自主选择 IP 数据库（目前支持：`LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`, `IPInfoLocal`, `CHUNZHEN`)
 
 ```bash
 # 可以自行指定IP数据库[此处为IP-API.com]，不指定则默认为LeoMoeAPI
@@ -300,7 +305,6 @@ nexttrace --data-provider ip-api.com
 ##        默认搜索用户当前路径、程序所在路径、和 FHS 路径（Unix-like）
 ##        如果需要自定义路径，请设置环境变量
 export NEXTTRACE_IPINFOLOCALPATH=/xxx/yyy.mmdb
-##        对于离线库 Ip2region 可NextTrace自动下载，也可自行下载并命名为 ip2region.db
 ## 另外：由于IP.SB被滥用比较严重，会经常出现无法查询的问题，请知悉。
 ##      IP-API.com限制调用较为严格，如有查询不到的情况，请几分钟后再试。
 # 纯真IP数据库默认使用 http://127.0.0.1:2060 作为查询接口，如需自定义请使用环境变量
@@ -323,6 +327,23 @@ nexttrace -d ip-api.com -m 20 -T -p 443 -q 5 -n 1.1.1.1
 nexttrace -T -q 2 --parallel-requests 1 -t -P 2001:4860:4860::8888
 ```
 
+### Globalping
+
+[Globalping](https://globalping.io/) 提供了对成千上万由社区托管的探针的访问能力，可用于运行网络测试和测量。
+
+通过 `--from` 参数可以选择使用指定位置的探针来执行 traceroute。位置字段支持洲、国家、地区、城市、ASN、ISP 或云厂商区域等多种类型。
+
+```bash
+nexttrace google.com --from Germany
+nexttrace google.com --from comcast+california
+```
+
+匿名用户默认每小时限额为 250 次测试。将 `GLOBALPING_TOKEN` 环境变量设置为你的令牌后，可将限额提升至每小时 500 次。
+
+```bash
+export GLOBALPING_TOKEN=your_token_here
+```
+
 ### 全部用法详见 Usage 菜单
 
 ```shell
@@ -331,17 +352,18 @@ Usage: nexttrace [-h|--help] [--init] [-4|--ipv4] [-6|--ipv6] [-T|--tcp]
                  [--icmp-mode <integer>] [-q|--queries <integer>]
                  [--parallel-requests <integer>] [-m|--max-hops <integer>]
                  [--max-attempts <integer>] [-d|--data-provider
-                 (Ip2region|ip2region|IP.SB|ip.sb|IPInfo|ipinfo|IPInsight|ipinsight|IPAPI.com|ip-api.com|IPInfoLocal|ipinfolocal|chunzhen|LeoMoeAPI|leomoeapi|ipdb.one|disable-geoip)]
+                 (IP.SB|ip.sb|IPInfo|ipinfo|IPInsight|ipinsight|IPAPI.com|ip-api.com|IPInfoLocal|ipinfolocal|chunzhen|LeoMoeAPI|leomoeapi|ipdb.one|disable-geoip)]
                  [--pow-provider (api.nxtrace.org|sakura)] [-n|--no-rdns]
                  [-a|--always-rdns] [-P|--route-path] [-r|--report] [--dn42]
                  [-o|--output] [-t|--table] [--raw] [-j|--json] [-c|--classic]
                  [-f|--first <integer>] [-M|--map] [-e|--disable-mpls]
                  [-V|--version] [-s|--source "<value>"] [--source-port
-                 <integer>] [-D|--dev "<value>"] [-z|--send-time <integer>]
-                 [-i|--ttl-time <integer>] [--timeout <integer>] [--psize
-                 <integer>] [_positionalArg_nexttrace_36 "<value>"]
-                 [--dot-server (dnssb|aliyun|dnspod|google|cloudflare)]
-                 [-g|--language (en|cn)] [--file "<value>"] [-C|--no-color]
+                 <integer>] [-D|--dev "<value>"] [--listen "<value>"]
+                 [--deploy] [-z|--send-time <integer>] [-i|--ttl-time
+                 <integer>] [--timeout <integer>] [--psize <integer>]
+                 [_positionalArg_nexttrace_38 "<value>"] [--dot-server
+                 (dnssb|aliyun|dnspod|google|cloudflare)] [-g|--language
+                 (en|cn)] [--file "<value>"] [-C|--no-color] [--from "<value>"]
 
 Arguments:
 
@@ -370,7 +392,7 @@ Arguments:
       --max-attempts                 Set the max number of attempts per TTL
                                      (instead of a fixed auto value)
   -d  --data-provider                Choose IP Geograph Data Provider [IP.SB,
-                                     IPInfo, IPInsight, IP-API.com, Ip2region,
+                                     IPInfo, IPInsight, IP-API.com,
                                      IPInfoLocal, CHUNZHEN, disable-geoip].
                                      Default: LeoMoeAPI
       --pow-provider                 Choose PoW Provider [api.nxtrace.org,
@@ -402,6 +424,9 @@ Arguments:
                                      packets
   -D  --dev                          Use the following Network Devices as the
                                      source address in outgoing packets
+      --listen                       Set listen address for web console (e.g.
+                                     127.0.0.1:30080)
+      --deploy                       Start the Gin powered web console
   -z  --send-time                    Set how many [milliseconds] between
                                      sending each packet. Useful when some
                                      routers use rate-limit for ICMP messages.
@@ -414,13 +439,18 @@ Arguments:
                                      sockets open before giving up on the
                                      connection. Default: 1000
       --psize                        Set the payload size. Default: 52
-      --_positionalArg_nexttrace_36  IP Address or domain name
+      --_positionalArg_nexttrace_38  IP Address or domain name
       --dot-server                   Use DoT Server for DNS Parse [dnssb,
                                      aliyun, dnspod, google, cloudflare]
   -g  --language                     Choose the language for displaying [en,
                                      cn]. Default: cn
       --file                         Read IP Address or domain name from file
   -C  --no-color                     Disable Colorful Output
+      --from                         Run traceroute via Globalping
+                                     (https://globalping.io/network) from a
+                                     specified location. The location field
+                                     accepts continents, countries, regions,
+                                     cities, ASNs, ISPs, or cloud regions.
 ```
 
 ## 项目截图
@@ -500,6 +530,8 @@ nexttrace --pow-provider sakura
 
 [PeeringDB](https://www.peeringdb.com) 无偿提供了本项目的一些数据支持
 
+[Globalping](https://globalping.io) 一个开源且免费的项目，提供全球范围内运行 traceroute 等网络测试的访问服务
+
 [sjlleo](https://github.com/sjlleo) 项目永远的领导者、创始人及核心贡献者
 
 [tsosunchia](https://github.com/tsosunchia) 项目现任管理、基础设施运维及核心贡献者
@@ -529,9 +561,8 @@ nexttrace --pow-provider sakura
     >请前往GitHub Actions中最新一次 [Build & Release](https://github.com/nxtrace/NTrace-V1/actions/workflows/build.yml) workflow.
 
 
-- 一些已知问题
+- 常见疑问
     + Windows 平台下，ICMP 模式须手动放行ICMP/ICMPv6防火墙
-    + Windows 平台下，TCP 模式暂不可用
     + macOS 平台下，仅 ICMP 模式不需要提权运行
     + 在一些情况下，同时运行多个 NextTrace 实例可能会导致互相干扰结果(目前仅在 TCP 模式下有观察到)
 

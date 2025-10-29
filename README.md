@@ -104,6 +104,11 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
       pkg install root-repo
       pkg install nexttrace
       ```
+    
+    * ImmortalWrt installation command
+      ```shell
+      opkg install nexttrace
+      ```
 
 * macOS
     * macOS Homebrew's installation command
@@ -288,7 +293,7 @@ nexttrace --no-color 1.1.1.1
 export NO_COLOR=1
 ```
 
-#### `NextTrace` supports users to select their own IP API (currently supports: `LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`, `Ip2region`, `IPInfoLocal`, `CHUNZHEN`)
+#### `NextTrace` supports users to select their own IP API (currently supports: `LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`, `IPInfoLocal`, `CHUNZHEN`)
 
 ```bash
 # You can specify the IP database by yourself [IP-API.com here], if not specified, LeoMoeAPI will be used
@@ -301,7 +306,6 @@ nexttrace --data-provider ip-api.com
 ##      Current directory, nexttrace binary directory and FHS directories (Unix-like) will be searched.
 ##      To customize it, please use environment variables,
 export NEXTTRACE_IPINFOLOCALPATH=/xxx/yyy.mmdb
-##      For the offline database Ip2region, you can download it manually and rename it to ip2region.db, or let NextTrace download it automatically
 ## Please be aware: Due to the serious abuse of IP.SB, you will often be not able to query IP data from this source
 ## IP-API.com has a stricter restiction on API calls, if you can't query IP data from this source, please try again in a few minutes
 
@@ -323,6 +327,23 @@ nexttrace -tcp --queries 2 --parallel-requests 1 --table --route-path 2001:4860:
 Equivalent to:
 nexttrace -d ip-api.com -m 20 -T -p 443 -q 5 -n 1.1.1.1
 nexttrace -T -q 2 --parallel-requests 1 -t -P 2001:4860:4860::8888
+```
+
+### Globalping
+
+[Globalping](https://globalping.io/) provides access to thousands of community-hosted probes to run network tests and measurements.
+
+Run traceroute from a specified location by using the `--from` flag. The location field accepts continents, countries, regions, cities, ASNs, ISPs, or cloud regions.
+
+```bash
+nexttrace google.com --from Germany
+nexttrace google.com --from comcast+california
+```
+
+A limit of 250 tests per hour is set for all anonymous users. To double the limit to 500 per hour please set the `GLOBALPING_TOKEN` environment variable with your token.
+
+```bash
+export GLOBALPING_TOKEN=your_token_here
 ```
 
 ### IP Database
@@ -348,17 +369,18 @@ Usage: nexttrace [-h|--help] [--init] [-4|--ipv4] [-6|--ipv6] [-T|--tcp]
                  [--icmp-mode <integer>] [-q|--queries <integer>]
                  [--parallel-requests <integer>] [-m|--max-hops <integer>]
                  [--max-attempts <integer>] [-d|--data-provider
-                 (Ip2region|ip2region|IP.SB|ip.sb|IPInfo|ipinfo|IPInsight|ipinsight|IPAPI.com|ip-api.com|IPInfoLocal|ipinfolocal|chunzhen|LeoMoeAPI|leomoeapi|ipdb.one|disable-geoip)]
+                 (IP.SB|ip.sb|IPInfo|ipinfo|IPInsight|ipinsight|IPAPI.com|ip-api.com|IPInfoLocal|ipinfolocal|chunzhen|LeoMoeAPI|leomoeapi|ipdb.one|disable-geoip)]
                  [--pow-provider (api.nxtrace.org|sakura)] [-n|--no-rdns]
                  [-a|--always-rdns] [-P|--route-path] [-r|--report] [--dn42]
                  [-o|--output] [-t|--table] [--raw] [-j|--json] [-c|--classic]
                  [-f|--first <integer>] [-M|--map] [-e|--disable-mpls]
                  [-V|--version] [-s|--source "<value>"] [--source-port
-                 <integer>] [-D|--dev "<value>"] [-z|--send-time <integer>]
-                 [-i|--ttl-time <integer>] [--timeout <integer>] [--psize
-                 <integer>] [_positionalArg_nexttrace_36 "<value>"]
-                 [--dot-server (dnssb|aliyun|dnspod|google|cloudflare)]
-                 [-g|--language (en|cn)] [--file "<value>"] [-C|--no-color]
+                 <integer>] [-D|--dev "<value>"] [--listen "<value>"]
+                 [--deploy] [-z|--send-time <integer>] [-i|--ttl-time
+                 <integer>] [--timeout <integer>] [--psize <integer>]
+                 [_positionalArg_nexttrace_38 "<value>"] [--dot-server
+                 (dnssb|aliyun|dnspod|google|cloudflare)] [-g|--language
+                 (en|cn)] [--file "<value>"] [-C|--no-color] [--from "<value>"]
 
 Arguments:
 
@@ -387,7 +409,7 @@ Arguments:
       --max-attempts                 Set the max number of attempts per TTL
                                      (instead of a fixed auto value)
   -d  --data-provider                Choose IP Geograph Data Provider [IP.SB,
-                                     IPInfo, IPInsight, IP-API.com, Ip2region,
+                                     IPInfo, IPInsight, IP-API.com,
                                      IPInfoLocal, CHUNZHEN, disable-geoip].
                                      Default: LeoMoeAPI
       --pow-provider                 Choose PoW Provider [api.nxtrace.org,
@@ -419,6 +441,9 @@ Arguments:
                                      packets
   -D  --dev                          Use the following Network Devices as the
                                      source address in outgoing packets
+      --listen                       Set listen address for web console (e.g.
+                                     127.0.0.1:30080)
+      --deploy                       Start the Gin powered web console
   -z  --send-time                    Set how many [milliseconds] between
                                      sending each packet. Useful when some
                                      routers use rate-limit for ICMP messages.
@@ -431,13 +456,18 @@ Arguments:
                                      sockets open before giving up on the
                                      connection. Default: 1000
       --psize                        Set the payload size. Default: 52
-      --_positionalArg_nexttrace_36  IP Address or domain name
+      --_positionalArg_nexttrace_38  IP Address or domain name
       --dot-server                   Use DoT Server for DNS Parse [dnssb,
                                      aliyun, dnspod, google, cloudflare]
   -g  --language                     Choose the language for displaying [en,
                                      cn]. Default: cn
       --file                         Read IP Address or domain name from file
   -C  --no-color                     Disable Colorful Output
+      --from                         Run traceroute via Globalping
+                                     (https://globalping.io/network) from a
+                                     specified location. The location field
+                                     accepts continents, countries, regions,
+                                     cities, ASNs, ISPs, or cloud regions.
 ```
 
 ## Project screenshot
@@ -511,6 +541,8 @@ This Project uses [JetBrain Open-Source Project License](https://jb.gg/OpenSourc
 
 [PeeringDB](https://www.peeringdb.com) Provided some data support for this project free of charge
 
+[Globalping](https://globalping.io) An open-source and free project that provides global access to run network tests like traceroute
+
 [sjlleo](https://github.com/sjlleo) The perpetual leader, founder, and core contributors
 
 [tsosunchia](https://github.com/tsosunchia) The project chair, infra maintainer, and core contributors
@@ -544,9 +576,8 @@ This Project uses [JetBrain Open-Source Project License](https://jb.gg/OpenSourc
 - How to obtain the freshly baked binary executable of the latest commit?
     > Please go to the most recent [Build & Release](https://github.com/nxtrace/NTrace-V1/actions/workflows/build.yml) workflow in GitHub Actions.
 
-- Known Issues
+- Common questions
     + On Windows, ICMP mode requires manual firewall allowance for ICMP/ICMPv6
-    + On Windows, TCP modes are currently unavailable
     + On macOS, only ICMP mode does not require elevated privileges
     + In some cases, running multiple instances of NextTrace simultaneously may interfere with each other’s results (observed so far only in TCP mode)
 

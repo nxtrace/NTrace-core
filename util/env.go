@@ -18,8 +18,10 @@ var (
 	EnvDataProvider = GetEnvDefault("NEXTTRACE_DATAPROVIDER", "")
 	EnvHostPort     = GetEnvDefault("NEXTTRACE_HOSTPORT", "api.nxtrace.org")
 	EnvPowProvider  = GetEnvDefault("NEXTTRACE_POWPROVIDER", "api.nxtrace.org")
+	EnvDeployAddr   = GetEnvDefault("NEXTTRACE_DEPLOY_ADDR", "")
 	EnvMaxAttempts  = GetEnvInt("NEXTTRACE_MAXATTEMPTS", 0)
 	EnvICMPMode     = GetEnvInt("NEXTTRACE_ICMPMODE", 0)
+	GlobalpingToken = GetEnvDefault("GLOBALPING_TOKEN", "")
 )
 
 func GetEnvTrimmed(key string) (string, bool) {

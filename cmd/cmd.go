@@ -23,12 +23,143 @@ import (
 	"github.com/nxtrace/NTrace-core/ipgeo"
 	"github.com/nxtrace/NTrace-core/printer"
 	"github.com/nxtrace/NTrace-core/reporter"
+	"github.com/nxtrace/NTrace-core/server"
 	"github.com/nxtrace/NTrace-core/trace"
 	"github.com/nxtrace/NTrace-core/tracelog"
 	"github.com/nxtrace/NTrace-core/tracemap"
 	"github.com/nxtrace/NTrace-core/util"
 	"github.com/nxtrace/NTrace-core/wshandle"
 )
+
+type listenInfo struct {
+	Binding string
+	Access  string
+}
+
+func buildListenInfo(addr string) listenInfo {
+	trimmed := strings.TrimSpace(addr)
+	effective := trimmed
+	if trimmed != "" && isDigitsOnly(trimmed) {
+		effective = ":" + trimmed
+	}
+
+	if effective == "" {
+		effective = ":1080"
+	}
+
+	host, port, err := net.SplitHostPort(effective)
+	if err != nil {
+		if strings.HasPrefix(effective, ":") {
+			host = ""
+			port = strings.TrimPrefix(effective, ":")
+		} else {
+			return listenInfo{
+				Binding: effective,
+			}
+		}
+	}
+
+	if port == "" {
+		port = "1080"
+	}
+
+	rawHost := host
+	if rawHost == "" {
+		rawHost = "0.0.0.0"
+	}
+
+	bindingHost := rawHost
+	if strings.Contains(bindingHost, ":") && !strings.HasPrefix(bindingHost, "[") {
+		bindingHost = "[" + bindingHost + "]"
+	}
+
+	info := listenInfo{
+		Binding: fmt.Sprintf("http://%s:%s", bindingHost, port),
+	}
+
+	wildcard := host == "" || host == "0.0.0.0" || host == "::"
+	var accessHost string
+	if wildcard {
+		accessHost = guessLocalIPv4()
+	} else {
+		accessHost = host
+	}
+
+	if accessHost != "" {
+		if strings.Contains(accessHost, ":") && !strings.HasPrefix(accessHost, "[") {
+			accessHost = "[" + accessHost + "]"
+		}
+		info.Access = fmt.Sprintf("http://%s:%s", accessHost, port)
+	}
+
+	return info
+}
+
+func isDigitsOnly(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func guessLocalIPv4() string {
+	addrs, err := net.InterfaceAddrs()
+	if err == nil {
+		for _, address := range addrs {
+			if ipNet, ok := address.(*net.IPNet); ok && !ipNet.IP.IsLoopback() {
+				if ip4 := ipNet.IP.To4(); ip4 != nil {
+					return ip4.String()
+				}
+			}
+		}
+	}
+	return "127.0.0.1"
+}
+
+func defaultLocalListenAddr() string {
+	if hasIPv4Loopback() {
+		return "127.0.0.1:1080"
+	}
+	if hasIPv6Loopback() {
+		return "[::1]:1080"
+	}
+	return "127.0.0.1:1080"
+}
+
+func hasIPv4Loopback() bool {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return false
+	}
+	for _, address := range addrs {
+		if ipNet, ok := address.(*net.IPNet); ok && ipNet.IP.IsLoopback() {
+			if ip4 := ipNet.IP.To4(); ip4 != nil {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func hasIPv6Loopback() bool {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return false
+	}
+	for _, address := range addrs {
+		if ipNet, ok := address.(*net.IPNet); ok && ipNet.IP.IsLoopback() {
+			if ip := ipNet.IP; ip.To4() == nil && len(ip) == net.IPv6len {
+				return true
+			}
+		}
+	}
+	return false
+}
 
 func Execute() {
 	parser := argparse.NewParser("nexttrace", "An open source visual route tracking CLI tool")
@@ -45,8 +176,8 @@ func Execute() {
 	parallelRequests := parser.Int("", "parallel-requests", &argparse.Options{Default: 18, Help: "Set ParallelRequests number. It should be 1 when there is a multi-routing"})
 	maxHops := parser.Int("m", "max-hops", &argparse.Options{Default: 30, Help: "Set the max number of hops (max TTL to be reached)"})
 	maxAttempts := parser.Int("", "max-attempts", &argparse.Options{Help: "Set the max number of attempts per TTL (instead of a fixed auto value)"})
-	dataOrigin := parser.Selector("d", "data-provider", []string{"Ip2region", "ip2region", "IP.SB", "ip.sb", "IPInfo", "ipinfo", "IPInsight", "ipinsight", "IPAPI.com", "ip-api.com", "IPInfoLocal", "ipinfolocal", "chunzhen", "LeoMoeAPI", "leomoeapi", "ipdb.one", "disable-geoip"}, &argparse.Options{Default: "LeoMoeAPI",
-		Help: "Choose IP Geograph Data Provider [IP.SB, IPInfo, IPInsight, IP-API.com, Ip2region, IPInfoLocal, CHUNZHEN, disable-geoip]"})
+	dataOrigin := parser.Selector("d", "data-provider", []string{"IP.SB", "ip.sb", "IPInfo", "ipinfo", "IPInsight", "ipinsight", "IPAPI.com", "ip-api.com", "IPInfoLocal", "ipinfolocal", "chunzhen", "LeoMoeAPI", "leomoeapi", "ipdb.one", "disable-geoip"}, &argparse.Options{Default: "LeoMoeAPI",
+		Help: "Choose IP Geograph Data Provider [IP.SB, IPInfo, IPInsight, IP-API.com, IPInfoLocal, CHUNZHEN, disable-geoip]"})
 	powProvider := parser.Selector("", "pow-provider", []string{"api.nxtrace.org", "sakura"}, &argparse.Options{Default: "api.nxtrace.org",
 		Help: "Choose PoW Provider [api.nxtrace.org, sakura] For China mainland users, please use sakura"})
 	norDNS := parser.Flag("n", "no-rdns", &argparse.Options{Help: "Do not resolve IP addresses to their domain names"})
@@ -66,6 +197,8 @@ func Execute() {
 	srcAddr := parser.String("s", "source", &argparse.Options{Help: "Use source address src_addr for outgoing packets"})
 	srcPort := parser.Int("", "source-port", &argparse.Options{Help: "Use source port src_port for outgoing packets"})
 	srcDev := parser.String("D", "dev", &argparse.Options{Help: "Use the following Network Devices as the source address in outgoing packets"})
+	deployListen := parser.String("", "listen", &argparse.Options{Help: "Set listen address for web console (e.g. 127.0.0.1:30080)"})
+	deploy := parser.Flag("", "deploy", &argparse.Options{Help: "Start the Gin powered web console"})
 	//router := parser.Flag("R", "route", &argparse.Options{Help: "Show Routing Table [Provided By BGP.Tools]"})
 	packetInterval := parser.Int("z", "send-time", &argparse.Options{Default: 50, Help: "Set how many [milliseconds] between sending each packet. Useful when some routers use rate-limit for ICMP messages"})
 	ttlInterval := parser.Int("i", "ttl-time", &argparse.Options{Default: 50, Help: "Set how many [milliseconds] between sending packets groups by TTL. Useful when some routers use rate-limit for ICMP messages"})
@@ -78,6 +211,7 @@ func Execute() {
 		Help: "Choose the language for displaying [en, cn]"})
 	file := parser.String("", "file", &argparse.Options{Help: "Read IP Address or domain name from file"})
 	noColor := parser.Flag("C", "no-color", &argparse.Options{Help: "Disable Colorful Output"})
+	from := parser.String("", "from", &argparse.Options{Help: "Run traceroute via Globalping (https://globalping.io/network) from a specified location. The location field accepts continents, countries, regions, cities, ASNs, ISPs, or cloud regions."})
 
 	err := parser.Parse(os.Args)
 	if err != nil {
@@ -100,6 +234,43 @@ func Execute() {
 	if *ver {
 		printer.CopyRight()
 		os.Exit(0)
+	}
+
+	if *deploy {
+		capabilitiesCheck()
+		// 优先使用 CLI 参数，其次使用环境变量
+		listenAddr := strings.TrimSpace(*deployListen)
+		envAddr := strings.TrimSpace(util.EnvDeployAddr)
+		userProvided := listenAddr != "" || envAddr != ""
+		if listenAddr == "" {
+			listenAddr = envAddr
+		}
+		if listenAddr == "" {
+			listenAddr = defaultLocalListenAddr()
+		}
+
+		info := buildListenInfo(listenAddr)
+		// 判断是否同时未通过 CLI 和环境变量指定地址
+		if !userProvided {
+			fmt.Printf("启动 NextTrace Web 控制台，监听地址: %s\n", info.Binding)
+			fmt.Println("远程访问请显式设置 --listen（例如 --listen 0.0.0.0:1080）。")
+			if info.Access != "" && info.Access != info.Binding {
+				fmt.Printf("如需远程访问，请尝试: %s\n", info.Access)
+			}
+		} else {
+			fmt.Printf("启动 NextTrace Web 控制台，监听地址: %s\n", info.Binding)
+			if info.Access != "" && info.Access != info.Binding {
+				fmt.Printf("如需远程访问，请尝试: %s\n", info.Access)
+			}
+		}
+		fmt.Println("注意：Web 控制台的安全性有限，请在确保安全的前提下使用，如有必要请使用ACL等方式加强安全性")
+		if err := server.Run(listenAddr); err != nil {
+			if util.EnvDevMode {
+				panic(err)
+			}
+			log.Fatal(err)
+		}
+		return
 	}
 
 	OSType := 3
@@ -152,7 +323,7 @@ func Execute() {
 		m = trace.ICMPTrace
 	}
 
-	if *fast_trace || *file != "" {
+	if *from == "" && (*fast_trace || *file != "") {
 		var paramsFastTrace = fastTrace.ParamsFastTrace{
 			OSType:         OSType,
 			ICMPMode:       *icmpMode,
@@ -239,6 +410,41 @@ func Execute() {
 				}
 			}()
 		}
+	}
+
+	if *from != "" {
+		executeGlobalpingTraceroute(
+			&trace.GlobalpingOptions{
+				Target:  *str,
+				From:    *from,
+				IPv4:    *ipv4Only,
+				IPv6:    *ipv6Only,
+				TCP:     *tcp,
+				UDP:     *udp,
+				Port:    *port,
+				Packets: *numMeasurements,
+				MaxHops: *maxHops,
+
+				DisableMaptrace: *disableMaptrace,
+				DataOrigin:      *dataOrigin,
+
+				TablePrint:   *tablePrint,
+				ClassicPrint: *classicPrint,
+				RawPrint:     *rawPrint,
+				JSONPrint:    *jsonPrint,
+			},
+			&trace.Config{
+				OSType:          OSType,
+				DN42:            *dn42,
+				NumMeasurements: *numMeasurements,
+				Lang:            *lang,
+				RDNS:            !*norDNS,
+				AlwaysWaitRDNS:  *alwaysrDNS,
+				IPGeoSource:     ipgeo.GetSource(*dataOrigin),
+				Timeout:         time.Duration(*timeout) * time.Millisecond,
+			},
+		)
+		return
 	}
 
 	var ip net.IP
@@ -373,7 +579,7 @@ func Execute() {
 		return
 	}
 	if !*disableMaptrace &&
-		(util.StringInSlice(strings.ToUpper(*dataOrigin), []string{"LEOMOEAPI", "IPINFO", "IPINFO", "IP-API.COM", "IPAPI.COM"})) {
+		(util.StringInSlice(strings.ToUpper(*dataOrigin), []string{"LEOMOEAPI", "IPINFO", "IP-API.COM", "IPAPI.COM"})) {
 		url, err := tracemap.GetMapUrl(string(r))
 		if err != nil {
 			fmt.Println(err)
@@ -444,5 +650,63 @@ func capabilitiesCheck() {
 		fmt.Println("您正在以普通用户权限运行 NextTrace，但 NextTrace 未被赋予监听网络套接字的ICMP消息包、修改IP头信息（TTL）等路由跟踪所需的权限")
 		fmt.Println("请使用管理员用户执行 `sudo setcap cap_net_raw,cap_net_admin+eip ${your_nexttrace_path}/nexttrace` 命令，赋予相关权限后再运行~")
 		fmt.Println("什么？为什么 ping 普通用户执行不要 root 权限？因为这些工具在管理员安装时就已经被赋予了一些必要的权限，具体请使用 `getcap /usr/bin/ping` 查看")
+	}
+}
+
+func executeGlobalpingTraceroute(opts *trace.GlobalpingOptions, config *trace.Config) {
+	res, measurement, err := trace.GlobalpingTraceroute(opts, config)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	if !opts.DisableMaptrace &&
+		(util.StringInSlice(strings.ToUpper(opts.DataOrigin), []string{"LEOMOEAPI", "IPINFO", "IP-API.COM", "IPAPI.COM"})) {
+		r, err := json.Marshal(res)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		url, err := tracemap.GetMapUrl(string(r))
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		res.TraceMapUrl = url
+	}
+
+	if opts.JSONPrint {
+		r, err := json.Marshal(res)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		fmt.Println(string(r))
+		return
+	}
+
+	if measurement == nil || len(measurement.Results) == 0 {
+		fmt.Println("Globalping 未返回可用的探测结果，已跳过输出。")
+		return
+	}
+
+	fmt.Fprintln(color.Output, color.New(color.FgGreen, color.Bold).Sprintf("> %s", trace.GlobalpingFormatLocation(&measurement.Results[0])))
+
+	if opts.TablePrint {
+		printer.TracerouteTablePrinter(res)
+	} else {
+		for i := range res.Hops {
+			if opts.ClassicPrint {
+				printer.ClassicPrinter(res, i)
+			} else if opts.RawPrint {
+				printer.EasyPrinter(res, i)
+			} else {
+				printer.RealtimePrinter(res, i)
+			}
+		}
+	}
+
+	if res.TraceMapUrl != "" {
+		tracemap.PrintMapUrl(res.TraceMapUrl)
 	}
 }

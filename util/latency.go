@@ -49,8 +49,9 @@ func GetFastIP(domain string, port string, enableOutput bool) string {
 	}
 
 	if len(ips) == 0 {
-		// 添加默认IP 45.88.195.154
+		// 添加默认IP 45.88.195.154 2605:52c0:2:954:114:514:1919:810
 		ips = append(ips, net.ParseIP("45.88.195.154"))
+		ips = append(ips, net.ParseIP("2605:52c0:2:954:114:514:1919:810"))
 	}
 
 	for _, ip := range ips {
@@ -128,7 +129,14 @@ func checkLatency(domain string, ip string, port string) {
 		//results <- ResponseInfo{IP: ip, Latency: "error", Content: ""}
 		return
 	}
-	defer resp.Body.Close()
+	if resp == nil || resp.Body == nil {
+		// 防止后续对 nil Body 的读写导致 panic
+		return
+	}
+	defer func() {
+		// 明确忽略关闭时的错误，HTTP 客户端此时已经读完正文
+		_ = resp.Body.Close()
+	}()
 
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {

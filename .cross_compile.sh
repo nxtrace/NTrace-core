@@ -7,6 +7,8 @@ DIST_PREFIX="nexttrace"
 DEBUG_MODE="${1:-}"                # 支持 ./script.sh debug
 TARGET_DIR="dist"
 PLATFORMS="linux/386 linux/amd64 linux/arm64 linux/mips linux/mips64 linux/mipsle linux/mips64le windows/amd64 windows/arm64 openbsd/amd64 openbsd/arm64 freebsd/amd64 freebsd/arm64"
+UPX_BIN="${UPX_BIN:-$(command -v upx 2>/dev/null || true)}"
+UPX_FLAGS="${UPX_FLAGS:--9}"
 
 # -------- Build metadata (robust) --------
 BUILD_VERSION="$(git describe --tags --always 2>/dev/null || true)"
@@ -24,6 +26,47 @@ LD_BASE="-X github.com/nxtrace/NTrace-core/config.Version=${BUILD_VERSION} \
 GO_BUILD_FLAGS=(-trimpath)
 if [[ "${DEBUG_MODE}" == "debug" ]]; then
   GO_BUILD_FLAGS=(-trimpath -gcflags "all=-N -l")
+fi
+
+compress_with_upx() {
+  local binary="${1:-}"
+  local target_os="${2:-}"
+  local target_arch="${3:-}"
+  local target_arm="${4:-}"
+  local note="${5:-}"
+  if [[ "${target_os}" != "linux" ]]; then
+    return
+  fi
+  case "${target_arch}" in
+    386|amd64|arm64)
+      ;;
+    arm)
+      if [[ "${target_arm}" != "7" ]]; then
+        return
+      fi
+      ;;
+    *)
+      return
+      ;;
+  esac
+  if [[ -z "${UPX_BIN}" ]]; then
+    return
+  fi
+  if [[ ! -f "${binary}" ]]; then
+    return
+  fi
+  if [[ "${note}" != "quiet" ]]; then
+    echo "upx => ${binary}"
+  fi
+  if ! "${UPX_BIN}" ${UPX_FLAGS} "${binary}" >/dev/null; then
+    echo "warn: upx failed for ${binary}, keeping uncompressed" >&2
+  fi
+}
+
+if [[ -z "${UPX_BIN}" ]]; then
+  echo "info: upx not found; set UPX_BIN or install upx to enable binary compression" >&2
+else
+  echo "info: using upx at ${UPX_BIN} with flags ${UPX_FLAGS}" >&2
 fi
 
 # -------- Prepare out dir --------
@@ -44,12 +87,14 @@ for pl in ${PLATFORMS}; do
 
   echo "build => ${TARGET}"
   go build "${GO_BUILD_FLAGS[@]}" -o "${TARGET}" -ldflags "${LD_BASE}"
+  compress_with_upx "${TARGET}" "${GOOS}" "${GOARCH}"
 
   # Extra soft-float variants for linux/mips and linux/mipsle
   if [[ "${GOOS}" == "linux" && ( "${GOARCH}" == "mips" || "${GOARCH}" == "mipsle" ) ]]; then
     TARGET_SOFT="${TARGET_DIR}/${DIST_PREFIX}_${GOOS}_${GOARCH}_softfloat"
     echo "build => ${TARGET_SOFT} (GOMIPS=softfloat)"
     GOMIPS=softfloat go build "${GO_BUILD_FLAGS[@]}" -o "${TARGET_SOFT}" -ldflags "${LD_BASE}"
+    compress_with_upx "${TARGET_SOFT}" "${GOOS}" "${GOARCH}"
   fi
 done
 
@@ -61,6 +106,7 @@ export GOARM='7'
 TARGET="${TARGET_DIR}/${DIST_PREFIX}_${GOOS}_${GOARCH}v7"
 echo "build => ${TARGET}"
 go build "${GO_BUILD_FLAGS[@]}" -o "${TARGET}" -ldflags "${LD_BASE}"
+compress_with_upx "${TARGET}" "${GOOS}" "${GOARCH}" "${GOARM}"
 
 # -------- Darwin targets with CGO + SDK libpcap --------
 if [[ "$(uname)" == "Darwin" ]]; then
@@ -89,6 +135,7 @@ if [[ "$(uname)" == "Darwin" ]]; then
     TARGET="${TARGET_DIR}/${DIST_PREFIX}_${GOOS}_${GOARCH}"
     echo "build => ${TARGET}"
     go build "${GO_BUILD_FLAGS[@]}" -o "${TARGET}" -ldflags "${LD_BASE}"
+    compress_with_upx "${TARGET}" "${GOOS}" "${GOARCH}"
   done
 
   # 合并 Universal 2（存在 lipo 才合并）

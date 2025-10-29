@@ -229,6 +229,9 @@ func (s *Result) add(hop Hop, attemptIdx, numMeasurements, maxAttempts int) {
 }
 
 func (s *Result) reduce(final int) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
 	if final > 0 && final < len(s.Hops) {
 		s.Hops = s.Hops[:final]
 	}

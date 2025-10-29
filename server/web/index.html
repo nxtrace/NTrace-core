@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>NextTrace Web</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+  <header class="header">
+    <div class="header__top">
+      <div class="header__title">
+        <h1 id="title-text">NextTrace Web</h1>
+      </div>
+      <div class="header__actions">
+        <button type="button" id="cache-btn" class="action-btn action-btn--ghost">清空缓存</button>
+        <button type="button" id="lang-toggle" class="action-btn action-btn--primary">English</button>
+      </div>
+    </div>
+    <p class="header__subtitle" id="subtitle-text">在浏览器中运行 NextTrace，实时查看路由探测结果。</p>
+  </header>
+
+  <main class="container">
+    <section class="panel panel--form">
+      <form id="trace-form" class="form">
+        <div class="form__group">
+          <label for="mode" id="label-mode">探测模式</label>
+          <select id="mode" name="mode">
+            <option value="single">单次探测</option>
+            <option value="mtr">持续探测</option>
+          </select>
+        </div>
+
+        <div class="form__group">
+          <label for="target" id="label-target">目标地址</label>
+          <input id="target" name="target" type="text" placeholder="例如：1.1.1.1 或 www.example.com" required>
+        </div>
+
+        <div class="form__group grid">
+          <div>
+            <label for="protocol" id="label-protocol">协议</label>
+            <select id="protocol" name="protocol"></select>
+          </div>
+          <div>
+            <label for="data-provider" id="label-provider">地理信息源</label>
+            <select id="data-provider" name="dataProvider"></select>
+          </div>
+        </div>
+
+        <div class="form__group grid" id="group-basic-params">
+          <div>
+            <label for="queries" id="label-queries">每跳探测次数</label>
+            <input id="queries" name="queries" type="number" min="1" max="63">
+          </div>
+          <div>
+            <label for="max-hops" id="label-maxhops">最大跳数</label>
+            <input id="max-hops" name="maxHops" type="number" min="1" max="64">
+          </div>
+        </div>
+
+        <div class="form__group grid" id="group-advanced-params">
+          <div>
+            <label for="dst-port" id="label-dst-port">目的端口</label>
+            <input id="dst-port" name="dstPort" type="number" min="1" max="65535" disabled>
+            <small id="dst-port-hint">仅 TCP/UDP 模式有效</small>
+          </div>
+          <div>
+            <label for="payload-size" id="label-psize">负载大小</label>
+            <input id="payload-size" name="payloadSize" type="number" min="16" max="2048">
+          </div>
+        </div>
+
+        <div class="form__group checkbox-group" id="group-disable-map">
+          <label class="checkbox">
+            <input type="checkbox" id="disable-maptrace" name="disableMaptrace">
+            <span id="label-disable-map">禁用地图生成</span>
+          </label>
+        </div>
+
+        <div class="form__actions">
+          <button type="submit" id="submit-btn">开始探测</button>
+          <button type="button" id="stop-btn" class="action-btn action-btn--ghost hidden">停止</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel panel--results">
+      <div class="results-header">
+        <div id="status" class="status status--idle">准备就绪</div>
+        <div id="result-meta" class="result-meta hidden"></div>
+      </div>
+      <div id="result" class="result hidden"></div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span id="footer-text">当前会话仅提供基础功能，更多高级选项请使用 CLI。</span>
+  </footer>
+
+  <script src="/assets/app.js" defer></script>
+</body>
+</html>

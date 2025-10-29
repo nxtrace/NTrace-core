@@ -18,6 +18,15 @@ import (
 	"github.com/nxtrace/NTrace-core/util"
 )
 
+func formatHostPort(addr, port string) string {
+	clean := strings.TrimSpace(addr)
+	clean = strings.Trim(clean, "[]")
+	if strings.Contains(clean, ":") {
+		return "[" + clean + "]:" + port
+	}
+	return clean + ":" + port
+}
+
 type WsConn struct {
 	Connecting   bool
 	Connected    bool            // 连接状态
@@ -28,6 +37,7 @@ type WsConn struct {
 	Interrupt    chan os.Signal  // 终端中止信号
 	Conn         *websocket.Conn // 主连接
 	ConnMux      sync.Mutex      // 连接互斥锁
+	stateMu      sync.RWMutex
 }
 
 var wsconn *WsConn
@@ -36,27 +46,65 @@ var envToken = util.EnvToken
 var cacheToken string
 var cacheTokenFailedTimes int
 
+func (c *WsConn) setConnectionState(connected, connecting bool) {
+	c.stateMu.Lock()
+	c.Connected = connected
+	c.Connecting = connecting
+	c.stateMu.Unlock()
+}
+
+func (c *WsConn) setConnected(v bool) {
+	c.stateMu.Lock()
+	c.Connected = v
+	c.stateMu.Unlock()
+}
+
+func (c *WsConn) setConnecting(v bool) {
+	c.stateMu.Lock()
+	c.Connecting = v
+	c.stateMu.Unlock()
+}
+
+func (c *WsConn) IsConnected() bool {
+	c.stateMu.RLock()
+	defer c.stateMu.RUnlock()
+	return c.Connected
+}
+
+func (c *WsConn) IsConnecting() bool {
+	c.stateMu.RLock()
+	defer c.stateMu.RUnlock()
+	return c.Connecting
+}
+
+func (c *WsConn) startReconnecting() bool {
+	c.stateMu.Lock()
+	defer c.stateMu.Unlock()
+	if c.Connected || c.Connecting {
+		return false
+	}
+	c.Connecting = true
+	return true
+}
+
 func (c *WsConn) keepAlive() {
 	go func() {
 		// 开启一个定时器
 		for {
 			<-time.After(time.Second * 54)
-			if c.Connected {
+			if c.IsConnected() {
 				err := c.Conn.WriteMessage(websocket.TextMessage, []byte("ping"))
 				if err != nil {
 					log.Println(err)
-					c.Connected = false
+					c.setConnected(false)
 					return
 				}
 			}
 		}
 	}()
 	for {
-		if !c.Connected && !c.Connecting {
-			c.Connecting = true
+		if c.startReconnecting() {
 			c.recreateWsConn()
-			// log.Println("WebSocket 连接意外断开，正在尝试重连...")
-			// return
 		}
 		// 降低检测频率，优化 CPU 占用情况
 		<-time.After(200 * time.Millisecond)
@@ -72,12 +120,12 @@ func (c *WsConn) messageReceiveHandler() {
 		}
 	}()
 	for {
-		if c.Connected {
+		if c.IsConnected() {
 			_, msg, err := c.Conn.ReadMessage()
 			if err != nil {
 				// 读取信息出错，连接已经意外断开
 				// log.Println(err)
-				c.Connected = false
+				c.setConnected(false)
 				return
 			}
 			if string(msg) != "pong" {
@@ -95,7 +143,7 @@ func (c *WsConn) messageSendHandler() {
 			return
 		case t := <-c.MsgSendCh:
 			// log.Println(t)
-			if !c.Connected {
+			if !c.IsConnected() {
 				c.MsgReceiveCh <- `{"ip":"` + t + `", "asnumber":"API Server Error"}`
 			} else {
 				err := c.Conn.WriteMessage(websocket.TextMessage, []byte(t))
@@ -112,7 +160,7 @@ func (c *WsConn) messageSendHandler() {
 				if util.EnvDevMode {
 					panic(err)
 				}
-				log.Fatalf("write close: %v", err)
+				log.Printf("write close: %v", err)
 			}
 			select {
 			// 等到了结果，直接退出
@@ -126,8 +174,13 @@ func (c *WsConn) messageSendHandler() {
 }
 
 func (c *WsConn) recreateWsConn() {
+	c.setConnected(false)
 	// 尝试重新连线
-	u := url.URL{Scheme: "wss", Host: fastIp + ":" + port, Path: "/v3/ipGeoWs"}
+	if host != "" && net.ParseIP(host) == nil {
+		// 刷新一次最优 IP，防止旧 IP 已失效
+		fastIp = util.GetFastIP(host, port, true)
+	}
+	u := url.URL{Scheme: "wss", Host: formatHostPort(fastIp, port), Path: "/v3/ipGeoWs"}
 	// log.Printf("connecting to %s", u.String())
 	jwtToken, ua := envToken, []string{"Privileged Client"}
 	err := error(nil)
@@ -144,7 +197,11 @@ func (c *WsConn) recreateWsConn() {
 				if util.EnvDevMode {
 					panic(err)
 				}
-				log.Fatalf("write close: %v", err)
+				log.Printf("pow token fetch failed: %v", err)
+				cacheToken = ""
+				cacheTokenFailedTimes++
+				c.setConnectionState(false, false)
+				return
 			}
 		} else {
 			// 使用 cacheToken
@@ -172,18 +229,13 @@ func (c *WsConn) recreateWsConn() {
 	if err != nil {
 		log.Println("dial:", err)
 		// <-time.After(time.Second * 1)
-		c.Connected = false
-		c.Connecting = false
-		if cacheTokenFailedTimes > 3 {
-			cacheToken = ""
-		}
+		c.setConnectionState(false, false)
 		cacheTokenFailedTimes += 1
+		time.Sleep(1 * time.Second)
 		//fmt.Println("重连失败", cacheTokenFailedTimes, "次")
 		return
-	} else {
-		c.Connected = true
 	}
-	c.Connecting = false
+	c.setConnectionState(err == nil, false)
 
 	c.Done = make(chan struct{})
 	go c.messageReceiveHandler()
@@ -199,9 +251,6 @@ func createWsConn() *WsConn {
 	// 如果 host 是一个 IP 使用默认域名
 	if valid := net.ParseIP(host); valid != nil {
 		fastIp = host
-		if len(strings.Split(fastIp, ":")) > 1 {
-			fastIp = "[" + fastIp + "]"
-		}
 		host = "api.nxtrace.org"
 	} else {
 		// 默认配置完成，开始寻找最优 IP
@@ -219,7 +268,17 @@ func createWsConn() *WsConn {
 			if util.EnvDevMode {
 				panic(err)
 			}
-			log.Fatalf("write close: %v", err)
+			log.Printf("pow token fetch failed: %v", err)
+			wsconn = &WsConn{
+				MsgSendCh:    make(chan string, 10),
+				MsgReceiveCh: make(chan string, 10),
+				Done:         make(chan struct{}),
+				Interrupt:    interrupt,
+			}
+			wsconn.setConnectionState(false, false)
+			go wsconn.keepAlive()
+			go wsconn.messageSendHandler()
+			return wsconn
 		}
 		ua = []string{util.UserAgent}
 	}
@@ -238,23 +297,23 @@ func createWsConn() *WsConn {
 	if proxyUrl != nil {
 		dialer.Proxy = http.ProxyURL(proxyUrl)
 	}
-	u := url.URL{Scheme: "wss", Host: fastIp + ":" + port, Path: "/v3/ipGeoWs"}
+	u := url.URL{Scheme: "wss", Host: formatHostPort(fastIp, port), Path: "/v3/ipGeoWs"}
 	// log.Printf("connecting to %s", u.String())
 
 	c, _, err := dialer.Dial(u.String(), requestHeader)
 
 	wsconn = &WsConn{
 		Conn:         c,
-		Connected:    true,
-		Connecting:   false,
 		MsgSendCh:    make(chan string, 10),
 		MsgReceiveCh: make(chan string, 10),
+		Interrupt:    interrupt,
 	}
+	wsconn.setConnectionState(err == nil, false)
 
 	if err != nil {
 		log.Println("dial:", err)
 		// <-time.After(time.Second * 1)
-		wsconn.Connected = false
+		cacheTokenFailedTimes++
 		wsconn.Done = make(chan struct{})
 		go wsconn.keepAlive()
 		go wsconn.messageSendHandler()

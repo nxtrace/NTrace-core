@@ -169,3 +169,6 @@ Temporary Items
 dist/
 
 NTrace-core
+
+.gocache
+.gomodcache
