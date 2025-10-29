@@ -129,6 +129,10 @@ func checkLatency(domain string, ip string, port string) {
 		//results <- ResponseInfo{IP: ip, Latency: "error", Content: ""}
 		return
 	}
+	if resp == nil || resp.Body == nil {
+		// 防止后续对 nil Body 的读写导致 panic
+		return
+	}
 	defer resp.Body.Close()
 
 	bodyBytes, err := io.ReadAll(resp.Body)
