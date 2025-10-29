@@ -139,12 +139,17 @@ func runSingleTrace(session *wsTraceSession, setup *traceExecution) {
 				if len(attempts) == 0 {
 					continue
 				}
-				if session.seen[idx] == len(attempts) {
+				snapshot := append([]trace.Hop(nil), attempts...)
+				newLen := len(snapshot)
+				if newLen == 0 {
 					continue
 				}
-				session.seen[idx] = len(attempts)
+				if prevLen, ok := session.seen[idx]; ok && newLen <= prevLen {
+					continue
+				}
+				session.seen[idx] = newLen
 
-				hop := buildHopResponse(attempts, idx, session.lang)
+				hop := buildHopResponse(snapshot, idx, session.lang)
 				if len(hop.Attempts) == 0 {
 					continue
 				}
