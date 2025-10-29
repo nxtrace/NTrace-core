@@ -105,22 +105,24 @@ func GlobalpingTraceroute(opts *GlobalpingOptions, config *Config) (*Result, *gl
 		return nil, nil, err
 	}
 
+	limit := opts.MaxHops
+	if limit <= 0 && config != nil && config.MaxHops > 0 {
+		limit = config.MaxHops
+	}
+	if limit <= 0 || limit > len(gpHops) {
+		limit = len(gpHops)
+	}
+
 	result := &Result{}
 	geoMap := map[string]*ipgeo.IPGeoData{}
 	maxTimings := 1
 
-	for i := range gpHops {
-		if i >= opts.MaxHops {
-			break
-		}
+	for i := 0; i < limit; i++ {
 		if count := len(gpHops[i].Timings); count > maxTimings {
 			maxTimings = count
 		}
 	}
-	for i := range gpHops {
-		if i >= opts.MaxHops {
-			break
-		}
+	for i := 0; i < limit; i++ {
 		hops := make([]Hop, 0, maxTimings)
 		for j := 0; j < maxTimings; j++ {
 			var timing *globalping.MTRTiming
