@@ -36,6 +36,7 @@ func (f *FastTracer) tracert_v6(location string, ispCollection ISPCollection) {
 		DstPort:          f.ParamsFastTrace.DstPort,
 		MaxHops:          f.ParamsFastTrace.MaxHops,
 		NumMeasurements:  3,
+		MaxAttempts:      f.ParamsFastTrace.MaxAttempts,
 		ParallelRequests: 18,
 		RDNS:             f.ParamsFastTrace.RDNS,
 		AlwaysWaitRDNS:   f.ParamsFastTrace.AlwaysWaitRDNS,
@@ -149,6 +150,12 @@ func FastTestv6(traceMode trace.Method, outEnable bool, paramsFastTrace ParamsFa
 	_, err := fmt.Scanln(&c)
 	if err != nil {
 		c = "1"
+	}
+
+	// 仅在使用 UDPv6 探测时，确保 UDP 负载长度 ≥ 2
+	if traceMode == trace.UDPTrace && paramsFastTrace.PktSize < 2 {
+		fmt.Println("UDPv6 模式下，数据包长度不能小于 2，已自动调整为 2")
+		paramsFastTrace.PktSize = 2
 	}
 
 	ft := FastTracer{

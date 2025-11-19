@@ -172,10 +172,10 @@ func Execute() {
 	fast_trace := parser.Flag("F", "fast-trace", &argparse.Options{Help: "One-Key Fast Trace to China ISPs"})
 	port := parser.Int("p", "port", &argparse.Options{Help: "Set the destination port to use. With default of 80 for \"tcp\", 33494 for \"udp\""})
 	icmpMode := parser.Int("", "icmp-mode", &argparse.Options{Help: "Windows ONLY: Choose the method to listen for ICMP packets (1=Socket, 2=PCAP; 0=Auto)"})
-	numMeasurements := parser.Int("q", "queries", &argparse.Options{Default: 3, Help: "Set the number of probes per each hop"})
+	numMeasurements := parser.Int("q", "queries", &argparse.Options{Default: 3, Help: "Set the number of latency samples to display for each hop"})
+	maxAttempts := parser.Int("", "max-attempts", &argparse.Options{Help: "Set the maximum number of probe packets per hop (instead of a fixed auto value)"})
 	parallelRequests := parser.Int("", "parallel-requests", &argparse.Options{Default: 18, Help: "Set ParallelRequests number. It should be 1 when there is a multi-routing"})
 	maxHops := parser.Int("m", "max-hops", &argparse.Options{Default: 30, Help: "Set the max number of hops (max TTL to be reached)"})
-	maxAttempts := parser.Int("", "max-attempts", &argparse.Options{Help: "Set the max number of attempts per TTL (instead of a fixed auto value)"})
 	dataOrigin := parser.Selector("d", "data-provider", []string{"IP.SB", "ip.sb", "IPInfo", "ipinfo", "IPInsight", "ipinsight", "IPAPI.com", "ip-api.com", "IPInfoLocal", "ipinfolocal", "chunzhen", "LeoMoeAPI", "leomoeapi", "ipdb.one", "disable-geoip"}, &argparse.Options{Default: "LeoMoeAPI",
 		Help: "Choose IP Geograph Data Provider [IP.SB, IPInfo, IPInsight, IP-API.com, IPInfoLocal, CHUNZHEN, disable-geoip]"})
 	powProvider := parser.Selector("", "pow-provider", []string{"api.nxtrace.org", "sakura"}, &argparse.Options{Default: "api.nxtrace.org",
@@ -300,18 +300,19 @@ func Execute() {
 		}
 	}
 
-	if *maxAttempts > 255 {
-		fmt.Println("MaxAttempts 最大值为 255，已自动调整为 255")
-		*maxAttempts = 255
+	if !*tcp {
+		if *numMeasurements > 255 {
+			fmt.Println("Query 最大值为 255，已自动调整为 255")
+			*numMeasurements = 255
+		}
+
+		if *maxAttempts > 255 {
+			fmt.Println("MaxAttempt 最大值为 255，已自动调整为 255")
+			*maxAttempts = 255
+		}
 	}
 
 	domain := *str
-
-	// 仅在使用 UDP 探测时，确保 UDP 负载长度 ≥ 2
-	if *udp && *packetSize < 2 {
-		fmt.Println("UDP 模式下，数据包长度不能小于 2，已自动调整为 2")
-		*packetSize = 2
-	}
 
 	var m trace.Method
 	switch {
@@ -332,6 +333,7 @@ func Execute() {
 			DstPort:        *port,
 			BeginHop:       *beginHop,
 			MaxHops:        *maxHops,
+			MaxAttempts:    *maxAttempts,
 			RDNS:           !*norDNS,
 			AlwaysWaitRDNS: *alwaysrDNS,
 			Lang:           *lang,
@@ -489,6 +491,12 @@ func Execute() {
 				}
 			}
 		}
+	}
+
+	// 仅在使用 UDPv6 探测时，确保 UDP 负载长度 ≥ 2
+	if *udp && util.IsIPv6(ip) && *packetSize < 2 {
+		fmt.Println("UDPv6 模式下，数据包长度不能小于 2，已自动调整为 2")
+		*packetSize = 2
 	}
 
 	if !*jsonPrint {
