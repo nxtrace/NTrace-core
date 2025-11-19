@@ -10,11 +10,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/nxtrace/NTrace-core/trace/internal"
 	"golang.org/x/net/idna"
 	"golang.org/x/sync/singleflight"
 
 	"github.com/nxtrace/NTrace-core/ipgeo"
+	"github.com/nxtrace/NTrace-core/trace/internal"
 	"github.com/nxtrace/NTrace-core/util"
 )
 
@@ -355,6 +355,10 @@ func (h *Hop) fetchIPData(c Config) error {
 			if lastErr == nil {
 				lastErr = errors.New("ipgeo: lookup failed without specific error (DN42)")
 			}
+			h.Geo = &ipgeo.IPGeoData{
+				Asnumber: "failed to fetch geoip data",
+				Country:  "failed to fetch geoip data",
+			}
 			return lastErr
 		}
 		return nil
@@ -456,27 +460,51 @@ func (h *Hop) fetchIPData(c Config) error {
 				// 超时不阻塞
 			}
 		}
-		if err := <-ipGeoCh; err != nil {
-			return err
+		err := <-ipGeoCh
+		if err != nil {
+			h.Geo = &ipgeo.IPGeoData{
+				Asnumber: "failed to fetch geoip data",
+				Country:  "failed to fetch geoip data",
+			}
 		}
-		return nil
+		return err
 	}
 	// 非强制等待 PTR：依据率先完成者决定是否还等 PTR
 	if rDNSStarted {
 		select {
 		case err := <-ipGeoCh:
 			// 地理信息先完成：不再等待 PTR
+			if err != nil {
+				h.Geo = &ipgeo.IPGeoData{
+					Asnumber: "failed to fetch geoip data",
+					Country:  "failed to fetch geoip data",
+				}
+			}
 			return err
 		case ptrs := <-rDNSCh:
 			if len(ptrs) > 0 {
 				h.Hostname = CanonicalHostname(ptrs[0])
 			}
 			// 然后等待 IPGeo 完成
-			return <-ipGeoCh
+			err := <-ipGeoCh
+			if err != nil {
+				h.Geo = &ipgeo.IPGeoData{
+					Asnumber: "failed to fetch geoip data",
+					Country:  "failed to fetch geoip data",
+				}
+			}
+			return err
 		}
 	}
 	// 未启动 rDNS，只需等待地理信息
-	return <-ipGeoCh
+	err := <-ipGeoCh
+	if err != nil {
+		h.Geo = &ipgeo.IPGeoData{
+			Asnumber: "failed to fetch geoip data",
+			Country:  "failed to fetch geoip data",
+		}
+	}
+	return err
 }
 
 // parse 安全解析十六进制子串 s 为无符号整数
@@ -499,7 +527,7 @@ func findValid(hexStr string) string {
 		return ""
 	}
 
-	// 从尾到头按 4B 扫描（1B = 2 hex digits）
+	// 从尾到头以 4B 为单位扫描（1B = 2 hex digits）
 	for i := n - 8; i >= 0; i -= 8 {
 		// 直接匹配 "2000"
 		if hexStr[i:i+4] != "2000" {
