@@ -1,6 +1,6 @@
 module github.com/nxtrace/NTrace-core
 
-go 1.25.1
+go 1.25.4
 
 require (
 	github.com/akamensky/argparse v1.4.0

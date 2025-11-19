@@ -1,7 +1,6 @@
 package trace
 
 import (
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
@@ -11,11 +10,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/nxtrace/NTrace-core/trace/internal"
 	"golang.org/x/net/idna"
 	"golang.org/x/sync/singleflight"
 
 	"github.com/nxtrace/NTrace-core/ipgeo"
-	"github.com/nxtrace/NTrace-core/trace/internal"
 	"github.com/nxtrace/NTrace-core/util"
 )
 
@@ -480,72 +479,118 @@ func (h *Hop) fetchIPData(c Config) error {
 	return <-ipGeoCh
 }
 
+// parse 安全解析十六进制子串 s 为无符号整数
+func parse(s string, bitSize int) (uint64, bool) {
+	if len(s) == 0 {
+		return 0, false
+	}
+	v, err := strconv.ParseUint(s, 16, bitSize)
+	if err != nil {
+		return 0, false
+	}
+	return v, true
+}
+
+// findValid 在十六进制字符串 hexStr 中截取从 ICMP 扩展头开始的部分
+func findValid(hexStr string) string {
+	n := len(hexStr)
+	// 至少要能容纳 4B 扩展头，且 hexStr 的长度必须为偶数
+	if n < 8 || n%2 != 0 {
+		return ""
+	}
+
+	// 从尾到头按 4B 扫描（1B = 2 hex digits）
+	for i := n - 8; i >= 0; i -= 8 {
+		// 直接匹配 "2000"
+		if hexStr[i:i+4] != "2000" {
+			continue
+		}
+
+		// 处理扩展头 4B 后的剩余部分
+		remHex := n - (i + 8) // 剩余的 hex 个数
+		if remHex <= 0 {
+			continue
+		}
+
+		remBytes := remHex / 2
+		// 剩余部分长度必须 ≥ 8B
+		if remBytes >= 8 {
+			return hexStr[i:]
+		}
+
+		// 否则继续向左寻找更早的 "2000"
+	}
+	return ""
+}
+
 func extractMPLS(msg internal.ReceivedMessage) []string {
 	if util.DisableMPLS {
 		return nil
 	}
 
-	tmp := fmt.Sprintf("%x", msg.Msg)
+	// 将整包转换为十六进制字符串
+	hexStr := fmt.Sprintf("%x", msg.Msg)
 
-	var findValid func(tmp, sub string, from int) string
-	findValid = func(tmp, sub string, from int) string {
-		index := strings.LastIndex(tmp[:from], sub)
-		if index == -1 {
-			return ""
-		}
-		if len(tmp[index:])%8 == 0 || len(tmp[index:])/8 < 3 {
-			return tmp[index:]
-		}
-		return findValid(tmp, sub, index)
-	}
-	tmp = findValid(tmp, "2000", len(tmp))
-	if tmp == "" {
+	// 调用 findValid 截取从 ICMP 扩展头开始的字符串
+	extStr := findValid(hexStr)
+	if extStr == "" {
 		return nil
 	}
-	xdata, err := hex.DecodeString(tmp)
-	if err != nil {
-		return nil
+
+	var mplsLSEList []string
+	n := len(extStr)
+
+	// 先逐对象检查 Class 是否为 MPLS Label Stack Class (1)
+	for j := 8; j+8 <= n; {
+		// 对象头：Length(2B) | Class(1B) | C-Type(1B)
+		lengthU, ok := parse(extStr[j:j+4], 16)
+		if !ok || lengthU < 4 {
+			return nil
+		}
+		objLenBytes := int(lengthU)
+		objLenHex := objLenBytes * 2
+		if j+objLenHex > n {
+			return nil
+		}
+
+		// 读取 Class 的值
+		classU, ok := parse(extStr[j+4:j+6], 8)
+		if !ok {
+			return nil
+		}
+		class := int(classU)
+
+		if class == 1 {
+			// 去掉扩展头与 MPLS 对象头，只保留 MPLS 对象负载
+			payloadStart := j + 8
+			payloadEnd := j + objLenHex
+			if payloadEnd <= payloadStart {
+				return nil
+			}
+			mplsPayload := extStr[payloadStart:payloadEnd] // 仅 LSE 区域
+			if len(mplsPayload)%8 != 0 {                   // 每个 LSE = 4B = 8 hex digits
+				return nil
+			}
+
+			// 逐个 LSE 解析并追加到 mplsLSEList
+			for off := 0; off+8 <= len(mplsPayload); off += 8 {
+				vU, ok := parse(mplsPayload[off:off+8], 32)
+				if !ok {
+					return nil
+				}
+				v := uint32(vU)
+
+				lbl := (v >> 12) & 0xFFFFF // 20 bits
+				tc := (v >> 9) & 0x7       // 3 bits
+				s := (v >> 8) & 0x1        // 1 bit
+				ttl := v & 0xFF            // 8 bits
+
+				mplsLSEList = append(mplsLSEList, fmt.Sprintf("[MPLS: Lbl %d, TC %d, S %d, TTL %d]", lbl, tc, s, ttl))
+			}
+		}
+
+		// 跳到下一个对象
+		j += objLenHex
 	}
-	xdata[2], xdata[3] = 0, 0
-	// 判断此处这个ICMP Multi-Part Extensions的CLass为MPLS Label Stack Class (1)
-	if tmp[12:14] != "01" {
-		//fmt.Println("CLASS:", tmp[12:14], ",不是MPLS标签栈类")
-		return nil
-	}
-	l := len(tmp)/8 - 2
-	//去掉扩展头和MPLS头
-	tmp = tmp[8*2:]
-
-	var retStrList []string
-	for i := 0; i < l; i++ {
-		label, err := strconv.ParseInt(tmp[i*8+0:i*8+5], 16, 32)
-		if err != nil {
-			return nil
-		}
-
-		strSlice := fmt.Sprintf("%s", []byte(tmp[i*8+5:i*8+6]))
-		//fmt.Printf("\nstrSlice: %s\n", strSlice)
-
-		num, err := strconv.ParseUint(strSlice, 16, 64)
-		if err != nil {
-			return nil
-		}
-		binaryStr := fmt.Sprintf("%04s", strconv.FormatUint(num, 2))
-
-		//fmt.Printf("\nbinaryStr: %s\n", binaryStr)
-		tc, err := strconv.ParseInt(binaryStr[:3], 2, 32)
-		if err != nil {
-			return nil
-		}
-		s := binaryStr[3:]
-
-		ttlMpls, err := strconv.ParseInt(tmp[i*8+6:i*8+8], 16, 32)
-		if err != nil {
-			return nil
-		}
-
-		retStrList = append(retStrList, fmt.Sprintf("[MPLS: Lbl %d, TC %d, S %s, TTL %d]", label, tc, s, ttlMpls))
-	}
-
-	return retStrList
+	return mplsLSEList
 }
