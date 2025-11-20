@@ -347,11 +347,11 @@ export GLOBALPING_TOKEN=your_token_here
 ### 全部用法详见 Usage 菜单
 
 ```shell
-Usage: nexttrace [-h|--help] [--init] [-4|--ipv4] [-6|--ipv6] [-T|--tcp]
+usage: nexttrace [-h|--help] [--init] [-4|--ipv4] [-6|--ipv6] [-T|--tcp]
                  [-U|--udp] [-F|--fast-trace] [-p|--port <integer>]
                  [--icmp-mode <integer>] [-q|--queries <integer>]
-                 [--parallel-requests <integer>] [-m|--max-hops <integer>]
-                 [--max-attempts <integer>] [-d|--data-provider
+                 [--max-attempts <integer>] [--parallel-requests <integer>]
+                 [-m|--max-hops <integer>] [-d|--data-provider
                  (IP.SB|ip.sb|IPInfo|ipinfo|IPInsight|ipinsight|IPAPI.com|ip-api.com|IPInfoLocal|ipinfolocal|chunzhen|LeoMoeAPI|leomoeapi|ipdb.one|disable-geoip)]
                  [--pow-provider (api.nxtrace.org|sakura)] [-n|--no-rdns]
                  [-a|--always-rdns] [-P|--route-path] [-r|--report] [--dn42]
@@ -364,6 +364,8 @@ Usage: nexttrace [-h|--help] [--init] [-4|--ipv4] [-6|--ipv6] [-T|--tcp]
                  [_positionalArg_nexttrace_38 "<value>"] [--dot-server
                  (dnssb|aliyun|dnspod|google|cloudflare)] [-g|--language
                  (en|cn)] [--file "<value>"] [-C|--no-color] [--from "<value>"]
+
+                 An open source visual route tracking CLI tool
 
 Arguments:
 
@@ -382,15 +384,15 @@ Arguments:
       --icmp-mode                    Windows ONLY: Choose the method to listen
                                      for ICMP packets (1=Socket, 2=PCAP;
                                      0=Auto)
-  -q  --queries                      Set the number of probes per each hop.
-                                     Default: 3
+  -q  --queries                      Set the number of latency samples to
+                                     display for each hop. Default: 3
+      --max-attempts                 Set the maximum number of probe packets
+                                     per hop (instead of a fixed auto value)
       --parallel-requests            Set ParallelRequests number. It should be
                                      1 when there is a multi-routing. Default:
                                      18
   -m  --max-hops                     Set the max number of hops (max TTL to be
                                      reached). Default: 30
-      --max-attempts                 Set the max number of attempts per TTL
-                                     (instead of a fixed auto value)
   -d  --data-provider                Choose IP Geograph Data Provider [IP.SB,
                                      IPInfo, IPInsight, IP-API.com,
                                      IPInfoLocal, CHUNZHEN, disable-geoip].

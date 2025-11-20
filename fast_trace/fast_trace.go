@@ -33,6 +33,7 @@ type ParamsFastTrace struct {
 	DstPort        int
 	BeginHop       int
 	MaxHops        int
+	MaxAttempts    int
 	RDNS           bool
 	AlwaysWaitRDNS bool
 	Lang           string
@@ -67,6 +68,7 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 		DstPort:          f.ParamsFastTrace.DstPort,
 		MaxHops:          f.ParamsFastTrace.MaxHops,
 		NumMeasurements:  3,
+		MaxAttempts:      f.ParamsFastTrace.MaxAttempts,
 		ParallelRequests: 18,
 		RDNS:             f.ParamsFastTrace.RDNS,
 		AlwaysWaitRDNS:   f.ParamsFastTrace.AlwaysWaitRDNS,

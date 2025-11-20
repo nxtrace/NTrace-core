@@ -44,12 +44,12 @@ func PrepareWinDivertRuntime() error {
 	}
 
 	// DLL
-	if err = writeIfChecksumDiff(filepath.Join(exeDir, "WinDivert.dll"), dllBytes); err != nil {
+	if err := writeIfChecksumDiff(filepath.Join(exeDir, "WinDivert.dll"), dllBytes); err != nil {
 		return err
 	}
 
 	// SYS
-	if err = writeIfChecksumDiff(filepath.Join(exeDir, sysName), sysBytes); err != nil {
+	if err := writeIfChecksumDiff(filepath.Join(exeDir, sysName), sysBytes); err != nil {
 		return err
 	}
 	return nil
@@ -63,7 +63,7 @@ func writeIfChecksumDiff(dst string, data []byte) error {
 	}
 
 	hash := sha256.New()
-	if _, err = io.Copy(hash, file); err != nil {
+	if _, err := io.Copy(hash, file); err != nil {
 		_ = file.Close()                      // 先关再写，避免 Windows 共享冲突
 		return os.WriteFile(dst, data, 0o644) // 读失败，则尝试覆盖
 	}
