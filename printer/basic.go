@@ -78,7 +78,7 @@ func PrintTraceRouteNav(ip net.IP, domain string, dataOrigin string, maxHops int
 
 func applyLangSetting(h *trace.Hop) {
 	if len(h.Geo.Country) <= 1 {
-		//打印h.geo
+		// 打印 h.Geo
 		if h.Geo.Whois != "" {
 			h.Geo.Country = h.Geo.Whois
 		} else {
@@ -94,11 +94,12 @@ func applyLangSetting(h *trace.Hop) {
 
 	if h.Lang == "en" {
 		if h.Geo.Country == "Anycast" {
-
 		} else if h.Geo.Prov == "骨干网" {
 			h.Geo.Prov = "BackBone"
 		} else if h.Geo.ProvEn == "" {
-			h.Geo.Country = h.Geo.CountryEn
+			if h.Geo.CountryEn != "" {
+				h.Geo.Country = h.Geo.CountryEn
+			}
 		} else {
 			if h.Geo.CityEn == "" {
 				h.Geo.Country = h.Geo.ProvEn
@@ -111,5 +112,4 @@ func applyLangSetting(h *trace.Hop) {
 			}
 		}
 	}
-
 }
