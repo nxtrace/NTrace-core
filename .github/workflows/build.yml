@@ -234,7 +234,7 @@ jobs:
     needs: [ build-darwin ]
     steps:
       - name: Download darwin slices (flatten)
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           pattern: nexttrace_darwin_*
           merge-multiple: true
@@ -269,7 +269,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
       - name: Download all artifacts (flatten)
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           pattern: nexttrace_*
           merge-multiple: true
