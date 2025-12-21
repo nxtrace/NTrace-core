@@ -76,6 +76,7 @@ func (t *UDPTracerIPv6) PrintFunc(ctx context.Context, cancel context.CancelCaus
 		// 接收的时候检查一下是不是 3 跳都齐了
 		if t.ttlComp(ttl + 1) {
 			if t.RealtimePrinter != nil {
+				t.res.waitGeo(ctx, ttl)
 				t.RealtimePrinter(&t.res, ttl)
 			}
 			ttl++
@@ -180,10 +181,7 @@ func (t *UDPTracerIPv6) addHopWithIndex(peer net.Addr, ttl, i int, rtt time.Dura
 		RTT:     rtt,
 		MPLS:    mpls,
 	}
-
-	_ = h.fetchIPData(t.Config) // 忽略错误，继续添加结果
-
-	t.res.add(h, i, t.NumMeasurements, t.MaxAttempts)
+	t.res.addWithGeoAsync(h, i, t.NumMeasurements, t.MaxAttempts, t.Config)
 }
 
 func (t *UDPTracerIPv6) matchWorker(ctx context.Context) {
@@ -253,6 +251,7 @@ func (t *UDPTracerIPv6) Execute() (res *Result, err error) {
 	// 初始化 res.Hops 和 res.tailDone，并预分配到 MaxHops
 	t.res.Hops = make([][]Hop, t.MaxHops)
 	t.res.tailDone = make([]bool, t.MaxHops)
+	t.res.setGeoWait(t.NumMeasurements)
 
 	// 解析并校验用户指定的 IPv6 源地址
 	SrcAddr := net.ParseIP(t.SrcAddr)
@@ -459,7 +458,7 @@ func (t *UDPTracerIPv6) send(ctx context.Context, s *internal.UDPSpec, ttl, i in
 				Error:   errHopLimitTimeout,
 			}
 
-			t.res.add(h, i, t.NumMeasurements, t.MaxAttempts)
+			_, _ = t.res.add(h, i, t.NumMeasurements, t.MaxAttempts)
 			t.dropSent(seq)
 		}
 	}(seq, ttl, i)

@@ -85,7 +85,7 @@ func RealtimePrinterWithRouter(res *trace.Result, ttl int) {
 			fmt.Fprintf(color.Output, " %s", color.New(color.FgHiGreen, color.Bold).Sprintf("%-16s", whoisFormat[0]))
 		}
 
-		if res.Hops[ttl][i].Geo.Country == "" {
+		if res.Hops[ttl][i].Geo.Country == "" && res.Hops[ttl][i].Geo.Source != trace.PendingGeoSource {
 			res.Hops[ttl][i].Geo.Country = "LAN Address"
 		}
 

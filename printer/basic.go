@@ -77,6 +77,9 @@ func PrintTraceRouteNav(ip net.IP, domain string, dataOrigin string, maxHops int
 }
 
 func applyLangSetting(h *trace.Hop) {
+	if h.Geo == nil || h.Geo.Source == trace.PendingGeoSource {
+		return
+	}
 	if len(h.Geo.Country) <= 1 {
 		// 打印 h.Geo
 		if h.Geo.Whois != "" {
