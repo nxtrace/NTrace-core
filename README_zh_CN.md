@@ -65,7 +65,7 @@ Document Language: [English](README.md) | 简体中文
 * Linux 
   * 一键安装脚本
     ```shell
-    curl -sL nxtrace.org/nt | bash
+    curl -sL https://nxtrace.org/nt | bash
     ```
   
   * 从 nxtrace的APT源安装
