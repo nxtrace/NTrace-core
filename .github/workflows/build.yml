@@ -50,6 +50,7 @@ jobs:
           - { goos: windows, goarch: arm,    goarm: 7, allow_fail: true } # windows/arm 计划于 Go 1.26 移除
           - { goos: linux,   goarch: arm64 }
           - { goos: linux,   goarch: riscv64 }
+          - { goos: linux,   goarch: loong64 }
           - { goos: linux,   goarch: mips64 }
           - { goos: linux,   goarch: mips64le }
           - { goos: linux,   goarch: mipsle }
