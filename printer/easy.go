@@ -3,6 +3,7 @@ package printer
 import (
 	"fmt"
 
+	"github.com/nxtrace/NTrace-core/ipgeo"
 	"github.com/nxtrace/NTrace-core/trace"
 )
 
@@ -11,6 +12,9 @@ func EasyPrinter(res *trace.Result, ttl int) {
 		if res.Hops[ttl][i].Address == nil {
 			fmt.Printf("%d|*||||||\n", ttl+1)
 			continue
+		}
+		if res.Hops[ttl][i].Geo == nil {
+			res.Hops[ttl][i].Geo = &ipgeo.IPGeoData{}
 		}
 		applyLangSetting(&res.Hops[ttl][i]) // 应用语言设置
 		fmt.Printf(

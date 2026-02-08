@@ -8,6 +8,7 @@ import (
 
 	"github.com/fatih/color"
 
+	"github.com/nxtrace/NTrace-core/ipgeo"
 	"github.com/nxtrace/NTrace-core/trace"
 	"github.com/nxtrace/NTrace-core/util"
 )
@@ -66,6 +67,9 @@ func RealtimePrinter(res *trace.Result, ttl int) {
 		}
 
 		i, _ := strconv.Atoi(v[0])
+		if res.Hops[ttl][i].Geo == nil {
+			res.Hops[ttl][i].Geo = &ipgeo.IPGeoData{}
+		}
 		if res.Hops[ttl][i].Geo.Asnumber != "" {
 			/*** CMIN2, CUG, CN2, CUII, CTG 改为壕金色高亮
 			/* 小孩子不懂事加着玩的

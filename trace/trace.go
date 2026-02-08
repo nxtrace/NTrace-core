@@ -176,7 +176,8 @@ func Traceroute(method Method, config Config) (*Result, error) {
 		case <-done:
 			// 正常完成
 		case <-time.After(30 * time.Second):
-			// 超时，不再等待，直接返回当前结果
+			// 超时，将所有剩余 pending geo 标记为 timeout
+			result.markAllPendingGeoTimeout()
 		}
 	}
 	return result, err
@@ -215,9 +216,6 @@ func geoWaitForMeasurements(numMeasurements int) time.Duration {
 		numMeasurements = 1
 	}
 	maxRetries := numMeasurements - 1
-	if maxRetries < 0 {
-		maxRetries = 0
-	}
 	if maxRetries > 5 {
 		maxRetries = 5
 	}
@@ -400,6 +398,7 @@ func (s *Result) waitGeo(ctx context.Context, ttlIdx int) {
 		}
 		select {
 		case <-ctx.Done():
+			s.markPendingGeoTimeout(ttlIdx)
 			return
 		case <-time.After(20 * time.Millisecond):
 		}
@@ -439,6 +438,21 @@ func (s *Result) markPendingGeoTimeout(ttlIdx int) {
 			continue
 		}
 		hop.Geo = timeoutGeo()
+	}
+}
+
+func (s *Result) markAllPendingGeoTimeout() {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	for ttlIdx := range s.Hops {
+		for i := range s.Hops[ttlIdx] {
+			hop := &s.Hops[ttlIdx][i]
+			if hop.Address == nil || !isPendingGeo(hop.Geo) {
+				continue
+			}
+			hop.Geo = timeoutGeo()
+		}
 	}
 }
 
