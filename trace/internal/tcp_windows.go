@@ -100,6 +100,12 @@ func (s *TCPSpec) listenICMPWinDivert(ctx context.Context, ready chan struct{}, 
 	}
 	defer sniffHandle.Close()
 
+	// context 取消时关闭 handle，使阻塞的 Recv() 立即返回错误
+	go func() {
+		<-ctx.Done()
+		_ = sniffHandle.Close()
+	}()
+
 	_ = sniffHandle.SetParam(wd.QueueLength, 8192)
 	_ = sniffHandle.SetParam(wd.QueueTime, 4000)
 
@@ -233,6 +239,12 @@ func (s *TCPSpec) ListenTCP(ctx context.Context, ready chan struct{}, onTCP func
 		log.Fatalf("(ListenTCP) WinDivert open failed: %v (filter=%q)", err, filter)
 	}
 	defer sniffHandle.Close()
+
+	// context 取消时关闭 handle，使阻塞的 Recv() 立即返回错误
+	go func() {
+		<-ctx.Done()
+		_ = sniffHandle.Close()
+	}()
 
 	_ = sniffHandle.SetParam(wd.QueueLength, 8192)
 	_ = sniffHandle.SetParam(wd.QueueTime, 4000)

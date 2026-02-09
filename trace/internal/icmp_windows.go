@@ -139,6 +139,12 @@ func (s *ICMPSpec) listenICMPWinDivert(ctx context.Context, ready chan struct{},
 	}
 	defer handle.Close()
 
+	// context 取消时关闭 handle，使阻塞的 Recv() 立即返回错误
+	go func() {
+		<-ctx.Done()
+		_ = handle.Close()
+	}()
+
 	// 增大队列防丢包
 	_ = handle.SetParam(wd.QueueLength, 8192)
 	_ = handle.SetParam(wd.QueueTime, 4000) // 4s
