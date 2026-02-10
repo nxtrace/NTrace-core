@@ -126,7 +126,8 @@ add(hop, attemptIdx, numMeasurements, maxAttempts) → (added bool, idx int)
 
 ## 平台特殊处理
 - Darwin: CGO + libpcap，go:linkname hack
-- Windows: WinDivert (assets/windivert/)
+- Windows: TCP/UDP 与 ICMP sniff 模式依赖 WinDivert（assets/windivert/）；ICMP Socket 模式可不依赖 WinDivert
+- util/pcap.go 仅在 Darwin 构建（`//go:build darwin`）
 - Linux: 支持 raw socket 和 unprivileged ICMP
 - trace/internal/ 下按平台分文件：`*_darwin.go`、`*_unix.go`、`*_windows.go`
 
@@ -137,6 +138,13 @@ add(hop, attemptIdx, numMeasurements, maxAttempts) → (added bool, idx int)
 4. `singleflight.Group`（ipGeoSF/rDNSSF）用于去重并发查询
 5. `geoCache = sync.Map{}` 全局缓存 Geo 结果
 6. `fetchIPData` 内部重试逻辑：2s→3s→4s→...→6s（上限），最多 min(numMeasurements-1, 5) 次
+
+## 最近修复记录（2026-02-10，Windows 去除 Npcap 依赖）
+1. trace/internal/icmp_windows.go: ICMP 监听从 PCAP 切换为 WinDivert sniff（`wd.FlagSniff|wd.FlagRecvOnly`）
+2. trace/internal/tcp_windows.go: TCP/ICMP 监听从 PCAP 切换为 WinDivert sniff
+3. trace/internal/udp_windows.go: UDP/ICMP 监听从 PCAP 切换为 WinDivert sniff
+4. util/pcap.go: build tag 由 `darwin || (windows && amd64)` 改为 `darwin`，Windows 构建不再引入 pcap
+5. Windows `--icmp-mode` 语义更新：`1=Socket`、`2=WinDivert`、`0=Auto`
 
 ## 最近修复记录（2026-02-08，v1.5.0 后发版前审查）
 1. trace/trace.go: waitGeo context 取消时标记 timeout
