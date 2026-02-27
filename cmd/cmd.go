@@ -185,7 +185,7 @@ func Execute() {
 	routePath := parser.Flag("P", "route-path", &argparse.Options{Help: "Print traceroute hop path by ASN and location"})
 	dn42 := parser.Flag("", "dn42", &argparse.Options{Help: "DN42 Mode"})
 	output := parser.Flag("o", "output", &argparse.Options{Help: "Write trace result to file (RealTimePrinter ONLY)"})
-	tablePrint := parser.Flag("t", "table", &argparse.Options{Help: "Output trace results as a final summary table (report mode)"})
+	tablePrint := parser.Flag("", "table", &argparse.Options{Help: "Output trace results as a final summary table (traceroute report mode)"})
 	rawPrint := parser.Flag("", "raw", &argparse.Options{Help: "An Output Easy to Parse"})
 	jsonPrint := parser.Flag("j", "json", &argparse.Options{Help: "Output trace results as JSON"})
 	classicPrint := parser.Flag("c", "classic", &argparse.Options{Help: "Classic Output trace results like BestTrace"})
@@ -211,9 +211,9 @@ func Execute() {
 	file := parser.String("", "file", &argparse.Options{Help: "Read IP Address or domain name from file"})
 	noColor := parser.Flag("C", "no-color", &argparse.Options{Help: "Disable Colorful Output"})
 	from := parser.String("", "from", &argparse.Options{Help: "Run traceroute via Globalping (https://globalping.io/network) from a specified location. The location field accepts continents, countries, regions, cities, ASNs, ISPs, or cloud regions."})
-	mtrMode := parser.Flag("", "mtr", &argparse.Options{Help: "Enable MTR (My Traceroute) continuous probing mode"})
-	mtrInterval := parser.Int("", "mtr-interval", &argparse.Options{Default: 1000, Help: "Set interval between MTR rounds in milliseconds (default: 1000)"})
-	mtrMaxRounds := parser.Int("", "mtr-max-rounds", &argparse.Options{Default: 0, Help: "Set maximum MTR rounds (0 = infinite until Ctrl-C)"})
+	mtrMode := parser.Flag("t", "mtr", &argparse.Options{Help: "Enable MTR (My Traceroute) continuous probing mode"})
+	reportMode := parser.Flag("r", "report", &argparse.Options{Help: "MTR report mode (non-interactive, implies --mtr); can trigger MTR without --mtr"})
+	wideMode := parser.Flag("w", "wide", &argparse.Options{Help: "MTR wide report mode (implies --mtr --report); alone equals --mtr --report --wide"})
 
 	err := parser.Parse(os.Args)
 	if err != nil {
@@ -223,13 +223,53 @@ func Execute() {
 		return
 	}
 
+	// ── 统一 MTR 有效开关 ──
+	effectiveMTR := *mtrMode || *reportMode || *wideMode
+	effectiveReport := *reportMode || *wideMode
+	effectiveWide := *wideMode
+
+	// MTR 冲突检查必须在所有可能 early-return 的分支之前执行
+	if effectiveMTR {
+		conflictFlags := map[string]bool{
+			"table":     *tablePrint,
+			"raw":       *rawPrint,
+			"classic":   *classicPrint,
+			"json":      *jsonPrint,
+			"output":    *output,
+			"routePath": *routePath,
+			"from":      *from != "",
+			"fastTrace": *fast_trace,
+			"file":      *file != "",
+			"deploy":    *deploy,
+		}
+		if conflict, ok := checkMTRConflicts(conflictFlags); !ok {
+			fmt.Printf("--mtr 不能与 %s 同时使用\n", conflict)
+			os.Exit(1)
+		}
+	}
+
+	// 判定 -q / -i 是否显式传入（用于 MTR 下参数迁移）
+	queriesExplicit := false
+	ttlTimeExplicit := false
+	for _, a := range parser.GetArgs() {
+		if !a.GetParsed() {
+			continue
+		}
+		switch a.GetLname() {
+		case "queries":
+			queriesExplicit = true
+		case "ttl-time":
+			ttlTimeExplicit = true
+		}
+	}
+
 	if *noColor {
 		color.NoColor = true
 	} else {
 		color.NoColor = false
 	}
 
-	if !*jsonPrint {
+	if !*jsonPrint && !effectiveMTR {
 		printer.Version()
 	}
 
@@ -400,7 +440,7 @@ func Execute() {
 	//}()
 	// MTR 使用 TUI 备用屏，必须在 wshandle.New() / GetFastIP 之前
 	// 禁止彩色横幅输出，避免污染主终端历史。
-	if *mtrMode {
+	if effectiveMTR {
 		util.SuppressFastIPOutput = true
 	}
 
@@ -515,7 +555,7 @@ func Execute() {
 		*packetSize = 2
 	}
 
-	if !*jsonPrint && !*mtrMode {
+	if !*jsonPrint && !effectiveMTR {
 		printer.PrintTraceRouteNav(ip, domain, *dataOrigin, *maxHops, *packetSize, *srcAddr, string(m))
 	}
 
@@ -550,27 +590,34 @@ func Execute() {
 	}
 
 	// ── MTR 连续探测模式 ──
-	if *mtrMode {
-		conflictFlags := map[string]bool{
-			"table":     *tablePrint,
-			"raw":       *rawPrint,
-			"classic":   *classicPrint,
-			"json":      *jsonPrint,
-			"output":    *output,
-			"routePath": *routePath,
-			"from":      *from != "",
-			"fastTrace": *fast_trace,
-			"file":      *file != "",
-			"deploy":    *deploy,
+	if effectiveMTR {
+		// MTR 下 -q/-i 参数迁移
+		var mtrMaxRounds int
+		var mtrIntervalMs int
+		if effectiveReport {
+			if queriesExplicit {
+				mtrMaxRounds = *numMeasurements
+			} else {
+				mtrMaxRounds = 10 // report 默认 10 轮
+			}
+		} else {
+			if queriesExplicit {
+				mtrMaxRounds = *numMeasurements
+			} else {
+				mtrMaxRounds = 0 // 非 report → 无限
+			}
 		}
-		if conflict, ok := checkMTRConflicts(conflictFlags); !ok {
-			fmt.Printf("--mtr 不能与 %s 同时使用\n", conflict)
-			os.Exit(1)
+		if ttlTimeExplicit {
+			mtrIntervalMs = *ttlInterval
+		} else {
+			mtrIntervalMs = 1000 // MTR 默认 1000ms
 		}
-		if *numMeasurements != 1 {
-			fmt.Println("[MTR] --queries 在 MTR 模式下无效，已重置为 1")
+
+		if effectiveReport {
+			runMTRReport(m, conf, mtrIntervalMs, mtrMaxRounds, domain, *dataOrigin, effectiveWide)
+		} else {
+			runMTRTUI(m, conf, mtrIntervalMs, mtrMaxRounds, domain, *dataOrigin)
 		}
-		runMTRMode(m, conf, *mtrInterval, *mtrMaxRounds, domain, *dataOrigin)
 		return
 	}
 

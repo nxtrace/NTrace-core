@@ -42,10 +42,10 @@ func checkMTRConflicts(flags map[string]bool) (conflict string, ok bool) {
 	return "", true
 }
 
-// runMTRMode 执行 MTR 连续探测模式。
-// 当 stdin 为 TTY 时启用交互式 TUI（备用屏幕、按键控制）；
+// runMTRTUI 执行 MTR 交互式 TUI 模式。
+// 当 stdin 为 TTY 时启用全屏 TUI（备用屏幕、按键控制）；
 // 非 TTY 时降级为简单表格刷新。
-func runMTRMode(method trace.Method, conf trace.Config, intervalMs int, maxRounds int, domain string, dataOrigin string) {
+func runMTRTUI(method trace.Method, conf trace.Config, intervalMs int, maxRounds int, domain string, dataOrigin string) {
 	if intervalMs <= 0 {
 		intervalMs = 1000
 	}
@@ -111,6 +111,68 @@ func runMTRMode(method trace.Method, conf trace.Config, intervalMs int, maxRound
 	}
 }
 
+// runMTRReport 执行 MTR 非全屏报告模式（对齐 mtr -rzw 风格）。
+// 探测完 maxRounds 后一次性输出最终统计到 stdout，不进入 alternate screen。
+func runMTRReport(method trace.Method, conf trace.Config, intervalMs int, maxRounds int, domain string, dataOrigin string, wide bool) {
+	if intervalMs <= 0 {
+		intervalMs = 1000
+	}
+	if maxRounds <= 0 {
+		maxRounds = 10
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sigCh
+		cancel()
+	}()
+
+	startTime := time.Now()
+
+	srcHost, _ := os.Hostname()
+	if srcHost == "" {
+		srcHost = "unknown-host"
+	}
+
+	lang := conf.Lang
+	if lang == "" {
+		lang = "cn"
+	}
+
+	// 最终快照
+	var finalStats []trace.MTRHopStat
+	onSnapshot := func(iteration int, stats []trace.MTRHopStat) {
+		finalStats = stats
+	}
+
+	opts := trace.MTROptions{
+		Interval:  time.Duration(intervalMs) * time.Millisecond,
+		MaxRounds: maxRounds,
+	}
+
+	err := trace.RunMTR(ctx, method, conf, opts, onSnapshot)
+	if err != nil && err != context.Canceled {
+		fmt.Println(err)
+		return
+	}
+
+	if len(finalStats) == 0 {
+		fmt.Println("No data collected.")
+		return
+	}
+
+	printer.MTRReportPrint(finalStats, printer.MTRReportOptions{
+		StartTime: startTime,
+		SrcHost:   srcHost,
+		Wide:      wide,
+		Lang:      lang,
+	})
+}
+
 // resolveSrcIP 按优先级解析源 IP：--source > --dev 推导 > udp dial fallback。
 // 保证与目标 IP 族匹配，失败时返回 "unknown"。
 func resolveSrcIP(conf trace.Config) string {
@@ -153,9 +215,13 @@ func buildAPIInfo(dataOrigin string) string {
 	if !strings.EqualFold(dataOrigin, "LeoMoeAPI") && !strings.EqualFold(dataOrigin, "leomoeapi") {
 		return ""
 	}
-	ip := util.FastIpCache
-	if ip == "" {
+	meta := util.FastIPMetaCache
+	if meta.IP == "" {
 		return ""
 	}
-	return fmt.Sprintf("preferred API IP: %s", ip)
+	nodeName := meta.NodeName
+	if nodeName == "" {
+		nodeName = "Unknown"
+	}
+	return fmt.Sprintf("preferred API IP: %s[%s]", nodeName, meta.IP)
 }

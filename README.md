@@ -298,22 +298,31 @@ export NO_COLOR=1
 
 ```bash
 # MTR mode: continuous probing with ICMP (default), refreshes table in real-time
+nexttrace -t 1.1.1.1
+# or equivalently:
 nexttrace --mtr 1.1.1.1
 
 # MTR mode with TCP SYN probing
-nexttrace --mtr --tcp --port 443 www.bing.com
+nexttrace -t --tcp --port 443 www.bing.com
 
 # MTR mode with UDP probing
-nexttrace --mtr --udp 1.0.0.1
+nexttrace -t --udp 1.0.0.1
 
-# Set the interval between rounds (default: 1000ms)
-nexttrace --mtr --mtr-interval 500 1.1.1.1
+# Set the interval between rounds (default: 1000ms in MTR)
+nexttrace -t -i 500 1.1.1.1
 
-# Limit the number of rounds (default: 0 = infinite, press Ctrl-C to stop)
-nexttrace --mtr --mtr-max-rounds 10 1.1.1.1
+# Limit the number of rounds (default: infinite in TUI, 10 in report mode)
+nexttrace -t -q 20 1.1.1.1
+
+# Report mode: run N rounds and print a final summary (like mtr -r)
+nexttrace -r 1.1.1.1       # = --mtr --report, 10 rounds by default
+nexttrace -r -q 5 1.1.1.1  # 5 rounds
+
+# Wide report: no host column truncation (like mtr -rw)
+nexttrace -w 1.1.1.1       # = --mtr --report --wide
 
 # Combine with other options
-nexttrace --mtr --tcp --max-hops 20 --first 3 --no-rdns 8.8.8.8
+nexttrace -t --tcp --max-hops 20 --first 3 --no-rdns 8.8.8.8
 ```
 
 When running in a terminal (TTY), MTR mode uses an **interactive full-screen TUI**:
@@ -328,6 +337,15 @@ When running in a terminal (TTY), MTR mode uses an **interactive full-screen TUI
 - When using LeoMoeAPI, the preferred API IP address is shown in the header.
 - Uses the **alternate screen buffer**, so your previous terminal history is preserved on exit.
 - When stdin is not a TTY (e.g. piped), it falls back to a simple table refresh.
+
+The **report mode** (`-r`/`--report`) produces a one-shot summary after all rounds complete, suitable for scripting:
+
+```
+Start: 2025-07-14T09:12:00+0800
+HOST: myhost                    Loss%   Snt   Last    Avg   Best   Wrst  StDev
+  1.|-- AS4134 10.0.0.1          0.0%    10    1.23   1.45   0.98   2.10   0.32
+  2.|-- ???                    100.0%    10    0.00   0.00   0.00   0.00   0.00
+```
 
 > Note: `--mtr` cannot be used together with `--table`, `--raw`, `--classic`, `--json`, `--output`, `--route-path`, `--from`, `--fast-trace`, `--file`, or `--deploy`.
 
@@ -364,7 +382,7 @@ nexttrace -tcp --queries 2 --parallel-requests 1 --table --route-path 2001:4860:
 
 Equivalent to:
 nexttrace -d ip-api.com -m 20 -T -p 443 -q 5 -n 1.1.1.1
-nexttrace -T -q 2 --parallel-requests 1 -t -P 2001:4860:4860::8888
+nexttrace -T -q 2 --parallel-requests 1 --table -P 2001:4860:4860::8888
 ```
 
 ### Globalping
@@ -409,8 +427,8 @@ usage: nexttrace [-h|--help] [--init] [-4|--ipv4] [-6|--ipv6] [-T|--tcp]
                  [-m|--max-hops <integer>] [-d|--data-provider
                  (IP.SB|ip.sb|IPInfo|ipinfo|IPInsight|ipinsight|IPAPI.com|ip-api.com|IPInfoLocal|ipinfolocal|chunzhen|LeoMoeAPI|leomoeapi|ipdb.one|disable-geoip)]
                  [--pow-provider (api.nxtrace.org|sakura)] [-n|--no-rdns]
-                 [-a|--always-rdns] [-P|--route-path] [-r|--report] [--dn42]
-                 [-o|--output] [-t|--table] [--raw] [-j|--json] [-c|--classic]
+                 [-a|--always-rdns] [-P|--route-path] [--dn42]
+                 [-o|--output] [--table] [--raw] [-j|--json] [-c|--classic]
                  [-f|--first <integer>] [-M|--map] [-e|--disable-mpls]
                  [-V|--version] [-s|--source "<value>"] [--source-port
                  <integer>] [-D|--dev "<value>"] [--listen "<value>"]
@@ -419,7 +437,7 @@ usage: nexttrace [-h|--help] [--init] [-4|--ipv4] [-6|--ipv6] [-T|--tcp]
                  [_positionalArg_nexttrace_38 "<value>"] [--dot-server
                  (dnssb|aliyun|dnspod|google|cloudflare)] [-g|--language
                  (en|cn)] [--file "<value>"] [-C|--no-color] [--from "<value>"]
-                 [--mtr] [--mtr-interval <integer>] [--mtr-max-rounds <integer>]
+                 [-t|--mtr] [-r|--report] [-w|--wide]
 
                  An open source visual route tracking CLI tool
 
@@ -462,11 +480,10 @@ Arguments:
                                      domain names
   -P  --route-path                   Print traceroute hop path by ASN and
                                      location
-  -r  --report                       output using report mode
       --dn42                         DN42 Mode
   -o  --output                       Write trace result to file
                                      (RealTimePrinter ONLY)
-  -t  --table                        Output trace results as table
+      --table                        Output trace results as table
       --raw                          An Output Easy to Parse
   -j  --json                         Output trace results as JSON
   -c  --classic                      Classic Output trace results like
@@ -493,6 +510,8 @@ Arguments:
                                      sending packets groups by TTL. Useful when
                                      some routers use rate-limit for ICMP
                                      messages. Default: 50
+                                     (In MTR mode, also controls interval
+                                     between rounds. Default: 1000)
       --timeout                      The number of [milliseconds] to keep probe
                                      sockets open before giving up on the
                                      connection. Default: 1000
@@ -509,12 +528,12 @@ Arguments:
                                      specified location. The location field
                                      accepts continents, countries, regions,
                                      cities, ASNs, ISPs, or cloud regions.
-      --mtr                          Enable MTR (My Traceroute) continuous
+  -t  --mtr                          Enable MTR (My Traceroute) continuous
                                      probing mode
-      --mtr-interval                 Set interval between MTR rounds in
-                                     milliseconds. Default: 1000
-      --mtr-max-rounds               Set maximum MTR rounds (0 = infinite
-                                     until Ctrl-C). Default: 0
+  -r  --report                       MTR report mode: run N rounds then print
+                                     summary. Implies --mtr. Default rounds: 10
+  -w  --wide                         Wide report mode: no host column
+                                     truncation. Implies --mtr --report
 ```
 
 ## Project screenshot

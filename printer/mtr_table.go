@@ -2,10 +2,14 @@ package printer
 
 import (
 	"fmt"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/fatih/color"
+	"github.com/mattn/go-runewidth"
 	"github.com/rodaine/table"
+	"golang.org/x/term"
 
 	"github.com/nxtrace/NTrace-core/ipgeo"
 	"github.com/nxtrace/NTrace-core/trace"
@@ -175,24 +179,29 @@ func geoField(cn, en, lang string) string {
 //	HostModeCity  (1): + 城市/省份/国家
 //	HostModeOwner (2): + 运营商
 //	HostModeFull  (3): + 完整地址 + 运营商
+//
+// ASN 始终作为前缀（对齐 mtr -rw 风格）：
+//
+//	"AS13335 one.one.one.one"    （模式 0）
+//	"AS13335 one.one.one.one US" （模式 1）
 func formatMTRHostByMode(s trace.MTRHopStat, mode int, nameMode int, lang string) string {
 	base := formatMTRHostBase(s, nameMode)
 	if s.Geo == nil {
 		return base
 	}
 
-	var segs []string
-
-	// ASN 在所有模式下都展示
+	// ASN 作为前缀
+	asnPrefix := ""
 	if s.Geo.Asnumber != "" {
-		segs = append(segs, "AS"+s.Geo.Asnumber)
+		asnPrefix = "AS" + s.Geo.Asnumber
 	}
+
+	var segs []string
 
 	switch mode {
 	case HostModeASN:
 		// 仅 ASN，无额外 geo
 	case HostModeCity:
-		// 单级回退链：city -> prov -> country，取最具体的一个
 		city := geoField(s.Geo.City, s.Geo.CityEn, lang)
 		prov := geoField(s.Geo.Prov, s.Geo.ProvEn, lang)
 		country := geoField(s.Geo.Country, s.Geo.CountryEn, lang)
@@ -233,11 +242,17 @@ func formatMTRHostByMode(s trace.MTRHopStat, mode int, nameMode int, lang string
 		}
 	}
 
-	geo := strings.Join(segs, ", ")
-	if geo == "" {
-		return base
+	// 拼接顺序：asnPrefix + base + geo
+	var parts []string
+	if asnPrefix != "" {
+		parts = append(parts, asnPrefix)
 	}
-	return base + " " + geo
+	parts = append(parts, base)
+	geo := strings.Join(segs, ", ")
+	if geo != "" {
+		parts = append(parts, geo)
+	}
+	return strings.Join(parts, " ")
 }
 
 // formatMTRHostWithMPLS 构建 Host 列完整内容（含内联 MPLS），供表格打印器使用。
@@ -306,4 +321,142 @@ func formatMTRGeoData(data *ipgeo.IPGeoData) string {
 	}
 
 	return strings.Join(segs, ", ")
+}
+
+// ---------------------------------------------------------------------------
+// MTR Report 模式打印器（对齐 mtr -rzw 风格）
+// ---------------------------------------------------------------------------
+
+// MTRReportOptions 控制报告输出细节。
+type MTRReportOptions struct {
+	StartTime time.Time
+	SrcHost   string
+	Wide      bool
+	Lang      string
+}
+
+// MTRReportPrint 以 mtr -rzw 风格将最终统计一次性输出到 stdout。
+//
+// 输出格式（示例）：
+//
+//	Start: 2025-07-14T09:12:00+0800
+//	HOST: myhost                       Loss%   Snt   Last    Avg   Best   Wrst  StDev
+//	  1. AS4134 one.one.one.one         0.0%    10    1.23   1.45   0.98   2.10   0.32
+//	  2. ???                           100.0%    10    0.00   0.00   0.00   0.00   0.00
+//
+// Wide 模式下使用 HostModeFull（完整地址 + 运营商），host 列宽度取所有行最大值；
+// 非 wide 模式使用 HostModeASN，按终端宽度截断：
+//
+//	width < 100  → maxHost = 16
+//	100 ≤ width < 140 → maxHost = 20
+//	width ≥ 140  → maxHost = 24
+func MTRReportPrint(stats []trace.MTRHopStat, opts MTRReportOptions) {
+	lang := opts.Lang
+	if lang == "" {
+		lang = "cn"
+	}
+
+	// wide 模式使用完整地址，非 wide 仅 ASN
+	hostMode := HostModeASN
+	if opts.Wide {
+		hostMode = HostModeFull
+	}
+
+	// Start 行
+	fmt.Printf("Start: %s\n", opts.StartTime.Format("2006-01-02T15:04:05-0700"))
+
+	// 预先格式化所有 host 字符串，以便确定对齐宽度
+	hosts := make([]string, len(stats))
+	for i, s := range stats {
+		hosts[i] = formatMTRHostWithMPLS(s, hostMode, HostNamePTRorIP, lang)
+	}
+
+	// 确定 host 列对齐宽度
+	var hostColW int
+	if opts.Wide {
+		// wide: 取所有 host + 表头中的最大可视宽度
+		hostColW = reportDisplayWidth(opts.SrcHost)
+		for _, h := range hosts {
+			if w := reportDisplayWidth(h); w > hostColW {
+				hostColW = w
+			}
+		}
+		hostColW++ // 加 1 列间距
+	} else {
+		tw, _, err := term.GetSize(int(os.Stdout.Fd()))
+		if err != nil || tw <= 0 {
+			tw = 80
+		}
+		switch {
+		case tw < 100:
+			hostColW = 16
+		case tw < 140:
+			hostColW = 20
+		default:
+			hostColW = 24
+		}
+		// 截断 host 到 hostColW
+		for i, h := range hosts {
+			if reportDisplayWidth(h) > hostColW {
+				hosts[i] = reportTruncateToWidth(h, hostColW)
+			}
+		}
+	}
+
+	// 度量列格式：右对齐，固定宽度
+	const metricsFmt = " %6s %5s %6s %6s %6s %6s %6s"
+
+	// HOST 表头行
+	hostHeader := opts.SrcHost
+	if !opts.Wide && reportDisplayWidth(hostHeader) > hostColW {
+		hostHeader = reportTruncateToWidth(hostHeader, hostColW)
+	}
+
+	headerMetrics := fmt.Sprintf(metricsFmt, "Loss%", "Snt", "Last", "Avg", "Best", "Wrst", "StDev")
+	fmt.Printf("HOST: %s%s\n", reportPadRight(hostHeader, hostColW), headerMetrics)
+
+	// 数据行
+	// 前缀 "  N. " 占 5 字符（%3d. + 空格），与 "HOST: " 的 6 字符差 1，
+	// 将额外 1 格留给 host 列左侧自然padding。
+	prevTTL := 0
+	for i, s := range stats {
+		prefix := fmt.Sprintf("%3d. ", s.TTL)
+		if s.TTL == prevTTL {
+			prefix = "     "
+		}
+		prevTTL = s.TTL
+
+		metrics := fmt.Sprintf(metricsFmt,
+			formatLoss(s.Loss),
+			fmt.Sprint(s.Snt),
+			formatMs(s.Last),
+			formatMs(s.Avg),
+			formatMs(s.Best),
+			formatMs(s.Wrst),
+			formatMs(s.StDev),
+		)
+		fmt.Printf("%s%s%s\n", prefix, reportPadRight(hosts[i], hostColW), metrics)
+	}
+}
+
+// reportDisplayWidth 返回字符串的终端显示宽度（CJK 字符占 2 列）。
+func reportDisplayWidth(s string) int {
+	return runewidth.StringWidth(s)
+}
+
+// reportTruncateToWidth 将字符串按终端显示宽度截断（CJK 安全）。
+func reportTruncateToWidth(s string, maxW int) string {
+	if runewidth.StringWidth(s) <= maxW {
+		return s
+	}
+	return runewidth.Truncate(s, maxW, "")
+}
+
+// reportPadRight 将 s 用空格右填充到 width 显示列宽（CJK 安全）。
+func reportPadRight(s string, width int) string {
+	w := runewidth.StringWidth(s)
+	if w >= width {
+		return s
+	}
+	return s + strings.Repeat(" ", width-w)
 }

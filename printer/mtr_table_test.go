@@ -105,7 +105,7 @@ func TestMTRRenderTable_EmptyHostname(t *testing.T) {
 		t.Fatalf("expected 1 row, got %d", len(rows))
 	}
 	// 无 hostname 时只显示 IP + Geo
-	want := "8.8.8.8 AS15169, United States"
+	want := "AS15169 8.8.8.8 United States"
 	if rows[0].Host != want {
 		t.Errorf("Host = %q, want %q", rows[0].Host, want)
 	}
@@ -120,7 +120,7 @@ func TestMTRRenderTable_HostnameAndIP(t *testing.T) {
 		}},
 	}
 	rows := MTRRenderTable(stats, HostModeFull, HostNamePTRorIP, "en")
-	want := "one.one.one.one AS13335, US, Cloudflare"
+	want := "AS13335 one.one.one.one US, Cloudflare"
 	if rows[0].Host != want {
 		t.Errorf("Host = %q, want %q", rows[0].Host, want)
 	}
@@ -796,7 +796,7 @@ func TestFormatMTRHostByMode_ASN(t *testing.T) {
 		},
 	}
 	got := formatMTRHostByMode(s, HostModeASN, HostNamePTRorIP, "en")
-	want := "one.one.one.one AS13335"
+	want := "AS13335 one.one.one.one"
 	if got != want {
 		t.Errorf("HostModeASN: got %q, want %q", got, want)
 	}
@@ -814,7 +814,7 @@ func TestFormatMTRHostByMode_City(t *testing.T) {
 		},
 	}
 	got := formatMTRHostByMode(s, HostModeCity, HostNamePTRorIP, "en")
-	want := "1.1.1.1 AS13335, Los Angeles"
+	want := "AS13335 1.1.1.1 Los Angeles"
 	if got != want {
 		t.Errorf("HostModeCity: got %q, want %q", got, want)
 	}
@@ -830,7 +830,7 @@ func TestFormatMTRHostByMode_Owner(t *testing.T) {
 		},
 	}
 	got := formatMTRHostByMode(s, HostModeOwner, HostNamePTRorIP, "en")
-	want := "1.1.1.1 AS13335, Cloudflare"
+	want := "AS13335 1.1.1.1 Cloudflare"
 	if got != want {
 		t.Errorf("HostModeOwner: got %q, want %q", got, want)
 	}
@@ -848,7 +848,7 @@ func TestFormatMTRHostByMode_Full(t *testing.T) {
 		},
 	}
 	got := formatMTRHostByMode(s, HostModeFull, HostNamePTRorIP, "en")
-	want := "one.one.one.one AS13335, US, Cloudflare"
+	want := "AS13335 one.one.one.one US, Cloudflare"
 	if got != want {
 		t.Errorf("HostModeFull: got %q, want %q", got, want)
 	}
@@ -923,13 +923,13 @@ func TestFormatMTRHostByMode_LangCN(t *testing.T) {
 		},
 	}
 	got := formatMTRHostByMode(s, HostModeCity, HostNamePTRorIP, "cn")
-	want := "1.1.1.1 AS13335, 洛杉矶"
+	want := "AS13335 1.1.1.1 洛杉矶"
 	if got != want {
 		t.Errorf("HostModeCity cn: got %q, want %q", got, want)
 	}
 
 	got = formatMTRHostByMode(s, HostModeCity, HostNamePTRorIP, "en")
-	want = "1.1.1.1 AS13335, Los Angeles"
+	want = "AS13335 1.1.1.1 Los Angeles"
 	if got != want {
 		t.Errorf("HostModeCity en: got %q, want %q", got, want)
 	}
@@ -1111,7 +1111,7 @@ func TestFormatMTRHostByMode_IPOnly_ShowsIP(t *testing.T) {
 	}
 	// HostNameIPOnly 时 base 始终是 IP，即使有 PTR
 	got := formatMTRHostByMode(s, HostModeFull, HostNameIPOnly, "en")
-	want := "1.1.1.1 AS13335, US, Cloudflare"
+	want := "AS13335 1.1.1.1 US, Cloudflare"
 	if got != want {
 		t.Errorf("HostModeFull+IPOnly: got %q, want %q", got, want)
 	}
@@ -1129,7 +1129,7 @@ func TestFormatMTRHostByMode_PTRorIP_ShowsPTR(t *testing.T) {
 		},
 	}
 	got := formatMTRHostByMode(s, HostModeFull, HostNamePTRorIP, "en")
-	want := "one.one.one.one AS13335, US, Cloudflare"
+	want := "AS13335 one.one.one.one US, Cloudflare"
 	if got != want {
 		t.Errorf("HostModeFull+PTRorIP: got %q, want %q", got, want)
 	}
