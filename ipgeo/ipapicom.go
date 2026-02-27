@@ -16,10 +16,7 @@ import (
 
 func IPApiCom(ip string, timeout time.Duration, _ string, _ bool) (*IPGeoData, error) {
 	url := token.BaseOrDefault("http://ip-api.com/json/") + ip + "?fields=status,message,country,regionName,city,isp,district,as,lat,lon"
-	client := &http.Client{
-		// 2 秒超时
-		Timeout: timeout,
-	}
+	client := util.NewGeoHTTPClient(timeout)
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:100.0) Gecko/20100101 Firefox/100.0")
 	content, err := client.Do(req)

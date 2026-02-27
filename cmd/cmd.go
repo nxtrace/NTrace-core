@@ -356,6 +356,13 @@ func Execute() {
 
 	domain := *str
 
+	// 将 --dot-server 配置注入 Geo DNS 解析策略层，
+	// 使 GeoIP API 域名解析（含 LeoMoe FastIP）也走 DoT。
+	// 必须在 fast-trace / wshandle.New() / GetFastIP 之前执行。
+	if *dot != "" {
+		util.SetGeoDNSResolver(*dot)
+	}
+
 	var m trace.Method
 	switch {
 	case *tcp:

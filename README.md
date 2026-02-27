@@ -519,6 +519,8 @@ Arguments:
       --_positionalArg_nexttrace_38  IP Address or domain name
       --dot-server                   Use DoT Server for DNS Parse [dnssb,
                                      aliyun, dnspod, google, cloudflare]
+                                     Also applies to GeoIP API DNS resolution
+                                     (including LeoMoe FastIP)
   -g  --language                     Choose the language for displaying [en,
                                      cn]. Default: cn
       --file                         Read IP Address or domain name from file

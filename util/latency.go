@@ -1,6 +1,7 @@
 package util
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"io"
@@ -53,9 +54,9 @@ func GetFastIP(domain string, port string, enableOutput bool) string {
 	var ips []net.IP
 	var err error
 	if domain == "api.nxtrace.org" {
-		ips, err = net.LookupIP("api.nxtrace.org")
+		ips, err = LookupHostForGeo(context.Background(), "api.nxtrace.org")
 	} else {
-		ips, err = net.LookupIP(domain)
+		ips, err = LookupHostForGeo(context.Background(), domain)
 	}
 
 	if err != nil {

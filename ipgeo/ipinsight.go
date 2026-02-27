@@ -2,17 +2,15 @@ package ipgeo
 
 import (
 	"io"
-	"net/http"
 	"time"
 
 	"github.com/tidwall/gjson"
+
+	"github.com/nxtrace/NTrace-core/util"
 )
 
 func IPInSight(ip string, timeout time.Duration, _ string, _ bool) (*IPGeoData, error) {
-	client := &http.Client{
-		// 2 秒超时
-		Timeout: timeout,
-	}
+	client := util.NewGeoHTTPClient(timeout)
 	resp, err := client.Get(token.BaseOrDefault("https://api.ipinsight.io/ip/") + ip + "?token=" + token.ipinsight)
 	if err != nil {
 		return nil, err

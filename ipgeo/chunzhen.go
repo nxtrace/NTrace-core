@@ -13,10 +13,7 @@ import (
 
 func Chunzhen(ip string, timeout time.Duration, _ string, _ bool) (*IPGeoData, error) {
 	url := util.GetEnvDefault("NEXTTRACE_CHUNZHENURL", "http://127.0.0.1:2060") + "?ip=" + ip
-	client := &http.Client{
-		// 2 秒超时
-		Timeout: timeout,
-	}
+	client := util.NewGeoHTTPClient(timeout)
 	req, _ := http.NewRequest("GET", url, nil)
 	content, err := client.Do(req)
 	if err != nil {
