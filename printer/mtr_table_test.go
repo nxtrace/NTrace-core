@@ -14,7 +14,7 @@ func TestMTRRenderTable_HeaderOrder(t *testing.T) {
 	stats := []trace.MTRHopStat{
 		{TTL: 1, IP: "1.1.1.1", Loss: 0, Snt: 5, Last: 1.23, Avg: 1.50, Best: 1.00, Wrst: 2.00, StDev: 0.33},
 	}
-	rows := MTRRenderTable(stats, HostModeFull, "en")
+	rows := MTRRenderTable(stats, HostModeFull, HostNamePTRorIP, "en")
 	if len(rows) != 1 {
 		t.Fatalf("expected 1 row, got %d", len(rows))
 	}
@@ -53,7 +53,7 @@ func TestMTRRenderTable_NumericFormatting(t *testing.T) {
 		{TTL: 1, IP: "10.0.0.1", Loss: 33.3333, Snt: 3, Last: 0.456, Avg: 1.789, Best: 0.123, Wrst: 3.456, StDev: 1.234},
 		{TTL: 2, IP: "10.0.0.2", Loss: 100, Snt: 3, Last: 0, Avg: 0, Best: 0, Wrst: 0, StDev: 0},
 	}
-	rows := MTRRenderTable(stats, HostModeFull, "en")
+	rows := MTRRenderTable(stats, HostModeFull, HostNamePTRorIP, "en")
 	if len(rows) != 2 {
 		t.Fatalf("expected 2 rows, got %d", len(rows))
 	}
@@ -83,7 +83,7 @@ func TestMTRRenderTable_NilGeo(t *testing.T) {
 	stats := []trace.MTRHopStat{
 		{TTL: 1, IP: "192.168.1.1", Geo: nil},
 	}
-	rows := MTRRenderTable(stats, HostModeFull, "en")
+	rows := MTRRenderTable(stats, HostModeFull, HostNamePTRorIP, "en")
 	if len(rows) != 1 {
 		t.Fatalf("expected 1 row, got %d", len(rows))
 	}
@@ -100,7 +100,7 @@ func TestMTRRenderTable_EmptyHostname(t *testing.T) {
 			CountryEn: "United States",
 		}},
 	}
-	rows := MTRRenderTable(stats, HostModeFull, "en")
+	rows := MTRRenderTable(stats, HostModeFull, HostNamePTRorIP, "en")
 	if len(rows) != 1 {
 		t.Fatalf("expected 1 row, got %d", len(rows))
 	}
@@ -119,7 +119,7 @@ func TestMTRRenderTable_HostnameAndIP(t *testing.T) {
 			Owner:     "Cloudflare",
 		}},
 	}
-	rows := MTRRenderTable(stats, HostModeFull, "en")
+	rows := MTRRenderTable(stats, HostModeFull, HostNamePTRorIP, "en")
 	want := "one.one.one.one AS13335, US, Cloudflare"
 	if rows[0].Host != want {
 		t.Errorf("Host = %q, want %q", rows[0].Host, want)
@@ -133,7 +133,7 @@ func TestMTRRenderTable_MultiPath(t *testing.T) {
 		{TTL: 2, IP: "10.0.0.2"},
 		{TTL: 3, IP: "10.0.1.1"},
 	}
-	rows := MTRRenderTable(stats, HostModeFull, "en")
+	rows := MTRRenderTable(stats, HostModeFull, HostNamePTRorIP, "en")
 	if len(rows) != 3 {
 		t.Fatalf("expected 3 rows, got %d", len(rows))
 	}
@@ -156,7 +156,7 @@ func TestMTRRenderTable_UnknownHost(t *testing.T) {
 	stats := []trace.MTRHopStat{
 		{TTL: 1, IP: "", Host: ""},
 	}
-	rows := MTRRenderTable(stats, HostModeFull, "en")
+	rows := MTRRenderTable(stats, HostModeFull, HostNamePTRorIP, "en")
 	if rows[0].Host != "???" {
 		t.Errorf("Host = %q, want %q", rows[0].Host, "???")
 	}
@@ -795,7 +795,7 @@ func TestFormatMTRHostByMode_ASN(t *testing.T) {
 			Owner:     "Cloudflare",
 		},
 	}
-	got := formatMTRHostByMode(s, HostModeASN, "en")
+	got := formatMTRHostByMode(s, HostModeASN, HostNamePTRorIP, "en")
 	want := "one.one.one.one AS13335"
 	if got != want {
 		t.Errorf("HostModeASN: got %q, want %q", got, want)
@@ -813,7 +813,7 @@ func TestFormatMTRHostByMode_City(t *testing.T) {
 			CityEn:    "Los Angeles",
 		},
 	}
-	got := formatMTRHostByMode(s, HostModeCity, "en")
+	got := formatMTRHostByMode(s, HostModeCity, HostNamePTRorIP, "en")
 	want := "1.1.1.1 AS13335, Los Angeles"
 	if got != want {
 		t.Errorf("HostModeCity: got %q, want %q", got, want)
@@ -829,7 +829,7 @@ func TestFormatMTRHostByMode_Owner(t *testing.T) {
 			Owner:    "Cloudflare",
 		},
 	}
-	got := formatMTRHostByMode(s, HostModeOwner, "en")
+	got := formatMTRHostByMode(s, HostModeOwner, HostNamePTRorIP, "en")
 	want := "1.1.1.1 AS13335, Cloudflare"
 	if got != want {
 		t.Errorf("HostModeOwner: got %q, want %q", got, want)
@@ -847,7 +847,7 @@ func TestFormatMTRHostByMode_Full(t *testing.T) {
 			Owner:     "Cloudflare",
 		},
 	}
-	got := formatMTRHostByMode(s, HostModeFull, "en")
+	got := formatMTRHostByMode(s, HostModeFull, HostNamePTRorIP, "en")
 	want := "one.one.one.one AS13335, US, Cloudflare"
 	if got != want {
 		t.Errorf("HostModeFull: got %q, want %q", got, want)
@@ -857,7 +857,7 @@ func TestFormatMTRHostByMode_Full(t *testing.T) {
 func TestFormatMTRHostByMode_NilGeo(t *testing.T) {
 	s := trace.MTRHopStat{TTL: 1, IP: "10.0.0.1"}
 	for _, mode := range []int{HostModeASN, HostModeCity, HostModeOwner, HostModeFull} {
-		got := formatMTRHostByMode(s, mode, "en")
+		got := formatMTRHostByMode(s, mode, HostNamePTRorIP, "en")
 		if got != "10.0.0.1" {
 			t.Errorf("mode %d with nil geo: got %q, want %q", mode, got, "10.0.0.1")
 		}
@@ -870,7 +870,7 @@ func TestFormatMTRHostByMode_NoASN(t *testing.T) {
 		IP:  "10.0.0.1",
 		Geo: &ipgeo.IPGeoData{CountryEn: "US"},
 	}
-	got := formatMTRHostByMode(s, HostModeASN, "en")
+	got := formatMTRHostByMode(s, HostModeASN, HostNamePTRorIP, "en")
 	// 无 ASN 时只显示 base
 	if got != "10.0.0.1" {
 		t.Errorf("HostModeASN no ASN: got %q, want %q", got, "10.0.0.1")
@@ -922,13 +922,13 @@ func TestFormatMTRHostByMode_LangCN(t *testing.T) {
 			CityEn:    "Los Angeles",
 		},
 	}
-	got := formatMTRHostByMode(s, HostModeCity, "cn")
+	got := formatMTRHostByMode(s, HostModeCity, HostNamePTRorIP, "cn")
 	want := "1.1.1.1 AS13335, 洛杉矶"
 	if got != want {
 		t.Errorf("HostModeCity cn: got %q, want %q", got, want)
 	}
 
-	got = formatMTRHostByMode(s, HostModeCity, "en")
+	got = formatMTRHostByMode(s, HostModeCity, HostNamePTRorIP, "en")
 	want = "1.1.1.1 AS13335, Los Angeles"
 	if got != want {
 		t.Errorf("HostModeCity en: got %q, want %q", got, want)
@@ -1092,4 +1092,193 @@ func TestMTRTUI_DisplayModeAffectsHopData(t *testing.T) {
 	if !strings.Contains(out, "Cloudflare") {
 		t.Error("mode Full should show owner")
 	}
+}
+
+// ---------------------------------------------------------------------------
+// NameMode (n 键) 测试
+// ---------------------------------------------------------------------------
+
+func TestFormatMTRHostByMode_IPOnly_ShowsIP(t *testing.T) {
+	s := trace.MTRHopStat{
+		TTL:  1,
+		IP:   "1.1.1.1",
+		Host: "one.one.one.one",
+		Geo: &ipgeo.IPGeoData{
+			Asnumber:  "13335",
+			CountryEn: "US",
+			Owner:     "Cloudflare",
+		},
+	}
+	// HostNameIPOnly 时 base 始终是 IP，即使有 PTR
+	got := formatMTRHostByMode(s, HostModeFull, HostNameIPOnly, "en")
+	want := "1.1.1.1 AS13335, US, Cloudflare"
+	if got != want {
+		t.Errorf("HostModeFull+IPOnly: got %q, want %q", got, want)
+	}
+}
+
+func TestFormatMTRHostByMode_PTRorIP_ShowsPTR(t *testing.T) {
+	s := trace.MTRHopStat{
+		TTL:  1,
+		IP:   "1.1.1.1",
+		Host: "one.one.one.one",
+		Geo: &ipgeo.IPGeoData{
+			Asnumber:  "13335",
+			CountryEn: "US",
+			Owner:     "Cloudflare",
+		},
+	}
+	got := formatMTRHostByMode(s, HostModeFull, HostNamePTRorIP, "en")
+	want := "one.one.one.one AS13335, US, Cloudflare"
+	if got != want {
+		t.Errorf("HostModeFull+PTRorIP: got %q, want %q", got, want)
+	}
+}
+
+func TestFormatMTRHostByMode_IPOnly_NoPTR(t *testing.T) {
+	// 无 PTR 时 HostNameIPOnly 和 HostNamePTRorIP 结果相同
+	s := trace.MTRHopStat{
+		TTL: 1,
+		IP:  "10.0.0.1",
+		Geo: &ipgeo.IPGeoData{Asnumber: "64512"},
+	}
+	gotIP := formatMTRHostByMode(s, HostModeASN, HostNameIPOnly, "en")
+	gotPTR := formatMTRHostByMode(s, HostModeASN, HostNamePTRorIP, "en")
+	if gotIP != gotPTR {
+		t.Errorf("no PTR: IPOnly=%q differs from PTRorIP=%q", gotIP, gotPTR)
+	}
+}
+
+func TestMTRRenderTable_IPOnly(t *testing.T) {
+	stats := []trace.MTRHopStat{
+		{TTL: 1, IP: "1.1.1.1", Host: "one.one.one.one", Geo: &ipgeo.IPGeoData{
+			Asnumber:  "13335",
+			CountryEn: "US",
+		}},
+	}
+	// HostNameIPOnly → Host 使用 IP 而非 PTR
+	rows := MTRRenderTable(stats, HostModeFull, HostNameIPOnly, "en")
+	if strings.Contains(rows[0].Host, "one.one.one.one") {
+		t.Errorf("IPOnly should not show PTR, got: %q", rows[0].Host)
+	}
+	if !strings.Contains(rows[0].Host, "1.1.1.1") {
+		t.Errorf("IPOnly should show IP, got: %q", rows[0].Host)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// TUI Header APIInfo + NameMode 测试
+// ---------------------------------------------------------------------------
+
+func TestMTRTUI_HeaderAPIInfo(t *testing.T) {
+	header := MTRTUIHeader{
+		Target:    "8.8.8.8",
+		StartTime: time.Now(),
+		Iteration: 1,
+		Version:   "v1.0.0",
+		APIInfo:   "preferred API IP: 1.2.3.4",
+	}
+	out := mtrTUIRenderStringWithWidth(header, nil, 120)
+	if !strings.Contains(out, "preferred API IP: 1.2.3.4") {
+		t.Errorf("header should contain API info, got:\n%s", out)
+	}
+	// API 信息应与 NextTrace 在同一行
+	lines := strings.Split(out, "\r\n")
+	for _, l := range lines {
+		if strings.Contains(l, "NextTrace [v1.0.0]") {
+			if !strings.Contains(l, "preferred API IP: 1.2.3.4") {
+				t.Errorf("API info should be on the same line as NextTrace, got:\n%s", l)
+			}
+			return
+		}
+	}
+	t.Error("missing NextTrace header line")
+}
+
+func TestMTRTUI_HeaderNoAPIInfo(t *testing.T) {
+	header := MTRTUIHeader{
+		Target:    "8.8.8.8",
+		StartTime: time.Now(),
+		Iteration: 1,
+		Version:   "v1.0.0",
+	}
+	out := mtrTUIRenderStringWithWidth(header, nil, 120)
+	if strings.Contains(out, "preferred API") {
+		t.Errorf("header should not contain API info when empty, got:\n%s", out)
+	}
+}
+
+func TestMTRTUI_NameModeInKeys(t *testing.T) {
+	for nm, label := range map[int]string{0: "ptr", 1: "ip"} {
+		header := MTRTUIHeader{
+			Target:    "8.8.8.8",
+			StartTime: time.Now(),
+			Iteration: 1,
+			NameMode:  nm,
+		}
+		out := mtrTUIRenderStringWithWidth(header, nil, 120)
+		expected := "n-host(" + label + ")"
+		if !strings.Contains(out, expected) {
+			t.Errorf("nameMode %d: should contain %q, got:\n%s", nm, expected, out)
+		}
+	}
+}
+
+func TestMTRTUI_FirstLineCentered(t *testing.T) {
+	header := MTRTUIHeader{
+		Target:    "8.8.8.8",
+		StartTime: time.Now(),
+		Iteration: 1,
+		Version:   "v1.0.0",
+	}
+	out := mtrTUIRenderStringWithWidth(header, nil, 120)
+	lines := strings.Split(out, "\r\n")
+	for _, l := range lines {
+		if strings.Contains(l, "NextTrace [v1.0.0]") {
+			trimmed := strings.TrimRight(l, " ")
+			// 居中意味着首字符不是 'N'
+			if len(trimmed) > 0 && trimmed[0] == 'N' {
+				t.Errorf("first line should be centered (left-padded), got: %q", l)
+			}
+			return
+		}
+	}
+	t.Error("missing NextTrace header line")
+}
+
+// TestMTRTUI_FirstLineTruncatedOnNarrow 验证首行在极窄终端不会超宽。
+func TestMTRTUI_FirstLineTruncatedOnNarrow(t *testing.T) {
+	header := MTRTUIHeader{
+		Target:    "8.8.8.8",
+		StartTime: time.Now(),
+		Iteration: 1,
+		Version:   "v1.0.0",
+		APIInfo:   "preferred API IP: 123.456.789.012 some very long extra text to overflow",
+	}
+	const width = 30
+	out := mtrTUIRenderStringWithWidth(header, nil, width)
+	lines := strings.Split(out, "\r\n")
+	for _, l := range lines {
+		// 跳过清屏序列开头的行：去掉 ANSI CSI 序列后再检查
+		clean := l
+		for strings.HasPrefix(clean, "\033[") {
+			// 跳过 \033[ ... 直到终止字节 (0x40-0x7E)
+			idx := 2
+			for idx < len(clean) && (clean[idx] < 0x40 || clean[idx] > 0x7E) {
+				idx++
+			}
+			if idx < len(clean) {
+				idx++ // 跳过终止字节
+			}
+			clean = clean[idx:]
+		}
+		if strings.Contains(clean, "NextTrace") {
+			w := displayWidth(clean)
+			if w > width {
+				t.Errorf("first line exceeds termWidth=%d: displayWidth=%d, line=%q", width, w, clean)
+			}
+			return
+		}
+	}
+	t.Error("missing NextTrace header line")
 }

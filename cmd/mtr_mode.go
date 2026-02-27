@@ -6,12 +6,14 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/nxtrace/NTrace-core/config"
 	"github.com/nxtrace/NTrace-core/printer"
 	"github.com/nxtrace/NTrace-core/trace"
+	"github.com/nxtrace/NTrace-core/util"
 )
 
 // MTR 模式下与其他输出/功能标志互斥的检查。
@@ -25,7 +27,6 @@ func checkMTRConflicts(flags map[string]bool) (conflict string, ok bool) {
 		{"--raw", flags["raw"]},
 		{"--classic", flags["classic"]},
 		{"--json", flags["json"]},
-		{"--report", flags["report"]},
 		{"--output", flags["output"]},
 		{"--route-path", flags["routePath"]},
 		{"--from", flags["from"]},
@@ -44,7 +45,7 @@ func checkMTRConflicts(flags map[string]bool) (conflict string, ok bool) {
 // runMTRMode 执行 MTR 连续探测模式。
 // 当 stdin 为 TTY 时启用交互式 TUI（备用屏幕、按键控制）；
 // 非 TTY 时降级为简单表格刷新。
-func runMTRMode(method trace.Method, conf trace.Config, intervalMs int, maxRounds int, domain string) {
+func runMTRMode(method trace.Method, conf trace.Config, intervalMs int, maxRounds int, domain string, dataOrigin string) {
 	if intervalMs <= 0 {
 		intervalMs = 1000
 	}
@@ -71,23 +72,18 @@ func runMTRMode(method trace.Method, conf trace.Config, intervalMs int, maxRound
 	startTime := time.Now()
 	target := conf.DstIP.String()
 
-	// 解析源主机名和源 IP
+	// 解析源 IP：--source > --dev 推导 > udp dial fallback
 	srcHost, _ := os.Hostname()
-	srcIP := ""
-	if conf.DstIP != nil {
-		if c, err := net.Dial("udp", net.JoinHostPort(conf.DstIP.String(), "80")); err == nil {
-			if addr, ok := c.LocalAddr().(*net.UDPAddr); ok {
-				srcIP = addr.IP.String()
-			}
-			c.Close()
-		}
-	}
+	srcIP := resolveSrcIP(conf)
 
 	// 语言：默认为 "cn"
 	lang := conf.Lang
 	if lang == "" {
 		lang = "cn"
 	}
+
+	// preferred API 信息（仅 LeoMoeAPI 且有结果时展示）
+	apiInfo := buildAPIInfo(dataOrigin)
 
 	opts := trace.MTROptions{
 		Interval:         time.Duration(intervalMs) * time.Millisecond,
@@ -100,10 +96,10 @@ func runMTRMode(method trace.Method, conf trace.Config, intervalMs int, maxRound
 	if ui.IsTTY() {
 		opts.IsPaused = ui.IsPaused
 		onSnapshot = printer.MTRTUIPrinter(target, domain, target, config.Version, startTime,
-			srcHost, srcIP, lang, ui.IsPaused, ui.CurrentDisplayMode)
+			srcHost, srcIP, lang, apiInfo, ui.IsPaused, ui.CurrentDisplayMode, ui.CurrentNameMode)
 	} else {
 		onSnapshot = func(iteration int, stats []trace.MTRHopStat) {
-			printer.MTRTablePrinter(stats, iteration, ui.CurrentDisplayMode(), lang)
+			printer.MTRTablePrinter(stats, iteration, ui.CurrentDisplayMode(), ui.CurrentNameMode(), lang)
 		}
 	}
 
@@ -113,4 +109,53 @@ func runMTRMode(method trace.Method, conf trace.Config, intervalMs int, maxRound
 		ui.Leave()
 		fmt.Println(err)
 	}
+}
+
+// resolveSrcIP 按优先级解析源 IP：--source > --dev 推导 > udp dial fallback。
+// 保证与目标 IP 族匹配，失败时返回 "unknown"。
+func resolveSrcIP(conf trace.Config) string {
+	// 1. --source 已指定
+	if conf.SrcAddr != "" {
+		return conf.SrcAddr
+	}
+
+	// 2. --dev 推导（已在 cmd.go 中赋值到 conf.SrcAddr，这里做兜底）
+	if util.SrcDev != "" {
+		if dev, err := net.InterfaceByName(util.SrcDev); err == nil {
+			if addrs, err2 := dev.Addrs(); err2 == nil {
+				for _, addr := range addrs {
+					if ipNet, ok := addr.(*net.IPNet); ok {
+						if (ipNet.IP.To4() == nil) == (conf.DstIP.To4() == nil) {
+							return ipNet.IP.String()
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// 3. udp dial fallback
+	if conf.DstIP != nil {
+		if c, err := net.Dial("udp", net.JoinHostPort(conf.DstIP.String(), "80")); err == nil {
+			if addr, ok := c.LocalAddr().(*net.UDPAddr); ok {
+				c.Close()
+				return addr.IP.String()
+			}
+			c.Close()
+		}
+	}
+
+	return "unknown"
+}
+
+// buildAPIInfo 生成首行 preferred API 扩展信息（纯文本，不含 ANSI；仅 LeoMoeAPI）。
+func buildAPIInfo(dataOrigin string) string {
+	if !strings.EqualFold(dataOrigin, "LeoMoeAPI") && !strings.EqualFold(dataOrigin, "leomoeapi") {
+		return ""
+	}
+	ip := util.FastIpCache
+	if ip == "" {
+		return ""
+	}
+	return fmt.Sprintf("preferred API IP: %s", ip)
 }

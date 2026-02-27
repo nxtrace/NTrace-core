@@ -17,7 +17,7 @@ import (
 
 // MTRTablePrinter 将 MTR 快照渲染为经典 MTR 风格表格。
 // 每次调用都会先清屏再重绘。
-func MTRTablePrinter(stats []trace.MTRHopStat, iteration int, mode int, lang string) {
+func MTRTablePrinter(stats []trace.MTRHopStat, iteration int, mode int, nameMode int, lang string) {
 	// 清屏并移动到左上角
 	fmt.Print("\033[H\033[2J")
 
@@ -35,7 +35,7 @@ func MTRTablePrinter(stats []trace.MTRHopStat, iteration int, mode int, lang str
 		}
 		prevTTL = s.TTL
 
-		host := formatMTRHostWithMPLS(s, mode, lang)
+		host := formatMTRHostWithMPLS(s, mode, nameMode, lang)
 		tbl.AddRow(
 			hopStr,
 			formatLoss(s.Loss),
@@ -54,8 +54,8 @@ func MTRTablePrinter(stats []trace.MTRHopStat, iteration int, mode int, lang str
 }
 
 // MTRRenderTable 仅返回格式化后的行数据（用于测试/非终端场景）。
-// mode / lang 控制 Host 列内容；传 -1 / "" 等效于 HostModeFull + "en"（向后兼容）。
-func MTRRenderTable(stats []trace.MTRHopStat, mode int, lang string) []MTRRow {
+// mode / nameMode / lang 控制 Host 列内容；传 -1 / -1 / "" 等效于 HostModeFull + HostNamePTRorIP + "en"（向后兼容）。
+func MTRRenderTable(stats []trace.MTRHopStat, mode int, nameMode int, lang string) []MTRRow {
 	prevTTL := 0
 	rows := make([]MTRRow, 0, len(stats))
 	for _, s := range stats {
@@ -74,7 +74,7 @@ func MTRRenderTable(stats []trace.MTRHopStat, mode int, lang string) []MTRRow {
 			Best:  formatMs(s.Best),
 			Wrst:  formatMs(s.Wrst),
 			StDev: formatMs(s.StDev),
-			Host:  formatMTRHostWithMPLS(s, mode, lang),
+			Host:  formatMTRHostWithMPLS(s, mode, nameMode, lang),
 		})
 	}
 	return rows
@@ -119,15 +119,31 @@ const (
 )
 
 // ---------------------------------------------------------------------------
+// Host 基础显示模式（n 键切换）
+// ---------------------------------------------------------------------------
+
+const (
+	HostNamePTRorIP = 0 // 默认：有 PTR 显示 PTR，否则 IP
+	HostNameIPOnly  = 1 // 始终显示 IP
+)
+
+// ---------------------------------------------------------------------------
 // Host 列格式化（多模式 + 语言感知）
 // ---------------------------------------------------------------------------
 
-// formatMTRHostBase 构建基础 host 标识：优先 PTR，无 PTR 时回退 IP。
+// formatMTRHostBase 构建基础 host 标识。
 //
-//	有 PTR → PTR
-//	无 PTR → IP
+//	nameMode == HostNameIPOnly → 始终显示 IP
+//	nameMode == HostNamePTRorIP（默认）→ 有 PTR 显示 PTR，否则 IP
 //	都无   → "???"
-func formatMTRHostBase(s trace.MTRHopStat) string {
+func formatMTRHostBase(s trace.MTRHopStat, nameMode int) string {
+	if nameMode == HostNameIPOnly {
+		if s.IP != "" {
+			return s.IP
+		}
+		return "???"
+	}
+	// HostNamePTRorIP（默认）
 	if s.Host != "" {
 		return s.Host
 	}
@@ -159,8 +175,8 @@ func geoField(cn, en, lang string) string {
 //	HostModeCity  (1): + 城市/省份/国家
 //	HostModeOwner (2): + 运营商
 //	HostModeFull  (3): + 完整地址 + 运营商
-func formatMTRHostByMode(s trace.MTRHopStat, mode int, lang string) string {
-	base := formatMTRHostBase(s)
+func formatMTRHostByMode(s trace.MTRHopStat, mode int, nameMode int, lang string) string {
+	base := formatMTRHostBase(s, nameMode)
 	if s.Geo == nil {
 		return base
 	}
@@ -225,23 +241,26 @@ func formatMTRHostByMode(s trace.MTRHopStat, mode int, lang string) string {
 }
 
 // formatMTRHostWithMPLS 构建 Host 列完整内容（含内联 MPLS），供表格打印器使用。
-func formatMTRHostWithMPLS(s trace.MTRHopStat, mode int, lang string) string {
+func formatMTRHostWithMPLS(s trace.MTRHopStat, mode int, nameMode int, lang string) string {
 	if mode < 0 {
 		mode = HostModeFull
+	}
+	if nameMode < 0 {
+		nameMode = HostNamePTRorIP
 	}
 	if lang == "" {
 		lang = "en"
 	}
-	host := formatMTRHostByMode(s, mode, lang)
+	host := formatMTRHostByMode(s, mode, nameMode, lang)
 	if len(s.MPLS) > 0 {
 		host += " " + strings.Join(s.MPLS, " ")
 	}
 	return host
 }
 
-// formatMTRHost 向后兼容别名（HostModeFull + "en" + 内联 MPLS）。
+// formatMTRHost 向后兼容别名（HostModeFull + HostNamePTRorIP + "en" + 内联 MPLS）。
 func formatMTRHost(s trace.MTRHopStat) string {
-	return formatMTRHostWithMPLS(s, HostModeFull, "en")
+	return formatMTRHostWithMPLS(s, HostModeFull, HostNamePTRorIP, "en")
 }
 
 // formatMTRGeoData 返回简短 geo 描述（向后兼容，等效于英文 HostModeFull geo 部分）。

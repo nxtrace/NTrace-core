@@ -40,6 +40,8 @@ type MTRTUIHeader struct {
 	SrcIP       string // 源 IP
 	Lang        string // 语言（"en" / "cn"）
 	DisplayMode int    // 显示模式 0-3
+	NameMode    int    // Host 基础显示 0=PTR/IP, 1=IP only
+	APIInfo     string // preferred API 信息（纯文本，可为空）
 }
 
 // ---------------------------------------------------------------------------
@@ -297,12 +299,26 @@ func mtrTUIRenderWithWidth(w io.Writer, header MTRTUIHeader, stats []trace.MTRHo
 		statusStr = "Paused"
 	}
 
-	// ── 信息行 1：NextTrace [version] ──
+	// ── 信息行 1：NextTrace [version]  preferred API info（居中，纯文本） ──
 	ver := header.Version
 	if ver == "" {
 		ver = "dev"
 	}
-	tuiLine(&b, "NextTrace [%s]", ver)
+	line1 := fmt.Sprintf("NextTrace [%s]", ver)
+	if header.APIInfo != "" {
+		line1 += "  " + header.APIInfo
+	}
+	// 截断 + 居中
+	line1W := displayWidth(line1)
+	if line1W > lo.termWidth {
+		line1 = truncateByDisplayWidth(line1, lo.termWidth)
+		line1W = displayWidth(line1)
+	}
+	if line1W < lo.termWidth {
+		pad := (lo.termWidth - line1W) / 2
+		line1 = strings.Repeat(" ", pad) + line1
+	}
+	tuiLine(&b, "%s", line1)
 
 	// ── 信息行 2：srcHost (srcIP) -> dstName (dstIP)     RFC3339-time ──
 	srcPart := header.SrcHost
@@ -346,8 +362,12 @@ func mtrTUIRenderWithWidth(w io.Writer, header MTRTUIHeader, stats []trace.MTRHo
 	if header.DisplayMode >= 0 && header.DisplayMode < 4 {
 		modeLabel = modeNames[header.DisplayMode]
 	}
-	tuiLine(&b, "Keys: q-quit  p-pause  SPACE-resume  r-reset  y-display(%s)          [%s] Round: %d",
-		modeLabel, statusStr, header.Iteration)
+	nameLabel := "ptr"
+	if header.NameMode == 1 {
+		nameLabel = "ip"
+	}
+	tuiLine(&b, "Keys: q-quit  p-pause  SPACE-resume  r-reset  y-display(%s)  n-host(%s)          [%s] Round: %d",
+		modeLabel, nameLabel, statusStr, header.Iteration)
 	b.WriteString("\r\n") // 空行
 
 	// ── 双层表头 ──
@@ -358,12 +378,13 @@ func mtrTUIRenderWithWidth(w io.Writer, header MTRTUIHeader, stats []trace.MTRHo
 	if lang == "" {
 		lang = "en"
 	}
+	nameMode := header.NameMode
 	prevTTL := 0
 	for _, s := range stats {
 		hopPrefix := formatTUIHopPrefix(s.TTL, prevTTL)
 		prevTTL = s.TTL
 
-		host := formatMTRHostByMode(s, header.DisplayMode, lang)
+		host := formatMTRHostByMode(s, header.DisplayMode, nameMode, lang)
 		renderDataRow(&b, lo, hopPrefix, host, s)
 
 		// MPLS 多行显示：每个标签独占一行，位于 host 列区域
@@ -500,8 +521,8 @@ func truncateStr(s string, maxLen int) string {
 // MTRTUIPrinter 返回一个可直接用作 MTROnSnapshot 的回调函数，
 // 将帧渲染到 os.Stdout。
 func MTRTUIPrinter(target, domain, targetIP, version string, startTime time.Time,
-	srcHost, srcIP, lang string,
-	isPaused func() bool, displayMode func() int) func(iteration int, stats []trace.MTRHopStat) {
+	srcHost, srcIP, lang, apiInfo string,
+	isPaused func() bool, displayMode func() int, nameMode func() int) func(iteration int, stats []trace.MTRHopStat) {
 	return func(iteration int, stats []trace.MTRHopStat) {
 		status := MTRTUIRunning
 		if isPaused != nil && isPaused() {
@@ -510,6 +531,10 @@ func MTRTUIPrinter(target, domain, targetIP, version string, startTime time.Time
 		mode := 0
 		if displayMode != nil {
 			mode = displayMode()
+		}
+		nm := 0
+		if nameMode != nil {
+			nm = nameMode()
 		}
 		MTRTUIRender(os.Stdout, MTRTUIHeader{
 			Target:      target,
@@ -523,6 +548,8 @@ func MTRTUIPrinter(target, domain, targetIP, version string, startTime time.Time
 			SrcIP:       srcIP,
 			Lang:        lang,
 			DisplayMode: mode,
+			NameMode:    nm,
+			APIInfo:     apiInfo,
 		}, stats)
 	}
 }

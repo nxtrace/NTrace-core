@@ -10,7 +10,7 @@ import (
 func TestCheckMTRConflicts_NoConflict(t *testing.T) {
 	flags := map[string]bool{
 		"table": false, "raw": false, "classic": false,
-		"json": false, "report": false, "output": false,
+		"json": false, "output": false,
 		"routePath": false, "from": false, "fastTrace": false,
 		"file": false, "deploy": false,
 	}
@@ -23,7 +23,7 @@ func TestCheckMTRConflicts_NoConflict(t *testing.T) {
 func TestCheckMTRConflicts_Table(t *testing.T) {
 	flags := map[string]bool{
 		"table": true, "raw": false, "classic": false,
-		"json": false, "report": false, "output": false,
+		"json": false, "output": false,
 		"routePath": false, "from": false, "fastTrace": false,
 		"file": false, "deploy": false,
 	}
@@ -39,7 +39,7 @@ func TestCheckMTRConflicts_Table(t *testing.T) {
 func TestCheckMTRConflicts_JSON(t *testing.T) {
 	flags := map[string]bool{
 		"table": false, "raw": false, "classic": false,
-		"json": true, "report": false, "output": false,
+		"json": true, "output": false,
 		"routePath": false, "from": false, "fastTrace": false,
 		"file": false, "deploy": false,
 	}
@@ -52,26 +52,10 @@ func TestCheckMTRConflicts_JSON(t *testing.T) {
 	}
 }
 
-func TestCheckMTRConflicts_Report(t *testing.T) {
-	flags := map[string]bool{
-		"table": false, "raw": false, "classic": false,
-		"json": false, "report": true, "output": false,
-		"routePath": false, "from": false, "fastTrace": false,
-		"file": false, "deploy": false,
-	}
-	conflict, ok := checkMTRConflicts(flags)
-	if ok {
-		t.Fatal("expected conflict with --report")
-	}
-	if conflict != "--report" {
-		t.Errorf("conflict = %q, want --report", conflict)
-	}
-}
-
 func TestCheckMTRConflicts_FastTrace(t *testing.T) {
 	flags := map[string]bool{
 		"table": false, "raw": false, "classic": false,
-		"json": false, "report": false, "output": false,
+		"json": false, "output": false,
 		"routePath": false, "from": false, "fastTrace": true,
 		"file": false, "deploy": false,
 	}
@@ -87,7 +71,7 @@ func TestCheckMTRConflicts_FastTrace(t *testing.T) {
 func TestCheckMTRConflicts_Deploy(t *testing.T) {
 	flags := map[string]bool{
 		"table": false, "raw": false, "classic": false,
-		"json": false, "report": false, "output": false,
+		"json": false, "output": false,
 		"routePath": false, "from": false, "fastTrace": false,
 		"file": false, "deploy": true,
 	}
@@ -103,7 +87,7 @@ func TestCheckMTRConflicts_Deploy(t *testing.T) {
 func TestCheckMTRConflicts_From(t *testing.T) {
 	flags := map[string]bool{
 		"table": false, "raw": false, "classic": false,
-		"json": false, "report": false, "output": false,
+		"json": false, "output": false,
 		"routePath": false, "from": true, "fastTrace": false,
 		"file": false, "deploy": false,
 	}
@@ -120,7 +104,7 @@ func TestCheckMTRConflicts_AllConflicts(t *testing.T) {
 	// 多个冲突标志同时设置时，应返回第一个匹配的
 	flags := map[string]bool{
 		"table": true, "raw": true, "classic": true,
-		"json": true, "report": true, "output": true,
+		"json": true, "output": true,
 		"routePath": true, "from": true, "fastTrace": true,
 		"file": true, "deploy": true,
 	}
@@ -316,5 +300,61 @@ func TestCheckTTY_EmptyFds(t *testing.T) {
 	// 空参数 → vacuously true
 	if !CheckTTY() {
 		t.Error("CheckTTY() with no args should be true")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// n 键 NameMode 切换测试
+// ---------------------------------------------------------------------------
+
+func TestParseMTRKey_NameToggle(t *testing.T) {
+	for _, b := range []byte{'n', 'N'} {
+		if got := ParseMTRKey(b); got != "name_toggle" {
+			t.Errorf("ParseMTRKey(%q) = %q, want %q", b, got, "name_toggle")
+		}
+	}
+}
+
+func TestMTRUI_NameModeToggle(t *testing.T) {
+	_, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ui := newMTRUI(cancel)
+
+	// 初始为 0 (PTRorIP)
+	if got := ui.CurrentNameMode(); got != 0 {
+		t.Errorf("initial name mode = %d, want 0", got)
+	}
+
+	// 切换 → 1 (IPOnly)
+	ui.ToggleNameMode()
+	if got := ui.CurrentNameMode(); got != 1 {
+		t.Errorf("after toggle: name mode = %d, want 1", got)
+	}
+
+	// 再切换 → 0 (PTRorIP)
+	ui.ToggleNameMode()
+	if got := ui.CurrentNameMode(); got != 0 {
+		t.Errorf("after 2nd toggle: name mode = %d, want 0", got)
+	}
+}
+
+func TestMTRUI_NameModeNotResetByRestart(t *testing.T) {
+	_, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ui := newMTRUI(cancel)
+
+	// 设置 nameMode 为 1
+	ui.ToggleNameMode()
+	if got := ui.CurrentNameMode(); got != 1 {
+		t.Fatalf("name mode = %d, want 1", got)
+	}
+
+	// 模拟重置请求
+	atomic.StoreInt32(&ui.restartReq, 1)
+	ui.ConsumeRestartRequest()
+
+	// nameMode 不应被重置
+	if got := ui.CurrentNameMode(); got != 1 {
+		t.Errorf("name mode after restart = %d, want 1 (unchanged)", got)
 	}
 }

@@ -157,7 +157,7 @@ nexttrace 1.0.0.1
 # URL
 nexttrace http://example.com:8080/index.html?q=1
 
-# Form printing
+# Table output (report mode): runs trace once and prints a final summary table
 nexttrace --table 1.0.0.1
 
 # An Output Easy to Parse
@@ -321,10 +321,15 @@ When running in a terminal (TTY), MTR mode uses an **interactive full-screen TUI
 - **`q` / `Q`** — quit (restores terminal, no output left behind)
 - **`p`** — pause probing
 - **`SPACE`** — resume probing
+- **`r`** — reset statistics (counters are cleared, display mode is preserved)
+- **`y`** — cycle host display mode: ASN → City → Owner → Full
+- **`n`** — toggle host name display: PTR/IP ↔ IP only
+- The TUI header displays **source → destination**, with `--source`/`--dev` information when specified.
+- When using LeoMoeAPI, the preferred API IP address is shown in the header.
 - Uses the **alternate screen buffer**, so your previous terminal history is preserved on exit.
 - When stdin is not a TTY (e.g. piped), it falls back to a simple table refresh.
 
-> Note: `--mtr` cannot be used together with `--table`, `--raw`, `--classic`, `--json`, `--report`, `--output`, `--route-path`, `--from`, `--fast-trace`, `--file`, or `--deploy`.
+> Note: `--mtr` cannot be used together with `--table`, `--raw`, `--classic`, `--json`, `--output`, `--route-path`, `--from`, `--fast-trace`, `--file`, or `--deploy`.
 
 #### `NextTrace` supports users to select their own IP API (currently supports: `LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`, `IPInfoLocal`, `CHUNZHEN`)
 

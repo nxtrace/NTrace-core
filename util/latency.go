@@ -27,6 +27,10 @@ var (
 )
 var FastIpCache = ""
 
+// SuppressFastIPOutput 为 true 时，GetFastIP 即使 enableOutput=true 也不打印彩色输出。
+// MTR 模式在进入备用屏前设置此标志，避免污染主终端历史。
+var SuppressFastIPOutput bool
+
 func GetFastIP(domain string, port string, enableOutput bool) string {
 	proxyUrl := GetProxy()
 	if proxyUrl != nil {
@@ -74,7 +78,7 @@ func GetFastIP(domain string, port string, enableOutput bool) string {
 	}
 
 	//if len(ips) > 0 {
-	if enableOutput {
+	if enableOutput && !SuppressFastIPOutput {
 		_, _ = fmt.Fprintf(color.Output, "%s preferred API IP - %s - %s - %s",
 			color.New(color.FgWhite, color.Bold).Sprintf("[NextTrace API]"),
 			color.New(color.FgGreen, color.Bold).Sprintf("%s", result.IP),

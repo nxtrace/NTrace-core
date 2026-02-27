@@ -20,6 +20,7 @@ type mtrUI struct {
 	paused      int32       // 0=running, 1=paused（atomic）
 	restartReq  int32       // 1=请求重置统计（atomic）
 	displayMode int32       // 显示模式 0-3（atomic）
+	nameMode    int32       // Host 基础显示 0=PTR/IP, 1=IP only（atomic）
 	cancel      context.CancelFunc
 }
 
@@ -66,6 +67,22 @@ func (u *mtrUI) CycleDisplayMode() {
 // CurrentDisplayMode 返回当前显示模式 (0-3)。
 func (u *mtrUI) CurrentDisplayMode() int {
 	return int(atomic.LoadInt32(&u.displayMode))
+}
+
+// ToggleNameMode 在 PTR/IP (0) 和 IP only (1) 之间切换。
+func (u *mtrUI) ToggleNameMode() int32 {
+	for {
+		old := atomic.LoadInt32(&u.nameMode)
+		next := int32(1) - old // 0→1, 1→0
+		if atomic.CompareAndSwapInt32(&u.nameMode, old, next) {
+			return next
+		}
+	}
+}
+
+// CurrentNameMode 返回当前 Host 基础显示模式 (0=PTR/IP, 1=IP only)。
+func (u *mtrUI) CurrentNameMode() int {
+	return int(atomic.LoadInt32(&u.nameMode))
 }
 
 // Enter 进入交互模式：切换到备用屏幕缓冲区、隐藏光标、开启 raw mode。
@@ -138,6 +155,8 @@ func (u *mtrUI) ReadKeysLoop(ctx context.Context) {
 			atomic.StoreInt32(&u.restartReq, 1)
 		case 'y', 'Y':
 			u.CycleDisplayMode()
+		case 'n', 'N':
+			u.ToggleNameMode()
 		}
 	}
 }
@@ -149,7 +168,7 @@ func (u *mtrUI) ConsumeRestartRequest() bool {
 }
 
 // ParseMTRKey 将单字节解析为操作名称（用于测试）。
-// 返回值: "quit", "pause", "resume", "restart", "" (未知)。
+// 返回值: "quit", "pause", "resume", "restart", "display_mode", "name_toggle", "" (未知)。
 func ParseMTRKey(b byte) string {
 	switch b {
 	case 'q', 'Q', 0x03:
@@ -162,6 +181,8 @@ func ParseMTRKey(b byte) string {
 		return "restart"
 	case 'y', 'Y':
 		return "display_mode"
+	case 'n', 'N':
+		return "name_toggle"
 	default:
 		return ""
 	}

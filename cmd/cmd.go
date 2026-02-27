@@ -183,10 +183,9 @@ func Execute() {
 	norDNS := parser.Flag("n", "no-rdns", &argparse.Options{Help: "Do not resolve IP addresses to their domain names"})
 	alwaysrDNS := parser.Flag("a", "always-rdns", &argparse.Options{Help: "Always resolve IP addresses to their domain names"})
 	routePath := parser.Flag("P", "route-path", &argparse.Options{Help: "Print traceroute hop path by ASN and location"})
-	report := parser.Flag("r", "report", &argparse.Options{Help: "output using report mode"})
 	dn42 := parser.Flag("", "dn42", &argparse.Options{Help: "DN42 Mode"})
 	output := parser.Flag("o", "output", &argparse.Options{Help: "Write trace result to file (RealTimePrinter ONLY)"})
-	tablePrint := parser.Flag("t", "table", &argparse.Options{Help: "Output trace results as table"})
+	tablePrint := parser.Flag("t", "table", &argparse.Options{Help: "Output trace results as a final summary table (report mode)"})
 	rawPrint := parser.Flag("", "raw", &argparse.Options{Help: "An Output Easy to Parse"})
 	jsonPrint := parser.Flag("j", "json", &argparse.Options{Help: "Output trace results as JSON"})
 	classicPrint := parser.Flag("c", "classic", &argparse.Options{Help: "Classic Output trace results like BestTrace"})
@@ -399,6 +398,12 @@ func Execute() {
 	//go func() {
 	//	defer wg.Done()
 	//}()
+	// MTR 使用 TUI 备用屏，必须在 wshandle.New() / GetFastIP 之前
+	// 禁止彩色横幅输出，避免污染主终端历史。
+	if *mtrMode {
+		util.SuppressFastIPOutput = true
+	}
+
 	var leoWs *wshandle.WsConn
 	needsLeoWS := strings.EqualFold(*dataOrigin, "LEOMOEAPI")
 	if needsLeoWS {
@@ -477,12 +482,20 @@ func Execute() {
 	}
 
 	if *srcDev != "" {
-		dev, _ := net.InterfaceByName(*srcDev)
+		dev, devErr := net.InterfaceByName(*srcDev)
+		if devErr != nil || dev == nil {
+			fmt.Printf("无法找到网卡 %q: %v\n", *srcDev, devErr)
+			os.Exit(1)
+		}
 		util.SrcDev = dev.Name
 		if addrs, err := dev.Addrs(); err == nil {
 			for _, addr := range addrs {
-				if (addr.(*net.IPNet).IP.To4() == nil) == (ip.To4() == nil) {
-					*srcAddr = addr.(*net.IPNet).IP.String()
+				ipNet, ok := addr.(*net.IPNet)
+				if !ok {
+					continue // 跳过非 *net.IPNet 类型（如 *net.IPAddr）
+				}
+				if (ipNet.IP.To4() == nil) == (ip.To4() == nil) {
+					*srcAddr = ipNet.IP.String()
 					// 检查是否是内网IP
 					if !(net.ParseIP(*srcAddr).IsPrivate() ||
 						net.ParseIP(*srcAddr).IsLoopback() ||
@@ -543,7 +556,6 @@ func Execute() {
 			"raw":       *rawPrint,
 			"classic":   *classicPrint,
 			"json":      *jsonPrint,
-			"report":    *report,
 			"output":    *output,
 			"routePath": *routePath,
 			"from":      *from != "",
@@ -558,7 +570,7 @@ func Execute() {
 		if *numMeasurements != 1 {
 			fmt.Println("[MTR] --queries 在 MTR 模式下无效，已重置为 1")
 		}
-		runMTRMode(m, conf, *mtrInterval, *mtrMaxRounds, domain)
+		runMTRMode(m, conf, *mtrInterval, *mtrMaxRounds, domain, *dataOrigin)
 		return
 	}
 
@@ -579,10 +591,6 @@ func Execute() {
 			} else {
 				conf.RealtimePrinter = printer.RealtimePrinter
 			}
-		}
-	} else {
-		if !*report {
-			conf.AsyncPrinter = printer.TracerouteTablePrinter
 		}
 	}
 

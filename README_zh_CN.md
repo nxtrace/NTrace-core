@@ -165,7 +165,7 @@ nexttrace 1.0.0.1
 # URL
 nexttrace http://example.com:8080/index.html?q=1
 
-# 表格打印，使用 --table / -t 参数，将实时显示结果
+# 表格输出（报告模式）：运行一次探测后打印最终汇总表格
 nexttrace --table 1.0.0.1
 
 # 一个方便供机器读取转化的模式
@@ -319,10 +319,15 @@ nexttrace --mtr --tcp --max-hops 20 --first 3 --no-rdns 8.8.8.8
 - **`q` / `Q`** — 退出（恢复终端，不留下输出）
 - **`p`** — 暂停探测
 - **空格**  — 恢复探测
+- **`r`** — 重置统计（计数器清零，显示模式保持不变）
+- **`y`** — 循环切换主机显示模式：ASN → City → Owner → Full
+- **`n`** — 切换主机名显示方式：PTR/IP ↔ 仅 IP
+- TUI 标题栏显示**源 → 目标**路由信息，指定 `--source`/`--dev` 时会展示对应信息。
+- 使用 LeoMoeAPI 时，标题栏会显示首选 API IP 地址。
 - 使用**备用屏幕缓冲区**，退出后恢复之前的终端历史记录。
 - 当 stdin 非 TTY（如管道输入）时，降级为简单表格刷新模式。
 
-> 注意：`--mtr` 不可与 `--table`、`--raw`、`--classic`、`--json`、`--report`、`--output`、`--route-path`、`--from`、`--fast-trace`、`--file`、`--deploy` 同时使用。
+> 注意：`--mtr` 不可与 `--table`、`--raw`、`--classic`、`--json`、`--output`、`--route-path`、`--from`、`--fast-trace`、`--file`、`--deploy` 同时使用。
 
 #### `NextTrace`支持用户自主选择 IP 数据库（目前支持：`LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`, `IPInfoLocal`, `CHUNZHEN`)
 
