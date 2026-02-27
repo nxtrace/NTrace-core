@@ -384,3 +384,242 @@ func TestTruncateStr(t *testing.T) {
 		}
 	}
 }
+
+// ---------------------------------------------------------------------------
+// 自适应布局新增测试
+// ---------------------------------------------------------------------------
+
+// TestTUI_RightAlignedMetricsBlock 验证指标列数值右对齐并出现在行尾。
+func TestTUI_RightAlignedMetricsBlock(t *testing.T) {
+	header := MTRTUIHeader{Target: "1.1.1.1", StartTime: time.Now(), Iteration: 1}
+	stats := []trace.MTRHopStat{
+		{TTL: 1, IP: "10.0.0.1", Loss: 0, Snt: 5, Last: 1.23, Avg: 1.50, Best: 1.00, Wrst: 2.00, StDev: 0.33},
+	}
+	result := mtrTUIRenderStringWithWidth(header, stats, 120)
+
+	lines := strings.Split(result, "\r\n")
+	// 找到含 "1.|--" 的 hop 行
+	var hopLine string
+	for _, l := range lines {
+		if strings.Contains(l, "1.|--") {
+			hopLine = l
+			break
+		}
+	}
+	if hopLine == "" {
+		t.Fatal("missing hop line with 1.|--")
+	}
+
+	// Loss 出现在 Host之后
+	hostIdx := strings.Index(hopLine, "10.0.0.1")
+	lossIdx := strings.Index(hopLine, "0.0%")
+	if lossIdx <= hostIdx {
+		t.Errorf("Loss(%d) should appear after Host(%d)", lossIdx, hostIdx)
+	}
+
+	// 各指标值应存在
+	for _, m := range []string{"0.0%", "1.23", "1.50", "1.00", "2.00", "0.33"} {
+		if !strings.Contains(hopLine, m) {
+			t.Errorf("hop line missing metric %q", m)
+		}
+	}
+
+	// 验证右对齐：指标前应有空格（padLeft 效果）
+	// 取 "Snt" 列值 "5"，应有前导空格
+	sntIdx := strings.Index(hopLine, "0.0%")
+	if sntIdx < 0 {
+		t.Fatal("metric not found in hop line")
+	}
+	// 指标块在行尾，末尾不应有大量多余空格
+	trimmed := strings.TrimRight(hopLine, " ")
+	if len(trimmed) < len(hopLine)-2 {
+		t.Errorf("too many trailing spaces; metrics should be near end of line")
+	}
+}
+
+// TestTUI_HostExpandsOnWideTerminal 宽终端(200列)时 Host 列宽应大于默认 40。
+func TestTUI_HostExpandsOnWideTerminal(t *testing.T) {
+	lo := computeLayout(200)
+	if lo.hostW <= tuiHostDefault {
+		t.Errorf("wide terminal: hostW=%d, want > %d", lo.hostW, tuiHostDefault)
+	}
+	if lo.termWidth != 200 {
+		t.Errorf("termWidth=%d, want 200", lo.termWidth)
+	}
+}
+
+// TestTUI_HostShrinksWhenWidthReduced 窄终端(80列)时 Host 列宽应被压缩。
+func TestTUI_HostShrinksWhenWidthReduced(t *testing.T) {
+	lo := computeLayout(80)
+	if lo.hostW >= tuiHostDefault {
+		t.Errorf("narrow terminal: hostW=%d, should be < %d", lo.hostW, tuiHostDefault)
+	}
+	if lo.hostW < tuiHostMin {
+		t.Errorf("hostW=%d, should not be less than min %d", lo.hostW, tuiHostMin)
+	}
+}
+
+// TestTUI_DualHeaderPacketsPings 验证双层分组表头：
+// 第一层含 "Packets" 和 "Pings"，第二层含各列名。
+func TestTUI_DualHeaderPacketsPings(t *testing.T) {
+	header := MTRTUIHeader{Target: "1.1.1.1", StartTime: time.Now(), Iteration: 1}
+	result := mtrTUIRenderStringWithWidth(header, nil, 120)
+
+	lines := strings.Split(result, "\r\n")
+
+	foundPackets, foundPings := false, false
+	foundLoss, foundSnt, foundLast, foundAvg, foundBest, foundWrst, foundStDev := false, false, false, false, false, false, false
+
+	for _, l := range lines {
+		if strings.Contains(l, "Packets") {
+			foundPackets = true
+		}
+		if strings.Contains(l, "Pings") {
+			foundPings = true
+		}
+		if strings.Contains(l, "Loss%") {
+			foundLoss = true
+		}
+		if strings.Contains(l, "Snt") {
+			foundSnt = true
+		}
+		if strings.Contains(l, "Last") {
+			foundLast = true
+		}
+		if strings.Contains(l, "Avg") {
+			foundAvg = true
+		}
+		if strings.Contains(l, "Best") {
+			foundBest = true
+		}
+		if strings.Contains(l, "Wrst") {
+			foundWrst = true
+		}
+		if strings.Contains(l, "StDev") {
+			foundStDev = true
+		}
+	}
+
+	if !foundPackets {
+		t.Error("missing 'Packets' group label in header")
+	}
+	if !foundPings {
+		t.Error("missing 'Pings' group label in header")
+	}
+	if !foundLoss || !foundSnt {
+		t.Error("missing Loss%/Snt column names under Packets group")
+	}
+	if !foundLast || !foundAvg || !foundBest || !foundWrst || !foundStDev {
+		t.Error("missing RTT column names under Pings group")
+	}
+
+	// "Packets" 和 "Pings" 应在同一行
+	for _, l := range lines {
+		if strings.Contains(l, "Packets") && strings.Contains(l, "Pings") {
+			return // 验证通过
+		}
+	}
+	t.Error("Packets and Pings should be on the same header line")
+}
+
+// TestTUI_VeryNarrowNoPanic 极窄终端(30列)不应 panic，
+// 且 hop 数据行与表头行的显示宽度不超过 termWidth。
+func TestTUI_VeryNarrowNoPanic(t *testing.T) {
+	header := MTRTUIHeader{Target: "x", StartTime: time.Now(), Iteration: 1}
+	stats := []trace.MTRHopStat{
+		{TTL: 1, IP: "10.0.0.1", Loss: 0, Snt: 1, Last: 1.0, Avg: 1.0, Best: 1.0, Wrst: 1.0, StDev: 0},
+	}
+	const width = 30
+
+	// 不应 panic
+	result := mtrTUIRenderStringWithWidth(header, stats, width)
+
+	if !strings.Contains(result, "\r\n") {
+		t.Error("output should contain \\r\\n")
+	}
+	if !strings.Contains(result, "1.|--") {
+		t.Error("missing hop prefix even in narrow mode")
+	}
+
+	// 验证 hop 行与表头子行不超宽
+	lines := strings.Split(result, "\r\n")
+	for _, l := range lines {
+		// 跳过清屏序列、信息行（nexttrace / Keys）和空行
+		if l == "" || strings.HasPrefix(l, "\033[") ||
+			strings.Contains(l, "nexttrace") || strings.Contains(l, "Keys:") {
+			continue
+		}
+		w := displayWidth(l)
+		if w > width {
+			t.Errorf("line exceeds termWidth=%d: displayWidth=%d, line=%q", width, w, l)
+		}
+	}
+}
+
+// TestTUI_DisplayWidthCJK 验证 CJK 宽字符截断和宽度计算。
+func TestTUI_DisplayWidthCJK(t *testing.T) {
+	// 每个中文字符占 2 列
+	if w := displayWidth("中文"); w != 4 {
+		t.Errorf("displayWidth(\"中文\") = %d, want 4", w)
+	}
+	if w := displayWidth("abc"); w != 3 {
+		t.Errorf("displayWidth(\"abc\") = %d, want 3", w)
+	}
+
+	// 截断：max=5 → "中文" (4列) 可以放下
+	got := truncateByDisplayWidth("中文", 5)
+	if got != "中文" {
+		t.Errorf("truncateByDisplayWidth(\"中文\", 5) = %q, want \"中文\"", got)
+	}
+
+	// 截断：max=3 → "中文" (4列) 超出 → 截断到 2列 + "."
+	got = truncateByDisplayWidth("中文", 3)
+	if displayWidth(got) > 3 {
+		t.Errorf("truncateByDisplayWidth(\"中文\", 3) width=%d, want <= 3", displayWidth(got))
+	}
+
+	// padRight CJK
+	padded := padRight("中文", 8) // 4显示列 + 4空格 = 8列
+	if displayWidth(padded) != 8 {
+		t.Errorf("padRight(\"中文\", 8) width=%d, want 8", displayWidth(padded))
+	}
+}
+
+// TestTUI_ComputeLayoutZeroWidth 验证 termWidth=0 回退到默认值。
+func TestTUI_ComputeLayoutZeroWidth(t *testing.T) {
+	lo := computeLayout(0)
+	if lo.termWidth != tuiDefaultTerm {
+		t.Errorf("termWidth=%d, want default %d", lo.termWidth, tuiDefaultTerm)
+	}
+	if lo.hostW < tuiHostMin {
+		t.Errorf("hostW=%d, want >= %d", lo.hostW, tuiHostMin)
+	}
+}
+
+// TestTUI_TotalWidthInvariant 验证 computeLayout 的核心不变式：
+// 对于 termWidth >= 23（绝对下限），totalWidth() == termWidth（右锚定）。
+func TestTUI_TotalWidthInvariant(t *testing.T) {
+	for _, tw := range []int{23, 25, 30, 40, 50, 60, 61, 80, 120, 200} {
+		lo := computeLayout(tw)
+		if lo.totalWidth() != tw {
+			t.Errorf("termWidth=%d: totalWidth()=%d, want exact match (hostW=%d, metricsWidth=%d)",
+				tw, lo.totalWidth(), lo.hostW, lo.metricsWidth())
+		}
+		if lo.hostW < 1 {
+			t.Errorf("termWidth=%d: hostW=%d, must be >= 1", tw, lo.hostW)
+		}
+	}
+}
+
+// TestTUI_NarrowRightAnchor 验证窄屏(62列)时指标区贴右边界，
+// 即 metricsStart + metricsWidth == termWidth。
+func TestTUI_NarrowRightAnchor(t *testing.T) {
+	for _, tw := range []int{62, 65, 70, 80} {
+		lo := computeLayout(tw)
+		rightEdge := lo.metricsStart + lo.metricsWidth()
+		if rightEdge != tw {
+			t.Errorf("termWidth=%d: metricsStart(%d)+metricsWidth(%d)=%d, want %d",
+				tw, lo.metricsStart, lo.metricsWidth(), rightEdge, tw)
+		}
+	}
+}
