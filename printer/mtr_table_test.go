@@ -1559,8 +1559,8 @@ func TestTUI_PrefixWidthForMaxTTL(t *testing.T) {
 		maxTTL int
 		want   int
 	}{
-		{0, 4},   // 空 stats → 默认
-		{1, 4},   // TTL<100 → 2 digits + 2 = 4
+		{0, 4}, // 空 stats → 默认
+		{1, 4}, // TTL<100 → 2 digits + 2 = 4
 		{99, 4},
 		{100, 5}, // 3 digits + 2 = 5
 		{255, 5},
