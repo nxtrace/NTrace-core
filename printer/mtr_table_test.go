@@ -14,7 +14,7 @@ func TestMTRRenderTable_HeaderOrder(t *testing.T) {
 	stats := []trace.MTRHopStat{
 		{TTL: 1, IP: "1.1.1.1", Loss: 0, Snt: 5, Last: 1.23, Avg: 1.50, Best: 1.00, Wrst: 2.00, StDev: 0.33},
 	}
-	rows := MTRRenderTable(stats)
+	rows := MTRRenderTable(stats, HostModeFull, "en")
 	if len(rows) != 1 {
 		t.Fatalf("expected 1 row, got %d", len(rows))
 	}
@@ -53,7 +53,7 @@ func TestMTRRenderTable_NumericFormatting(t *testing.T) {
 		{TTL: 1, IP: "10.0.0.1", Loss: 33.3333, Snt: 3, Last: 0.456, Avg: 1.789, Best: 0.123, Wrst: 3.456, StDev: 1.234},
 		{TTL: 2, IP: "10.0.0.2", Loss: 100, Snt: 3, Last: 0, Avg: 0, Best: 0, Wrst: 0, StDev: 0},
 	}
-	rows := MTRRenderTable(stats)
+	rows := MTRRenderTable(stats, HostModeFull, "en")
 	if len(rows) != 2 {
 		t.Fatalf("expected 2 rows, got %d", len(rows))
 	}
@@ -83,7 +83,7 @@ func TestMTRRenderTable_NilGeo(t *testing.T) {
 	stats := []trace.MTRHopStat{
 		{TTL: 1, IP: "192.168.1.1", Geo: nil},
 	}
-	rows := MTRRenderTable(stats)
+	rows := MTRRenderTable(stats, HostModeFull, "en")
 	if len(rows) != 1 {
 		t.Fatalf("expected 1 row, got %d", len(rows))
 	}
@@ -100,7 +100,7 @@ func TestMTRRenderTable_EmptyHostname(t *testing.T) {
 			CountryEn: "United States",
 		}},
 	}
-	rows := MTRRenderTable(stats)
+	rows := MTRRenderTable(stats, HostModeFull, "en")
 	if len(rows) != 1 {
 		t.Fatalf("expected 1 row, got %d", len(rows))
 	}
@@ -119,8 +119,8 @@ func TestMTRRenderTable_HostnameAndIP(t *testing.T) {
 			Owner:     "Cloudflare",
 		}},
 	}
-	rows := MTRRenderTable(stats)
-	want := "one.one.one.one (1.1.1.1) AS13335, US, Cloudflare"
+	rows := MTRRenderTable(stats, HostModeFull, "en")
+	want := "one.one.one.one AS13335, US, Cloudflare"
 	if rows[0].Host != want {
 		t.Errorf("Host = %q, want %q", rows[0].Host, want)
 	}
@@ -133,7 +133,7 @@ func TestMTRRenderTable_MultiPath(t *testing.T) {
 		{TTL: 2, IP: "10.0.0.2"},
 		{TTL: 3, IP: "10.0.1.1"},
 	}
-	rows := MTRRenderTable(stats)
+	rows := MTRRenderTable(stats, HostModeFull, "en")
 	if len(rows) != 3 {
 		t.Fatalf("expected 3 rows, got %d", len(rows))
 	}
@@ -156,7 +156,7 @@ func TestMTRRenderTable_UnknownHost(t *testing.T) {
 	stats := []trace.MTRHopStat{
 		{TTL: 1, IP: "", Host: ""},
 	}
-	rows := MTRRenderTable(stats)
+	rows := MTRRenderTable(stats, HostModeFull, "en")
 	if rows[0].Host != "???" {
 		t.Errorf("Host = %q, want %q", rows[0].Host, "???")
 	}
@@ -212,17 +212,16 @@ func TestMTRTUIRenderString_Header(t *testing.T) {
 		Domain:    "example.com",
 		TargetIP:  "1.1.1.1",
 		Version:   "v1.0.0",
+		SrcHost:   "myhost",
+		SrcIP:     "192.168.1.1",
 	}
 	result := MTRTUIRenderString(header, nil)
 
-	if !strings.Contains(result, "My traceroute") {
-		t.Error("missing 'My traceroute' in header")
+	if !strings.Contains(result, "NextTrace [v1.0.0]") {
+		t.Error("missing 'NextTrace [v1.0.0]' in header")
 	}
-	if !strings.Contains(result, "NextTrace v1.0.0") {
-		t.Error("missing version in header")
-	}
-	if !strings.Contains(result, "example.com (1.1.1.1)") {
-		t.Error("missing domain+IP in header")
+	if !strings.Contains(result, "myhost (192.168.1.1) -> example.com (1.1.1.1)") {
+		t.Error("missing src->dst route line in header")
 	}
 	if !strings.Contains(result, "[Running]") {
 		t.Error("missing Running status")
@@ -230,11 +229,14 @@ func TestMTRTUIRenderString_Header(t *testing.T) {
 	if !strings.Contains(result, "Round: 5") {
 		t.Error("missing round number")
 	}
-	if !strings.Contains(result, "q - quit") {
+	if !strings.Contains(result, "q-quit") {
 		t.Error("missing key hints")
 	}
-	if !strings.Contains(result, "r - reset") {
+	if !strings.Contains(result, "r-reset") {
 		t.Error("missing reset key hint")
+	}
+	if !strings.Contains(result, "y-display") {
+		t.Error("missing display mode key hint")
 	}
 }
 
@@ -284,12 +286,11 @@ func TestMTRTUIRenderString_FramePrefix(t *testing.T) {
 	if !strings.HasPrefix(result, "\033[H\033[2J") {
 		t.Error("frame should start with cursor-home + erase-screen")
 	}
-	// header 行应含有 My traceroute 并以 \r\n 结束
-	idx := strings.Index(result, "My traceroute")
+	// header 首行应含有 NextTrace 并以 \r\n 结束
+	idx := strings.Index(result, "NextTrace [")
 	if idx < 0 {
-		t.Fatal("missing 'My traceroute' in header")
+		t.Fatal("missing 'NextTrace [' in header")
 	}
-	// 找到该行末尾
 	nlIdx := strings.Index(result[idx:], "\r\n")
 	if nlIdx < 0 {
 		t.Error("header line should end with \\r\\n")
@@ -406,11 +407,11 @@ func TestTUI_RightAlignedMetricsBlock(t *testing.T) {
 	result := mtrTUIRenderStringWithWidth(header, stats, 120)
 
 	lines := strings.Split(result, "\r\n")
-	// 找到含 "1." 的 hop 行（数据行以 hop prefix 开头）
+	// 找到含 "1." 前缀且包含 hop IP 的数据行
 	var hopLine string
 	for _, l := range lines {
 		trimmed := strings.TrimLeft(l, " ")
-		if strings.HasPrefix(trimmed, "1.") {
+		if strings.HasPrefix(trimmed, "1.") && strings.Contains(l, "10.0.0.1") {
 			hopLine = l
 			break
 		}
@@ -552,7 +553,7 @@ func TestTUI_VeryNarrowNoPanic(t *testing.T) {
 	for _, l := range lines {
 		// 跳过清屏序列、信息行和空行
 		if l == "" || strings.HasPrefix(l, "\033[") ||
-			strings.Contains(l, "traceroute") || strings.Contains(l, "Host:") || strings.Contains(l, "Keys:") {
+			strings.Contains(l, "NextTrace") || strings.Contains(l, "->") || strings.Contains(l, "Keys:") {
 			continue
 		}
 		w := displayWidth(l)
@@ -642,11 +643,8 @@ func TestMTRTUI_HeaderContainsVersion(t *testing.T) {
 		Iteration: 1,
 	}
 	out := mtrTUIRenderStringWithWidth(header, nil, 120)
-	if !strings.Contains(out, "NextTrace v1.3.0") {
-		t.Errorf("header should contain 'NextTrace v1.3.0', got:\n%s", out)
-	}
-	if !strings.Contains(out, "My traceroute") {
-		t.Errorf("header should contain 'My traceroute', got:\n%s", out)
+	if !strings.Contains(out, "NextTrace [v1.3.0]") {
+		t.Errorf("header should contain 'NextTrace [v1.3.0]', got:\n%s", out)
 	}
 }
 
@@ -657,10 +655,16 @@ func TestMTRTUI_HeaderContainsDomainAndIP(t *testing.T) {
 		TargetIP:  "8.8.8.8",
 		StartTime: time.Now(),
 		Iteration: 1,
+		SrcHost:   "myhost",
+		SrcIP:     "192.168.1.1",
 	}
 	out := mtrTUIRenderStringWithWidth(header, nil, 120)
 	if !strings.Contains(out, "dns.google (8.8.8.8)") {
 		t.Errorf("header should contain 'dns.google (8.8.8.8)', got:\n%s", out)
+	}
+	// 应包含 src -> dst 格式
+	if !strings.Contains(out, "myhost (192.168.1.1) -> dns.google (8.8.8.8)") {
+		t.Errorf("header should contain src -> dst route line, got:\n%s", out)
 	}
 }
 
@@ -671,8 +675,8 @@ func TestMTRTUI_HeaderContainsResetKey(t *testing.T) {
 		Iteration: 1,
 	}
 	out := mtrTUIRenderStringWithWidth(header, nil, 120)
-	if !strings.Contains(out, "r - reset") {
-		t.Errorf("header should contain 'r - reset', got:\n%s", out)
+	if !strings.Contains(out, "r-reset") {
+		t.Errorf("header should contain 'r-reset', got:\n%s", out)
 	}
 }
 
@@ -684,8 +688,13 @@ func TestMTRTUI_HeaderIPOnlyWhenNoDomain(t *testing.T) {
 		Iteration: 1,
 	}
 	out := mtrTUIRenderStringWithWidth(header, nil, 120)
-	if !strings.Contains(out, "Host: 1.2.3.4") {
-		t.Errorf("header should contain 'Host: 1.2.3.4' when domain is empty, got:\n%s", out)
+	// 无域名时只显示 IP（不含 "Host:" 前缀）
+	if !strings.Contains(out, "1.2.3.4") {
+		t.Errorf("header should contain '1.2.3.4' when domain is empty, got:\n%s", out)
+	}
+	// 不应出现 "Host:" 前缀（新格式使用 src -> dst）
+	if strings.Contains(out, "Host:") {
+		t.Errorf("new header should not contain 'Host:' prefix, got:\n%s", out)
 	}
 }
 
@@ -765,7 +774,322 @@ func TestMTRTUI_HeaderIPNoDuplicate(t *testing.T) {
 	if strings.Contains(out, "1.1.1.1 (1.1.1.1)") {
 		t.Errorf("should not show duplicate IP, got:\n%s", out)
 	}
-	if !strings.Contains(out, "Host: 1.1.1.1") {
-		t.Errorf("should show 'Host: 1.1.1.1', got:\n%s", out)
+	// 新格式下目标 IP 应单独出现
+	if !strings.Contains(out, "1.1.1.1") {
+		t.Errorf("should show '1.1.1.1', got:\n%s", out)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// 显示模式测试
+// ---------------------------------------------------------------------------
+
+func TestFormatMTRHostByMode_ASN(t *testing.T) {
+	s := trace.MTRHopStat{
+		TTL:  1,
+		IP:   "1.1.1.1",
+		Host: "one.one.one.one",
+		Geo: &ipgeo.IPGeoData{
+			Asnumber:  "13335",
+			CountryEn: "US",
+			Owner:     "Cloudflare",
+		},
+	}
+	got := formatMTRHostByMode(s, HostModeASN, "en")
+	want := "one.one.one.one AS13335"
+	if got != want {
+		t.Errorf("HostModeASN: got %q, want %q", got, want)
+	}
+}
+
+func TestFormatMTRHostByMode_City(t *testing.T) {
+	s := trace.MTRHopStat{
+		TTL: 1,
+		IP:  "1.1.1.1",
+		Geo: &ipgeo.IPGeoData{
+			Asnumber:  "13335",
+			CountryEn: "US",
+			ProvEn:    "California",
+			CityEn:    "Los Angeles",
+		},
+	}
+	got := formatMTRHostByMode(s, HostModeCity, "en")
+	want := "1.1.1.1 AS13335, Los Angeles"
+	if got != want {
+		t.Errorf("HostModeCity: got %q, want %q", got, want)
+	}
+}
+
+func TestFormatMTRHostByMode_Owner(t *testing.T) {
+	s := trace.MTRHopStat{
+		TTL: 1,
+		IP:  "1.1.1.1",
+		Geo: &ipgeo.IPGeoData{
+			Asnumber: "13335",
+			Owner:    "Cloudflare",
+		},
+	}
+	got := formatMTRHostByMode(s, HostModeOwner, "en")
+	want := "1.1.1.1 AS13335, Cloudflare"
+	if got != want {
+		t.Errorf("HostModeOwner: got %q, want %q", got, want)
+	}
+}
+
+func TestFormatMTRHostByMode_Full(t *testing.T) {
+	s := trace.MTRHopStat{
+		TTL:  1,
+		IP:   "1.1.1.1",
+		Host: "one.one.one.one",
+		Geo: &ipgeo.IPGeoData{
+			Asnumber:  "13335",
+			CountryEn: "US",
+			Owner:     "Cloudflare",
+		},
+	}
+	got := formatMTRHostByMode(s, HostModeFull, "en")
+	want := "one.one.one.one AS13335, US, Cloudflare"
+	if got != want {
+		t.Errorf("HostModeFull: got %q, want %q", got, want)
+	}
+}
+
+func TestFormatMTRHostByMode_NilGeo(t *testing.T) {
+	s := trace.MTRHopStat{TTL: 1, IP: "10.0.0.1"}
+	for _, mode := range []int{HostModeASN, HostModeCity, HostModeOwner, HostModeFull} {
+		got := formatMTRHostByMode(s, mode, "en")
+		if got != "10.0.0.1" {
+			t.Errorf("mode %d with nil geo: got %q, want %q", mode, got, "10.0.0.1")
+		}
+	}
+}
+
+func TestFormatMTRHostByMode_NoASN(t *testing.T) {
+	s := trace.MTRHopStat{
+		TTL: 1,
+		IP:  "10.0.0.1",
+		Geo: &ipgeo.IPGeoData{CountryEn: "US"},
+	}
+	got := formatMTRHostByMode(s, HostModeASN, "en")
+	// 无 ASN 时只显示 base
+	if got != "10.0.0.1" {
+		t.Errorf("HostModeASN no ASN: got %q, want %q", got, "10.0.0.1")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// 语言感知测试
+// ---------------------------------------------------------------------------
+
+func TestGeoField_CN(t *testing.T) {
+	got := geoField("中国", "China", "cn")
+	if got != "中国" {
+		t.Errorf("geoField cn: got %q, want %q", got, "中国")
+	}
+}
+
+func TestGeoField_EN(t *testing.T) {
+	got := geoField("中国", "China", "en")
+	if got != "China" {
+		t.Errorf("geoField en: got %q, want %q", got, "China")
+	}
+}
+
+func TestGeoField_Fallback(t *testing.T) {
+	// en 模式但无英文字段时回退到中文
+	got := geoField("中国", "", "en")
+	if got != "中国" {
+		t.Errorf("geoField en fallback: got %q, want %q", got, "中国")
+	}
+	// cn 模式但无中文字段时回退到英文
+	got = geoField("", "China", "cn")
+	if got != "China" {
+		t.Errorf("geoField cn fallback: got %q, want %q", got, "China")
+	}
+}
+
+func TestFormatMTRHostByMode_LangCN(t *testing.T) {
+	s := trace.MTRHopStat{
+		TTL: 1,
+		IP:  "1.1.1.1",
+		Geo: &ipgeo.IPGeoData{
+			Asnumber:  "13335",
+			Country:   "美国",
+			CountryEn: "US",
+			Prov:      "加利福尼亚",
+			ProvEn:    "California",
+			City:      "洛杉矶",
+			CityEn:    "Los Angeles",
+		},
+	}
+	got := formatMTRHostByMode(s, HostModeCity, "cn")
+	want := "1.1.1.1 AS13335, 洛杉矶"
+	if got != want {
+		t.Errorf("HostModeCity cn: got %q, want %q", got, want)
+	}
+
+	got = formatMTRHostByMode(s, HostModeCity, "en")
+	want = "1.1.1.1 AS13335, Los Angeles"
+	if got != want {
+		t.Errorf("HostModeCity en: got %q, want %q", got, want)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// MPLS 多行显示测试
+// ---------------------------------------------------------------------------
+
+func TestTUI_MPLSMultiLine(t *testing.T) {
+	header := MTRTUIHeader{Target: "1.1.1.1", StartTime: time.Now(), Iteration: 1}
+	stats := []trace.MTRHopStat{
+		{
+			TTL:  1,
+			IP:   "10.0.0.1",
+			Loss: 0, Snt: 5, Last: 1.0, Avg: 1.0, Best: 1.0, Wrst: 1.0, StDev: 0,
+			MPLS: []string{"[MPLS: Lbl 100, TC 0, S 1, TTL 1]", "[MPLS: Lbl 200, TC 0, S 0, TTL 1]"},
+		},
+		{TTL: 2, IP: "10.0.0.2", Loss: 0, Snt: 5, Last: 2.0, Avg: 2.0, Best: 2.0, Wrst: 2.0, StDev: 0},
+	}
+	result := mtrTUIRenderStringWithWidth(header, stats, 120)
+
+	// MPLS 标签应在独立的续行中出现
+	if !strings.Contains(result, "[MPLS: Lbl 100") {
+		t.Error("missing first MPLS label in output")
+	}
+	if !strings.Contains(result, "[MPLS: Lbl 200") {
+		t.Error("missing second MPLS label in output")
+	}
+
+	// MPLS 不应和 host IP 在同一行
+	lines := strings.Split(result, "\r\n")
+	for _, l := range lines {
+		if strings.Contains(l, "10.0.0.1") && strings.Contains(l, "MPLS") {
+			t.Error("MPLS label should not be on the same line as host IP")
+		}
+	}
+}
+
+func TestTUI_MPLSMultiLine_NoMPLS(t *testing.T) {
+	header := MTRTUIHeader{Target: "1.1.1.1", StartTime: time.Now(), Iteration: 1}
+	stats := []trace.MTRHopStat{
+		{TTL: 1, IP: "10.0.0.1", Loss: 0, Snt: 5, Last: 1.0, Avg: 1.0, Best: 1.0, Wrst: 1.0, StDev: 0},
+	}
+	result := mtrTUIRenderStringWithWidth(header, stats, 120)
+	if strings.Contains(result, "MPLS") {
+		t.Error("output should not contain MPLS when hop has no labels")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// 新 header 格式综合测试
+// ---------------------------------------------------------------------------
+
+func TestMTRTUI_HeaderSrcDstFormat(t *testing.T) {
+	header := MTRTUIHeader{
+		Target:    "8.8.8.8",
+		Domain:    "dns.google",
+		TargetIP:  "8.8.8.8",
+		StartTime: time.Now(),
+		Iteration: 1,
+		Version:   "v1.0.0",
+		SrcHost:   "laptop.local",
+		SrcIP:     "10.0.0.5",
+	}
+	out := mtrTUIRenderStringWithWidth(header, nil, 150)
+
+	// 第一行应仅含 NextTrace [版本]
+	lines := strings.Split(out, "\r\n")
+	found := false
+	for _, l := range lines {
+		if strings.Contains(l, "NextTrace [v1.0.0]") {
+			found = true
+			// 不应含 "My traceroute"
+			if strings.Contains(l, "My traceroute") {
+				t.Error("line 1 should not contain 'My traceroute'")
+			}
+			break
+		}
+	}
+	if !found {
+		t.Error("missing 'NextTrace [v1.0.0]' in output")
+	}
+
+	// 第二行应含 src -> dst + RFC3339 时间
+	if !strings.Contains(out, "laptop.local (10.0.0.5) -> dns.google (8.8.8.8)") {
+		t.Errorf("missing route line, got:\n%s", out)
+	}
+}
+
+func TestMTRTUI_HeaderNoSrcInfo(t *testing.T) {
+	// 无源信息时应只显示目标
+	header := MTRTUIHeader{
+		Target:    "8.8.8.8",
+		Domain:    "dns.google",
+		TargetIP:  "8.8.8.8",
+		StartTime: time.Now(),
+		Iteration: 1,
+		Version:   "v1.0.0",
+	}
+	out := mtrTUIRenderStringWithWidth(header, nil, 120)
+	// 不应含 "->" （无源信息）
+	if strings.Contains(out, "->") {
+		t.Errorf("should not contain '->' when no src info, got:\n%s", out)
+	}
+	// 应含目标
+	if !strings.Contains(out, "dns.google (8.8.8.8)") {
+		t.Errorf("should contain destination, got:\n%s", out)
+	}
+}
+
+func TestMTRTUI_DisplayModeInKeys(t *testing.T) {
+	for mode, label := range map[int]string{0: "ASN", 1: "City", 2: "Owner", 3: "Full"} {
+		header := MTRTUIHeader{
+			Target:      "8.8.8.8",
+			StartTime:   time.Now(),
+			Iteration:   1,
+			DisplayMode: mode,
+		}
+		out := mtrTUIRenderStringWithWidth(header, nil, 120)
+		expected := "y-display(" + label + ")"
+		if !strings.Contains(out, expected) {
+			t.Errorf("mode %d: should contain %q, got:\n%s", mode, expected, out)
+		}
+	}
+}
+
+func TestMTRTUI_DisplayModeAffectsHopData(t *testing.T) {
+	stats := []trace.MTRHopStat{
+		{
+			TTL: 1, IP: "1.1.1.1",
+			Geo: &ipgeo.IPGeoData{
+				Asnumber:  "13335",
+				CountryEn: "US",
+				Owner:     "Cloudflare",
+			},
+			Loss: 0, Snt: 5, Last: 1.0, Avg: 1.0, Best: 1.0, Wrst: 1.0, StDev: 0,
+		},
+	}
+
+	// Mode 0 (ASN): 有 ASN 无 country 无 owner
+	header := MTRTUIHeader{Target: "x", StartTime: time.Now(), Iteration: 1, DisplayMode: HostModeASN, Lang: "en"}
+	out := mtrTUIRenderStringWithWidth(header, stats, 120)
+	if !strings.Contains(out, "AS13335") {
+		t.Error("mode ASN should show ASN")
+	}
+	if strings.Contains(out, "Cloudflare") {
+		t.Error("mode ASN should not show owner")
+	}
+
+	// Mode 3 (Full): 有 ASN + country + owner
+	header.DisplayMode = HostModeFull
+	out = mtrTUIRenderStringWithWidth(header, stats, 120)
+	if !strings.Contains(out, "AS13335") {
+		t.Error("mode Full should show ASN")
+	}
+	if !strings.Contains(out, "US") {
+		t.Error("mode Full should show country")
+	}
+	if !strings.Contains(out, "Cloudflare") {
+		t.Error("mode Full should show owner")
 	}
 }

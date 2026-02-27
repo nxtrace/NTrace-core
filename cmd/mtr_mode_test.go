@@ -176,6 +176,23 @@ func TestParseMTRKey_Restart(t *testing.T) {
 	}
 }
 
+func TestParseMTRKey_DisplayMode(t *testing.T) {
+	for _, b := range []byte{'y', 'Y'} {
+		if got := ParseMTRKey(b); got != "display_mode" {
+			t.Errorf("ParseMTRKey(%q) = %q, want %q", b, got, "display_mode")
+		}
+	}
+}
+
+func TestParseMTRKey_Unknown_IncludesY(t *testing.T) {
+	// y/Y 现在已有映射，不再返回空
+	for _, b := range []byte{'x', 'z', '1', '\n'} {
+		if got := ParseMTRKey(b); got != "" {
+			t.Errorf("ParseMTRKey(%q) = %q, want empty", b, got)
+		}
+	}
+}
+
 func TestMTRUI_ConsumeRestartRequest(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -200,6 +217,61 @@ func TestMTRUI_ConsumeRestartRequest(t *testing.T) {
 	}
 
 	_ = ctx // suppress unused
+}
+
+// ---------------------------------------------------------------------------
+// 显示模式切换测试
+// ---------------------------------------------------------------------------
+
+func TestMTRUI_DisplayModeCycle(t *testing.T) {
+	_, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ui := newMTRUI(cancel)
+
+	// 初始模式为 0
+	if got := ui.CurrentDisplayMode(); got != 0 {
+		t.Errorf("initial display mode = %d, want 0", got)
+	}
+
+	// 循环切换 0 → 1 → 2 → 3 → 0
+	ui.CycleDisplayMode()
+	if got := ui.CurrentDisplayMode(); got != 1 {
+		t.Errorf("after 1st cycle: display mode = %d, want 1", got)
+	}
+
+	ui.CycleDisplayMode()
+	if got := ui.CurrentDisplayMode(); got != 2 {
+		t.Errorf("after 2nd cycle: display mode = %d, want 2", got)
+	}
+
+	ui.CycleDisplayMode()
+	if got := ui.CurrentDisplayMode(); got != 3 {
+		t.Errorf("after 3rd cycle: display mode = %d, want 3", got)
+	}
+
+	ui.CycleDisplayMode()
+	if got := ui.CurrentDisplayMode(); got != 0 {
+		t.Errorf("after 4th cycle: display mode = %d, want 0 (wrap)", got)
+	}
+}
+
+func TestMTRUI_DisplayModeNotResetByRestart(t *testing.T) {
+	_, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ui := newMTRUI(cancel)
+
+	// 设置显示模式为 2
+	ui.CycleDisplayMode() // 0 → 1
+	ui.CycleDisplayMode() // 1 → 2
+
+	// 模拟重置请求
+	atomic.StoreInt32(&ui.restartReq, 1)
+	ui.ConsumeRestartRequest()
+
+	// 显示模式不应被重置
+	if got := ui.CurrentDisplayMode(); got != 2 {
+		t.Errorf("display mode after restart = %d, want 2 (unchanged)", got)
+	}
 }
 
 // ---------------------------------------------------------------------------

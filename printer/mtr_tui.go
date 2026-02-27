@@ -35,6 +35,11 @@ type MTRTUIHeader struct {
 	Domain   string // 用户输入的域名（可为空）
 	TargetIP string // 解析后的目标 IP
 	Version  string // 软件版本，如 "v1.3.0"
+	// 以下为 v3 新增字段
+	SrcHost     string // 源主机名
+	SrcIP       string // 源 IP
+	Lang        string // 语言（"en" / "cn"）
+	DisplayMode int    // 显示模式 0-3
 }
 
 // ---------------------------------------------------------------------------
@@ -292,39 +297,84 @@ func mtrTUIRenderWithWidth(w io.Writer, header MTRTUIHeader, stats []trace.MTRHo
 		statusStr = "Paused"
 	}
 
-	// ── 信息行 1：版本 + 当前时间 ──
+	// ── 信息行 1：NextTrace [version] ──
 	ver := header.Version
 	if ver == "" {
 		ver = "dev"
 	}
-	tuiLine(&b, "My traceroute [NextTrace %s]          %s",
-		ver, time.Now().Format("2006-01-02T15:04:05"))
+	tuiLine(&b, "NextTrace [%s]", ver)
 
-	// ── 信息行 2：目标 domain (IP) ──
-	targetLine := header.Target // 兜底
-	if header.Domain != "" && header.TargetIP != "" && header.Domain != header.TargetIP {
-		targetLine = fmt.Sprintf("%s (%s)", header.Domain, header.TargetIP)
-	} else if header.TargetIP != "" {
-		targetLine = header.TargetIP
+	// ── 信息行 2：srcHost (srcIP) -> dstName (dstIP)     RFC3339-time ──
+	srcPart := header.SrcHost
+	if srcPart != "" && header.SrcIP != "" && srcPart != header.SrcIP {
+		srcPart = fmt.Sprintf("%s (%s)", srcPart, header.SrcIP)
+	} else if header.SrcIP != "" {
+		srcPart = header.SrcIP
 	}
-	tuiLine(&b, "Host: %s", targetLine)
 
-	// ── 信息行 3：按键提示 + 状态 ──
-	tuiLine(&b, "Keys: q - quit   p - pause   SPACE - resume   r - reset          [%s] Round: %d",
-		statusStr, header.Iteration)
+	dstPart := header.Target // 兜底
+	if header.Domain != "" && header.TargetIP != "" && header.Domain != header.TargetIP {
+		dstPart = fmt.Sprintf("%s (%s)", header.Domain, header.TargetIP)
+	} else if header.TargetIP != "" {
+		dstPart = header.TargetIP
+	}
+
+	var routeLine string
+	if srcPart != "" {
+		routeLine = fmt.Sprintf("%s -> %s", srcPart, dstPart)
+	} else {
+		routeLine = dstPart
+	}
+	timeStr := time.Now().Format("2006-01-02T15:04:05-0700")
+	timeW := displayWidth(timeStr)
+	routeW := displayWidth(routeLine)
+	gap := lo.termWidth - routeW - timeW
+	if gap < 2 {
+		// 窄屏：截断 route 文本保证时间贴右
+		maxRoute := lo.termWidth - timeW - 2
+		if maxRoute < 1 {
+			maxRoute = 1
+		}
+		routeLine = truncateByDisplayWidth(routeLine, maxRoute)
+		gap = 2
+	}
+	tuiLine(&b, "%s%s%s", routeLine, strings.Repeat(" ", gap), timeStr)
+
+	// ── 信息行 3：按键提示 + 显示模式 + 状态 ──
+	modeNames := [4]string{"ASN", "City", "Owner", "Full"}
+	modeLabel := "ASN"
+	if header.DisplayMode >= 0 && header.DisplayMode < 4 {
+		modeLabel = modeNames[header.DisplayMode]
+	}
+	tuiLine(&b, "Keys: q-quit  p-pause  SPACE-resume  r-reset  y-display(%s)          [%s] Round: %d",
+		modeLabel, statusStr, header.Iteration)
 	b.WriteString("\r\n") // 空行
 
 	// ── 双层表头 ──
 	renderDualHeader(&b, lo)
 
 	// ── hop 数据行 ──
+	lang := header.Lang
+	if lang == "" {
+		lang = "en"
+	}
 	prevTTL := 0
 	for _, s := range stats {
 		hopPrefix := formatTUIHopPrefix(s.TTL, prevTTL)
 		prevTTL = s.TTL
 
-		host := formatMTRHost(s)
+		host := formatMTRHostByMode(s, header.DisplayMode, lang)
 		renderDataRow(&b, lo, hopPrefix, host, s)
+
+		// MPLS 多行显示：每个标签独占一行，位于 host 列区域
+		if len(s.MPLS) > 0 {
+			for _, mplsLabel := range s.MPLS {
+				var mRow strings.Builder
+				mRow.WriteString(strings.Repeat(" ", lo.prefixW+tuiPrefixGap))
+				mRow.WriteString(fitLeft("  "+mplsLabel, lo.hostW))
+				tuiLine(&b, "%s", mRow.String())
+			}
+		}
 	}
 
 	fmt.Fprint(w, b.String())
@@ -449,20 +499,30 @@ func truncateStr(s string, maxLen int) string {
 
 // MTRTUIPrinter 返回一个可直接用作 MTROnSnapshot 的回调函数，
 // 将帧渲染到 os.Stdout。
-func MTRTUIPrinter(target, domain, targetIP, version string, startTime time.Time, isPaused func() bool) func(iteration int, stats []trace.MTRHopStat) {
+func MTRTUIPrinter(target, domain, targetIP, version string, startTime time.Time,
+	srcHost, srcIP, lang string,
+	isPaused func() bool, displayMode func() int) func(iteration int, stats []trace.MTRHopStat) {
 	return func(iteration int, stats []trace.MTRHopStat) {
 		status := MTRTUIRunning
 		if isPaused != nil && isPaused() {
 			status = MTRTUIPaused
 		}
+		mode := 0
+		if displayMode != nil {
+			mode = displayMode()
+		}
 		MTRTUIRender(os.Stdout, MTRTUIHeader{
-			Target:    target,
-			StartTime: startTime,
-			Status:    status,
-			Iteration: iteration,
-			Domain:    domain,
-			TargetIP:  targetIP,
-			Version:   version,
+			Target:      target,
+			StartTime:   startTime,
+			Status:      status,
+			Iteration:   iteration,
+			Domain:      domain,
+			TargetIP:    targetIP,
+			Version:     version,
+			SrcHost:     srcHost,
+			SrcIP:       srcIP,
+			Lang:        lang,
+			DisplayMode: mode,
 		}, stats)
 	}
 }

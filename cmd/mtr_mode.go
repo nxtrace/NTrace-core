@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"os/signal"
 	"syscall"
@@ -70,6 +71,24 @@ func runMTRMode(method trace.Method, conf trace.Config, intervalMs int, maxRound
 	startTime := time.Now()
 	target := conf.DstIP.String()
 
+	// 解析源主机名和源 IP
+	srcHost, _ := os.Hostname()
+	srcIP := ""
+	if conf.DstIP != nil {
+		if c, err := net.Dial("udp", net.JoinHostPort(conf.DstIP.String(), "80")); err == nil {
+			if addr, ok := c.LocalAddr().(*net.UDPAddr); ok {
+				srcIP = addr.IP.String()
+			}
+			c.Close()
+		}
+	}
+
+	// 语言：默认为 "cn"
+	lang := conf.Lang
+	if lang == "" {
+		lang = "cn"
+	}
+
 	opts := trace.MTROptions{
 		Interval:         time.Duration(intervalMs) * time.Millisecond,
 		MaxRounds:        maxRounds,
@@ -80,10 +99,11 @@ func runMTRMode(method trace.Method, conf trace.Config, intervalMs int, maxRound
 	var onSnapshot trace.MTROnSnapshot
 	if ui.IsTTY() {
 		opts.IsPaused = ui.IsPaused
-		onSnapshot = printer.MTRTUIPrinter(target, domain, target, config.Version, startTime, ui.IsPaused)
+		onSnapshot = printer.MTRTUIPrinter(target, domain, target, config.Version, startTime,
+			srcHost, srcIP, lang, ui.IsPaused, ui.CurrentDisplayMode)
 	} else {
 		onSnapshot = func(iteration int, stats []trace.MTRHopStat) {
-			printer.MTRTablePrinter(stats, iteration)
+			printer.MTRTablePrinter(stats, iteration, ui.CurrentDisplayMode(), lang)
 		}
 	}
 

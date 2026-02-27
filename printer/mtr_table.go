@@ -17,7 +17,7 @@ import (
 
 // MTRTablePrinter 将 MTR 快照渲染为经典 MTR 风格表格。
 // 每次调用都会先清屏再重绘。
-func MTRTablePrinter(stats []trace.MTRHopStat, iteration int) {
+func MTRTablePrinter(stats []trace.MTRHopStat, iteration int, mode int, lang string) {
 	// 清屏并移动到左上角
 	fmt.Print("\033[H\033[2J")
 
@@ -35,7 +35,7 @@ func MTRTablePrinter(stats []trace.MTRHopStat, iteration int) {
 		}
 		prevTTL = s.TTL
 
-		host := formatMTRHost(s)
+		host := formatMTRHostWithMPLS(s, mode, lang)
 		tbl.AddRow(
 			hopStr,
 			formatLoss(s.Loss),
@@ -54,7 +54,8 @@ func MTRTablePrinter(stats []trace.MTRHopStat, iteration int) {
 }
 
 // MTRRenderTable 仅返回格式化后的行数据（用于测试/非终端场景）。
-func MTRRenderTable(stats []trace.MTRHopStat) []MTRRow {
+// mode / lang 控制 Host 列内容；传 -1 / "" 等效于 HostModeFull + "en"（向后兼容）。
+func MTRRenderTable(stats []trace.MTRHopStat, mode int, lang string) []MTRRow {
 	prevTTL := 0
 	rows := make([]MTRRow, 0, len(stats))
 	for _, s := range stats {
@@ -73,7 +74,7 @@ func MTRRenderTable(stats []trace.MTRHopStat) []MTRRow {
 			Best:  formatMs(s.Best),
 			Wrst:  formatMs(s.Wrst),
 			StDev: formatMs(s.StDev),
-			Host:  formatMTRHost(s),
+			Host:  formatMTRHostWithMPLS(s, mode, lang),
 		})
 	}
 	return rows
@@ -106,40 +107,144 @@ func formatMs(ms float64) string {
 	return fmt.Sprintf("%.2f", ms)
 }
 
-// formatMTRHost 构建 Host 列内容：IP/hostname + 简要 Geo + MPLS 标签。
-func formatMTRHost(s trace.MTRHopStat) string {
-	if s.IP == "" && s.Host == "" {
-		return "???"
+// ---------------------------------------------------------------------------
+// 显示模式常量
+// ---------------------------------------------------------------------------
+
+const (
+	HostModeASN   = 0 // ASN + PTR/IP（默认）
+	HostModeCity  = 1 // + 城市/省份/国家
+	HostModeOwner = 2 // + 运营商
+	HostModeFull  = 3 // + 完整地址 + 运营商
+)
+
+// ---------------------------------------------------------------------------
+// Host 列格式化（多模式 + 语言感知）
+// ---------------------------------------------------------------------------
+
+// formatMTRHostBase 构建基础 host 标识：优先 PTR，无 PTR 时回退 IP。
+//
+//	有 PTR → PTR
+//	无 PTR → IP
+//	都无   → "???"
+func formatMTRHostBase(s trace.MTRHopStat) string {
+	if s.Host != "" {
+		return s.Host
+	}
+	if s.IP != "" {
+		return s.IP
+	}
+	return "???"
+}
+
+// geoField 根据语言选择中/英字段。
+// lang == "en" 优先英文，否则优先中文。
+func geoField(cn, en, lang string) string {
+	if lang == "en" {
+		if en != "" {
+			return en
+		}
+		return cn
+	}
+	// 默认（含 "cn"）优先中文
+	if cn != "" {
+		return cn
+	}
+	return en
+}
+
+// formatMTRHostByMode 按显示模式构建 Host 列（不含 MPLS）。
+//
+//	HostModeASN   (0): ASN + PTR/IP
+//	HostModeCity  (1): + 城市/省份/国家
+//	HostModeOwner (2): + 运营商
+//	HostModeFull  (3): + 完整地址 + 运营商
+func formatMTRHostByMode(s trace.MTRHopStat, mode int, lang string) string {
+	base := formatMTRHostBase(s)
+	if s.Geo == nil {
+		return base
 	}
 
-	var parts []string
+	var segs []string
 
-	// 主标识：hostname (IP) 或仅 IP
-	if s.Host != "" && s.IP != "" {
-		parts = append(parts, fmt.Sprintf("%s (%s)", s.Host, s.IP))
-	} else if s.Host != "" {
-		parts = append(parts, s.Host)
-	} else {
-		parts = append(parts, s.IP)
+	// ASN 在所有模式下都展示
+	if s.Geo.Asnumber != "" {
+		segs = append(segs, "AS"+s.Geo.Asnumber)
 	}
 
-	// 简要 Geo 信息
-	if s.Geo != nil {
-		geo := formatMTRGeoData(s.Geo)
-		if geo != "" {
-			parts = append(parts, geo)
+	switch mode {
+	case HostModeASN:
+		// 仅 ASN，无额外 geo
+	case HostModeCity:
+		// 单级回退链：city -> prov -> country，取最具体的一个
+		city := geoField(s.Geo.City, s.Geo.CityEn, lang)
+		prov := geoField(s.Geo.Prov, s.Geo.ProvEn, lang)
+		country := geoField(s.Geo.Country, s.Geo.CountryEn, lang)
+		if city != "" {
+			segs = append(segs, city)
+		} else if prov != "" {
+			segs = append(segs, prov)
+		} else if country != "" {
+			segs = append(segs, country)
+		}
+	case HostModeOwner:
+		owner := s.Geo.Owner
+		if owner == "" {
+			owner = s.Geo.Isp
+		}
+		if owner != "" {
+			segs = append(segs, owner)
+		}
+	default: // HostModeFull
+		country := geoField(s.Geo.Country, s.Geo.CountryEn, lang)
+		prov := geoField(s.Geo.Prov, s.Geo.ProvEn, lang)
+		city := geoField(s.Geo.City, s.Geo.CityEn, lang)
+		if country != "" {
+			segs = append(segs, country)
+		}
+		if prov != "" && prov != country {
+			segs = append(segs, prov)
+		}
+		if city != "" && city != prov {
+			segs = append(segs, city)
+		}
+		owner := s.Geo.Owner
+		if owner == "" {
+			owner = s.Geo.Isp
+		}
+		if owner != "" {
+			segs = append(segs, owner)
 		}
 	}
 
-	// MPLS 标签（extractMPLS 已产出 [MPLS: Lbl ...] 格式，直接拼接）
-	if len(s.MPLS) > 0 {
-		parts = append(parts, strings.Join(s.MPLS, " "))
+	geo := strings.Join(segs, ", ")
+	if geo == "" {
+		return base
 	}
-
-	return strings.Join(parts, " ")
+	return base + " " + geo
 }
 
-// formatMTRGeoData 返回简短 geo 描述，例如 "AS13335, US" 或 "AS4134, China, Beijing"。
+// formatMTRHostWithMPLS 构建 Host 列完整内容（含内联 MPLS），供表格打印器使用。
+func formatMTRHostWithMPLS(s trace.MTRHopStat, mode int, lang string) string {
+	if mode < 0 {
+		mode = HostModeFull
+	}
+	if lang == "" {
+		lang = "en"
+	}
+	host := formatMTRHostByMode(s, mode, lang)
+	if len(s.MPLS) > 0 {
+		host += " " + strings.Join(s.MPLS, " ")
+	}
+	return host
+}
+
+// formatMTRHost 向后兼容别名（HostModeFull + "en" + 内联 MPLS）。
+func formatMTRHost(s trace.MTRHopStat) string {
+	return formatMTRHostWithMPLS(s, HostModeFull, "en")
+}
+
+// formatMTRGeoData 返回简短 geo 描述（向后兼容，等效于英文 HostModeFull geo 部分）。
 func formatMTRGeoData(data *ipgeo.IPGeoData) string {
 	if data == nil {
 		return ""
@@ -150,7 +255,6 @@ func formatMTRGeoData(data *ipgeo.IPGeoData) string {
 		segs = append(segs, "AS"+data.Asnumber)
 	}
 
-	// 使用英文字段
 	country := data.CountryEn
 	if country == "" {
 		country = data.Country

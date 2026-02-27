@@ -15,11 +15,12 @@ import (
 
 // mtrUI 管理终端交互状态：备份屏幕、raw mode、按键处理。
 type mtrUI struct {
-	isTTY      bool
-	oldState   *term.State // raw mode 之前的终端状态
-	paused     int32       // 0=running, 1=paused（atomic）
-	restartReq int32       // 1=请求重置统计（atomic）
-	cancel     context.CancelFunc
+	isTTY       bool
+	oldState    *term.State // raw mode 之前的终端状态
+	paused      int32       // 0=running, 1=paused（atomic）
+	restartReq  int32       // 1=请求重置统计（atomic）
+	displayMode int32       // 显示模式 0-3（atomic）
+	cancel      context.CancelFunc
 }
 
 // newMTRUI 创建 TUI 控制器。cancel 是用于退出 MTR 的 context cancel 函数。
@@ -49,6 +50,22 @@ func CheckTTY(fds ...int) bool {
 // IsPaused 返回当前是否处于暂停状态（供 MTROptions.IsPaused 使用）。
 func (u *mtrUI) IsPaused() bool {
 	return atomic.LoadInt32(&u.paused) == 1
+}
+
+// CycleDisplayMode 循环切换显示模式 (0 → 1 → 2 → 3 → 0)。
+func (u *mtrUI) CycleDisplayMode() {
+	for {
+		old := atomic.LoadInt32(&u.displayMode)
+		next := (old + 1) % 4
+		if atomic.CompareAndSwapInt32(&u.displayMode, old, next) {
+			return
+		}
+	}
+}
+
+// CurrentDisplayMode 返回当前显示模式 (0-3)。
+func (u *mtrUI) CurrentDisplayMode() int {
+	return int(atomic.LoadInt32(&u.displayMode))
 }
 
 // Enter 进入交互模式：切换到备用屏幕缓冲区、隐藏光标、开启 raw mode。
@@ -119,6 +136,8 @@ func (u *mtrUI) ReadKeysLoop(ctx context.Context) {
 			atomic.StoreInt32(&u.paused, 0)
 		case 'r', 'R':
 			atomic.StoreInt32(&u.restartReq, 1)
+		case 'y', 'Y':
+			u.CycleDisplayMode()
 		}
 	}
 }
@@ -141,6 +160,8 @@ func ParseMTRKey(b byte) string {
 		return "resume"
 	case 'r', 'R':
 		return "restart"
+	case 'y', 'Y':
+		return "display_mode"
 	default:
 		return ""
 	}
