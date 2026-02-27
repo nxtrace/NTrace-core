@@ -85,6 +85,28 @@ func (u *mtrUI) CurrentNameMode() int {
 	return int(atomic.LoadInt32(&u.nameMode))
 }
 
+// ---------------------------------------------------------------------------
+// 终端模式关闭序列（幂等）
+// ---------------------------------------------------------------------------
+
+// disableTerminalInputModes 向 stdout 写入显式关闭序列，
+// 确保鼠标事件、焦点事件、bracketed paste 等不会污染 MTR 输入。
+// 在 Enter() 和 Leave() 中均调用，实现幂等防御。
+func disableTerminalInputModes() {
+	seqs := []string{
+		"\033[?1000l", // 关闭 X10 mouse
+		"\033[?1002l", // 关闭 button-event mouse
+		"\033[?1003l", // 关闭 any-event mouse
+		"\033[?1006l", // 关闭 SGR extended mouse
+		"\033[?1015l", // 关闭 urxvt mouse
+		"\033[?1004l", // 关闭 focus in/out
+		"\033[?2004l", // 关闭 bracketed paste
+	}
+	for _, s := range seqs {
+		os.Stdout.WriteString(s)
+	}
+}
+
 // Enter 进入交互模式：切换到备用屏幕缓冲区、隐藏光标、开启 raw mode。
 // 非 TTY 时为 no-op。
 func (u *mtrUI) Enter() {
@@ -95,6 +117,8 @@ func (u *mtrUI) Enter() {
 	os.Stdout.WriteString("\033[?1049h")
 	// 隐藏光标
 	os.Stdout.WriteString("\033[?25l")
+	// 防御：关闭可能被外部残留的鼠标/焦点/paste 模式
+	disableTerminalInputModes()
 	// raw mode
 	if oldState, err := term.MakeRaw(int(os.Stdin.Fd())); err == nil {
 		u.oldState = oldState
@@ -107,6 +131,8 @@ func (u *mtrUI) Leave() {
 	if !u.isTTY {
 		return
 	}
+	// 防御：确保退出前关闭所有扩展输入模式
+	disableTerminalInputModes()
 	// 恢复终端
 	if u.oldState != nil {
 		_ = term.Restore(int(os.Stdin.Fd()), u.oldState)
@@ -118,18 +144,170 @@ func (u *mtrUI) Leave() {
 	os.Stdout.WriteString("\033[?1049l")
 }
 
+// ---------------------------------------------------------------------------
+// 输入解析器：字节流状态机
+// ---------------------------------------------------------------------------
+
+// mtrInputAction 表示输入解析器解析出的动作。
+type mtrInputAction int
+
+const (
+	mtrActionNone        mtrInputAction = iota // 无动作（序列被吞掉或 buffer 不足）
+	mtrActionQuit                              // q / Q / Ctrl-C
+	mtrActionPause                             // p
+	mtrActionResume                            // 空格
+	mtrActionRestart                           // r
+	mtrActionDisplayMode                       // y
+	mtrActionNameToggle                        // n
+)
+
+// mtrInputParser 是一个字节级状态机，能区分普通按键与
+// CSI/SS3/OSC/鼠标/焦点等转义序列，对后者整体吞掉。
+type mtrInputParser struct {
+	state mtrParserState
+	csiN  int // CSI 体内已读字节数（用于限制吞掉长度）
+}
+
+type mtrParserState int
+
+const (
+	mtrStateGround   mtrParserState = iota // 等待新输入
+	mtrStateEsc                            // 刚收到 ESC (0x1B)
+	mtrStateCSI                            // ESC [  ——  CSI 序列体
+	mtrStateSS3                            // ESC O  ——  SS3 序列体（1 字节负载）
+	mtrStateOSC                            // ESC ]  ——  OSC 序列体（到 BEL/ST 结束）
+	mtrStateX10Mouse                       // ESC [ M  —— 3 字节负载
+	mtrStateSGRMouse                       // ESC [ <  —— 到 M/m 结束
+)
+
+// mtrParserMaxCSI 限制 CSI 序列体最大长度，防止畸形输入卡死解析器。
+const mtrParserMaxCSI = 64
+
+// Feed 向解析器喂入一个字节，返回识别出的动作。
+// 正常按键立即返回动作；转义序列在完整吞掉前返回 mtrActionNone。
+func (p *mtrInputParser) Feed(b byte) mtrInputAction {
+	switch p.state {
+	case mtrStateGround:
+		if b == 0x1B { // ESC
+			p.state = mtrStateEsc
+			return mtrActionNone
+		}
+		return mapKeyToAction(b)
+
+	case mtrStateEsc:
+		switch b {
+		case '[':
+			p.state = mtrStateCSI
+			p.csiN = 0
+			return mtrActionNone
+		case 'O':
+			p.state = mtrStateSS3
+			return mtrActionNone
+		case ']':
+			p.state = mtrStateOSC
+			return mtrActionNone
+		default:
+			// ESC + 非序列头 → 忽略两个字节，回到 ground
+			p.state = mtrStateGround
+			return mtrActionNone
+		}
+
+	case mtrStateCSI:
+		p.csiN++
+		switch {
+		case b == 'M': // X10 mouse: ESC [ M Cb Cx Cy
+			p.state = mtrStateX10Mouse
+			p.csiN = 0
+			return mtrActionNone
+		case b == '<': // SGR mouse: ESC [ < params M/m
+			p.state = mtrStateSGRMouse
+			return mtrActionNone
+		case b == 'I' || b == 'O': // Focus in/out: ESC [ I / ESC [ O
+			p.state = mtrStateGround
+			return mtrActionNone
+		case b >= 0x40 && b <= 0x7E: // CSI 终止符
+			p.state = mtrStateGround
+			return mtrActionNone
+		case p.csiN > mtrParserMaxCSI: // 安全限制
+			p.state = mtrStateGround
+			return mtrActionNone
+		default: // CSI 参数/中间字节，继续吞
+			return mtrActionNone
+		}
+
+	case mtrStateSS3:
+		// SS3 序列只有 1 字节最终字符
+		p.state = mtrStateGround
+		return mtrActionNone
+
+	case mtrStateOSC:
+		// OSC 到 BEL (0x07) 或 ST (ESC \) 结束
+		if b == 0x07 {
+			p.state = mtrStateGround
+		} else if b == 0x1B {
+			// 可能是 ST 的 ESC 前缀；简化处理：回到 mtrStateEsc
+			p.state = mtrStateEsc
+		}
+		return mtrActionNone
+
+	case mtrStateX10Mouse:
+		p.csiN++
+		if p.csiN >= 3 { // 吃完 Cb Cx Cy 3 字节
+			p.state = mtrStateGround
+		}
+		return mtrActionNone
+
+	case mtrStateSGRMouse:
+		// SGR mouse: 数字、分号、最终 M 或 m
+		if b == 'M' || b == 'm' {
+			p.state = mtrStateGround
+		}
+		return mtrActionNone
+
+	default:
+		p.state = mtrStateGround
+		return mtrActionNone
+	}
+}
+
+// mapKeyToAction 将普通单字节映射为动作。
+func mapKeyToAction(b byte) mtrInputAction {
+	switch b {
+	case 'q', 'Q', 0x03: // q / Q / Ctrl-C
+		return mtrActionQuit
+	case 'p', 'P':
+		return mtrActionPause
+	case ' ':
+		return mtrActionResume
+	case 'r', 'R':
+		return mtrActionRestart
+	case 'y', 'Y':
+		return mtrActionDisplayMode
+	case 'n', 'N':
+		return mtrActionNameToggle
+	default:
+		return mtrActionNone
+	}
+}
+
 // ReadKeysLoop 在独立 goroutine 中读按键：
 //
 //	q / Q → 退出（调用 cancel）
 //	p     → 暂停
 //	空格  → 恢复
+//	r     → 重置统计
+//	y     → 切换显示模式
+//	n     → 切换 Host 显示
 //
+// 使用 mtrInputParser 字节流状态机解析输入，
+// 自动吞掉 CSI/SS3/OSC/鼠标/焦点等转义序列。
 // 当 ctx 结束或 stdin 关闭时自动退出。非 TTY 时立即返回。
 func (u *mtrUI) ReadKeysLoop(ctx context.Context) {
 	if !u.isTTY {
 		return
 	}
-	buf := make([]byte, 1)
+	var parser mtrInputParser
+	buf := make([]byte, 64) // 批量读取，减少 syscall
 	for {
 		select {
 		case <-ctx.Done():
@@ -143,20 +321,23 @@ func (u *mtrUI) ReadKeysLoop(ctx context.Context) {
 			}
 			return
 		}
-		switch buf[0] {
-		case 'q', 'Q', 0x03: // q / Q / Ctrl-C
-			u.cancel()
-			return
-		case 'p', 'P':
-			atomic.StoreInt32(&u.paused, 1)
-		case ' ':
-			atomic.StoreInt32(&u.paused, 0)
-		case 'r', 'R':
-			atomic.StoreInt32(&u.restartReq, 1)
-		case 'y', 'Y':
-			u.CycleDisplayMode()
-		case 'n', 'N':
-			u.ToggleNameMode()
+		for i := 0; i < n; i++ {
+			action := parser.Feed(buf[i])
+			switch action {
+			case mtrActionQuit:
+				u.cancel()
+				return
+			case mtrActionPause:
+				atomic.StoreInt32(&u.paused, 1)
+			case mtrActionResume:
+				atomic.StoreInt32(&u.paused, 0)
+			case mtrActionRestart:
+				atomic.StoreInt32(&u.restartReq, 1)
+			case mtrActionDisplayMode:
+				u.CycleDisplayMode()
+			case mtrActionNameToggle:
+				u.ToggleNameMode()
+			}
 		}
 	}
 }

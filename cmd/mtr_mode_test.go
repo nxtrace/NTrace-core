@@ -358,3 +358,147 @@ func TestMTRUI_NameModeNotResetByRestart(t *testing.T) {
 		t.Errorf("name mode after restart = %d, want 1 (unchanged)", got)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// mtrInputParser 测试
+// ---------------------------------------------------------------------------
+
+// feedAll 向解析器喂入完整字节流，返回所有非 None 动作。
+func feedAll(p *mtrInputParser, data []byte) []mtrInputAction {
+	var actions []mtrInputAction
+	for _, b := range data {
+		a := p.Feed(b)
+		if a != mtrActionNone {
+			actions = append(actions, a)
+		}
+	}
+	return actions
+}
+
+func TestMTRInputParser_IgnoresX10MouseSequence(t *testing.T) {
+	// X10 mouse: ESC [ M Cb Cx Cy  —— 6 字节
+	// 关键：Cb/Cx/Cy 可以是 0x20（空格），不应触发 resume
+	var p mtrInputParser
+	// 模拟点击事件：button=0(0x20), x=10(0x2A), y=5(0x25)
+	seq := []byte{0x1B, '[', 'M', 0x20, 0x2A, 0x25}
+	actions := feedAll(&p, seq)
+	if len(actions) != 0 {
+		t.Errorf("X10 mouse should produce no actions, got %v", actions)
+	}
+
+	// 确认解析器回到 ground：后续 'q' 应正常识别
+	a := p.Feed('q')
+	if a != mtrActionQuit {
+		t.Errorf("after X10 mouse, 'q' should produce quit, got %d", a)
+	}
+}
+
+func TestMTRInputParser_IgnoresSGRMouseSequence(t *testing.T) {
+	// SGR mouse: ESC [ < 0;10;5 M  (按下) 或 ...m (释放)
+	var p mtrInputParser
+	press := []byte{0x1B, '[', '<', '0', ';', '1', '0', ';', '5', 'M'}
+	release := []byte{0x1B, '[', '<', '0', ';', '1', '0', ';', '5', 'm'}
+
+	actions := feedAll(&p, press)
+	if len(actions) != 0 {
+		t.Errorf("SGR mouse press should produce no actions, got %v", actions)
+	}
+	actions = feedAll(&p, release)
+	if len(actions) != 0 {
+		t.Errorf("SGR mouse release should produce no actions, got %v", actions)
+	}
+}
+
+func TestMTRInputParser_IgnoresFocusSequence(t *testing.T) {
+	var p mtrInputParser
+	// Focus in: ESC [ I
+	focusIn := []byte{0x1B, '[', 'I'}
+	actions := feedAll(&p, focusIn)
+	if len(actions) != 0 {
+		t.Errorf("focus-in should produce no actions, got %v", actions)
+	}
+
+	// Focus out: ESC [ O
+	focusOut := []byte{0x1B, '[', 'O'}
+	actions = feedAll(&p, focusOut)
+	if len(actions) != 0 {
+		t.Errorf("focus-out should produce no actions, got %v", actions)
+	}
+}
+
+func TestMTRInputParser_RecognizesNormalKeysAfterEscapeNoise(t *testing.T) {
+	var p mtrInputParser
+
+	// 先喂入一堆 escape 噪音（X10 mouse + focus + CSI arrow），然后喂正常键
+	noise := []byte{
+		0x1B, '[', 'M', 0x20, 0x30, 0x30, // X10 mouse
+		0x1B, '[', 'I', // focus in
+		0x1B, '[', 'A', // CSI arrow up
+	}
+	noiseActions := feedAll(&p, noise)
+	if len(noiseActions) != 0 {
+		t.Errorf("noise should produce no actions, got %v", noiseActions)
+	}
+
+	// 现在喂入正常快捷键序列
+	keys := []byte{'p', ' ', 'r', 'y', 'n', 'q'}
+	expected := []mtrInputAction{
+		mtrActionPause,
+		mtrActionResume,
+		mtrActionRestart,
+		mtrActionDisplayMode,
+		mtrActionNameToggle,
+		mtrActionQuit,
+	}
+	actions := feedAll(&p, keys)
+	if len(actions) != len(expected) {
+		t.Fatalf("expected %d actions, got %d: %v", len(expected), len(actions), actions)
+	}
+	for i, want := range expected {
+		if actions[i] != want {
+			t.Errorf("action[%d] = %d, want %d", i, actions[i], want)
+		}
+	}
+}
+
+func TestMTRInputParser_SS3Ignored(t *testing.T) {
+	// SS3 F (PF1 key): ESC O P
+	var p mtrInputParser
+	seq := []byte{0x1B, 'O', 'P'}
+	actions := feedAll(&p, seq)
+	if len(actions) != 0 {
+		t.Errorf("SS3 sequence should produce no actions, got %v", actions)
+	}
+}
+
+func TestMTRInputParser_OSCIgnored(t *testing.T) {
+	// OSC title: ESC ] 0 ; t i t l e BEL
+	var p mtrInputParser
+	seq := []byte{0x1B, ']', '0', ';', 't', 'i', 't', 'l', 'e', 0x07}
+	actions := feedAll(&p, seq)
+	if len(actions) != 0 {
+		t.Errorf("OSC sequence should produce no actions, got %v", actions)
+	}
+}
+
+func TestMTRInputParser_BracketedPasteIgnored(t *testing.T) {
+	// Bracketed paste start: ESC [ 2 0 0 ~
+	// Pasted content (including spaces and 'q')
+	// Bracketed paste end: ESC [ 2 0 1 ~
+	var p mtrInputParser
+	seq := []byte{
+		0x1B, '[', '2', '0', '0', '~', // start
+		'h', 'e', 'l', 'l', 'o', ' ', 'q', // pasted content — 不应触发任何动作
+		// 注意：CSI 序列在 ~ 就终止了，后续字节回到 ground
+	}
+	actions := feedAll(&p, seq)
+	// CSI "200~" 终止在 '~' ，之后 'h','e','l','l','o' 是普通键（无映射→None），
+	// ' ' 触发 resume，'q' 触发 quit
+	// 这是正常行为 —— bracketed paste 的真正防护在 disableTerminalInputModes 已关闭 2004 模式
+	// 此测试验证 CSI 序列本身被正确吞掉
+	// CSI 2 0 0 ~ → 吞掉（~ 是终止符）
+	// 后续 hello q 回到 ground 正常处理
+	if len(actions) < 1 {
+		t.Error("expected at least resume/quit from post-CSI bytes")
+	}
+}

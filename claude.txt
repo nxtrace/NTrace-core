@@ -1,158 +1,137 @@
-# NTrace-core 项目记忆文件
-# 供 LLM 在后续会话中快速加载上下文，避免重复分析
+# NTrace-core 项目记忆文件（2026-02 快照）
+# 供 LLM 在后续会话中快速加载上下文，减少重复分析。
 
-## 项目概述
-- **名称**: NextTrace (NTrace-core)
-- **仓库**: github.com/nxtrace/NTrace-core
-- **语言**: Go (go 1.25.4+)
-- **模块路径**: github.com/nxtrace/NTrace-core
-- **功能**: 开源可视化 traceroute 工具，支持 ICMP/TCP/UDP 探测，异步 Geo IP 查询，多平台交叉编译
-- **入口**: main.go → cmd.Execute()
+## 项目概览
+- 名称：NextTrace (NTrace-core)
+- 仓库：github.com/nxtrace/NTrace-core
+- 模块：`github.com/nxtrace/NTrace-core`
+- 语言：Go（`go 1.26.0`）
+- 入口：`main.go -> cmd.Execute()`
+- 核心能力：ICMP/TCP/UDP traceroute、GeoIP/RDNS、MTR 连续探测、Web/API、多平台构建
 
-## 构建须知（重要）
-- **必须使用** `-ldflags "-checklinkname=0"` 编译，因为 `trace/internal/icmp_darwin.go` 使用了 `//go:linkname` 引用 Go 内部未导出函数 `net.internetSocket` 和 `net.newIPConn`
-- 本地构建命令: `go build -ldflags "-checklinkname=0" ./...`
-- 交叉编译脚本: `.cross_compile.sh`，其中 `LD_BASE` 已包含 `-checklinkname=0`
-- macOS 构建需要 CGO_ENABLED=1（依赖 libpcap），其他平台 CGO_ENABLED=0
-- CI: `.github/workflows/build.yml`，tag push 触发 release
-- 版本号通过 ldflags 注入到 `config/basic.go` 的 `Version`、`BuildDate`、`CommitID`
+## 构建与测试（必须遵守）
+- 由于 Darwin 下 `trace/internal/icmp_darwin.go` 使用 `//go:linkname`，构建/测试必须带：
+  - `-ldflags "-checklinkname=0"`
+- 常用命令：
+  - 构建：`go build -ldflags "-checklinkname=0" ./...`
+  - 测试：`go test -ldflags "-checklinkname=0" ./...`
+- 交叉编译脚本：`.cross_compile.sh`（`LD_BASE` 已内置 `-checklinkname=0`）
 
-## 目录结构与职责
+## 当前 CLI 语义（重点）
 
-```
-main.go              → 入口，调用 cmd.Execute()
-cmd/cmd.go           → CLI 参数解析、printer 选择、调用 trace.Traceroute()（~728 行核心调度）
-config/              → Version/BuildDate/CommitID 变量 + viper 配置
-trace/
-  trace.go           → 核心：Traceroute()、Result、Hop、异步 Geo 机制、fetchIPData()、MPLS 解析（~800 行）
-  icmp_ipv4.go       → ICMP IPv4 tracer
-  icmp_ipv6.go       → ICMP IPv6 tracer
-  tcp_ipv4.go        → TCP IPv4 tracer
-  tcp_ipv6.go        → TCP IPv6 tracer
-  udp_ipv4.go        → UDP IPv4 tracer
-  udp_ipv6.go        → UDP IPv6 tracer
-  cache.go           → 探测缓存
-  globalping.go      → GlobalPing 集成
-  quic.go            → QUIC 探测
-  temp_printer.go    → 内部简单 printer（调试用）
-  internal/          → 平台相关的底层 socket 操作（icmp/tcp/udp × darwin/unix/windows）
-                       ⚠ icmp_darwin.go 使用 go:linkname，需 -checklinkname=0
-printer/
-  basic.go           → Version/CopyRight/PrintTraceRouteNav + applyLangSetting()
-  realtime_printer.go      → 默认实时 printer（最常用路径）
-  realtime_printer_router.go → 带路由表的实时 printer
-  classic_printer.go → 经典 traceroute 风格 printer
-  easy.go            → 管道友好的原始输出 printer
-  tableprinter.go    → 表格输出 printer
-  printer.go         → HopPrinter（经典模式用）+ formatIpGeoData
-ipgeo/
-  ipgeo.go           → IPGeoData 结构体定义 + Source 类型
-  ipfilter.go        → 本地快速 IP 过滤（私有地址等）
-  leo.go/ipsb.go/... → 各 Geo 数据源实现
-  tokens.go          → API token 管理
-tracelog/log.go      → 同时输出到stdout和/tmp/trace.log的printer
-reporter/reporter.go → Route-Path 功能（实验性）
-server/              → HTTP/WebSocket 服务器模式
-  server.go          → Gin 路由注册
-  trace_handler.go   → traceroute API 处理（~588 行）
-  mtr.go             → MTR 模式
-  ws_handler.go      → WebSocket 处理
-  cache_handler.go   → 缓存 API
-  web/               → 前端静态文件
-fast_trace/          → 快速多目标探测
-tracemap/            → tracemap 可视化集成
-wshandle/            → WebSocket 客户端
-dn42/                → DN42 网络支持
-util/                → 工具函数（DNS、延迟计算、环境变量等）
-pow/                 → PoW 验证
-assets/windivert/    → Windows WinDivert 支持
-```
+### 常规 traceroute 路径
+- `--table`：现在是“最终汇总表”模式（一次探测完成后输出汇总表），不再是旧的异步 table 刷新模式。
+- `--route-path`：仍由 `reporter.New(...).Print()` 负责（与 MTR report 无关）。
 
-## 异步 Geo 查询机制（v1.5.0 后新增，核心变更）
+### MTR 相关参数
+- `-t/--mtr`：开启 MTR 交互模式（TTY 全屏 TUI）。
+- `-r/--report`：MTR 报告模式（非交互），隐式开启 MTR。
+- `-w/--wide`：宽报告模式，隐式等价 `--mtr --report --wide`。
+- 有效 MTR 开关：`effectiveMTR = mtr || report || wide`。
+- MTR 冲突参数（会直接报错退出）：`--table` `--raw` `--classic` `--json` `--output` `--route-path` `--from` `--fast-trace` `--file` `--deploy`。
 
-### 流程
-1. 各 tracer 收到 hop 响应后调用 `res.addWithGeoAsync()` 而非旧的同步 `fetchIPData()`
-2. `addWithGeoAsync` 先设 `hop.Geo = pendingGeo()`（Source="pending"），将 hop 加入 Result
-3. 启动 goroutine 异步执行 `fetchIPData()`，完成后通过 `updateHop()` 回填真实 Geo 数据
-4. `PrintFunc` 在打印前调用 `res.waitGeo(ctx, ttl)` 等待该 TTL 的 Geo 完成（有超时）
-5. `Traceroute()` 返回前通过 `geoWG.Wait()` 等待所有异步查询完成（30s 硬超时）
+### MTR 中 `-q/-i` 的新语义
+- `-q/--queries`：
+  - 在 MTR report 下表示“轮次”，默认 10（仅当用户未显式传 `-q`）。
+  - 在 MTR TUI 下表示“最大轮次”，未显式传时默认无限运行。
+- `-i/--ttl-time`：
+  - 在 MTR 下表示“轮间隔毫秒”，默认 1000ms（仅当用户未显式传 `-i`）。
 
-### 关键类型和常量
-- `PendingGeoSource = "pending"` — 导出常量，printer 中用于判断是否跳过
-- `timeoutGeoSource = "timeout"` — 内部常量
-- `pendingGeo()` → 占位 IPGeoData
-- `timeoutGeo()` → 超时回退（Country="网络故障"）
-- `geoWG sync.WaitGroup` — 追踪所有异步 Geo goroutine
-- `geoWait time.Duration` — 每个 TTL 的等待预算
+## MTR 运行链路（重要文件）
+- 入口与调度：`cmd/mtr_mode.go`
+  - `runMTRTUI(...)`
+  - `runMTRReport(...)`
+- 交互控制：`cmd/mtr_ui.go`
+  - alternate screen + raw mode
+  - 输入状态机解析（吞掉 CSI/SS3/OSC/鼠标/焦点等序列）
+  - Enter/Leave 显式关闭输入扩展模式：1000/1002/1003/1006/1015/1004/2004
+- 核心探测循环：`trace/mtr_runner.go`
+  - `RunMTR` / `mtrLoop`
+  - 支持暂停、重置、流式预览（`ProgressThrottle` 默认 200ms）
+  - ICMP 持久引擎 + TCP/UDP fallback
+- 统计聚合：`trace/mtr_stats.go`
+  - `MTRAggregator` / `MTRHopStat`
+  - unknown 合并策略：单路径时把 unknown 合并到唯一已知路径，避免同 TTL 分裂成 waiting + 真实 IP 两行
+- 输出层：
+  - TUI：`printer/mtr_tui.go`
+  - table/report：`printer/mtr_table.go`
 
-### Geo nil 安全规则
-所有 printer 在访问 `hop.Geo.*` 前必须检查 nil：
-```go
-if res.Hops[ttl][i].Geo == nil {
-    res.Hops[ttl][i].Geo = &ipgeo.IPGeoData{}
-}
-```
-已修复的文件：realtime_printer.go、realtime_printer_router.go、easy.go、tracelog/log.go、reporter/reporter.go、tableprinter.go
-未来新增 printer 也要遵守此规则。
+## MTR 交互行为（当前）
+- `q`/`Q`/`Ctrl-C`：退出
+- `p`：暂停
+- `SPACE`：恢复
+- `r`：重置统计
+- `y`：切换 Host 显示模式（ASN/City/Owner/Full）
+- `n`：切换 Host 基名显示（PTR-or-IP / IP-only）
 
-## Result.add() 审计机制
-```
-add(hop, attemptIdx, numMeasurements, maxAttempts) → (added bool, idx int)
-```
-- attemptIdx < N-1：无条件放行
-- attemptIdx >= N-1：审计（前面有有效 hop / 当前有效 / 到达 maxAttempts 三选一放行）
-- 放行后 tailDone[k]=true，后续一律忽略
-- 返回 (true, idx) 表示已加入，供 addWithGeoAsync 启动异步查询
+## MTR 显示与统计规则（当前）
+- Host 显示支持：
+  - `HostModeASN` / `HostModeCity` / `HostModeOwner` / `HostModeFull`
+  - `HostNamePTRorIP` / `HostNameIPOnly`
+- 默认语言：`cn`（`--language en` 才优先英文字段）
+- waiting 判定：`loss >= 99.95 && IP=="" && Host==""`
+  - 显示为 `(waiting for reply)`
+  - 指标列（Loss/Snt/Last/Avg/Best/Wrst/StDev）留空
+- TUI 支持：
+  - 终端宽度自适应 + CJK 宽度计算（go-runewidth）
+  - 窄屏右锚定指标区
+  - 动态 hop 前缀宽度（覆盖 3 位/4 位 TTL）
+  - MPLS 独立续行显示
 
-## Printer 选择逻辑（cmd/cmd.go）
-```
-默认         → printer.RealtimePrinter
--r/--router  → printer.RealtimePrinterWithRouter
--c/--classic → printer.ClassicPrinter
--raw         → printer.EasyPrinter
--o/--output  → tracelog.RealtimePrinter
--T/--table   → printer.TracerouteTablePrinter (AsyncPrinter)
---report     → reporter.New().Print()
-```
+## MTR 引擎关键机制（易踩坑）
+- 目的地提前停止：
+  - `knownFinalTTL`（跨轮缓存）+ `roundFinalTTL`（本轮检测）用于缩短后续轮次 TTL 上界。
+- seq 16 位回卷处理：
+  - `seqWillWrap(...)` 触发 `rotateEngine(...)`
+  - 轮换 echoID 并重建 listener，协议层隔离新旧回包。
+- 额外安全网：
+  - onICMP 中有 RTT 合理性检查（`<=0` 或 `>timeout` 丢弃）。
+- 流式预览：
+  - 仅已发送 TTL 才会参与预览；未发送 TTL 保持 nil 槽位，避免提前计入 Snt/Loss。
 
-## 数据源（ipgeo.Source）
-- LeoMoeAPI (默认) / IP.SB / IPInfo / IPInsight / IPAPI.com / IP2Region (chunzhen) / IPInfo本地 / DN42
+## DoT 与 Geo DNS（近期大改）
+- `--dot-server` 不仅影响目标域名解析，也影响 GeoIP API / LeoMoe FastIP 的域名解析链路。
+- 关键文件：`util/dns_resolver.go`
+  - `SetGeoDNSResolver(dotServer)`
+  - `LookupHostForGeo(ctx, host)`：IP 字面量短路 -> DoT -> 失败时按配置 fallback 系统 DNS
+- `cmd/cmd.go` 在早期阶段（fast-trace / ws 初始化之前）注入 DoT 解析策略，避免早期分支绕过。
+- Geo HTTP 请求统一走 `util.NewGeoHTTPClient(...)`（`util/http_client_geo.go`）。
 
-## 测试
-- 测试文件分布在各包中，但多数测试被注释掉
-- `go test` 会因 linkname 问题失败（linker 阶段），需要：
-  `go test -ldflags "-checklinkname=0" ./包名/`
-- 或只对不依赖 trace/internal 的包单独测试
+## LeoMoe FastIP 与 MTR 首行
+- `util/latency.go`：
+  - `FastIPMetaCache` 缓存节点元数据（IP/Latency/NodeName）
+  - `SuppressFastIPOutput` 可抑制彩色横幅
+- MTR 模式在进入 TUI 前会设 `SuppressFastIPOutput=true`，避免污染主终端历史。
+- MTR 首行 `APIInfo` 由 `cmd/mtr_mode.go` 的 `buildAPIInfo(...)` 生成（仅 LeoMoeAPI 且有元数据时显示）。
 
-## 平台特殊处理
-- Darwin: CGO + libpcap，go:linkname hack
-- Windows: TCP/UDP 与 ICMP sniff 模式依赖 WinDivert（assets/windivert/）；ICMP Socket 模式可不依赖 WinDivert
-- util/pcap.go 仅在 Darwin 构建（`//go:build darwin`）
-- Linux: 支持 raw socket 和 unprivileged ICMP
-- trace/internal/ 下按平台分文件：`*_darwin.go`、`*_unix.go`、`*_windows.go`
+## `--source` / `--dev` 现状
+- `--dev` 在 `cmd/cmd.go` 先解析网卡并推导 `srcAddr`（已处理非 `*net.IPNet` 地址类型，避免 panic）。
+- MTR 标题显示源信息来自：
+  - `--source`（最高优先）
+  - `--dev` 推导
+  - UDP dial fallback
+- 相关函数：`cmd/mtr_mode.go -> resolveSrcIP(...)`
 
-## 常见陷阱
-1. 修改 printer 时必须处理 `Geo == nil` 和 `Geo.Source == PendingGeoSource`
-2. 构建必须加 `-checklinkname=0`
-3. `Result.Hops` 通过 `sync.RWMutex` 保护，异步访问需加锁
-4. `singleflight.Group`（ipGeoSF/rDNSSF）用于去重并发查询
-5. `geoCache = sync.Map{}` 全局缓存 Geo 结果
-6. `fetchIPData` 内部重试逻辑：2s→3s→4s→...→6s（上限），最多 min(numMeasurements-1, 5) 次
+## CI 与工具链（当前）
+- `go.mod`: `go 1.26.0`
+- GitHub Actions：
+  - `.github/workflows/build.yml` 使用 `setup-go@v6` + `go-version: 1.26.x`
+  - `.github/workflows/test.yml` 使用 `setup-go@v6` + `go-version: 1.26.x`
+  - test workflow 中 `GOTOOLCHAIN=go1.26.0+auto`
+  - build matrix 已移除 `windows/arm`
 
-## 最近修复记录（2026-02-10，Windows 去除 Npcap 依赖）
-1. trace/internal/icmp_windows.go: ICMP 监听从 PCAP 切换为 WinDivert sniff（`wd.FlagSniff|wd.FlagRecvOnly`）
-2. trace/internal/tcp_windows.go: TCP/ICMP 监听从 PCAP 切换为 WinDivert sniff
-3. trace/internal/udp_windows.go: UDP/ICMP 监听从 PCAP 切换为 WinDivert sniff
-4. util/pcap.go: build tag 由 `darwin || (windows && amd64)` 改为 `darwin`，Windows 构建不再引入 pcap
-5. Windows `--icmp-mode` 语义更新：`1=Socket`、`2=WinDivert`、`0=Auto`
+## 关键文件导航
+- CLI 主调度：`cmd/cmd.go`
+- MTR 参数/流程：`cmd/mtr_mode.go`
+- MTR 交互输入：`cmd/mtr_ui.go`
+- MTR 引擎：`trace/mtr_runner.go`
+- MTR 聚合：`trace/mtr_stats.go`
+- MTR TUI：`printer/mtr_tui.go`
+- MTR table/report：`printer/mtr_table.go`
+- Geo DoT 解析：`util/dns_resolver.go`
+- Geo HTTP 客户端：`util/http_client_geo.go`
+- FastIP：`util/latency.go`
 
-## 最近修复记录（2026-02-08，v1.5.0 后发版前审查）
-1. trace/trace.go: waitGeo context 取消时标记 timeout
-2. trace/trace.go: Traceroute() 30s 超时后清理所有 pending geo（markAllPendingGeoTimeout）
-3. trace/trace.go: geoWaitForMeasurements 移除不可达代码
-4. printer/realtime_printer.go: 添加 Geo nil guard
-5. printer/realtime_printer_router.go: 添加 Geo nil guard + 补充 applyLangSetting
-6. printer/easy.go: 添加 Geo nil guard
-7. tracelog/log.go: 添加 Geo nil guard
-8. reporter/reporter.go: InitialBaseData 添加 Geo != nil 检查
-9. printer/tableprinter.go: 修复 nil 检查顺序 + 移除冗余死代码
+## 仍需记住的残余风险（非阻断）
+- `MTRReportPrint` 的 waiting 指标留空目前主要通过代码路径覆盖，
+  还没有单独一条“report 渲染输出断言”来专门锁死该行为。
