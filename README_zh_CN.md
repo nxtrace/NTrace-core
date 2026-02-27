@@ -292,6 +292,38 @@ nexttrace --no-color 1.1.1.1
 export NO_COLOR=1
 ```
 
+#### `NextTrace` 支持 MTR（My Traceroute）连续探测模式
+
+```bash
+# MTR 模式：使用 ICMP（默认）连续探测，实时刷新表格
+nexttrace --mtr 1.1.1.1
+
+# MTR 模式使用 TCP SYN 探测
+nexttrace --mtr --tcp --port 443 www.bing.com
+
+# MTR 模式使用 UDP 探测
+nexttrace --mtr --udp 1.0.0.1
+
+# 设置每轮间隔（默认 1000ms）
+nexttrace --mtr --mtr-interval 500 1.1.1.1
+
+# 限制最大轮次（默认 0 = 无限，按 Ctrl-C 停止）
+nexttrace --mtr --mtr-max-rounds 10 1.1.1.1
+
+# 与其他选项组合使用
+nexttrace --mtr --tcp --max-hops 20 --first 3 --no-rdns 8.8.8.8
+```
+
+在终端（TTY）中运行时，MTR 模式使用**交互式全屏 TUI**：
+
+- **`q` / `Q`** — 退出（恢复终端，不留下输出）
+- **`p`** — 暂停探测
+- **空格**  — 恢复探测
+- 使用**备用屏幕缓冲区**，退出后恢复之前的终端历史记录。
+- 当 stdin 非 TTY（如管道输入）时，降级为简单表格刷新模式。
+
+> 注意：`--mtr` 不可与 `--table`、`--raw`、`--classic`、`--json`、`--report`、`--output`、`--route-path`、`--from`、`--fast-trace`、`--file`、`--deploy` 同时使用。
+
 #### `NextTrace`支持用户自主选择 IP 数据库（目前支持：`LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`, `IPInfoLocal`, `CHUNZHEN`)
 
 ```bash
@@ -364,6 +396,7 @@ usage: nexttrace [-h|--help] [--init] [-4|--ipv4] [-6|--ipv6] [-T|--tcp]
                  [_positionalArg_nexttrace_38 "<value>"] [--dot-server
                  (dnssb|aliyun|dnspod|google|cloudflare)] [-g|--language
                  (en|cn)] [--file "<value>"] [-C|--no-color] [--from "<value>"]
+                 [--mtr] [--mtr-interval <integer>] [--mtr-max-rounds <integer>]
 
                  An open source visual route tracking CLI tool
 
@@ -453,6 +486,12 @@ Arguments:
                                      specified location. The location field
                                      accepts continents, countries, regions,
                                      cities, ASNs, ISPs, or cloud regions.
+      --mtr                          Enable MTR (My Traceroute) continuous
+                                     probing mode
+      --mtr-interval                 Set interval between MTR rounds in
+                                     milliseconds. Default: 1000
+      --mtr-max-rounds               Set maximum MTR rounds (0 = infinite
+                                     until Ctrl-C). Default: 0
 ```
 
 ## 项目截图

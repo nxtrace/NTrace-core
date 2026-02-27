@@ -294,6 +294,38 @@ nexttrace --no-color 1.1.1.1
 export NO_COLOR=1
 ```
 
+#### `NextTrace` supports MTR (My Traceroute) continuous probing mode
+
+```bash
+# MTR mode: continuous probing with ICMP (default), refreshes table in real-time
+nexttrace --mtr 1.1.1.1
+
+# MTR mode with TCP SYN probing
+nexttrace --mtr --tcp --port 443 www.bing.com
+
+# MTR mode with UDP probing
+nexttrace --mtr --udp 1.0.0.1
+
+# Set the interval between rounds (default: 1000ms)
+nexttrace --mtr --mtr-interval 500 1.1.1.1
+
+# Limit the number of rounds (default: 0 = infinite, press Ctrl-C to stop)
+nexttrace --mtr --mtr-max-rounds 10 1.1.1.1
+
+# Combine with other options
+nexttrace --mtr --tcp --max-hops 20 --first 3 --no-rdns 8.8.8.8
+```
+
+When running in a terminal (TTY), MTR mode uses an **interactive full-screen TUI**:
+
+- **`q` / `Q`** — quit (restores terminal, no output left behind)
+- **`p`** — pause probing
+- **`SPACE`** — resume probing
+- Uses the **alternate screen buffer**, so your previous terminal history is preserved on exit.
+- When stdin is not a TTY (e.g. piped), it falls back to a simple table refresh.
+
+> Note: `--mtr` cannot be used together with `--table`, `--raw`, `--classic`, `--json`, `--report`, `--output`, `--route-path`, `--from`, `--fast-trace`, `--file`, or `--deploy`.
+
 #### `NextTrace` supports users to select their own IP API (currently supports: `LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`, `IPInfoLocal`, `CHUNZHEN`)
 
 ```bash
@@ -382,6 +414,7 @@ usage: nexttrace [-h|--help] [--init] [-4|--ipv4] [-6|--ipv6] [-T|--tcp]
                  [_positionalArg_nexttrace_38 "<value>"] [--dot-server
                  (dnssb|aliyun|dnspod|google|cloudflare)] [-g|--language
                  (en|cn)] [--file "<value>"] [-C|--no-color] [--from "<value>"]
+                 [--mtr] [--mtr-interval <integer>] [--mtr-max-rounds <integer>]
 
                  An open source visual route tracking CLI tool
 
@@ -471,6 +504,12 @@ Arguments:
                                      specified location. The location field
                                      accepts continents, countries, regions,
                                      cities, ASNs, ISPs, or cloud regions.
+      --mtr                          Enable MTR (My Traceroute) continuous
+                                     probing mode
+      --mtr-interval                 Set interval between MTR rounds in
+                                     milliseconds. Default: 1000
+      --mtr-max-rounds               Set maximum MTR rounds (0 = infinite
+                                     until Ctrl-C). Default: 0
 ```
 
 ## Project screenshot

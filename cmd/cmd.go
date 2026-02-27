@@ -212,6 +212,9 @@ func Execute() {
 	file := parser.String("", "file", &argparse.Options{Help: "Read IP Address or domain name from file"})
 	noColor := parser.Flag("C", "no-color", &argparse.Options{Help: "Disable Colorful Output"})
 	from := parser.String("", "from", &argparse.Options{Help: "Run traceroute via Globalping (https://globalping.io/network) from a specified location. The location field accepts continents, countries, regions, cities, ASNs, ISPs, or cloud regions."})
+	mtrMode := parser.Flag("", "mtr", &argparse.Options{Help: "Enable MTR (My Traceroute) continuous probing mode"})
+	mtrInterval := parser.Int("", "mtr-interval", &argparse.Options{Default: 1000, Help: "Set interval between MTR rounds in milliseconds (default: 1000)"})
+	mtrMaxRounds := parser.Int("", "mtr-max-rounds", &argparse.Options{Default: 0, Help: "Set maximum MTR rounds (0 = infinite until Ctrl-C)"})
 
 	err := parser.Parse(os.Args)
 	if err != nil {
@@ -499,7 +502,7 @@ func Execute() {
 		*packetSize = 2
 	}
 
-	if !*jsonPrint {
+	if !*jsonPrint && !*mtrMode {
 		printer.PrintTraceRouteNav(ip, domain, *dataOrigin, *maxHops, *packetSize, *srcAddr, string(m))
 	}
 
@@ -526,6 +529,37 @@ func Execute() {
 		IPGeoSource:      ipgeo.GetSource(*dataOrigin),
 		Timeout:          time.Duration(*timeout) * time.Millisecond,
 		PktSize:          *packetSize,
+	}
+
+	// --disable-mpls 需在 MTR 分支之前生效
+	if *disableMPLS {
+		util.DisableMPLS = true
+	}
+
+	// ── MTR 连续探测模式 ──
+	if *mtrMode {
+		conflictFlags := map[string]bool{
+			"table":     *tablePrint,
+			"raw":       *rawPrint,
+			"classic":   *classicPrint,
+			"json":      *jsonPrint,
+			"report":    *report,
+			"output":    *output,
+			"routePath": *routePath,
+			"from":      *from != "",
+			"fastTrace": *fast_trace,
+			"file":      *file != "",
+			"deploy":    *deploy,
+		}
+		if conflict, ok := checkMTRConflicts(conflictFlags); !ok {
+			fmt.Printf("--mtr 不能与 %s 同时使用\n", conflict)
+			os.Exit(1)
+		}
+		if *numMeasurements != 1 {
+			fmt.Println("[MTR] --queries 在 MTR 模式下无效，已重置为 1")
+		}
+		runMTRMode(m, conf, *mtrInterval, *mtrMaxRounds)
+		return
 	}
 
 	// 暂时弃用
@@ -564,10 +598,6 @@ func Execute() {
 				fmt.Println(err)
 			}
 		}
-	}
-
-	if *disableMPLS {
-		util.DisableMPLS = true
 	}
 
 	res, err := trace.Traceroute(m, conf)
