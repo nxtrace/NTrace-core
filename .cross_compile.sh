@@ -6,7 +6,7 @@ set -Eeuo pipefail
 DIST_PREFIX="nexttrace"
 DEBUG_MODE="${1:-}"                # 支持 ./script.sh debug
 TARGET_DIR="dist"
-PLATFORMS="linux/386 linux/amd64 linux/arm64 linux/mips linux/mips64 linux/mipsle linux/mips64le windows/amd64 windows/arm64 openbsd/amd64 openbsd/arm64 freebsd/amd64 freebsd/arm64"
+PLATFORMS="linux/386 linux/amd64 linux/arm64 linux/mips linux/mips64 linux/mipsle linux/mips64le linux/loong64 windows/amd64 windows/arm64 openbsd/amd64 openbsd/arm64 freebsd/amd64 freebsd/arm64"
 UPX_BIN="${UPX_BIN:-$(command -v upx 2>/dev/null || true)}"
 UPX_FLAGS="${UPX_FLAGS:--9}"
 

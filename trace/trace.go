@@ -1,6 +1,7 @@
 package trace
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -164,6 +165,21 @@ func Traceroute(method Method, config Config) (*Result, error) {
 	if err != nil && errors.Is(err, syscall.EPERM) {
 		err = fmt.Errorf("%w, please run as root", err)
 	}
+	if result != nil {
+		// 等待所有异步 Geo 查询完成，最多等 30 秒
+		done := make(chan struct{})
+		go func() {
+			result.geoWG.Wait()
+			close(done)
+		}()
+		select {
+		case <-done:
+			// 正常完成
+		case <-time.After(30 * time.Second):
+			// 超时，将所有剩余 pending geo 标记为 timeout
+			result.markAllPendingGeoTimeout()
+		}
+	}
 	return result, err
 }
 
@@ -172,6 +188,47 @@ type Result struct {
 	lock        sync.RWMutex
 	tailDone    []bool
 	TraceMapUrl string
+	geoWait     time.Duration
+	geoWG       sync.WaitGroup
+}
+
+const PendingGeoSource = "pending"
+const timeoutGeoSource = "timeout"
+
+func isPendingGeo(geo *ipgeo.IPGeoData) bool {
+	return geo != nil && geo.Source == PendingGeoSource
+}
+
+func pendingGeo() *ipgeo.IPGeoData {
+	return &ipgeo.IPGeoData{Source: PendingGeoSource}
+}
+
+func timeoutGeo() *ipgeo.IPGeoData {
+	return &ipgeo.IPGeoData{
+		Country:   "网络故障",
+		CountryEn: "Network Error",
+		Source:    timeoutGeoSource,
+	}
+}
+
+func geoWaitForMeasurements(numMeasurements int) time.Duration {
+	if numMeasurements <= 0 {
+		numMeasurements = 1
+	}
+	maxRetries := numMeasurements - 1
+	if maxRetries > 5 {
+		maxRetries = 5
+	}
+
+	total := 0
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		timeout := 2 + attempt
+		if timeout > 6 {
+			timeout = 6
+		}
+		total += timeout
+	}
+	return time.Duration(total) * time.Second
 }
 
 // 判定 Hop 是否“有效”
@@ -183,7 +240,7 @@ func isValidHop(h Hop) bool {
 // - N = numMeasurements（每个 TTL 组的最小输出条数）
 // - M = maxAttempts（每个 TTL 组的最大尝试条数）
 // 规则：对同一 TTL，attemptIdx < N-1 无条件放行（索引 i 从 0 开始）；第 N 条进行审计（已有有效 / 当次有效 / 达到最后一次尝试 任一成立即放行）；超过 N 条一律忽略
-func (s *Result) add(hop Hop, attemptIdx, numMeasurements, maxAttempts int) {
+func (s *Result) add(hop Hop, attemptIdx, numMeasurements, maxAttempts int) (bool, int) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -195,7 +252,7 @@ func (s *Result) add(hop Hop, attemptIdx, numMeasurements, maxAttempts int) {
 	case attemptIdx < n-1:
 		// attemptIdx < N-1：无条件放行
 		s.Hops[k] = append(bucket, hop)
-		return
+		return true, len(s.Hops[k]) - 1
 	case attemptIdx >= n-1:
 		// 正在决定第 N 条：审计
 		// 放行条件（三选一）：
@@ -203,11 +260,11 @@ func (s *Result) add(hop Hop, attemptIdx, numMeasurements, maxAttempts int) {
 		// (2) 当前 hop 为有效值
 		// (3) 已到最后一次尝试
 		if len(bucket) >= n {
-			return
+			return false, -1
 		}
 
 		if s.tailDone[k] {
-			return
+			return false, -1
 		}
 
 		hasValid := false
@@ -220,10 +277,16 @@ func (s *Result) add(hop Hop, attemptIdx, numMeasurements, maxAttempts int) {
 		if hasValid || isValidHop(hop) || attemptIdx >= maxAttempts-1 {
 			s.Hops[k] = append(bucket, hop) // 填满第 N 个
 			s.tailDone[k] = true
+			return true, len(s.Hops[k]) - 1
 		}
 		// 否则丢弃，等待后续更优候选（长度仍保持 N-1）
-		return
+		return false, -1
 	}
+	return false, -1
+}
+
+func (s *Result) setGeoWait(numMeasurements int) {
+	s.geoWait = geoWaitForMeasurements(numMeasurements)
 }
 
 func (s *Result) reduce(final int) {
@@ -286,6 +349,134 @@ func CanonicalHostname(s string) string {
 		// 若转换失败，保留原标签
 	}
 	return strings.Join(parts, ".")
+}
+
+func (s *Result) updateHop(ttl, idx int, updated Hop) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	k := ttl - 1
+	if k < 0 || k >= len(s.Hops) {
+		return
+	}
+	if idx < 0 || idx >= len(s.Hops[k]) {
+		return
+	}
+
+	h := &s.Hops[k][idx]
+	if updated.Hostname != "" {
+		h.Hostname = updated.Hostname
+	}
+	if updated.Geo != nil {
+		h.Geo = updated.Geo
+	}
+	if updated.Lang != "" {
+		h.Lang = updated.Lang
+	}
+}
+
+func (s *Result) waitGeo(ctx context.Context, ttlIdx int) {
+	if s.geoWait <= 0 {
+		return
+	}
+	if ttlIdx < 0 {
+		return
+	}
+
+	deadline := time.Now().Add(s.geoWait)
+	for {
+		if !s.hasPendingGeo(ttlIdx) {
+			return
+		}
+		if time.Now().After(deadline) {
+			s.markPendingGeoTimeout(ttlIdx)
+			return
+		}
+		if ctx == nil {
+			time.Sleep(20 * time.Millisecond)
+			continue
+		}
+		select {
+		case <-ctx.Done():
+			s.markPendingGeoTimeout(ttlIdx)
+			return
+		case <-time.After(20 * time.Millisecond):
+		}
+	}
+}
+
+func (s *Result) hasPendingGeo(ttlIdx int) bool {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+
+	if ttlIdx < 0 || ttlIdx >= len(s.Hops) {
+		return false
+	}
+
+	for _, hop := range s.Hops[ttlIdx] {
+		if hop.Address == nil {
+			continue
+		}
+		if isPendingGeo(hop.Geo) {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Result) markPendingGeoTimeout(ttlIdx int) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	if ttlIdx < 0 || ttlIdx >= len(s.Hops) {
+		return
+	}
+
+	for i := range s.Hops[ttlIdx] {
+		hop := &s.Hops[ttlIdx][i]
+		if hop.Address == nil || !isPendingGeo(hop.Geo) {
+			continue
+		}
+		hop.Geo = timeoutGeo()
+	}
+}
+
+func (s *Result) markAllPendingGeoTimeout() {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	for ttlIdx := range s.Hops {
+		for i := range s.Hops[ttlIdx] {
+			hop := &s.Hops[ttlIdx][i]
+			if hop.Address == nil || !isPendingGeo(hop.Geo) {
+				continue
+			}
+			hop.Geo = timeoutGeo()
+		}
+	}
+}
+
+func (s *Result) addWithGeoAsync(hop Hop, attemptIdx, numMeasurements, maxAttempts int, cfg Config) {
+	if hop.Geo == nil {
+		hop.Geo = pendingGeo()
+	} else if hop.Geo.Source == "" {
+		hop.Geo.Source = PendingGeoSource
+	}
+	if hop.Lang == "" {
+		hop.Lang = cfg.Lang
+	}
+
+	added, idx := s.add(hop, attemptIdx, numMeasurements, maxAttempts)
+	if !added {
+		return
+	}
+
+	s.geoWG.Add(1)
+	go func(ttl, idx int, h Hop) {
+		defer s.geoWG.Done()
+		_ = h.fetchIPData(cfg)
+		s.updateHop(ttl, idx, h)
+	}(hop.TTL, idx, hop)
 }
 
 func (h *Hop) fetchIPData(c Config) error {
@@ -355,10 +546,7 @@ func (h *Hop) fetchIPData(c Config) error {
 			if lastErr == nil {
 				lastErr = errors.New("ipgeo: lookup failed without specific error (DN42)")
 			}
-			h.Geo = &ipgeo.IPGeoData{
-				Asnumber: "failed to fetch geoip data",
-				Country:  "failed to fetch geoip data",
-			}
+			h.Geo = timeoutGeo()
 			return lastErr
 		}
 		return nil
@@ -366,7 +554,7 @@ func (h *Hop) fetchIPData(c Config) error {
 	// 地理信息查询：快速路径 -> 缓存 -> singleflight
 	ipGeoCh := make(chan error, 1)
 	go func() {
-		if c.IPGeoSource == nil || h.Geo != nil {
+		if c.IPGeoSource == nil || (h.Geo != nil && !isPendingGeo(h.Geo)) {
 			ipGeoCh <- nil
 			return
 		}
@@ -462,10 +650,7 @@ func (h *Hop) fetchIPData(c Config) error {
 		}
 		err := <-ipGeoCh
 		if err != nil {
-			h.Geo = &ipgeo.IPGeoData{
-				Asnumber: "failed to fetch geoip data",
-				Country:  "failed to fetch geoip data",
-			}
+			h.Geo = timeoutGeo()
 		}
 		return err
 	}
@@ -475,10 +660,7 @@ func (h *Hop) fetchIPData(c Config) error {
 		case err := <-ipGeoCh:
 			// 地理信息先完成：不再等待 PTR
 			if err != nil {
-				h.Geo = &ipgeo.IPGeoData{
-					Asnumber: "failed to fetch geoip data",
-					Country:  "failed to fetch geoip data",
-				}
+				h.Geo = timeoutGeo()
 			}
 			return err
 		case ptrs := <-rDNSCh:
@@ -488,10 +670,7 @@ func (h *Hop) fetchIPData(c Config) error {
 			// 然后等待 IPGeo 完成
 			err := <-ipGeoCh
 			if err != nil {
-				h.Geo = &ipgeo.IPGeoData{
-					Asnumber: "failed to fetch geoip data",
-					Country:  "failed to fetch geoip data",
-				}
+				h.Geo = timeoutGeo()
 			}
 			return err
 		}
@@ -499,10 +678,7 @@ func (h *Hop) fetchIPData(c Config) error {
 	// 未启动 rDNS，只需等待地理信息
 	err := <-ipGeoCh
 	if err != nil {
-		h.Geo = &ipgeo.IPGeoData{
-			Asnumber: "failed to fetch geoip data",
-			Country:  "failed to fetch geoip data",
-		}
+		h.Geo = timeoutGeo()
 	}
 	return err
 }

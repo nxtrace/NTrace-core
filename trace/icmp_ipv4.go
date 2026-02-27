@@ -74,6 +74,7 @@ func (t *ICMPTracer) PrintFunc(ctx context.Context, cancel context.CancelCauseFu
 		// 接收的时候检查一下是不是 3 跳都齐了
 		if t.ttlComp(ttl + 1) {
 			if t.RealtimePrinter != nil {
+				t.res.waitGeo(ctx, ttl)
 				t.RealtimePrinter(&t.res, ttl)
 			}
 			ttl++
@@ -192,10 +193,7 @@ func (t *ICMPTracer) addHopWithIndex(peer net.Addr, ttl, i int, rtt time.Duratio
 		RTT:     rtt,
 		MPLS:    mpls,
 	}
-
-	_ = h.fetchIPData(t.Config) // 忽略错误，继续添加结果
-
-	t.res.add(h, i, t.NumMeasurements, t.MaxAttempts)
+	t.res.addWithGeoAsync(h, i, t.NumMeasurements, t.MaxAttempts, t.Config)
 }
 
 func (t *ICMPTracer) matchWorker(ctx context.Context) {
@@ -263,6 +261,7 @@ func (t *ICMPTracer) Execute() (res *Result, err error) {
 	// 初始化 res.Hops 和 res.tailDone，并预分配到 MaxHops
 	t.res.Hops = make([][]Hop, t.MaxHops)
 	t.res.tailDone = make([]bool, t.MaxHops)
+	t.res.setGeoWait(t.NumMeasurements)
 
 	// 解析并校验用户指定的 IPv4 源地址
 	SrcAddr := net.ParseIP(t.SrcAddr).To4()
@@ -436,7 +435,7 @@ func (t *ICMPTracer) send(ctx context.Context, s *internal.ICMPSpec, ttl, i int)
 				Error:   errHopLimitTimeout,
 			}
 
-			t.res.add(h, i, t.NumMeasurements, t.MaxAttempts)
+			_, _ = t.res.add(h, i, t.NumMeasurements, t.MaxAttempts)
 			t.dropSent(seq)
 		}
 	}(seq, ttl, i)

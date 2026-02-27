@@ -99,6 +99,10 @@ func tableDataGenerator(h trace.Hop) *rowData {
 			h.Geo = &ipgeo.IPGeoData{}
 		}
 
+		if h.Geo.Owner == "" {
+			h.Geo.Owner = h.Geo.Isp
+		}
+
 		r := &rowData{
 			Hop:      fmt.Sprint(h.TTL),
 			IP:       IP,
@@ -111,19 +115,6 @@ func tableDataGenerator(h trace.Hop) *rowData {
 			Owner:    h.Geo.Owner,
 		}
 
-		if h.Geo == nil {
-			return r
-		}
-
-		if h.Geo.Owner == "" {
-			h.Geo.Owner = h.Geo.Isp
-		}
-		r.Asnumber = h.Geo.Asnumber
-		r.Country = h.Geo.CountryEn
-		r.Prov = h.Geo.ProvEn
-		r.City = h.Geo.CityEn
-		r.District = h.Geo.District
-		r.Owner = h.Geo.Owner
 		return r
 	}
 }

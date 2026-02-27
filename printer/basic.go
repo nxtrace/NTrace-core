@@ -27,7 +27,7 @@ func Version() {
 
 func CopyRight() {
 	sponsor()
-	fmt.Fprintf(color.Output, "\n%s\n%s %s\n%s %s\n%s %s, %s, %s, %s, %s\n%s %s, %s\n",
+	fmt.Fprintf(color.Output, "\n%s\n%s %s\n%s %s\n%s %s, %s, %s, %s, %s\n%s %s\n",
 		color.New(color.FgCyan, color.Bold).Sprintf("%s", "NextTrace CopyRight"),
 		color.New(color.FgWhite, color.Bold).Sprintf("%s", "Honorary Founder:"),
 		color.New(color.FgHiBlue, color.Bold).Sprintf("%s", "Leo"),
@@ -40,7 +40,6 @@ func CopyRight() {
 		color.New(color.FgHiBlue, color.Bold).Sprintf("%s", "Yunlq"),
 		color.New(color.FgHiBlue, color.Bold).Sprintf("%s", "Tso"),
 		color.New(color.FgWhite, color.Bold).Sprintf("%s", "Infra Maintainer:"),
-		color.New(color.FgHiBlue, color.Bold).Sprintf("%s", "MoeDove"),
 		color.New(color.FgHiBlue, color.Bold).Sprintf("%s", "Tso"),
 	)
 }
@@ -77,6 +76,9 @@ func PrintTraceRouteNav(ip net.IP, domain string, dataOrigin string, maxHops int
 }
 
 func applyLangSetting(h *trace.Hop) {
+	if h.Geo == nil || h.Geo.Source == trace.PendingGeoSource {
+		return
+	}
 	if len(h.Geo.Country) <= 1 {
 		// 打印 h.Geo
 		if h.Geo.Whois != "" {

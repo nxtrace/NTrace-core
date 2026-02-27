@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/nxtrace/NTrace-core/ipgeo"
 	"github.com/nxtrace/NTrace-core/trace"
 )
 
@@ -73,6 +74,10 @@ func RealtimePrinter(res *trace.Result, ttl int) {
 		}
 
 		i, _ := strconv.Atoi(v[0])
+
+		if res.Hops[ttl][i].Geo == nil {
+			res.Hops[ttl][i].Geo = &ipgeo.IPGeoData{}
+		}
 
 		if res.Hops[ttl][i].Geo.Asnumber != "" {
 			resStr += fmt.Sprintf("AS%-7s", res.Hops[ttl][i].Geo.Asnumber)

@@ -61,11 +61,11 @@ func (s *TCPSpec) resolveICMPMode() int {
 		return 1
 	}
 
-	// Auto(0) 或强制 PCAP(2) → 尝试 PCAP
-	ok, err := pcapAvailable()
+	// Auto(0) 或强制 Sniff(2) → 尝试 WinDivert
+	ok, err := winDivertAvailable()
 	if !ok {
 		if icmpMode == 2 {
-			log.Printf("PCAP mode requested, but Npcap is not available: %v; falling back to Socket mode.", err)
+			log.Printf("WinDivert sniff mode requested, but WinDivert is not available: %v; falling back to Socket mode.", err)
 		}
 		return 1
 	}
@@ -77,243 +77,249 @@ func (s *TCPSpec) ListenICMP(ctx context.Context, ready chan struct{}, onICMP fu
 	case 1:
 		s.listenICMPSock(ctx, ready, onICMP)
 	case 2:
-		s.listenICMPPcap(ctx, ready, onICMP)
+		s.listenICMPWinDivert(ctx, ready, onICMP)
 	}
 }
 
-func (s *TCPSpec) listenICMPPcap(ctx context.Context, ready chan struct{}, onICMP func(msg ReceivedMessage, finish time.Time, data []byte)) {
-	// 选择捕获设备与本地接口
-	dev, err := util.PcapDeviceByIP(s.SrcIP)
-	if err != nil {
-		return
+func (s *TCPSpec) listenICMPWinDivert(ctx context.Context, ready chan struct{}, onICMP func(msg ReceivedMessage, finish time.Time, data []byte)) {
+	// 构造 WinDivert 过滤器：入站 ICMP/ICMPv6，目标为本机 s.SrcIP
+	var filter string
+	if s.IPVersion == 4 {
+		filter = fmt.Sprintf("inbound and icmp and ip.DstAddr == %s", s.SrcIP.String())
+	} else {
+		filter = fmt.Sprintf("inbound and icmpv6 and ipv6.DstAddr == %s", s.SrcIP.String())
 	}
 
-	ipPrefix := "ip"
-	proto := "icmp"
-	if s.IPVersion == 6 {
-		ipPrefix = "ip6"
-		proto = "icmp6"
-	}
-
-	// 以“立即模式”打开 pcap，降低首包丢失概率
-	handle, err := util.OpenLiveImmediate(dev, 65535, true, 4<<20)
+	// 以嗅探模式打开 WinDivert：只复制匹配的包，不拦截
+	sniffHandle, err := wd.Open(filter, wd.LayerNetwork, 0, wd.FlagSniff|wd.FlagRecvOnly)
 	if err != nil {
 		if util.EnvDevMode {
-			panic(fmt.Errorf("(ListenICMP) pcap open failed on %s: %v", dev, err))
+			panic(fmt.Errorf("(ListenICMP) WinDivert open failed: %v (filter=%q)", err, filter))
 		}
-		log.Fatalf("(ListenICMP) pcap open failed on %s: %v", dev, err)
+		log.Fatalf("(ListenICMP) WinDivert open failed: %v (filter=%q)", err, filter)
 	}
-	defer handle.Close()
+	defer sniffHandle.Close()
 
-	// 过滤：只抓 {ip/ip6} + {icmp/icmp6}，且目标为本机 s.SrcIP
-	filter := fmt.Sprintf("%s and %s and dst host %s",
-		ipPrefix, proto, s.SrcIP.String())
+	// context 取消时关闭 handle，使阻塞的 Recv() 立即返回错误
+	go func() {
+		<-ctx.Done()
+		_ = sniffHandle.Close()
+	}()
 
-	if err := handle.SetBPFFilter(filter); err != nil {
-		if util.EnvDevMode {
-			panic(fmt.Errorf("(ListenICMP) set BPF failed: %v (filter=%q)", err, filter))
-		}
-		log.Fatalf("(ListenICMP) set BPF failed: %v (filter=%q)", err, filter)
-	}
+	_ = sniffHandle.SetParam(wd.QueueLength, 8192)
+	_ = sniffHandle.SetParam(wd.QueueTime, 4000)
 
-	src := gopacket.NewPacketSource(handle, handle.LinkType())
-	pktCh := src.Packets()
 	close(ready)
+
+	buf := make([]byte, 65535)
+	var addr wd.Address
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case pkt, ok := <-pktCh:
-			if !ok {
-				return
-			}
+		default:
+		}
 
-			// 解包
-			packet := pkt.NetworkLayer()
-			if packet == nil {
+		n, err := sniffHandle.Recv(buf, &addr)
+		if err != nil {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			continue
+		}
+
+		finish := time.Now()
+		raw := make([]byte, n)
+		copy(raw, buf[:n])
+
+		var firstLayer gopacket.Decoder
+		if s.IPVersion == 4 {
+			firstLayer = layers.LayerTypeIPv4
+		} else {
+			firstLayer = layers.LayerTypeIPv6
+		}
+		pkt := gopacket.NewPacket(raw, firstLayer, gopacket.NoCopy)
+
+		outer := raw
+
+		var peerIP net.IP
+		var data []byte
+		if s.IPVersion == 4 {
+			ip4, ok := pkt.Layer(layers.LayerTypeIPv4).(*layers.IPv4)
+			if !ok || ip4 == nil {
 				continue
 			}
-			finish := pkt.Metadata().Timestamp
+			peerIP = ip4.SrcIP
 
-			// outer = IP 头 + 负载
-			outer := make([]byte, 0, len(packet.LayerContents())+len(packet.LayerPayload()))
-			outer = append(outer, packet.LayerContents()...)
-			outer = append(outer, packet.LayerPayload()...)
-
-			var peerIP net.IP // 提取对端 IP（按族别）
-			var data []byte   // 提取 ICMP 的负载
-			if s.IPVersion == 4 {
-				// 从包中获取 IPv4 层信息
-				ip4, ok := pkt.Layer(layers.LayerTypeIPv4).(*layers.IPv4)
-				if !ok || ip4 == nil {
-					continue
-				}
-				peerIP = ip4.SrcIP
-
-				// 从包中获取 ICMPv4 层信息
-				ic4, ok := pkt.Layer(layers.LayerTypeICMPv4).(*layers.ICMPv4)
-				if !ok || ic4 == nil {
-					continue
-				}
-				data = ic4.Payload
-
-				switch ic4.TypeCode.Type() {
-				case layers.ICMPv4TypeTimeExceeded:
-				case layers.ICMPv4TypeDestinationUnreachable:
-				default:
-					//log.Println("received icmp message of unknown type", ic4.TypeCode.Type())
-					continue
-				}
-
-				if len(data) < 20 || data[0]>>4 != 4 {
-					continue
-				}
-
-				dstIP := net.IP(data[16:20])
-				if !dstIP.Equal(s.DstIP) {
-					continue
-				}
-			} else {
-				// 从包中获取 IPv6 层信息
-				ip6, ok := pkt.Layer(layers.LayerTypeIPv6).(*layers.IPv6)
-				if !ok || ip6 == nil {
-					continue
-				}
-				peerIP = ip6.SrcIP
-
-				// 从包中获取 ICMPv6 层信息
-				ic6, ok := pkt.Layer(layers.LayerTypeICMPv6).(*layers.ICMPv6)
-				if !ok || ic6 == nil {
-					continue
-				}
-				data = ic6.Payload[4:]
-
-				switch ic6.TypeCode.Type() {
-				case layers.ICMPv6TypeTimeExceeded:
-				case layers.ICMPv6TypePacketTooBig:
-				case layers.ICMPv6TypeDestinationUnreachable:
-				default:
-					//log.Println("received icmp message of unknown type", ic6.TypeCode.Type())
-					continue
-				}
-
-				if len(data) < 40 || data[0]>>4 != 6 {
-					continue
-				}
-
-				dstIP := net.IP(data[24:40])
-				if !dstIP.Equal(s.DstIP) {
-					continue
-				}
+			ic4, ok := pkt.Layer(layers.LayerTypeICMPv4).(*layers.ICMPv4)
+			if !ok || ic4 == nil {
+				continue
 			}
-			peer := &net.IPAddr{IP: peerIP}
+			data = ic4.Payload
 
-			// outer：外层 IP 报文字节；data：ICMP 引用的内层 IP 片段
-			msg := ReceivedMessage{
-				Peer: peer,
-				Msg:  outer,
+			switch ic4.TypeCode.Type() {
+			case layers.ICMPv4TypeTimeExceeded:
+			case layers.ICMPv4TypeDestinationUnreachable:
+			default:
+				continue
 			}
-			onICMP(msg, finish, data)
+
+			if len(data) < 20 || data[0]>>4 != 4 {
+				continue
+			}
+
+			dstIP := net.IP(data[16:20])
+			if !dstIP.Equal(s.DstIP) {
+				continue
+			}
+		} else {
+			ip6, ok := pkt.Layer(layers.LayerTypeIPv6).(*layers.IPv6)
+			if !ok || ip6 == nil {
+				continue
+			}
+			peerIP = ip6.SrcIP
+
+			ic6, ok := pkt.Layer(layers.LayerTypeICMPv6).(*layers.ICMPv6)
+			if !ok || ic6 == nil {
+				continue
+			}
+			data = ic6.Payload[4:]
+
+			switch ic6.TypeCode.Type() {
+			case layers.ICMPv6TypeTimeExceeded:
+			case layers.ICMPv6TypePacketTooBig:
+			case layers.ICMPv6TypeDestinationUnreachable:
+			default:
+				continue
+			}
+
+			if len(data) < 40 || data[0]>>4 != 6 {
+				continue
+			}
+
+			dstIP := net.IP(data[24:40])
+			if !dstIP.Equal(s.DstIP) {
+				continue
+			}
 		}
+		peer := &net.IPAddr{IP: peerIP}
+
+		msg := ReceivedMessage{
+			Peer: peer,
+			Msg:  outer,
+		}
+		onICMP(msg, finish, data)
 	}
 }
 
 func (s *TCPSpec) ListenTCP(ctx context.Context, ready chan struct{}, onTCP func(srcPort, seq int, peer net.Addr, finish time.Time)) {
-	// 选择捕获设备与本地接口
-	dev, err := util.PcapDeviceByIP(s.SrcIP)
-	if err != nil {
-		return
+	// 构造 WinDivert 过滤器：入站 TCP，来自目标 s.DstIP → 本机 s.SrcIP，且源端口为 s.DstPort
+	var filter string
+	if s.IPVersion == 4 {
+		filter = fmt.Sprintf(
+			"inbound and tcp and ip.SrcAddr == %s and ip.DstAddr == %s and tcp.SrcPort == %d",
+			s.DstIP.String(), s.SrcIP.String(), s.DstPort,
+		)
+	} else {
+		filter = fmt.Sprintf(
+			"inbound and tcp and ipv6.SrcAddr == %s and ipv6.DstAddr == %s and tcp.SrcPort == %d",
+			s.DstIP.String(), s.SrcIP.String(), s.DstPort,
+		)
 	}
 
-	ipPrefix := "ip"
-	if s.IPVersion == 6 {
-		ipPrefix = "ip6"
-	}
-
-	// 以“立即模式”打开 pcap，降低首包丢失概率
-	handle, err := util.OpenLiveImmediate(dev, 65535, true, 4<<20)
+	// 以嗅探模式打开 WinDivert：只复制匹配的包，不拦截
+	sniffHandle, err := wd.Open(filter, wd.LayerNetwork, 0, wd.FlagSniff|wd.FlagRecvOnly)
 	if err != nil {
 		if util.EnvDevMode {
-			panic(fmt.Errorf("(ListenTCP) pcap open failed on %s: %v", dev, err))
+			panic(fmt.Errorf("(ListenTCP) WinDivert open failed: %v (filter=%q)", err, filter))
 		}
-		log.Fatalf("(ListenTCP) pcap open failed on %s: %v", dev, err)
+		log.Fatalf("(ListenTCP) WinDivert open failed: %v (filter=%q)", err, filter)
 	}
-	defer handle.Close()
+	defer sniffHandle.Close()
 
-	// 过滤：只抓 {ip/ip6} + tcp，来自目标 s.DstIP → 本机 s.SrcIP，且源端口为 s.DstPort
-	filter := fmt.Sprintf(
-		"%s and tcp and src host %s and dst host %s and src port %d",
-		ipPrefix, s.DstIP.String(), s.SrcIP.String(), s.DstPort,
-	)
+	// context 取消时关闭 handle，使阻塞的 Recv() 立即返回错误
+	go func() {
+		<-ctx.Done()
+		_ = sniffHandle.Close()
+	}()
 
-	if err := handle.SetBPFFilter(filter); err != nil {
-		if util.EnvDevMode {
-			panic(fmt.Errorf("(ListenTCP) set BPF failed: %v (filter=%q)", err, filter))
-		}
-		log.Fatalf("(ListenTCP) set BPF failed: %v (filter=%q)", err, filter)
-	}
+	_ = sniffHandle.SetParam(wd.QueueLength, 8192)
+	_ = sniffHandle.SetParam(wd.QueueTime, 4000)
 
-	src := gopacket.NewPacketSource(handle, handle.LinkType())
-	pktCh := src.Packets()
 	close(ready)
+
+	buf := make([]byte, 65535)
+	var addr wd.Address
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case pkt, ok := <-pktCh:
-			if !ok {
-				return
-			}
-
-			// 解包
-			packet := pkt.NetworkLayer()
-			if packet == nil {
-				continue
-			}
-			finish := pkt.Metadata().Timestamp
-
-			// 从包中获取 TCP 层信息
-			tl, ok := pkt.Layer(layers.LayerTypeTCP).(*layers.TCP)
-			if !ok || tl == nil {
-				continue
-			}
-
-			if int(tl.SrcPort) != s.DstPort {
-				continue
-			}
-
-			// 依据报文类型还原原始探测 seq：1=RST+ACK => ack-1-s.PktSize；2=SYN+ACK => ack-1
-			var seq int
-			if tl.ACK && tl.RST {
-				seq = int(tl.Ack) - 1 - s.PktSize
-			} else if tl.ACK && tl.SYN {
-				seq = int(tl.Ack) - 1
-			} else {
-				continue
-			}
-
-			var peerIP net.IP // 提取对端 IP（按族别）
-			if s.IPVersion == 4 {
-				// 从包中获取 IPv4 层信息
-				ip4, ok := pkt.Layer(layers.LayerTypeIPv4).(*layers.IPv4)
-				if !ok || ip4 == nil {
-					continue
-				}
-				peerIP = ip4.SrcIP
-			} else {
-				// 从包中获取 IPv6 层信息
-				ip6, ok := pkt.Layer(layers.LayerTypeIPv6).(*layers.IPv6)
-				if !ok || ip6 == nil {
-					continue
-				}
-				peerIP = ip6.SrcIP
-			}
-			peer := &net.IPAddr{IP: peerIP}
-			srcPort := int(tl.DstPort)
-			onTCP(srcPort, seq, peer, finish)
+		default:
 		}
+
+		n, err := sniffHandle.Recv(buf, &addr)
+		if err != nil {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			continue
+		}
+
+		finish := time.Now()
+		raw := make([]byte, n)
+		copy(raw, buf[:n])
+
+		var firstLayer gopacket.Decoder
+		if s.IPVersion == 4 {
+			firstLayer = layers.LayerTypeIPv4
+		} else {
+			firstLayer = layers.LayerTypeIPv6
+		}
+		pkt := gopacket.NewPacket(raw, firstLayer, gopacket.NoCopy)
+
+		// 从包中获取 TCP 层信息
+		tl, ok := pkt.Layer(layers.LayerTypeTCP).(*layers.TCP)
+		if !ok || tl == nil {
+			continue
+		}
+
+		if int(tl.SrcPort) != s.DstPort {
+			continue
+		}
+
+		// 依据报文类型还原原始探测 seq：1=RST+ACK => ack-1-s.PktSize；2=SYN+ACK => ack-1
+		var seq int
+		if tl.ACK && tl.RST {
+			seq = int(tl.Ack) - 1 - s.PktSize
+		} else if tl.ACK && tl.SYN {
+			seq = int(tl.Ack) - 1
+		} else {
+			continue
+		}
+
+		var peerIP net.IP
+		if s.IPVersion == 4 {
+			ip4, ok := pkt.Layer(layers.LayerTypeIPv4).(*layers.IPv4)
+			if !ok || ip4 == nil {
+				continue
+			}
+			peerIP = ip4.SrcIP
+		} else {
+			ip6, ok := pkt.Layer(layers.LayerTypeIPv6).(*layers.IPv6)
+			if !ok || ip6 == nil {
+				continue
+			}
+			peerIP = ip6.SrcIP
+		}
+		peer := &net.IPAddr{IP: peerIP}
+		srcPort := int(tl.DstPort)
+		onTCP(srcPort, seq, peer, finish)
 	}
 }
 

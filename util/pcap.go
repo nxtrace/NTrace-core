@@ -1,4 +1,4 @@
-//go:build darwin || (windows && amd64)
+//go:build darwin
 
 package util
 

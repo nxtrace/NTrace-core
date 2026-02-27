@@ -8,6 +8,7 @@ import (
 
 	"github.com/fatih/color"
 
+	"github.com/nxtrace/NTrace-core/ipgeo"
 	"github.com/nxtrace/NTrace-core/trace"
 	"github.com/nxtrace/NTrace-core/util"
 )
@@ -67,6 +68,9 @@ func RealtimePrinterWithRouter(res *trace.Result, ttl int) {
 		}
 
 		i, _ := strconv.Atoi(v[0])
+		if res.Hops[ttl][i].Geo == nil {
+			res.Hops[ttl][i].Geo = &ipgeo.IPGeoData{}
+		}
 		if res.Hops[ttl][i].Geo.Asnumber != "" {
 			fmt.Fprintf(color.Output, " %s", color.New(color.FgHiGreen, color.Bold).Sprintf("AS%-6s", res.Hops[ttl][i].Geo.Asnumber))
 		} else {
@@ -85,9 +89,11 @@ func RealtimePrinterWithRouter(res *trace.Result, ttl int) {
 			fmt.Fprintf(color.Output, " %s", color.New(color.FgHiGreen, color.Bold).Sprintf("%-16s", whoisFormat[0]))
 		}
 
-		if res.Hops[ttl][i].Geo.Country == "" {
+		if res.Hops[ttl][i].Geo.Country == "" && res.Hops[ttl][i].Geo.Source != trace.PendingGeoSource {
 			res.Hops[ttl][i].Geo.Country = "LAN Address"
 		}
+
+		applyLangSetting(&res.Hops[ttl][i]) // 应用语言设置
 
 		hostname := res.Hops[ttl][i].Hostname
 		if util.EnableHidDstIP && ip == util.DstIP {

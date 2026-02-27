@@ -65,7 +65,7 @@ Document Language: [English](README.md) | 简体中文
 * Linux 
   * 一键安装脚本
     ```shell
-    curl -sL nxtrace.org/nt | bash
+    curl -sL https://nxtrace.org/nt | bash
     ```
   
   * 从 nxtrace的APT源安装
@@ -199,9 +199,9 @@ PS: 路由可视化的绘制模块为独立模块，具体代码可在 [nxtrace/
     netsh advfirewall firewall add rule name="All ICMP v6" dir=in action=allow protocol=icmpv6:any,any
     ```  
 - 对于管理员模式：  
-  **TCP/UDP mode** 需要额外安装 `npcap` 及 `WinDivert`，  
-  **ICMP mode** 若未安装 `npcap` 及 `WinDivert`，则需防火墙配置允许`ICMP/ICMPv6`。  
-  其中 `npcap` 请到官网下载并安装（[https://npcap.com/#download](https://npcap.com/#download)），`WinDivert` 可使用 `--init` 参数自动配置环境。
+  **TCP/UDP mode** 依赖 `WinDivert`。  
+  **ICMP mode** 支持 `1=Socket` 与 `2=WinDivert`（`0=Auto`）。使用 Socket 模式时，需防火墙配置允许`ICMP/ICMPv6`。  
+  `WinDivert` 可使用 `--init` 参数自动配置环境。
 
 #### `NextTrace` 现已经支持快速测试，有一次性测试回程路由需求的朋友可以使用
 
@@ -382,7 +382,7 @@ Arguments:
   -p  --port                         Set the destination port to use. With
                                      default of 80 for "tcp", 33494 for "udp"
       --icmp-mode                    Windows ONLY: Choose the method to listen
-                                     for ICMP packets (1=Socket, 2=PCAP;
+                                     for ICMP packets (1=Socket, 2=WinDivert;
                                      0=Auto)
   -q  --queries                      Set the number of latency samples to
                                      display for each hop. Default: 3

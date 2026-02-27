@@ -34,6 +34,8 @@ checkSystemArch() {
     archParam="armv7"
     elif [[ $arch == "mips" ]]; then
     archParam="mips"
+    elif [[ $arch == "loongarch64" ]]; then
+    archParam="loong64"
     fi
 }
 

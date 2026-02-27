@@ -58,7 +58,7 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
 * Linux
     * One-click installation script
       ```shell
-      curl -sL nxtrace.org/nt |bash
+      curl -sL https://nxtrace.org/nt | bash
       ```
 
     * Install nxtrace from the APT repository
@@ -195,9 +195,9 @@ The routing visualization function requires the geographical coordinates of each
     netsh advfirewall firewall add rule name="All ICMP v6" dir=in action=allow protocol=icmpv6:any,any
     ```  
 - **For Administrator Mode:**  
-  **TCP/UDP mode** requires additional installation of `npcap` and `WinDivert`.  
-  **ICMP mode** requires allowing `ICMP/ICMPv6` in the firewall if `npcap` and `WinDivert` are not installed.  
-  You can download and install `npcap` from the official website ([https://npcap.com/#download](https://npcap.com/#download)), and `WinDivert` can be automatically configured using the `--init` parameter.
+  **TCP/UDP mode** requires `WinDivert`.  
+  **ICMP mode** supports `1=Socket` and `2=WinDivert` (`0=Auto`). If running in Socket mode, the firewall must allow `ICMP/ICMPv6`.  
+  `WinDivert` can be automatically configured using the `--init` parameter.
 
 #### `NextTrace` now supports quick testing, and friends who have a one-time backhaul routing test requirement can use it
 
@@ -400,7 +400,7 @@ Arguments:
   -p  --port                         Set the destination port to use. With
                                      default of 80 for "tcp", 33494 for "udp"
       --icmp-mode                    Windows ONLY: Choose the method to listen
-                                     for ICMP packets (1=Socket, 2=PCAP;
+                                     for ICMP packets (1=Socket, 2=WinDivert;
                                      0=Auto)
   -q  --queries                      Set the number of latency samples to
                                      display for each hop. Default: 3

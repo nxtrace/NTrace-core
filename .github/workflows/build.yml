@@ -50,6 +50,7 @@ jobs:
           - { goos: windows, goarch: arm,    goarm: 7, allow_fail: true } # windows/arm 计划于 Go 1.26 移除
           - { goos: linux,   goarch: arm64 }
           - { goos: linux,   goarch: riscv64 }
+          - { goos: linux,   goarch: loong64 }
           - { goos: linux,   goarch: mips64 }
           - { goos: linux,   goarch: mips64le }
           - { goos: linux,   goarch: mipsle }
@@ -71,7 +72,7 @@ jobs:
       GOMIPS: ${{ matrix.gomips }}
     steps:
       - name: Checkout codebase
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -144,7 +145,7 @@ jobs:
           fi
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ env.ASSET_NAME }}
           path: dist/${{ env.ASSET_NAME }}
@@ -161,7 +162,7 @@ jobs:
       GOARCH: ${{ matrix.goarch }}
     steps:
       - name: Checkout codebase
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -222,7 +223,7 @@ jobs:
                       -checklinkname=0 -w -s"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ env.ASSET_NAME }}
           path: dist/${{ env.ASSET_NAME }}
@@ -234,7 +235,7 @@ jobs:
     needs: [ build-darwin ]
     steps:
       - name: Download darwin slices (flatten)
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           pattern: nexttrace_darwin_*
           merge-multiple: true
@@ -256,7 +257,7 @@ jobs:
           ls -l dist
 
       - name: Upload universal as artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: nexttrace_darwin_universal
           path: dist/nexttrace_darwin_universal
@@ -269,7 +270,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
       - name: Download all artifacts (flatten)
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           pattern: nexttrace_*
           merge-multiple: true
