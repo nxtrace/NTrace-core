@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"context"
 	"os"
+	"sync/atomic"
 	"testing"
 )
 
@@ -160,6 +162,44 @@ func TestParseMTRKey_Unknown(t *testing.T) {
 			t.Errorf("ParseMTRKey(%q) = %q, want empty", b, got)
 		}
 	}
+}
+
+// ---------------------------------------------------------------------------
+// r 键重置测试
+// ---------------------------------------------------------------------------
+
+func TestParseMTRKey_Restart(t *testing.T) {
+	for _, b := range []byte{'r', 'R'} {
+		if got := ParseMTRKey(b); got != "restart" {
+			t.Errorf("ParseMTRKey(%q) = %q, want %q", b, got, "restart")
+		}
+	}
+}
+
+func TestMTRUI_ConsumeRestartRequest(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ui := newMTRUI(cancel)
+
+	// 初始状态：无重置请求
+	if ui.ConsumeRestartRequest() {
+		t.Error("expected no restart request initially")
+	}
+
+	// 模拟按下 r 键
+	atomic.StoreInt32(&ui.restartReq, 1)
+
+	// 第一次消费应返回 true
+	if !ui.ConsumeRestartRequest() {
+		t.Error("expected restart request after setting flag")
+	}
+
+	// 第二次消费应返回 false（已被消费）
+	if ui.ConsumeRestartRequest() {
+		t.Error("expected restart request to be consumed")
+	}
+
+	_ = ctx // suppress unused
 }
 
 // ---------------------------------------------------------------------------

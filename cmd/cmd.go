@@ -558,7 +558,7 @@ func Execute() {
 		if *numMeasurements != 1 {
 			fmt.Println("[MTR] --queries 在 MTR 模式下无效，已重置为 1")
 		}
-		runMTRMode(m, conf, *mtrInterval, *mtrMaxRounds)
+		runMTRMode(m, conf, *mtrInterval, *mtrMaxRounds, domain)
 		return
 	}
 

@@ -672,3 +672,325 @@ func TestProbeRound_BeginHopExceedsMaxHops(t *testing.T) {
 		t.Errorf("seqCounter should not change, was %d now %d", seqBefore, atomic.LoadUint32(&e.seqCounter))
 	}
 }
+
+// ---------------------------------------------------------------------------
+// 重置统计（r 键）测试
+// ---------------------------------------------------------------------------
+
+// TestMTRLoop_RestartStatistics 验证 IsResetRequested 触发统计重置。
+func TestMTRLoop_RestartStatistics(t *testing.T) {
+	var round int32
+	var resetOnce int32
+
+	prober := &mockProber{
+		roundFn: func(_ context.Context) (*Result, error) {
+			n := atomic.AddInt32(&round, 1)
+			return mkResult(
+				[]Hop{mkHop(1, "1.1.1.1", time.Duration(n)*time.Millisecond)},
+			), nil
+		},
+	}
+	agg := NewMTRAggregator()
+
+	var iterations []int
+	var sntValues []int
+
+	err := mtrLoop(context.Background(), prober, Config{}, MTROptions{
+		MaxRounds: 4,
+		Interval:  time.Millisecond,
+		IsResetRequested: func() bool {
+			// 第 2 轮后触发一次重置
+			r := atomic.LoadInt32(&round)
+			if r == 2 && atomic.CompareAndSwapInt32(&resetOnce, 0, 1) {
+				return true
+			}
+			return false
+		},
+	}, agg, func(iter int, stats []MTRHopStat) {
+		iterations = append(iterations, iter)
+		if len(stats) > 0 {
+			sntValues = append(sntValues, stats[0].Snt)
+		}
+	}, false, fastBackoff)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// 重置后 iteration 从 0 重开，所以需要达到 4 轮才结束
+	// 轮次序列：round 1 → iter 1, round 2 → iter 2, [reset → iter=0],
+	//           round 3 → iter 1, round 4 → iter 2, round 5 → iter 3, round 6 → iter 4
+	// 最终必须 iteration 中出现 4
+	found := false
+	for _, v := range iterations {
+		if v == 4 {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected iteration to reach 4 after reset, got %v", iterations)
+	}
+
+	// 验证重置后 Snt 从 1 重新开始
+	sntOneCount := 0
+	for _, s := range sntValues {
+		if s == 1 {
+			sntOneCount++
+		}
+	}
+	// Snt=1 应至少出现 2 次（初始第一轮 + 重置后第一轮）
+	if sntOneCount < 2 {
+		t.Errorf("expected Snt=1 at least twice (initial + after reset), got %d occurrences in %v", sntOneCount, sntValues)
+	}
+}
+
+// TestResetClearsKnownFinalTTL 验证 resetFinalTTL 清除已知目的地 TTL 缓存。
+func TestResetClearsKnownFinalTTL(t *testing.T) {
+	e := newTestICMPEngine(2 * time.Second)
+	atomic.StoreInt32(&e.knownFinalTTL, 5)
+
+	e.resetFinalTTL()
+
+	if got := atomic.LoadInt32(&e.knownFinalTTL); got != -1 {
+		t.Errorf("expected knownFinalTTL=-1 after reset, got %d", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// 目的地停止测试
+// ---------------------------------------------------------------------------
+
+// TestOnICMP_DetectsDestination 验证 onICMP 在 peer==DstIP 时设置 roundFinalTTL。
+func TestOnICMP_DetectsDestination(t *testing.T) {
+	e := newTestICMPEngine(2 * time.Second)
+	e.config.DstIP = net.ParseIP("8.8.8.8")
+	atomic.StoreUint32(&e.roundID, 1)
+	atomic.StoreInt32(&e.roundFinalTTL, -1)
+	atomic.StoreInt32(&e.knownFinalTTL, -1)
+
+	now := time.Now()
+	seq := 42
+	e.sentAt[seq] = mtrProbeMeta{ttl: 5, start: now, roundID: 1}
+
+	peer := &net.IPAddr{IP: net.ParseIP("8.8.8.8")}
+	e.onICMP(internal.ReceivedMessage{Peer: peer}, now.Add(15*time.Millisecond), seq)
+
+	if got := atomic.LoadInt32(&e.roundFinalTTL); got != 5 {
+		t.Errorf("expected roundFinalTTL=5, got %d", got)
+	}
+}
+
+// TestOnICMP_NonDestinationDoesNotSetFinal 验证非目的地 hop 不设置 roundFinalTTL。
+func TestOnICMP_NonDestinationDoesNotSetFinal(t *testing.T) {
+	e := newTestICMPEngine(2 * time.Second)
+	e.config.DstIP = net.ParseIP("8.8.8.8")
+	atomic.StoreUint32(&e.roundID, 1)
+	atomic.StoreInt32(&e.roundFinalTTL, -1)
+
+	now := time.Now()
+	seq := 42
+	e.sentAt[seq] = mtrProbeMeta{ttl: 3, start: now, roundID: 1}
+
+	// 中间 hop，不是目的地
+	peer := &net.IPAddr{IP: net.ParseIP("10.0.0.1")}
+	e.onICMP(internal.ReceivedMessage{Peer: peer}, now.Add(10*time.Millisecond), seq)
+
+	if got := atomic.LoadInt32(&e.roundFinalTTL); got != -1 {
+		t.Errorf("expected roundFinalTTL=-1 for non-destination, got %d", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// peekPartialResult 单测
+// ---------------------------------------------------------------------------
+
+func TestPeekPartialResult_EmptyBeforeRound(t *testing.T) {
+	e := newTestICMPEngine(2 * time.Second)
+	// 未初始化 curTtlSeq → 返回 nil
+	if got := e.peekPartialResult(); got != nil {
+		t.Fatalf("expected nil before round, got %+v", got)
+	}
+}
+
+func TestPeekPartialResult_PartialReplies(t *testing.T) {
+	e := newTestICMPEngine(2 * time.Second)
+	atomic.StoreUint32(&e.roundID, 1)
+	atomic.StoreInt32(&e.roundFinalTTL, -1)
+
+	// 模拟 probeRound 已初始化 peek 状态
+	e.curBeginHop = 1
+	e.curEffectiveMax = 3
+	e.curTtlSeq = map[int]int{1: 10, 2: 11, 3: 12}
+
+	// TTL 1 已收到响应，TTL 2/3 尚未
+	e.replied[10] = &mtrProbeReply{
+		peer: &net.IPAddr{IP: net.ParseIP("10.0.0.1")},
+		rtt:  5 * time.Millisecond,
+	}
+
+	res := e.peekPartialResult()
+	if res == nil {
+		t.Fatal("expected non-nil partial result")
+	}
+	if len(res.Hops) != 3 {
+		t.Fatalf("expected 3 hop slots, got %d", len(res.Hops))
+	}
+	// TTL 1: 成功
+	if len(res.Hops[0]) != 1 || !res.Hops[0][0].Success {
+		t.Error("TTL 1 should be successful")
+	}
+	// TTL 2: 超时（尚未响应）
+	if len(res.Hops[1]) != 1 || res.Hops[1][0].Success {
+		t.Error("TTL 2 should be timeout (not replied)")
+	}
+	// TTL 3: 超时
+	if len(res.Hops[2]) != 1 || res.Hops[2][0].Success {
+		t.Error("TTL 3 should be timeout")
+	}
+}
+
+func TestPeekPartialResult_UnsentTTLsAreNil(t *testing.T) {
+	e := newTestICMPEngine(2 * time.Second)
+	atomic.StoreUint32(&e.roundID, 1)
+	atomic.StoreInt32(&e.roundFinalTTL, -1)
+
+	// 模拟发送进行到一半：TTL 1-2 已发送，TTL 3-5 尚未
+	e.curBeginHop = 1
+	e.curEffectiveMax = 5
+	e.curTtlSeq = map[int]int{1: 10, 2: 11} // 3-5 不存在
+
+	// TTL 1 已回复
+	e.replied[10] = &mtrProbeReply{
+		peer: &net.IPAddr{IP: net.ParseIP("10.0.0.1")},
+		rtt:  5 * time.Millisecond,
+	}
+
+	res := e.peekPartialResult()
+	if res == nil {
+		t.Fatal("expected non-nil partial result")
+	}
+	if len(res.Hops) != 5 {
+		t.Fatalf("expected 5 hop slots, got %d", len(res.Hops))
+	}
+
+	// TTL 1: 已发送+已回复 → 成功
+	if res.Hops[0] == nil || !res.Hops[0][0].Success {
+		t.Error("TTL 1 should be successful")
+	}
+	// TTL 2: 已发送+未回复 → 超时（非 nil）
+	if res.Hops[1] == nil || res.Hops[1][0].Success {
+		t.Error("TTL 2 should be timeout (sent but not replied)")
+	}
+	// TTL 3-5: 未发送 → nil（聚合器不计入 Snt/Loss）
+	for i := 2; i < 5; i++ {
+		if res.Hops[i] != nil {
+			t.Errorf("TTL %d should be nil (unsent), got %+v", i+1, res.Hops[i])
+		}
+	}
+}
+
+func TestPeekPartialResult_TrimsByRoundFinalTTL(t *testing.T) {
+	e := newTestICMPEngine(2 * time.Second)
+	atomic.StoreUint32(&e.roundID, 1)
+	atomic.StoreInt32(&e.roundFinalTTL, 2) // 本轮已检测到目的地在 TTL 2
+
+	e.curBeginHop = 1
+	e.curEffectiveMax = 5
+	e.curTtlSeq = map[int]int{1: 10, 2: 11, 3: 12, 4: 13, 5: 14}
+
+	res := e.peekPartialResult()
+	if res == nil {
+		t.Fatal("expected non-nil partial result")
+	}
+	// 应被裁剪到 TTL 2
+	if len(res.Hops) != 2 {
+		t.Errorf("expected 2 hop slots (trimmed by roundFinalTTL), got %d", len(res.Hops))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// mtrLoop 流式预览测试
+// ---------------------------------------------------------------------------
+
+// mockPeekerProber 同时实现 mtrProber + mtrPeeker。
+type mockPeekerProber struct {
+	mockProber
+	peekFn func() *Result
+}
+
+func (m *mockPeekerProber) peekPartialResult() *Result {
+	if m.peekFn != nil {
+		return m.peekFn()
+	}
+	return nil
+}
+
+func TestMTRLoop_StreamingProgress(t *testing.T) {
+	// probeRound 耗时 300ms，ProgressThrottle 50ms
+	// 在一轮中应产生多次预览 + 1 次最终快照
+	partialRes := mkResult(
+		[]Hop{mkHop(1, "1.1.1.1", 5*time.Millisecond)},
+	)
+
+	prober := &mockPeekerProber{
+		mockProber: mockProber{
+			roundFn: func(ctx context.Context) (*Result, error) {
+				select {
+				case <-time.After(300 * time.Millisecond):
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				}
+				return partialRes, nil
+			},
+		},
+		peekFn: func() *Result {
+			return partialRes
+		},
+	}
+	agg := NewMTRAggregator()
+
+	var snapshotCount int32
+
+	err := mtrLoop(context.Background(), prober, Config{}, MTROptions{
+		MaxRounds:        1,
+		Interval:         time.Millisecond,
+		ProgressThrottle: 50 * time.Millisecond,
+	}, agg, func(_ int, _ []MTRHopStat) {
+		atomic.AddInt32(&snapshotCount, 1)
+	}, false, fastBackoff)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// 300ms / 50ms ≈ 6 次预览 + 1 次最终 ≈ 7，至少应有 2 次
+	count := atomic.LoadInt32(&snapshotCount)
+	if count < 2 {
+		t.Errorf("expected at least 2 snapshots (preview+final), got %d", count)
+	}
+}
+
+func TestMTRLoop_NonPeekerNoStreaming(t *testing.T) {
+	// 普通 mockProber 不实现 mtrPeeker，应正常工作（无预览）
+	prober := constantResultProber(mkResult(
+		[]Hop{mkHop(1, "1.1.1.1", 5*time.Millisecond)},
+	))
+	agg := NewMTRAggregator()
+
+	var snapshotCount int32
+	err := mtrLoop(context.Background(), prober, Config{}, MTROptions{
+		MaxRounds:        3,
+		Interval:         time.Millisecond,
+		ProgressThrottle: time.Millisecond,
+	}, agg, func(_ int, _ []MTRHopStat) {
+		atomic.AddInt32(&snapshotCount, 1)
+	}, false, fastBackoff)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// 非 peeker 模式：每轮仅 1 次快照，共 3 次
+	if got := atomic.LoadInt32(&snapshotCount); got != 3 {
+		t.Errorf("expected exactly 3 snapshots, got %d", got)
+	}
+}

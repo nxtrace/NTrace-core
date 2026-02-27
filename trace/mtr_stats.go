@@ -198,6 +198,42 @@ func (agg *MTRAggregator) Update(res *Result, queries int) []MTRHopStat {
 	return agg.snapshotLocked()
 }
 
+// Reset 清空所有统计数据，用于 r 键重置。
+func (agg *MTRAggregator) Reset() {
+	agg.mu.Lock()
+	defer agg.mu.Unlock()
+	agg.stats = make(map[int]map[string]*mtrHopAccum)
+	agg.nextOrder = 0
+}
+
+// Clone 返回深拷贝的聚合器，用于流式预览（不影响原始数据）。
+func (agg *MTRAggregator) Clone() *MTRAggregator {
+	agg.mu.Lock()
+	defer agg.mu.Unlock()
+
+	c := &MTRAggregator{
+		stats:     make(map[int]map[string]*mtrHopAccum, len(agg.stats)),
+		nextOrder: agg.nextOrder,
+	}
+	for ttl, accMap := range agg.stats {
+		cMap := make(map[string]*mtrHopAccum, len(accMap))
+		for key, acc := range accMap {
+			dup := *acc // 浅拷贝
+			dup.mplsSet = make(map[string]struct{}, len(acc.mplsSet))
+			for k := range acc.mplsSet {
+				dup.mplsSet[k] = struct{}{}
+			}
+			if acc.geo != nil {
+				geoCopy := *acc.geo
+				dup.geo = &geoCopy
+			}
+			cMap[key] = &dup
+		}
+		c.stats[ttl] = cMap
+	}
+	return c
+}
+
 // Snapshot 返回当前聚合结果快照。
 func (agg *MTRAggregator) Snapshot() []MTRHopStat {
 	agg.mu.Lock()

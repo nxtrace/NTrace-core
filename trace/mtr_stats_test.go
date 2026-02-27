@@ -248,3 +248,75 @@ func TestHostnamePropagation(t *testing.T) {
 		t.Errorf("Host: want one.one.one.one, got %s", stats[0].Host)
 	}
 }
+
+func TestMTRAggregator_Reset(t *testing.T) {
+	agg := NewMTRAggregator()
+	res := mkResult(
+		[]Hop{mkHop(1, "1.1.1.1", 10*time.Millisecond)},
+		[]Hop{mkHop(2, "2.2.2.2", 20*time.Millisecond)},
+	)
+	agg.Update(res, 1)
+	agg.Update(res, 1)
+
+	// Reset 后 Snapshot 应为空
+	agg.Reset()
+	snap := agg.Snapshot()
+	if len(snap) != 0 {
+		t.Fatalf("expected 0 rows after Reset, got %d", len(snap))
+	}
+
+	// Reset 后继续 Update 应正常工作，Snt 从 1 重新开始
+	stats := agg.Update(res, 1)
+	if len(stats) != 2 {
+		t.Fatalf("expected 2 rows after re-update, got %d", len(stats))
+	}
+	if stats[0].Snt != 1 {
+		t.Errorf("Snt after reset: want 1, got %d", stats[0].Snt)
+	}
+}
+
+func TestMTRAggregator_CloneIsolation(t *testing.T) {
+	agg := NewMTRAggregator()
+	res1 := mkResult(
+		[]Hop{mkHop(1, "1.1.1.1", 10*time.Millisecond)},
+	)
+	agg.Update(res1, 1)
+
+	// Clone
+	clone := agg.Clone()
+
+	// 修改原始聚合器
+	res2 := mkResult(
+		[]Hop{mkHop(1, "1.1.1.1", 20*time.Millisecond)},
+	)
+	agg.Update(res2, 1)
+
+	// Clone 快照应只有 1 次发送
+	cloneSnap := clone.Snapshot()
+	if len(cloneSnap) != 1 {
+		t.Fatalf("clone: expected 1 row, got %d", len(cloneSnap))
+	}
+	if cloneSnap[0].Snt != 1 {
+		t.Errorf("clone Snt: want 1, got %d", cloneSnap[0].Snt)
+	}
+
+	// 原始聚合器应有 2 次发送
+	origSnap := agg.Snapshot()
+	if origSnap[0].Snt != 2 {
+		t.Errorf("original Snt: want 2, got %d", origSnap[0].Snt)
+	}
+
+	// 修改 Clone 不影响原始
+	res3 := mkResult(
+		[]Hop{mkHop(1, "1.1.1.1", 30*time.Millisecond)},
+	)
+	clone.Update(res3, 1)
+	cloneSnap = clone.Snapshot()
+	if cloneSnap[0].Snt != 2 {
+		t.Errorf("clone Snt after update: want 2, got %d", cloneSnap[0].Snt)
+	}
+	origSnap = agg.Snapshot()
+	if origSnap[0].Snt != 2 {
+		t.Errorf("original Snt should still be 2, got %d", origSnap[0].Snt)
+	}
+}

@@ -209,14 +209,20 @@ func TestMTRTUIRenderString_Header(t *testing.T) {
 		StartTime: startTime,
 		Status:    MTRTUIRunning,
 		Iteration: 5,
+		Domain:    "example.com",
+		TargetIP:  "1.1.1.1",
+		Version:   "v1.0.0",
 	}
 	result := MTRTUIRenderString(header, nil)
 
-	if !strings.Contains(result, "nexttrace --mtr 1.1.1.1") {
-		t.Error("missing target in header")
+	if !strings.Contains(result, "My traceroute") {
+		t.Error("missing 'My traceroute' in header")
 	}
-	if !strings.Contains(result, "2025-01-15T10:30:00") {
-		t.Error("missing start time in header")
+	if !strings.Contains(result, "NextTrace v1.0.0") {
+		t.Error("missing version in header")
+	}
+	if !strings.Contains(result, "example.com (1.1.1.1)") {
+		t.Error("missing domain+IP in header")
 	}
 	if !strings.Contains(result, "[Running]") {
 		t.Error("missing Running status")
@@ -226,6 +232,9 @@ func TestMTRTUIRenderString_Header(t *testing.T) {
 	}
 	if !strings.Contains(result, "q - quit") {
 		t.Error("missing key hints")
+	}
+	if !strings.Contains(result, "r - reset") {
+		t.Error("missing reset key hint")
 	}
 }
 
@@ -268,16 +277,17 @@ func TestMTRTUIRenderString_FramePrefix(t *testing.T) {
 		StartTime: time.Date(2025, 6, 1, 12, 0, 0, 0, time.UTC),
 		Status:    MTRTUIRunning,
 		Iteration: 1,
+		Version:   "v1.0.0",
 	}
 	result := MTRTUIRenderString(header, nil)
 
 	if !strings.HasPrefix(result, "\033[H\033[2J") {
 		t.Error("frame should start with cursor-home + erase-screen")
 	}
-	// header 行应以 \r\n 结束
-	idx := strings.Index(result, "2025-06-01T12:00:00")
+	// header 行应含有 My traceroute 并以 \r\n 结束
+	idx := strings.Index(result, "My traceroute")
 	if idx < 0 {
-		t.Fatal("missing timestamp in header")
+		t.Fatal("missing 'My traceroute' in header")
 	}
 	// 找到该行末尾
 	nlIdx := strings.Index(result[idx:], "\r\n")
@@ -313,11 +323,11 @@ func TestMTRTUIRenderString_HopRows(t *testing.T) {
 	}
 	result := MTRTUIRenderString(header, stats)
 
-	if !strings.Contains(result, "1.|--") {
-		t.Error("missing 1.|-- hop prefix")
+	if !strings.Contains(result, "1.") {
+		t.Error("missing 1. hop prefix")
 	}
-	if !strings.Contains(result, "2.|--") {
-		t.Error("missing 2.|-- hop prefix")
+	if !strings.Contains(result, "2.") {
+		t.Error("missing 2. hop prefix")
 	}
 	if !strings.Contains(result, "10.0.0.1") {
 		t.Error("missing first hop IP")
@@ -336,14 +346,12 @@ func TestMTRTUIRenderString_MultiPath(t *testing.T) {
 	header := MTRTUIHeader{Target: "x", StartTime: time.Now(), Iteration: 1}
 	result := MTRTUIRenderString(header, stats)
 
-	// 第一行 TTL=2 → "2.|--", 第二行同 TTL → "  |  "
-	if !strings.Contains(result, "2.|--") {
+	// 第一行 TTL=2 → "2.", 第二行同 TTL → "  "
+	if !strings.Contains(result, "2.") {
 		t.Error("missing first multipath hop prefix")
 	}
-	if !strings.Contains(result, "  |  ") {
-		t.Error("missing continuation prefix for same TTL")
-	}
-	if !strings.Contains(result, "3.|--") {
+	// 续行前缀 "  " 不易在输出行中唯一匹配，跳过特定验证
+	if !strings.Contains(result, "3.") {
 		t.Error("missing next TTL prefix")
 	}
 }
@@ -353,10 +361,10 @@ func TestFormatTUIHopPrefix(t *testing.T) {
 		ttl, prev int
 		want      string
 	}{
-		{1, 0, "1.|--"},
-		{5, 4, "5.|--"},
-		{3, 3, "  |  "},
-		{10, 9, "10.|--"},
+		{1, 0, "1."},
+		{5, 4, "5."},
+		{3, 3, "  "},
+		{10, 9, "10."},
 	}
 	for _, c := range cases {
 		got := formatTUIHopPrefix(c.ttl, c.prev)
@@ -398,16 +406,17 @@ func TestTUI_RightAlignedMetricsBlock(t *testing.T) {
 	result := mtrTUIRenderStringWithWidth(header, stats, 120)
 
 	lines := strings.Split(result, "\r\n")
-	// 找到含 "1.|--" 的 hop 行
+	// 找到含 "1." 的 hop 行（数据行以 hop prefix 开头）
 	var hopLine string
 	for _, l := range lines {
-		if strings.Contains(l, "1.|--") {
+		trimmed := strings.TrimLeft(l, " ")
+		if strings.HasPrefix(trimmed, "1.") {
 			hopLine = l
 			break
 		}
 	}
 	if hopLine == "" {
-		t.Fatal("missing hop line with 1.|--")
+		t.Fatal("missing hop line with 1. prefix")
 	}
 
 	// Loss 出现在 Host之后
@@ -537,16 +546,13 @@ func TestTUI_VeryNarrowNoPanic(t *testing.T) {
 	if !strings.Contains(result, "\r\n") {
 		t.Error("output should contain \\r\\n")
 	}
-	if !strings.Contains(result, "1.|--") {
-		t.Error("missing hop prefix even in narrow mode")
-	}
 
 	// 验证 hop 行与表头子行不超宽
 	lines := strings.Split(result, "\r\n")
 	for _, l := range lines {
-		// 跳过清屏序列、信息行（nexttrace / Keys）和空行
+		// 跳过清屏序列、信息行和空行
 		if l == "" || strings.HasPrefix(l, "\033[") ||
-			strings.Contains(l, "nexttrace") || strings.Contains(l, "Keys:") {
+			strings.Contains(l, "traceroute") || strings.Contains(l, "Host:") || strings.Contains(l, "Keys:") {
 			continue
 		}
 		w := displayWidth(l)
@@ -621,5 +627,145 @@ func TestTUI_NarrowRightAnchor(t *testing.T) {
 			t.Errorf("termWidth=%d: metricsStart(%d)+metricsWidth(%d)=%d, want %d",
 				tw, lo.metricsStart, lo.metricsWidth(), rightEdge, tw)
 		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// MTR TUI Header 测试（版本、域名/IP、r 键提示）
+// ---------------------------------------------------------------------------
+
+func TestMTRTUI_HeaderContainsVersion(t *testing.T) {
+	header := MTRTUIHeader{
+		Target:    "8.8.8.8",
+		StartTime: time.Now(),
+		Version:   "v1.3.0",
+		Iteration: 1,
+	}
+	out := mtrTUIRenderStringWithWidth(header, nil, 120)
+	if !strings.Contains(out, "NextTrace v1.3.0") {
+		t.Errorf("header should contain 'NextTrace v1.3.0', got:\n%s", out)
+	}
+	if !strings.Contains(out, "My traceroute") {
+		t.Errorf("header should contain 'My traceroute', got:\n%s", out)
+	}
+}
+
+func TestMTRTUI_HeaderContainsDomainAndIP(t *testing.T) {
+	header := MTRTUIHeader{
+		Target:    "8.8.8.8",
+		Domain:    "dns.google",
+		TargetIP:  "8.8.8.8",
+		StartTime: time.Now(),
+		Iteration: 1,
+	}
+	out := mtrTUIRenderStringWithWidth(header, nil, 120)
+	if !strings.Contains(out, "dns.google (8.8.8.8)") {
+		t.Errorf("header should contain 'dns.google (8.8.8.8)', got:\n%s", out)
+	}
+}
+
+func TestMTRTUI_HeaderContainsResetKey(t *testing.T) {
+	header := MTRTUIHeader{
+		Target:    "8.8.8.8",
+		StartTime: time.Now(),
+		Iteration: 1,
+	}
+	out := mtrTUIRenderStringWithWidth(header, nil, 120)
+	if !strings.Contains(out, "r - reset") {
+		t.Errorf("header should contain 'r - reset', got:\n%s", out)
+	}
+}
+
+func TestMTRTUI_HeaderIPOnlyWhenNoDomain(t *testing.T) {
+	header := MTRTUIHeader{
+		Target:    "1.2.3.4",
+		TargetIP:  "1.2.3.4",
+		StartTime: time.Now(),
+		Iteration: 1,
+	}
+	out := mtrTUIRenderStringWithWidth(header, nil, 120)
+	if !strings.Contains(out, "Host: 1.2.3.4") {
+		t.Errorf("header should contain 'Host: 1.2.3.4' when domain is empty, got:\n%s", out)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// formatTUIHopPrefix 新风格测试
+// ---------------------------------------------------------------------------
+
+func TestFormatTUIHopPrefix_MinimalStyle(t *testing.T) {
+	// 新 TTL 应返回 "N." 格式
+	got := formatTUIHopPrefix(1, 0)
+	if got != "1." {
+		t.Errorf("formatTUIHopPrefix(1, 0) = %q, want %q", got, "1.")
+	}
+
+	got = formatTUIHopPrefix(10, 9)
+	if got != "10." {
+		t.Errorf("formatTUIHopPrefix(10, 9) = %q, want %q", got, "10.")
+	}
+
+	// 续行应返回 "  "
+	got = formatTUIHopPrefix(5, 5)
+	if got != "  " {
+		t.Errorf("formatTUIHopPrefix(5, 5) = %q, want %q", got, "  ")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// formatMTRHost MPLS 测试
+// ---------------------------------------------------------------------------
+
+func TestFormatMTRHost_IncludesMPLS(t *testing.T) {
+	// extractMPLS 产出格式为 "[MPLS: Lbl N, TC N, S N, TTL N]"，不应再包裹
+	stat := trace.MTRHopStat{
+		TTL:  1,
+		IP:   "10.0.0.1",
+		MPLS: []string{"[MPLS: Lbl 100, TC 0, S 1, TTL 1]", "[MPLS: Lbl 200, TC 0, S 0, TTL 1]"},
+	}
+	got := formatMTRHost(stat)
+	// 不应出现双层包裹 "[MPLS: [MPLS: ..."
+	if strings.Contains(got, "[MPLS: [MPLS:") {
+		t.Errorf("should not double-wrap MPLS, got: %q", got)
+	}
+	// 每个标签应直接出现
+	if !strings.Contains(got, "[MPLS: Lbl 100") {
+		t.Errorf("should contain first MPLS label, got: %q", got)
+	}
+	if !strings.Contains(got, "[MPLS: Lbl 200") {
+		t.Errorf("should contain second MPLS label, got: %q", got)
+	}
+}
+
+func TestFormatMTRHost_NoMPLS(t *testing.T) {
+	stat := trace.MTRHopStat{
+		TTL: 1,
+		IP:  "10.0.0.1",
+	}
+	got := formatMTRHost(stat)
+	if strings.Contains(got, "MPLS") {
+		t.Errorf("formatMTRHost should not contain MPLS when empty, got: %q", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// IP 重复展示测试（P2）
+// ---------------------------------------------------------------------------
+
+func TestMTRTUI_HeaderIPNoDuplicate(t *testing.T) {
+	// 当 Domain == TargetIP 时不应显示 "1.1.1.1 (1.1.1.1)"
+	header := MTRTUIHeader{
+		Target:    "1.1.1.1",
+		Domain:    "1.1.1.1",
+		TargetIP:  "1.1.1.1",
+		StartTime: time.Now(),
+		Iteration: 1,
+	}
+	out := mtrTUIRenderStringWithWidth(header, nil, 120)
+	if strings.Contains(out, "1.1.1.1 (1.1.1.1)") {
+		t.Errorf("should not show duplicate IP, got:\n%s", out)
+	}
+	if !strings.Contains(out, "Host: 1.1.1.1") {
+		t.Errorf("should show 'Host: 1.1.1.1', got:\n%s", out)
 	}
 }

@@ -31,6 +31,10 @@ type MTRTUIHeader struct {
 	StartTime time.Time
 	Status    MTRTUIStatus
 	Iteration int
+	// 以下为 v2 新增字段
+	Domain   string // 用户输入的域名（可为空）
+	TargetIP string // 解析后的目标 IP
+	Version  string // 软件版本，如 "v1.3.0"
 }
 
 // ---------------------------------------------------------------------------
@@ -288,10 +292,25 @@ func mtrTUIRenderWithWidth(w io.Writer, header MTRTUIHeader, stats []trace.MTRHo
 		statusStr = "Paused"
 	}
 
-	// ── 信息行 ──
-	tuiLine(&b, "nexttrace --mtr %s          %s",
-		header.Target, header.StartTime.Format("2006-01-02T15:04:05"))
-	tuiLine(&b, "Keys: q - quit   p - pause   SPACE - resume          [%s] Round: %d",
+	// ── 信息行 1：版本 + 当前时间 ──
+	ver := header.Version
+	if ver == "" {
+		ver = "dev"
+	}
+	tuiLine(&b, "My traceroute [NextTrace %s]          %s",
+		ver, time.Now().Format("2006-01-02T15:04:05"))
+
+	// ── 信息行 2：目标 domain (IP) ──
+	targetLine := header.Target // 兜底
+	if header.Domain != "" && header.TargetIP != "" && header.Domain != header.TargetIP {
+		targetLine = fmt.Sprintf("%s (%s)", header.Domain, header.TargetIP)
+	} else if header.TargetIP != "" {
+		targetLine = header.TargetIP
+	}
+	tuiLine(&b, "Host: %s", targetLine)
+
+	// ── 信息行 3：按键提示 + 状态 ──
+	tuiLine(&b, "Keys: q - quit   p - pause   SPACE - resume   r - reset          [%s] Round: %d",
 		statusStr, header.Iteration)
 	b.WriteString("\r\n") // 空行
 
@@ -405,15 +424,15 @@ func mtrTUIRenderStringWithWidth(header MTRTUIHeader, stats []trace.MTRHopStat, 
 	return sb.String()
 }
 
-// formatTUIHopPrefix 返回 mtr 风格的跳数前缀：
+// formatTUIHopPrefix 返回简化版跳数前缀：
 //
-//	"1.|--"  新 TTL
-//	"  |  "  同 TTL 多路径续行
+//	"1."  新 TTL
+//	"  "  同 TTL 多路径续行
 func formatTUIHopPrefix(ttl, prevTTL int) string {
 	if ttl == prevTTL {
-		return "  |  "
+		return "  "
 	}
-	return fmt.Sprintf("%d.|--", ttl)
+	return fmt.Sprintf("%d.", ttl)
 }
 
 // truncateStr 截断字符串到 maxLen 字节，超出时添加省略号。
@@ -430,7 +449,7 @@ func truncateStr(s string, maxLen int) string {
 
 // MTRTUIPrinter 返回一个可直接用作 MTROnSnapshot 的回调函数，
 // 将帧渲染到 os.Stdout。
-func MTRTUIPrinter(target string, startTime time.Time, isPaused func() bool) func(iteration int, stats []trace.MTRHopStat) {
+func MTRTUIPrinter(target, domain, targetIP, version string, startTime time.Time, isPaused func() bool) func(iteration int, stats []trace.MTRHopStat) {
 	return func(iteration int, stats []trace.MTRHopStat) {
 		status := MTRTUIRunning
 		if isPaused != nil && isPaused() {
@@ -441,6 +460,9 @@ func MTRTUIPrinter(target string, startTime time.Time, isPaused func() bool) fun
 			StartTime: startTime,
 			Status:    status,
 			Iteration: iteration,
+			Domain:    domain,
+			TargetIP:  targetIP,
+			Version:   version,
 		}, stats)
 	}
 }

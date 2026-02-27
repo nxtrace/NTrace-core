@@ -15,10 +15,11 @@ import (
 
 // mtrUI 管理终端交互状态：备份屏幕、raw mode、按键处理。
 type mtrUI struct {
-	isTTY    bool
-	oldState *term.State // raw mode 之前的终端状态
-	paused   int32       // 0=running, 1=paused（atomic）
-	cancel   context.CancelFunc
+	isTTY      bool
+	oldState   *term.State // raw mode 之前的终端状态
+	paused     int32       // 0=running, 1=paused（atomic）
+	restartReq int32       // 1=请求重置统计（atomic）
+	cancel     context.CancelFunc
 }
 
 // newMTRUI 创建 TUI 控制器。cancel 是用于退出 MTR 的 context cancel 函数。
@@ -116,12 +117,20 @@ func (u *mtrUI) ReadKeysLoop(ctx context.Context) {
 			atomic.StoreInt32(&u.paused, 1)
 		case ' ':
 			atomic.StoreInt32(&u.paused, 0)
+		case 'r', 'R':
+			atomic.StoreInt32(&u.restartReq, 1)
 		}
 	}
 }
 
+// ConsumeRestartRequest 原子读取并清除重置请求标志。
+// 返回 true 表示请求了重置统计。
+func (u *mtrUI) ConsumeRestartRequest() bool {
+	return atomic.SwapInt32(&u.restartReq, 0) == 1
+}
+
 // ParseMTRKey 将单字节解析为操作名称（用于测试）。
-// 返回值: "quit", "pause", "resume", "" (未知)。
+// 返回值: "quit", "pause", "resume", "restart", "" (未知)。
 func ParseMTRKey(b byte) string {
 	switch b {
 	case 'q', 'Q', 0x03:
@@ -130,6 +139,8 @@ func ParseMTRKey(b byte) string {
 		return "pause"
 	case ' ':
 		return "resume"
+	case 'r', 'R':
+		return "restart"
 	default:
 		return ""
 	}

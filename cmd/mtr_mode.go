@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/nxtrace/NTrace-core/config"
 	"github.com/nxtrace/NTrace-core/printer"
 	"github.com/nxtrace/NTrace-core/trace"
 )
@@ -42,7 +43,7 @@ func checkMTRConflicts(flags map[string]bool) (conflict string, ok bool) {
 // runMTRMode 执行 MTR 连续探测模式。
 // 当 stdin 为 TTY 时启用交互式 TUI（备用屏幕、按键控制）；
 // 非 TTY 时降级为简单表格刷新。
-func runMTRMode(method trace.Method, conf trace.Config, intervalMs int, maxRounds int) {
+func runMTRMode(method trace.Method, conf trace.Config, intervalMs int, maxRounds int, domain string) {
 	if intervalMs <= 0 {
 		intervalMs = 1000
 	}
@@ -70,15 +71,16 @@ func runMTRMode(method trace.Method, conf trace.Config, intervalMs int, maxRound
 	target := conf.DstIP.String()
 
 	opts := trace.MTROptions{
-		Interval:  time.Duration(intervalMs) * time.Millisecond,
-		MaxRounds: maxRounds,
+		Interval:         time.Duration(intervalMs) * time.Millisecond,
+		MaxRounds:        maxRounds,
+		IsResetRequested: ui.ConsumeRestartRequest,
 	}
 
 	// TTY 模式下使用 TUI 渲染器 + 暂停支持，非 TTY 使用简单表格
 	var onSnapshot trace.MTROnSnapshot
 	if ui.IsTTY() {
 		opts.IsPaused = ui.IsPaused
-		onSnapshot = printer.MTRTUIPrinter(target, startTime, ui.IsPaused)
+		onSnapshot = printer.MTRTUIPrinter(target, domain, target, config.Version, startTime, ui.IsPaused)
 	} else {
 		onSnapshot = func(iteration int, stats []trace.MTRHopStat) {
 			printer.MTRTablePrinter(stats, iteration)

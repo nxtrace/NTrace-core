@@ -106,7 +106,7 @@ func formatMs(ms float64) string {
 	return fmt.Sprintf("%.2f", ms)
 }
 
-// formatMTRHost 构建 Host 列内容：IP/hostname + 简要 Geo。
+// formatMTRHost 构建 Host 列内容：IP/hostname + 简要 Geo + MPLS 标签。
 func formatMTRHost(s trace.MTRHopStat) string {
 	if s.IP == "" && s.Host == "" {
 		return "???"
@@ -129,6 +129,11 @@ func formatMTRHost(s trace.MTRHopStat) string {
 		if geo != "" {
 			parts = append(parts, geo)
 		}
+	}
+
+	// MPLS 标签（extractMPLS 已产出 [MPLS: Lbl ...] 格式，直接拼接）
+	if len(s.MPLS) > 0 {
+		parts = append(parts, strings.Join(s.MPLS, " "))
 	}
 
 	return strings.Join(parts, " ")
