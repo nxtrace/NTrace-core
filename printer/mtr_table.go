@@ -40,15 +40,16 @@ func MTRTablePrinter(stats []trace.MTRHopStat, iteration int, mode int, nameMode
 		prevTTL = s.TTL
 
 		host := formatMTRHostWithMPLS(s, mode, nameMode, lang)
+		m := formatMTRMetricStrings(s)
 		tbl.AddRow(
 			hopStr,
-			formatLoss(s.Loss),
-			s.Snt,
-			formatMs(s.Last),
-			formatMs(s.Avg),
-			formatMs(s.Best),
-			formatMs(s.Wrst),
-			formatMs(s.StDev),
+			m.loss,
+			m.snt,
+			m.last,
+			m.avg,
+			m.best,
+			m.wrst,
+			m.stdev,
 			host,
 		)
 	}
@@ -69,15 +70,16 @@ func MTRRenderTable(stats []trace.MTRHopStat, mode int, nameMode int, lang strin
 		}
 		prevTTL = s.TTL
 
+		m := formatMTRMetricStrings(s)
 		rows = append(rows, MTRRow{
 			Hop:   hopStr,
-			Loss:  formatLoss(s.Loss),
-			Snt:   fmt.Sprint(s.Snt),
-			Last:  formatMs(s.Last),
-			Avg:   formatMs(s.Avg),
-			Best:  formatMs(s.Best),
-			Wrst:  formatMs(s.Wrst),
-			StDev: formatMs(s.StDev),
+			Loss:  m.loss,
+			Snt:   m.snt,
+			Last:  m.last,
+			Avg:   m.avg,
+			Best:  m.best,
+			Wrst:  m.wrst,
+			StDev: m.stdev,
 			Host:  formatMTRHostWithMPLS(s, mode, nameMode, lang),
 		})
 	}
@@ -109,6 +111,34 @@ func formatLoss(pct float64) string {
 // formatMs 返回 "12.34" —— 毫秒值保留两位小数。
 func formatMs(ms float64) string {
 	return fmt.Sprintf("%.2f", ms)
+}
+
+// isWaitingHopStat 判断该 hop 是否为 "(waiting for reply)" 状态。
+// 条件：100% 丢包（≥ 99.95% 避免浮点边界抖动）且无 IP/Host。
+func isWaitingHopStat(s trace.MTRHopStat) bool {
+	return s.Loss >= 99.95 && s.IP == "" && s.Host == ""
+}
+
+// mtrMetrics 存储已格式化的指标字符串。
+type mtrMetrics struct {
+	loss, snt, last, avg, best, wrst, stdev string
+}
+
+// formatMTRMetricStrings 返回已格式化的指标字符串。
+// waiting 行全部返回空字符串。
+func formatMTRMetricStrings(s trace.MTRHopStat) mtrMetrics {
+	if isWaitingHopStat(s) {
+		return mtrMetrics{}
+	}
+	return mtrMetrics{
+		loss:  formatLoss(s.Loss),
+		snt:   fmt.Sprint(s.Snt),
+		last:  formatMs(s.Last),
+		avg:   formatMs(s.Avg),
+		best:  formatMs(s.Best),
+		wrst:  formatMs(s.Wrst),
+		stdev: formatMs(s.StDev),
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -295,7 +325,7 @@ type mtrHostParts struct {
 // waiting 条件：loss ≥ 99.95%（避免浮点边界抖动）且无 Host 和 IP。
 // 若 loss=100% 但仍有 IP/Host（极少见），优先显示真实地址。
 func buildMTRHostParts(s trace.MTRHopStat, mode int, nameMode int, lang string) mtrHostParts {
-	if s.Loss >= 99.95 && s.Host == "" && s.IP == "" {
+	if isWaitingHopStat(s) {
 		return mtrHostParts{waiting: true}
 	}
 
@@ -557,14 +587,15 @@ func MTRReportPrint(stats []trace.MTRHopStat, opts MTRReportOptions) {
 		}
 		prevTTL = s.TTL
 
+		m := formatMTRMetricStrings(s)
 		metrics := fmt.Sprintf(metricsFmt,
-			formatLoss(s.Loss),
-			fmt.Sprint(s.Snt),
-			formatMs(s.Last),
-			formatMs(s.Avg),
-			formatMs(s.Best),
-			formatMs(s.Wrst),
-			formatMs(s.StDev),
+			m.loss,
+			m.snt,
+			m.last,
+			m.avg,
+			m.best,
+			m.wrst,
+			m.stdev,
 		)
 		fmt.Printf("%s%s%s\n", prefix, reportPadRight(hosts[i], hostColW), metrics)
 	}

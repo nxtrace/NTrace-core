@@ -144,6 +144,8 @@ func TestMultiPath(t *testing.T) {
 }
 
 func TestErrorMix(t *testing.T) {
+	// 同 TTL: 2 次成功 (IP=1.1.1.1) + 1 次 timeout。
+	// 单路径归并后应只剩 1 行，Snt=3，Received=2，Loss≈33.3%。
 	agg := NewMTRAggregator()
 	res := mkResult(
 		[]Hop{
@@ -153,33 +155,23 @@ func TestErrorMix(t *testing.T) {
 		},
 	)
 	stats := agg.Update(res, 3)
-	var found bool
-	for _, s := range stats {
-		if s.IP == "1.1.1.1" {
-			found = true
-			if s.Snt != 2 {
-				t.Errorf("Snt: want 2, got %d", s.Snt)
-			}
-			if s.Received != 2 {
-				t.Errorf("Received: want 2, got %d", s.Received)
-			}
-			if s.Loss != 0 {
-				t.Errorf("Loss of 1.1.1.1: want 0, got %f", s.Loss)
-			}
-		}
+	if len(stats) != 1 {
+		t.Fatalf("expected 1 row after merge, got %d", len(stats))
 	}
-	if !found {
-		t.Error("did not find stats for 1.1.1.1")
+	s := stats[0]
+	if s.IP != "1.1.1.1" {
+		t.Errorf("IP: want 1.1.1.1, got %q", s.IP)
 	}
-	for _, s := range stats {
-		if s.IP == "" && s.Host == "" {
-			if s.Snt != 1 {
-				t.Errorf("timeout Snt: want 1, got %d", s.Snt)
-			}
-			if s.Loss != 100 {
-				t.Errorf("timeout Loss: want 100, got %f", s.Loss)
-			}
-		}
+	if s.Snt != 3 {
+		t.Errorf("Snt: want 3, got %d", s.Snt)
+	}
+	if s.Received != 2 {
+		t.Errorf("Received: want 2, got %d", s.Received)
+	}
+	wantLoss := roundN(100.0/3.0, 1) // 33.3
+	gotLoss := roundN(s.Loss, 1)
+	if gotLoss != wantLoss {
+		t.Errorf("Loss: want %.1f%%, got %.1f%%", wantLoss, gotLoss)
 	}
 }
 
@@ -318,5 +310,73 @@ func TestMTRAggregator_CloneIsolation(t *testing.T) {
 	origSnap = agg.Snapshot()
 	if origSnap[0].Snt != 2 {
 		t.Errorf("original Snt should still be 2, got %d", origSnap[0].Snt)
+	}
+}
+
+// TestUnknownMergedAfterLaterReply_SinglePath 验证跨轮次归并：
+// Round1: TTL1 timeout → Round2: TTL1 reply(IP=A)。
+// 结果应只有 A 一行，Snt=2，Received=1，Loss=50%。
+func TestUnknownMergedAfterLaterReply_SinglePath(t *testing.T) {
+	agg := NewMTRAggregator()
+
+	// Round 1: timeout
+	r1 := mkResult([]Hop{mkTimeoutHop(1)})
+	stats := agg.Update(r1, 1)
+	if len(stats) != 1 {
+		t.Fatalf("round1: expected 1 row, got %d", len(stats))
+	}
+
+	// Round 2: real reply
+	r2 := mkResult([]Hop{mkHop(1, "10.0.0.1", 15*time.Millisecond)})
+	stats = agg.Update(r2, 1)
+	if len(stats) != 1 {
+		t.Fatalf("round2: expected 1 row after merge, got %d", len(stats))
+	}
+	s := stats[0]
+	if s.IP != "10.0.0.1" {
+		t.Errorf("IP: want 10.0.0.1, got %q", s.IP)
+	}
+	if s.Snt != 2 {
+		t.Errorf("Snt: want 2, got %d", s.Snt)
+	}
+	if s.Received != 1 {
+		t.Errorf("Received: want 1, got %d", s.Received)
+	}
+	if s.Loss != 50 {
+		t.Errorf("Loss: want 50, got %f", s.Loss)
+	}
+}
+
+// TestUnknownPreserved_Multipath 验证多路径下 unknown 不被归并。
+func TestUnknownPreserved_Multipath(t *testing.T) {
+	agg := NewMTRAggregator()
+	res := mkResult(
+		[]Hop{
+			mkHop(1, "10.0.0.1", 5*time.Millisecond),
+			mkHop(1, "10.0.0.2", 8*time.Millisecond),
+			mkTimeoutHop(1),
+		},
+	)
+	stats := agg.Update(res, 3)
+
+	// 应有 3 行：10.0.0.1、10.0.0.2、unknown
+	if len(stats) != 3 {
+		t.Fatalf("expected 3 rows for multipath+timeout, got %d", len(stats))
+	}
+	ips := map[string]bool{}
+	hasUnknown := false
+	for _, s := range stats {
+		if s.IP != "" {
+			ips[s.IP] = true
+		}
+		if s.IP == "" && s.Host == "" {
+			hasUnknown = true
+		}
+	}
+	if !ips["10.0.0.1"] || !ips["10.0.0.2"] {
+		t.Error("expected both known IPs")
+	}
+	if !hasUnknown {
+		t.Error("expected unknown row preserved in multipath scenario")
 	}
 }

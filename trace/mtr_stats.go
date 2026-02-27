@@ -193,6 +193,9 @@ func (agg *MTRAggregator) Update(res *Result, queries int) []MTRHopStat {
 				acc.mplsSet[label] = struct{}{}
 			}
 		}
+
+		// 单路径归并：将 unknown 统计合并到唯一已知路径
+		mergeUnknownIntoSingleKnown(accMap)
 	}
 
 	return agg.snapshotLocked()
@@ -324,6 +327,9 @@ func (agg *MTRAggregator) snapshotLocked() []MTRHopStat {
 	return rows
 }
 
+// mtrUnknownKey 是 timeout / 无地址 hop 的聚合键。
+const mtrUnknownKey = "unknown"
+
 func mtrHopKey(ip, host string) string {
 	ip = strings.TrimSpace(ip)
 	host = strings.TrimSpace(host)
@@ -333,5 +339,57 @@ func mtrHopKey(ip, host string) string {
 	if host != "" {
 		return "host:" + strings.ToLower(host)
 	}
-	return "unknown"
+	return mtrUnknownKey
+}
+
+// mergeUnknownIntoSingleKnown 在同一 TTL 的 accMap 中，
+// 如果恰好只有 1 条非 unknown 路径，则将 unknown 累加器归并到该路径，
+// 避免同一跳同时出现 "(waiting for reply)" 和真实 IP 两行。
+//
+// 多路径场景（非 unknown ≥ 2 或 == 0）不归并，防止误归因。
+func mergeUnknownIntoSingleKnown(accMap map[string]*mtrHopAccum) {
+	unk, ok := accMap[mtrUnknownKey]
+	if !ok {
+		return
+	}
+
+	// 收集非 unknown 累加器
+	var known *mtrHopAccum
+	knownCount := 0
+	for k, acc := range accMap {
+		if k == mtrUnknownKey {
+			continue
+		}
+		known = acc
+		knownCount++
+		if knownCount > 1 {
+			break // 多路径，不归并
+		}
+	}
+	if knownCount != 1 {
+		return
+	}
+
+	// 归并统计
+	known.sent += unk.sent
+	known.received += unk.received
+	if unk.received > 0 {
+		known.sum += unk.sum
+		known.sumSq += unk.sumSq
+		known.last = unk.last
+		if unk.best > 0 && unk.best < known.best {
+			known.best = unk.best
+		}
+		if unk.worst > known.worst {
+			known.worst = unk.worst
+		}
+	}
+	if known.geo == nil && unk.geo != nil {
+		known.geo = unk.geo
+	}
+	for label := range unk.mplsSet {
+		known.mplsSet[label] = struct{}{}
+	}
+
+	delete(accMap, mtrUnknownKey)
 }

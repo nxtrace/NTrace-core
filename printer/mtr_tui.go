@@ -544,19 +544,20 @@ func renderDataRow(b *strings.Builder, lo mtrTUILayout, hopPrefix, host string, 
 	}
 
 	// 指标列，右对齐
-	row.WriteString(fitRight(formatLoss(s.Loss), lo.lossW))
+	m := formatMTRMetricStrings(s)
+	row.WriteString(fitRight(m.loss, lo.lossW))
 	row.WriteString(strings.Repeat(" ", tuiMetricGap))
-	row.WriteString(fitRight(fmt.Sprint(s.Snt), lo.sntW))
+	row.WriteString(fitRight(m.snt, lo.sntW))
 	row.WriteString(strings.Repeat(" ", tuiMetricGap))
-	row.WriteString(fitRight(formatMs(s.Last), lo.lastW))
+	row.WriteString(fitRight(m.last, lo.lastW))
 	row.WriteString(strings.Repeat(" ", tuiMetricGap))
-	row.WriteString(fitRight(formatMs(s.Avg), lo.avgW))
+	row.WriteString(fitRight(m.avg, lo.avgW))
 	row.WriteString(strings.Repeat(" ", tuiMetricGap))
-	row.WriteString(fitRight(formatMs(s.Best), lo.bestW))
+	row.WriteString(fitRight(m.best, lo.bestW))
 	row.WriteString(strings.Repeat(" ", tuiMetricGap))
-	row.WriteString(fitRight(formatMs(s.Wrst), lo.wrstW))
+	row.WriteString(fitRight(m.wrst, lo.wrstW))
 	row.WriteString(strings.Repeat(" ", tuiMetricGap))
-	row.WriteString(fitRight(formatMs(s.StDev), lo.stdevW))
+	row.WriteString(fitRight(m.stdev, lo.stdevW))
 
 	tuiLine(b, "%s", row.String())
 }

@@ -1589,3 +1589,76 @@ func TestTUI_TotalWidthInvariant_ThreeDigitTTL(t *testing.T) {
 		}
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Waiting-hop blank metrics
+// ---------------------------------------------------------------------------
+
+// TestMTRRenderTable_WaitingMetricsBlank 验证 100% 丢包且无 IP/Host 的行
+// 的所有指标列均为空字符串。
+func TestMTRRenderTable_WaitingMetricsBlank(t *testing.T) {
+	stats := []trace.MTRHopStat{
+		{TTL: 1, IP: "1.1.1.1", Loss: 0, Snt: 5, Last: 1.0, Avg: 1.0, Best: 1.0, Wrst: 1.0, StDev: 0},
+		{TTL: 2, IP: "", Host: "", Loss: 100, Snt: 5}, // waiting
+		{TTL: 3, IP: "2.2.2.2", Loss: 10, Snt: 5, Last: 2.0, Avg: 2.0, Best: 2.0, Wrst: 2.0, StDev: 0},
+	}
+	rows := MTRRenderTable(stats, HostModeFull, HostNamePTRorIP, "en")
+	if len(rows) != 3 {
+		t.Fatalf("expected 3 rows, got %d", len(rows))
+	}
+
+	// TTL 1 应有正常指标
+	if rows[0].Loss == "" {
+		t.Error("TTL 1 Loss should not be empty")
+	}
+
+	// TTL 2 应全部空白
+	r := rows[1]
+	for _, pair := range []struct {
+		name, val string
+	}{
+		{"Loss", r.Loss}, {"Snt", r.Snt}, {"Last", r.Last},
+		{"Avg", r.Avg}, {"Best", r.Best}, {"Wrst", r.Wrst}, {"StDev", r.StDev},
+	} {
+		if pair.val != "" {
+			t.Errorf("waiting row %s = %q, want empty", pair.name, pair.val)
+		}
+	}
+
+	// TTL 3 应有正常指标
+	if rows[2].Loss == "" {
+		t.Error("TTL 3 Loss should not be empty")
+	}
+}
+
+// TestTUI_WaitingMetricsBlank 验证 TUI 帧中 waiting 行不出现 "100.0%" 或 "0.00"。
+func TestTUI_WaitingMetricsBlank(t *testing.T) {
+	stats := []trace.MTRHopStat{
+		{TTL: 1, IP: "1.1.1.1", Loss: 0, Snt: 5, Last: 1.0, Avg: 1.0, Best: 1.0, Wrst: 1.0, StDev: 0},
+		{TTL: 2, IP: "", Host: "", Loss: 100, Snt: 5}, // waiting
+	}
+	header := MTRTUIHeader{
+		SrcHost: "localhost",
+		Target:  "example.com",
+	}
+	frame := mtrTUIRenderStringWithWidth(header, stats, 120)
+
+	// Split lines and find the waiting row (contains "(waiting for reply)")
+	lines := strings.Split(frame, "\n")
+	var waitingLine string
+	for _, l := range lines {
+		if strings.Contains(l, "(waiting for reply)") {
+			waitingLine = l
+			break
+		}
+	}
+	if waitingLine == "" {
+		t.Fatal("no waiting-for-reply line found in TUI frame")
+	}
+	if strings.Contains(waitingLine, "100.0%") {
+		t.Errorf("waiting line should not contain '100.0%%': %q", waitingLine)
+	}
+	if strings.Contains(waitingLine, "0.00") {
+		t.Errorf("waiting line should not contain '0.00': %q", waitingLine)
+	}
+}
