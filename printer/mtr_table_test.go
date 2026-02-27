@@ -1,6 +1,7 @@
 package printer
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -359,18 +360,21 @@ func TestMTRTUIRenderString_MultiPath(t *testing.T) {
 
 func TestFormatTUIHopPrefix(t *testing.T) {
 	cases := []struct {
-		ttl, prev int
-		want      string
+		ttl, prev, prefixW int
+		want               string
 	}{
-		{1, 0, "1."},
-		{5, 4, "5."},
-		{3, 3, "  "},
-		{10, 9, "10."},
+		{1, 0, 4, " 1. "},
+		{5, 4, 4, " 5. "},
+		{3, 3, 4, "    "},
+		{10, 9, 4, "10. "},
+		{100, 99, 5, "100. "},
+		{5, 5, 5, "     "},
+		{1, 0, 5, "  1. "},
 	}
 	for _, c := range cases {
-		got := formatTUIHopPrefix(c.ttl, c.prev)
+		got := formatTUIHopPrefix(c.ttl, c.prev, c.prefixW)
 		if got != c.want {
-			t.Errorf("formatTUIHopPrefix(%d, %d) = %q, want %q", c.ttl, c.prev, got, c.want)
+			t.Errorf("formatTUIHopPrefix(%d, %d, %d) = %q, want %q", c.ttl, c.prev, c.prefixW, got, c.want)
 		}
 	}
 }
@@ -449,7 +453,7 @@ func TestTUI_RightAlignedMetricsBlock(t *testing.T) {
 
 // TestTUI_HostExpandsOnWideTerminal 宽终端(200列)时 Host 列宽应大于默认 40。
 func TestTUI_HostExpandsOnWideTerminal(t *testing.T) {
-	lo := computeLayout(200)
+	lo := computeLayout(200, tuiPrefixW)
 	if lo.hostW <= tuiHostDefault {
 		t.Errorf("wide terminal: hostW=%d, want > %d", lo.hostW, tuiHostDefault)
 	}
@@ -460,7 +464,7 @@ func TestTUI_HostExpandsOnWideTerminal(t *testing.T) {
 
 // TestTUI_HostShrinksWhenWidthReduced 窄终端(80列)时 Host 列宽应被压缩。
 func TestTUI_HostShrinksWhenWidthReduced(t *testing.T) {
-	lo := computeLayout(80)
+	lo := computeLayout(80, tuiPrefixW)
 	if lo.hostW >= tuiHostDefault {
 		t.Errorf("narrow terminal: hostW=%d, should be < %d", lo.hostW, tuiHostDefault)
 	}
@@ -556,7 +560,7 @@ func TestTUI_VeryNarrowNoPanic(t *testing.T) {
 			strings.Contains(l, "NextTrace") || strings.Contains(l, "->") || strings.Contains(l, "Keys:") {
 			continue
 		}
-		w := displayWidth(l)
+		w := displayWidthWithTabs(l, tuiTabStop)
 		if w > width {
 			t.Errorf("line exceeds termWidth=%d: displayWidth=%d, line=%q", width, w, l)
 		}
@@ -594,7 +598,7 @@ func TestTUI_DisplayWidthCJK(t *testing.T) {
 
 // TestTUI_ComputeLayoutZeroWidth 验证 termWidth=0 回退到默认值。
 func TestTUI_ComputeLayoutZeroWidth(t *testing.T) {
-	lo := computeLayout(0)
+	lo := computeLayout(0, tuiPrefixW)
 	if lo.termWidth != tuiDefaultTerm {
 		t.Errorf("termWidth=%d, want default %d", lo.termWidth, tuiDefaultTerm)
 	}
@@ -604,10 +608,10 @@ func TestTUI_ComputeLayoutZeroWidth(t *testing.T) {
 }
 
 // TestTUI_TotalWidthInvariant 验证 computeLayout 的核心不变式：
-// 对于 termWidth >= 23（绝对下限），totalWidth() == termWidth（右锚定）。
+// 对于 termWidth >= 20（绝对下限），totalWidth() == termWidth（右锚定）。
 func TestTUI_TotalWidthInvariant(t *testing.T) {
-	for _, tw := range []int{23, 25, 30, 40, 50, 60, 61, 80, 120, 200} {
-		lo := computeLayout(tw)
+	for _, tw := range []int{20, 23, 25, 30, 40, 50, 60, 61, 80, 120, 200} {
+		lo := computeLayout(tw, tuiPrefixW)
 		if lo.totalWidth() != tw {
 			t.Errorf("termWidth=%d: totalWidth()=%d, want exact match (hostW=%d, metricsWidth=%d)",
 				tw, lo.totalWidth(), lo.hostW, lo.metricsWidth())
@@ -622,7 +626,7 @@ func TestTUI_TotalWidthInvariant(t *testing.T) {
 // 即 metricsStart + metricsWidth == termWidth。
 func TestTUI_NarrowRightAnchor(t *testing.T) {
 	for _, tw := range []int{62, 65, 70, 80} {
-		lo := computeLayout(tw)
+		lo := computeLayout(tw, tuiPrefixW)
 		rightEdge := lo.metricsStart + lo.metricsWidth()
 		if rightEdge != tw {
 			t.Errorf("termWidth=%d: metricsStart(%d)+metricsWidth(%d)=%d, want %d",
@@ -703,21 +707,32 @@ func TestMTRTUI_HeaderIPOnlyWhenNoDomain(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestFormatTUIHopPrefix_MinimalStyle(t *testing.T) {
-	// 新 TTL 应返回 "N." 格式
-	got := formatTUIHopPrefix(1, 0)
-	if got != "1." {
-		t.Errorf("formatTUIHopPrefix(1, 0) = %q, want %q", got, "1.")
+	// 新 TTL 应返回 "%*d. " 格式（prefixW=4: 2 位 TTL）
+	got := formatTUIHopPrefix(1, 0, 4)
+	if got != " 1. " {
+		t.Errorf("formatTUIHopPrefix(1, 0, 4) = %q, want %q", got, " 1. ")
 	}
 
-	got = formatTUIHopPrefix(10, 9)
-	if got != "10." {
-		t.Errorf("formatTUIHopPrefix(10, 9) = %q, want %q", got, "10.")
+	got = formatTUIHopPrefix(10, 9, 4)
+	if got != "10. " {
+		t.Errorf("formatTUIHopPrefix(10, 9, 4) = %q, want %q", got, "10. ")
 	}
 
-	// 续行应返回 "  "
-	got = formatTUIHopPrefix(5, 5)
-	if got != "  " {
-		t.Errorf("formatTUIHopPrefix(5, 5) = %q, want %q", got, "  ")
+	// 续行应返回 prefixW 个空格
+	got = formatTUIHopPrefix(5, 5, 4)
+	if got != "    " {
+		t.Errorf("formatTUIHopPrefix(5, 5, 4) = %q, want %q", got, "    ")
+	}
+
+	// 3 位 TTL，prefixW=5
+	got = formatTUIHopPrefix(100, 99, 5)
+	if got != "100. " {
+		t.Errorf("formatTUIHopPrefix(100, 99, 5) = %q, want %q", got, "100. ")
+	}
+
+	got = formatTUIHopPrefix(5, 5, 5)
+	if got != "     " {
+		t.Errorf("formatTUIHopPrefix(5, 5, 5) = %q, want %q", got, "     ")
 	}
 }
 
@@ -1281,4 +1296,296 @@ func TestMTRTUI_FirstLineTruncatedOnNarrow(t *testing.T) {
 		}
 	}
 	t.Error("missing NextTrace header line")
+}
+
+// ---------------------------------------------------------------------------
+// 新增：waiting for reply + 分隔符规则测试
+// ---------------------------------------------------------------------------
+
+// TestTUI_WaitingForReplyOn100Loss 验证 100% loss 且无地址的 hop 在 TUI 中
+// 显示 "(waiting for reply)" 而非 "???"。
+func TestTUI_WaitingForReplyOn100Loss(t *testing.T) {
+	header := MTRTUIHeader{Target: "1.1.1.1", StartTime: time.Now(), Iteration: 1}
+	stats := []trace.MTRHopStat{
+		{TTL: 1, IP: "10.0.0.1", Loss: 0, Snt: 5, Last: 1.0, Avg: 1.0, Best: 1.0, Wrst: 1.0, StDev: 0},
+		{TTL: 2, IP: "", Host: "", Loss: 100, Snt: 5, Last: 0, Avg: 0, Best: 0, Wrst: 0, StDev: 0},
+		{TTL: 3, IP: "10.0.0.3", Loss: 0, Snt: 5, Last: 2.0, Avg: 2.0, Best: 2.0, Wrst: 2.0, StDev: 0},
+	}
+	result := mtrTUIRenderStringWithWidth(header, stats, 120)
+
+	if !strings.Contains(result, "(waiting for reply)") {
+		t.Errorf("100%% loss hop should show '(waiting for reply)', got:\n%s", result)
+	}
+	// 不应出现 "???"（TUI 中的 100% loss 无地址 hop）
+	lines := strings.Split(result, "\r\n")
+	for _, l := range lines {
+		// 排除 header/表头行，只看数据行
+		trimmed := strings.TrimLeft(l, " ")
+		if strings.HasPrefix(trimmed, "2.") && strings.Contains(l, "???") {
+			t.Errorf("100%% loss hop should not show '???' in TUI, got line: %q", l)
+		}
+	}
+}
+
+// TestTUI_HostSeparators_WithTabs 验证 TUI 中 host 文本的 tab 分隔规则：
+//   - 序号后 1 空格 + ASN
+//   - ASN 与 IP/PTR 之间为 tab
+//   - IP/PTR 与后续信息之间为 tab
+func TestTUI_HostSeparators_WithTabs(t *testing.T) {
+	header := MTRTUIHeader{
+		Target:      "1.1.1.1",
+		StartTime:   time.Now(),
+		Iteration:   1,
+		DisplayMode: HostModeFull,
+		Lang:        "en",
+	}
+	stats := []trace.MTRHopStat{
+		{
+			TTL: 1, IP: "1.1.1.1", Host: "one.one.one.one",
+			Loss: 0, Snt: 5, Last: 1.0, Avg: 1.0, Best: 1.0, Wrst: 1.0, StDev: 0,
+			Geo: &ipgeo.IPGeoData{
+				Asnumber:  "13335",
+				CountryEn: "US",
+				Owner:     "Cloudflare",
+			},
+		},
+	}
+	result := mtrTUIRenderStringWithWidth(header, stats, 120)
+
+	lines := strings.Split(result, "\r\n")
+	var hopLine string
+	for _, l := range lines {
+		if strings.Contains(l, "one.one.one.one") {
+			hopLine = l
+			break
+		}
+	}
+	if hopLine == "" {
+		t.Fatal("missing hop line with one.one.one.one")
+	}
+
+	// 序号后 1 空格：应含 " 1. AS" 模式
+	if !strings.Contains(hopLine, " 1. AS") {
+		t.Errorf("prefix should be followed by 1 space then ASN, got: %q", hopLine)
+	}
+
+	// ASN 与 IP/PTR 之间应有 tab
+	if !strings.Contains(hopLine, "AS13335\tone.one.one.one") {
+		t.Errorf("ASN and IP/PTR should be separated by tab, got: %q", hopLine)
+	}
+
+	// IP/PTR 与后续信息之间应有 tab
+	if !strings.Contains(hopLine, "one.one.one.one\tUS Cloudflare") {
+		t.Errorf("IP/PTR and extras should be separated by tab, got: %q", hopLine)
+	}
+}
+
+// TestTUI_TabAwareAlignment_StillRightAnchored 验证含 tab 的 host 行
+// 右侧指标区仍能对齐（metricsStart 稳定）。
+func TestTUI_TabAwareAlignment_StillRightAnchored(t *testing.T) {
+	header := MTRTUIHeader{
+		Target:      "1.1.1.1",
+		StartTime:   time.Now(),
+		Iteration:   1,
+		DisplayMode: HostModeASN,
+		Lang:        "en",
+	}
+	stats := []trace.MTRHopStat{
+		{
+			TTL: 1, IP: "10.0.0.1", Loss: 0, Snt: 5, Last: 1.0, Avg: 1.0, Best: 1.0, Wrst: 1.0, StDev: 0,
+			Geo: &ipgeo.IPGeoData{Asnumber: "13335"},
+		},
+		{
+			TTL: 2, IP: "10.0.0.2", Loss: 50, Snt: 4, Last: 5.0, Avg: 6.0, Best: 4.0, Wrst: 8.0, StDev: 1.5,
+			Geo: &ipgeo.IPGeoData{Asnumber: "174"},
+		},
+		{
+			TTL: 3, IP: "", Host: "", Loss: 100, Snt: 4, Last: 0, Avg: 0, Best: 0, Wrst: 0, StDev: 0,
+		},
+	}
+	const width = 120
+	result := mtrTUIRenderStringWithWidth(header, stats, width)
+
+	lo := computeLayout(width, tuiPrefixWidthForMaxTTL(3))
+	lines := strings.Split(result, "\r\n")
+
+	// 在数据行中，指标区应出现在 metricsStart 附近
+	for _, l := range lines {
+		trimmed := strings.TrimLeft(l, " ")
+		if len(trimmed) == 0 {
+			continue
+		}
+		// 检查是否是数据行（以 "N. " 格式开头）
+		isData := false
+		for _, prefix := range []string{"1.", "2.", "3."} {
+			if strings.HasPrefix(trimmed, prefix) {
+				isData = true
+				break
+			}
+		}
+		if !isData {
+			continue
+		}
+		// 行的 tab-aware 宽度不应超过 termWidth
+		w := displayWidthWithTabs(l, tuiTabStop)
+		if w > width {
+			t.Errorf("data row exceeds termWidth=%d: displayWidth=%d, line=%q", width, w, l)
+		}
+		// 指标区不应超出
+		if w > lo.metricsStart+lo.metricsWidth() {
+			t.Errorf("data row overflows: displayWidth=%d > metricsStart(%d)+metricsWidth(%d), line=%q",
+				w, lo.metricsStart, lo.metricsWidth(), l)
+		}
+	}
+}
+
+// TestReport_WaitingForReplyOn100Loss 验证 report 模式中 100% loss
+// 且无地址的 hop 显示 "(waiting for reply)"。
+func TestReport_WaitingForReplyOn100Loss(t *testing.T) {
+	p := buildMTRHostParts(trace.MTRHopStat{
+		TTL: 2, IP: "", Host: "", Loss: 100, Snt: 10,
+	}, HostModeFull, HostNamePTRorIP, "en")
+	if !p.waiting {
+		t.Fatal("expected waiting=true for 100% loss with no IP/Host")
+	}
+
+	host := formatReportHost(trace.MTRHopStat{
+		TTL: 2, IP: "", Host: "", Loss: 100, Snt: 10,
+	}, HostModeFull, HostNamePTRorIP, "en")
+	if host != "(waiting for reply)" {
+		t.Errorf("report host = %q, want %q", host, "(waiting for reply)")
+	}
+
+	// 有 IP 但 loss=100% → 不应显示 waiting
+	hostWithIP := formatReportHost(trace.MTRHopStat{
+		TTL: 2, IP: "10.0.0.1", Host: "", Loss: 100, Snt: 10,
+	}, HostModeFull, HostNamePTRorIP, "en")
+	if hostWithIP == "(waiting for reply)" {
+		t.Error("hop with IP should not show waiting even with 100% loss")
+	}
+}
+
+// TestReport_FullExtrasUseSpaces_NoComma 验证 report HostModeFull 中
+// 后续信息使用空格分隔，不含 ", "。
+func TestReport_FullExtrasUseSpaces_NoComma(t *testing.T) {
+	s := trace.MTRHopStat{
+		TTL:  1,
+		IP:   "1.1.1.1",
+		Host: "one.one.one.one",
+		Loss: 0, Snt: 10,
+		Geo: &ipgeo.IPGeoData{
+			Asnumber:  "13335",
+			CountryEn: "US",
+			Owner:     "Cloudflare",
+		},
+	}
+	host := formatReportHost(s, HostModeFull, HostNamePTRorIP, "en")
+	// 应为 "AS13335 one.one.one.one US Cloudflare"（空格分隔）
+	if strings.Contains(host, ", ") {
+		t.Errorf("report host should not contain ', ', got: %q", host)
+	}
+	want := "AS13335 one.one.one.one US Cloudflare"
+	if host != want {
+		t.Errorf("report host = %q, want %q", host, want)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// 3 位 TTL 前缀宽度回归测试
+// ---------------------------------------------------------------------------
+
+// TestTUI_ThreeDigitTTLAlignment 验证 TTL>=100 时前缀宽度自动扩展为 5，
+// 布局不变式仍成立，且数据行不超宽。
+func TestTUI_ThreeDigitTTLAlignment(t *testing.T) {
+	header := MTRTUIHeader{Target: "1.1.1.1", StartTime: time.Now(), Iteration: 1, Lang: "en"}
+	var stats []trace.MTRHopStat
+	for ttl := 99; ttl <= 101; ttl++ {
+		stats = append(stats, trace.MTRHopStat{
+			TTL: ttl, IP: fmt.Sprintf("10.0.%d.1", ttl),
+			Loss: 0, Snt: 5, Last: 1.0, Avg: 1.0, Best: 1.0, Wrst: 1.0, StDev: 0,
+		})
+	}
+
+	const width = 120
+	result := mtrTUIRenderStringWithWidth(header, stats, width)
+
+	// 验证 prefixW 为 5（3 位 TTL → digits=3 → prefixW=5）
+	prefixW := tuiPrefixWidthForMaxTTL(101)
+	if prefixW != 5 {
+		t.Errorf("tuiPrefixWidthForMaxTTL(101) = %d, want 5", prefixW)
+	}
+
+	// 布局不变式
+	lo := computeLayout(width, prefixW)
+	if lo.totalWidth() != width {
+		t.Errorf("totalWidth()=%d, want %d (prefixW=%d, hostW=%d)", lo.totalWidth(), width, lo.prefixW, lo.hostW)
+	}
+
+	// 100. 前缀应出现在输出中
+	if !strings.Contains(result, "100.") {
+		t.Error("missing '100.' prefix in output")
+	}
+	if !strings.Contains(result, "101.") {
+		t.Error("missing '101.' prefix in output")
+	}
+
+	// 数据行不超宽
+	lines := strings.Split(result, "\r\n")
+	for _, l := range lines {
+		trimmed := strings.TrimLeft(l, " ")
+		if len(trimmed) == 0 {
+			continue
+		}
+		isData := false
+		for _, pfx := range []string{"99.", "100.", "101."} {
+			if strings.HasPrefix(trimmed, pfx) {
+				isData = true
+				break
+			}
+		}
+		if !isData {
+			continue
+		}
+		w := displayWidthWithTabs(l, tuiTabStop)
+		if w > width {
+			t.Errorf("data row exceeds termWidth=%d: displayWidth=%d, line=%q", width, w, l)
+		}
+	}
+}
+
+// TestTUI_PrefixWidthForMaxTTL 验证 tuiPrefixWidthForMaxTTL 各区间。
+func TestTUI_PrefixWidthForMaxTTL(t *testing.T) {
+	cases := []struct {
+		maxTTL int
+		want   int
+	}{
+		{0, 4},   // 空 stats → 默认
+		{1, 4},   // TTL<100 → 2 digits + 2 = 4
+		{99, 4},
+		{100, 5}, // 3 digits + 2 = 5
+		{255, 5},
+		{999, 5},
+		{1000, 6}, // 4 digits + 2 = 6（极端场景）
+	}
+	for _, c := range cases {
+		got := tuiPrefixWidthForMaxTTL(c.maxTTL)
+		if got != c.want {
+			t.Errorf("tuiPrefixWidthForMaxTTL(%d) = %d, want %d", c.maxTTL, got, c.want)
+		}
+	}
+}
+
+// TestTUI_TotalWidthInvariant_ThreeDigitTTL 验证 3 位 TTL 下右锚定不变式。
+func TestTUI_TotalWidthInvariant_ThreeDigitTTL(t *testing.T) {
+	prefixW := tuiPrefixWidthForMaxTTL(100) // 5
+	for _, tw := range []int{21, 25, 30, 40, 60, 80, 120, 200} {
+		lo := computeLayout(tw, prefixW)
+		if lo.totalWidth() != tw {
+			t.Errorf("termWidth=%d, prefixW=%d: totalWidth()=%d, want exact match",
+				tw, prefixW, lo.totalWidth())
+		}
+		if lo.hostW < 1 {
+			t.Errorf("termWidth=%d, prefixW=%d: hostW=%d, must be >= 1", tw, prefixW, lo.hostW)
+		}
+	}
 }

@@ -278,6 +278,137 @@ func formatMTRHost(s trace.MTRHopStat) string {
 	return formatMTRHostWithMPLS(s, HostModeFull, HostNamePTRorIP, "en")
 }
 
+// ---------------------------------------------------------------------------
+// 结构化 Host 组成（TUI / Report 共用）
+// ---------------------------------------------------------------------------
+
+// mtrHostParts 包含 Host 行的各组成部分，便于不同输出层（TUI/report）组装。
+type mtrHostParts struct {
+	waiting bool     // loss ≥ 99.95% 且无地址 → 显示 (waiting for reply)
+	asn     string   // "AS13335" 或 ""
+	base    string   // IP 或 PTR
+	extras  []string // geo/owner 等附加字段（不含 ASN）
+}
+
+// buildMTRHostParts 从统计数据构建 host 各组成部分。
+//
+// waiting 条件：loss ≥ 99.95%（避免浮点边界抖动）且无 Host 和 IP。
+// 若 loss=100% 但仍有 IP/Host（极少见），优先显示真实地址。
+func buildMTRHostParts(s trace.MTRHopStat, mode int, nameMode int, lang string) mtrHostParts {
+	if s.Loss >= 99.95 && s.Host == "" && s.IP == "" {
+		return mtrHostParts{waiting: true}
+	}
+
+	base := formatMTRHostBase(s, nameMode)
+
+	var asn string
+	var extras []string
+
+	if s.Geo != nil {
+		if s.Geo.Asnumber != "" {
+			asn = "AS" + s.Geo.Asnumber
+		}
+
+		switch mode {
+		case HostModeASN:
+			// 仅 ASN，无额外 geo
+		case HostModeCity:
+			city := geoField(s.Geo.City, s.Geo.CityEn, lang)
+			prov := geoField(s.Geo.Prov, s.Geo.ProvEn, lang)
+			country := geoField(s.Geo.Country, s.Geo.CountryEn, lang)
+			if city != "" {
+				extras = append(extras, city)
+			} else if prov != "" {
+				extras = append(extras, prov)
+			} else if country != "" {
+				extras = append(extras, country)
+			}
+		case HostModeOwner:
+			owner := s.Geo.Owner
+			if owner == "" {
+				owner = s.Geo.Isp
+			}
+			if owner != "" {
+				extras = append(extras, owner)
+			}
+		default: // HostModeFull
+			country := geoField(s.Geo.Country, s.Geo.CountryEn, lang)
+			prov := geoField(s.Geo.Prov, s.Geo.ProvEn, lang)
+			city := geoField(s.Geo.City, s.Geo.CityEn, lang)
+			if country != "" {
+				extras = append(extras, country)
+			}
+			if prov != "" && prov != country {
+				extras = append(extras, prov)
+			}
+			if city != "" && city != prov {
+				extras = append(extras, city)
+			}
+			owner := s.Geo.Owner
+			if owner == "" {
+				owner = s.Geo.Isp
+			}
+			if owner != "" {
+				extras = append(extras, owner)
+			}
+		}
+	}
+
+	return mtrHostParts{
+		asn:    asn,
+		base:   base,
+		extras: extras,
+	}
+}
+
+// formatTUIHost 构建 TUI 格式的 host 文本（tab 分隔，waiting 感知）。
+//
+// 规则：
+//   - waiting → "(waiting for reply)"
+//   - ASN\tIP/PTR\t后续信息（空格分隔）
+//   - 无 ASN 时省略 ASN + 首个 tab
+//   - 无后续信息时省略末尾 tab
+func formatTUIHost(s trace.MTRHopStat, mode int, nameMode int, lang string) string {
+	p := buildMTRHostParts(s, mode, nameMode, lang)
+	if p.waiting {
+		return "(waiting for reply)"
+	}
+
+	var b strings.Builder
+	if p.asn != "" {
+		b.WriteString(p.asn)
+		b.WriteByte('\t')
+	}
+	b.WriteString(p.base)
+	if len(p.extras) > 0 {
+		b.WriteByte('\t')
+		b.WriteString(strings.Join(p.extras, " "))
+	}
+	return b.String()
+}
+
+// formatReportHost 构建 report 格式的 host 文本（空格分隔，waiting 感知，含 MPLS）。
+func formatReportHost(s trace.MTRHopStat, mode int, nameMode int, lang string) string {
+	p := buildMTRHostParts(s, mode, nameMode, lang)
+	if p.waiting {
+		return "(waiting for reply)"
+	}
+
+	var parts []string
+	if p.asn != "" {
+		parts = append(parts, p.asn)
+	}
+	parts = append(parts, p.base)
+	if len(p.extras) > 0 {
+		parts = append(parts, strings.Join(p.extras, " "))
+	}
+	host := strings.Join(parts, " ")
+	if len(s.MPLS) > 0 {
+		host += " " + strings.Join(s.MPLS, " ")
+	}
+	return host
+}
+
 // formatMTRGeoData 返回简短 geo 描述（向后兼容，等效于英文 HostModeFull geo 部分）。
 func formatMTRGeoData(data *ipgeo.IPGeoData) string {
 	if data == nil {
@@ -368,7 +499,7 @@ func MTRReportPrint(stats []trace.MTRHopStat, opts MTRReportOptions) {
 	// 预先格式化所有 host 字符串，以便确定对齐宽度
 	hosts := make([]string, len(stats))
 	for i, s := range stats {
-		hosts[i] = formatMTRHostWithMPLS(s, hostMode, HostNamePTRorIP, lang)
+		hosts[i] = formatReportHost(s, hostMode, HostNamePTRorIP, lang)
 	}
 
 	// 确定 host 列对齐宽度

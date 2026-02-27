@@ -75,11 +75,12 @@ func (lo *mtrTUILayout) totalWidth() int {
 
 // 各列默认与最小宽度
 const (
-	tuiPrefixW     = 6 // "10.|--" → max 6 显示宽度
-	tuiPrefixGap   = 1 // prefix 与 Host 之间间距
-	tuiHostGap     = 2 // Host 与指标区之间间距
+	tuiPrefixW     = 4 // 默认前缀宽度（TTL ≤ 99: "%2d. " = 4 列）
+	tuiPrefixGap   = 0 // 前缀尾部已含空格
+	tuiHostGap     = 2 // Host 与指标区之间最小间距
 	tuiMetricGap   = 1 // 指标列之间间距
 	tuiDefaultTerm = 120
+	tuiTabStop     = 8 // tab 展开步长
 
 	tuiLossDefault = 6
 	tuiSntDefault  = 4
@@ -91,23 +92,40 @@ const (
 	tuiRTTMin      = 6
 )
 
-// computeLayout 根据终端宽度计算布局。
+// tuiPrefixWidthForMaxTTL 根据最大 TTL 值返回前缀列宽。
+// 前缀格式 "%Nd. "，其中 N = max(2, digits(maxTTL))，列宽 = N + 2。
+func tuiPrefixWidthForMaxTTL(maxTTL int) int {
+	digits := 2
+	if maxTTL >= 1000 {
+		digits = 4
+	} else if maxTTL >= 100 {
+		digits = 3
+	}
+	return digits + 2 // ". " 后缀
+}
+
+// computeLayout 根据终端宽度和前缀宽度计算布局。
+//
+// prefixW 为 hop 前缀列宽，由 tuiPrefixWidthForMaxTTL 动态计算。
 //
 // 三阶段压缩策略：
 //  1. 默认指标宽度，Host 取剩余空间
 //  2. Host 降至 tuiHostMin，按比例压缩指标列
 //  3. 极窄场景：循环缩减 Host（最低 1 列）直到 totalWidth ≤ termWidth
 //
-// 绝对下限 totalWidth = prefixW(6)+prefixGap(1)+host(1)+hostGap(2)+7×1+6×1 = 23。
-// 当 termWidth < 23 时接受溢出——该宽度下终端本身已不可用。
-func computeLayout(termWidth int) mtrTUILayout {
+// 绝对下限 totalWidth = prefixW+prefixGap(0)+host(1)+hostGap(2)+7×1+6×1。
+// 当 termWidth 低于下限时接受溢出——该宽度下终端本身已不可用。
+func computeLayout(termWidth, prefixW int) mtrTUILayout {
 	if termWidth <= 0 {
 		termWidth = tuiDefaultTerm
+	}
+	if prefixW <= 0 {
+		prefixW = tuiPrefixW
 	}
 
 	lo := mtrTUILayout{
 		termWidth: termWidth,
-		prefixW:   tuiPrefixW,
+		prefixW:   prefixW,
 		lossW:     tuiLossDefault,
 		sntW:      tuiSntDefault,
 		lastW:     tuiRTTDefault,
@@ -241,6 +259,47 @@ func padLeft(s string, width int) string {
 	return strings.Repeat(" ", width-w) + s
 }
 
+// ---------------------------------------------------------------------------
+// Tab 感知宽度辅助
+// ---------------------------------------------------------------------------
+
+// displayWidthWithTabs 返回包含 tab 的字符串在终端上的显示宽度。
+// tabStop 为 tab 停靠间隔（通常为 8）。
+func displayWidthWithTabs(s string, tabStop int) int {
+	col := 0
+	for _, r := range s {
+		if r == '\t' {
+			col = ((col / tabStop) + 1) * tabStop
+		} else {
+			col += runewidth.RuneWidth(r)
+		}
+	}
+	return col
+}
+
+// truncateWithTabs 将包含 tab 的字符串截断到不超过 maxW 显示列。
+func truncateWithTabs(s string, maxW int, tabStop int) string {
+	if maxW <= 0 {
+		return ""
+	}
+	col := 0
+	var result strings.Builder
+	for _, r := range s {
+		var nextCol int
+		if r == '\t' {
+			nextCol = ((col / tabStop) + 1) * tabStop
+		} else {
+			nextCol = col + runewidth.RuneWidth(r)
+		}
+		if nextCol > maxW {
+			break
+		}
+		result.WriteRune(r)
+		col = nextCol
+	}
+	return result.String()
+}
+
 // fitRight 先截断到 width，再右对齐填充。
 // 当列宽小于内容宽度时严格截断，保证输出恰好 width 列。
 func fitRight(s string, width int) string {
@@ -288,7 +347,15 @@ func MTRTUIRender(w io.Writer, header MTRTUIHeader, stats []trace.MTRHopStat) {
 
 // mtrTUIRenderWithWidth 是带可控宽度的内部渲染入口（测试用）。
 func mtrTUIRenderWithWidth(w io.Writer, header MTRTUIHeader, stats []trace.MTRHopStat, termWidth int) {
-	lo := computeLayout(termWidth)
+	// 根据最大 TTL 动态计算前缀宽度
+	maxTTL := 0
+	for _, s := range stats {
+		if s.TTL > maxTTL {
+			maxTTL = s.TTL
+		}
+	}
+	prefixW := tuiPrefixWidthForMaxTTL(maxTTL)
+	lo := computeLayout(termWidth, prefixW)
 	var b strings.Builder
 
 	// 清屏（cursor home + erase）
@@ -381,10 +448,10 @@ func mtrTUIRenderWithWidth(w io.Writer, header MTRTUIHeader, stats []trace.MTRHo
 	nameMode := header.NameMode
 	prevTTL := 0
 	for _, s := range stats {
-		hopPrefix := formatTUIHopPrefix(s.TTL, prevTTL)
+		hopPrefix := formatTUIHopPrefix(s.TTL, prevTTL, lo.prefixW)
 		prevTTL = s.TTL
 
-		host := formatMTRHostByMode(s, header.DisplayMode, nameMode, lang)
+		host := formatTUIHost(s, header.DisplayMode, nameMode, lang)
 		renderDataRow(&b, lo, hopPrefix, host, s)
 
 		// MPLS 多行显示：每个标签独占一行，位于 host 列区域
@@ -452,16 +519,29 @@ func centerIn(s string, width int) string {
 }
 
 // renderDataRow 渲染一行 hop 数据。
+//
+// 左侧为 prefix+hostText（含 tab），填充到 metricsStart 后拼接指标列，
+// 保证右侧指标列始终键齐。
 func renderDataRow(b *strings.Builder, lo mtrTUILayout, hopPrefix, host string, s trace.MTRHopStat) {
+	left := hopPrefix + host
+	leftW := displayWidthWithTabs(left, tuiTabStop)
+
+	// 截断：确保 left 不超过 metricsStart - 1（至少保留 1 列间距）
+	maxLeft := lo.metricsStart - 1
+	if maxLeft < 1 {
+		maxLeft = 1
+	}
+	if leftW > maxLeft {
+		left = truncateWithTabs(left, maxLeft, tuiTabStop)
+		leftW = displayWidthWithTabs(left, tuiTabStop)
+	}
+
 	var row strings.Builder
-
-	// prefix
-	row.WriteString(fitLeft(hopPrefix, lo.prefixW))
-	row.WriteString(strings.Repeat(" ", tuiPrefixGap))
-
-	// Host（CJK 安全截断 + 左对齐填充）
-	row.WriteString(fitLeft(host, lo.hostW))
-	row.WriteString(strings.Repeat(" ", tuiHostGap))
+	row.WriteString(left)
+	// 填充空格到 metricsStart
+	if gap := lo.metricsStart - leftW; gap > 0 {
+		row.WriteString(strings.Repeat(" ", gap))
+	}
 
 	// 指标列，右对齐
 	row.WriteString(fitRight(formatLoss(s.Loss), lo.lossW))
@@ -495,15 +575,19 @@ func mtrTUIRenderStringWithWidth(header MTRTUIHeader, stats []trace.MTRHopStat, 
 	return sb.String()
 }
 
-// formatTUIHopPrefix 返回简化版跳数前缀：
+// formatTUIHopPrefix 返回紧凑版跳数前缀，宽度由 prefixW 控制：
 //
-//	"1."  新 TTL
-//	"  "  同 TTL 多路径续行
-func formatTUIHopPrefix(ttl, prevTTL int) string {
+//	prefixW=4: " 1. "  新 TTL / "    " 续行
+//	prefixW=5: "  1. " 新 TTL / "     " 续行
+func formatTUIHopPrefix(ttl, prevTTL, prefixW int) string {
 	if ttl == prevTTL {
-		return "  "
+		return strings.Repeat(" ", prefixW)
 	}
-	return fmt.Sprintf("%d.", ttl)
+	digitW := prefixW - 2 // ". " 后缀占 2
+	if digitW < 2 {
+		digitW = 2
+	}
+	return fmt.Sprintf("%*d. ", digitW, ttl)
 }
 
 // truncateStr 截断字符串到 maxLen 字节，超出时添加省略号。
