@@ -45,7 +45,7 @@ func checkMTRConflicts(flags map[string]bool) (conflict string, ok bool) {
 // runMTRTUI 执行 MTR 交互式 TUI 模式。
 // 当 stdin 为 TTY 时启用全屏 TUI（备用屏幕、按键控制）；
 // 非 TTY 时降级为简单表格刷新。
-func runMTRTUI(method trace.Method, conf trace.Config, intervalMs int, maxRounds int, domain string, dataOrigin string) {
+func runMTRTUI(method trace.Method, conf trace.Config, intervalMs int, maxRounds int, domain string, dataOrigin string, showIPs bool) {
 	if intervalMs <= 0 {
 		intervalMs = 1000
 	}
@@ -96,10 +96,10 @@ func runMTRTUI(method trace.Method, conf trace.Config, intervalMs int, maxRounds
 	if ui.IsTTY() {
 		opts.IsPaused = ui.IsPaused
 		onSnapshot = printer.MTRTUIPrinter(target, domain, target, config.Version, startTime,
-			srcHost, srcIP, lang, apiInfo, ui.IsPaused, ui.CurrentDisplayMode, ui.CurrentNameMode)
+			srcHost, srcIP, lang, apiInfo, showIPs, ui.IsPaused, ui.CurrentDisplayMode, ui.CurrentNameMode)
 	} else {
 		onSnapshot = func(iteration int, stats []trace.MTRHopStat) {
-			printer.MTRTablePrinter(stats, iteration, ui.CurrentDisplayMode(), ui.CurrentNameMode(), lang)
+			printer.MTRTablePrinter(stats, iteration, ui.CurrentDisplayMode(), ui.CurrentNameMode(), lang, showIPs)
 		}
 	}
 
@@ -113,7 +113,7 @@ func runMTRTUI(method trace.Method, conf trace.Config, intervalMs int, maxRounds
 
 // runMTRReport 执行 MTR 非全屏报告模式（对齐 mtr -rzw 风格）。
 // 探测完 maxRounds 后一次性输出最终统计到 stdout，不进入 alternate screen。
-func runMTRReport(method trace.Method, conf trace.Config, intervalMs int, maxRounds int, domain string, dataOrigin string, wide bool) {
+func runMTRReport(method trace.Method, conf trace.Config, intervalMs int, maxRounds int, domain string, dataOrigin string, wide bool, showIPs bool) {
 	if intervalMs <= 0 {
 		intervalMs = 1000
 	}
@@ -169,6 +169,7 @@ func runMTRReport(method trace.Method, conf trace.Config, intervalMs int, maxRou
 		StartTime: startTime,
 		SrcHost:   srcHost,
 		Wide:      wide,
+		ShowIPs:   showIPs,
 		Lang:      lang,
 	})
 }

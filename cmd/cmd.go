@@ -214,6 +214,7 @@ func Execute() {
 	mtrMode := parser.Flag("t", "mtr", &argparse.Options{Help: "Enable MTR (My Traceroute) continuous probing mode"})
 	reportMode := parser.Flag("r", "report", &argparse.Options{Help: "MTR report mode (non-interactive, implies --mtr); can trigger MTR without --mtr"})
 	wideMode := parser.Flag("w", "wide", &argparse.Options{Help: "MTR wide report mode (implies --mtr --report); alone equals --mtr --report --wide"})
+	showIPs := parser.Flag("", "show-ips", &argparse.Options{Help: "MTR only: display both PTR hostnames and numeric IPs (PTR first, IP in parentheses)"})
 
 	err := parser.Parse(os.Args)
 	if err != nil {
@@ -621,9 +622,9 @@ func Execute() {
 		}
 
 		if effectiveReport {
-			runMTRReport(m, conf, mtrIntervalMs, mtrMaxRounds, domain, *dataOrigin, effectiveWide)
+			runMTRReport(m, conf, mtrIntervalMs, mtrMaxRounds, domain, *dataOrigin, effectiveWide, *showIPs)
 		} else {
-			runMTRTUI(m, conf, mtrIntervalMs, mtrMaxRounds, domain, *dataOrigin)
+			runMTRTUI(m, conf, mtrIntervalMs, mtrMaxRounds, domain, *dataOrigin, *showIPs)
 		}
 		return
 	}

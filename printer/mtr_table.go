@@ -21,7 +21,7 @@ import (
 
 // MTRTablePrinter 将 MTR 快照渲染为经典 MTR 风格表格。
 // 每次调用都会先清屏再重绘。
-func MTRTablePrinter(stats []trace.MTRHopStat, iteration int, mode int, nameMode int, lang string) {
+func MTRTablePrinter(stats []trace.MTRHopStat, iteration int, mode int, nameMode int, lang string, showIPs bool) {
 	// 清屏并移动到左上角
 	fmt.Print("\033[H\033[2J")
 
@@ -39,7 +39,7 @@ func MTRTablePrinter(stats []trace.MTRHopStat, iteration int, mode int, nameMode
 		}
 		prevTTL = s.TTL
 
-		host := formatMTRHostWithMPLS(s, mode, nameMode, lang)
+		host := formatMTRHostWithMPLS(s, mode, nameMode, lang, showIPs)
 		m := formatMTRMetricStrings(s)
 		tbl.AddRow(
 			hopStr,
@@ -60,7 +60,7 @@ func MTRTablePrinter(stats []trace.MTRHopStat, iteration int, mode int, nameMode
 
 // MTRRenderTable 仅返回格式化后的行数据（用于测试/非终端场景）。
 // mode / nameMode / lang 控制 Host 列内容；传 -1 / -1 / "" 等效于 HostModeFull + HostNamePTRorIP + "en"（向后兼容）。
-func MTRRenderTable(stats []trace.MTRHopStat, mode int, nameMode int, lang string) []MTRRow {
+func MTRRenderTable(stats []trace.MTRHopStat, mode int, nameMode int, lang string, showIPs bool) []MTRRow {
 	prevTTL := 0
 	rows := make([]MTRRow, 0, len(stats))
 	for _, s := range stats {
@@ -80,7 +80,7 @@ func MTRRenderTable(stats []trace.MTRHopStat, mode int, nameMode int, lang strin
 			Best:  m.best,
 			Wrst:  m.wrst,
 			StDev: m.stdev,
-			Host:  formatMTRHostWithMPLS(s, mode, nameMode, lang),
+			Host:  formatMTRHostWithMPLS(s, mode, nameMode, lang, showIPs),
 		})
 	}
 	return rows
@@ -168,15 +168,34 @@ const (
 // formatMTRHostBase 构建基础 host 标识。
 //
 //	nameMode == HostNameIPOnly → 始终显示 IP
-//	nameMode == HostNamePTRorIP（默认）→ 有 PTR 显示 PTR，否则 IP
+//	nameMode == HostNamePTRorIP（默认）:
+//	  - showIPs=false: 有 PTR 显示 PTR，否则 IP
+//	  - showIPs=true:  有 PTR 且有 IP 时显示 "PTR (IP)"
 //	都无   → "???"
-func formatMTRHostBase(s trace.MTRHopStat, nameMode int) string {
+func formatMTRHostBase(s trace.MTRHopStat, nameMode int, showIPs bool) string {
 	if nameMode == HostNameIPOnly {
 		if s.IP != "" {
 			return s.IP
 		}
 		return "???"
 	}
+
+	if showIPs {
+		if s.Host != "" && s.IP != "" {
+			if s.Host == s.IP {
+				return s.Host
+			}
+			return fmt.Sprintf("%s (%s)", s.Host, s.IP)
+		}
+		if s.Host != "" {
+			return s.Host
+		}
+		if s.IP != "" {
+			return s.IP
+		}
+		return "???"
+	}
+
 	// HostNamePTRorIP（默认）
 	if s.Host != "" {
 		return s.Host
@@ -214,8 +233,8 @@ func geoField(cn, en, lang string) string {
 //
 //	"AS13335 one.one.one.one"    （模式 0）
 //	"AS13335 one.one.one.one US" （模式 1）
-func formatMTRHostByMode(s trace.MTRHopStat, mode int, nameMode int, lang string) string {
-	base := formatMTRHostBase(s, nameMode)
+func formatMTRHostByMode(s trace.MTRHopStat, mode int, nameMode int, lang string, showIPs bool) string {
+	base := formatMTRHostBase(s, nameMode, showIPs)
 	if s.Geo == nil {
 		return base
 	}
@@ -286,7 +305,7 @@ func formatMTRHostByMode(s trace.MTRHopStat, mode int, nameMode int, lang string
 }
 
 // formatMTRHostWithMPLS 构建 Host 列完整内容（含内联 MPLS），供表格打印器使用。
-func formatMTRHostWithMPLS(s trace.MTRHopStat, mode int, nameMode int, lang string) string {
+func formatMTRHostWithMPLS(s trace.MTRHopStat, mode int, nameMode int, lang string, showIPs bool) string {
 	if mode < 0 {
 		mode = HostModeFull
 	}
@@ -296,7 +315,7 @@ func formatMTRHostWithMPLS(s trace.MTRHopStat, mode int, nameMode int, lang stri
 	if lang == "" {
 		lang = "en"
 	}
-	host := formatMTRHostByMode(s, mode, nameMode, lang)
+	host := formatMTRHostByMode(s, mode, nameMode, lang, showIPs)
 	if len(s.MPLS) > 0 {
 		host += " " + strings.Join(s.MPLS, " ")
 	}
@@ -305,7 +324,7 @@ func formatMTRHostWithMPLS(s trace.MTRHopStat, mode int, nameMode int, lang stri
 
 // formatMTRHost 向后兼容别名（HostModeFull + HostNamePTRorIP + "en" + 内联 MPLS）。
 func formatMTRHost(s trace.MTRHopStat) string {
-	return formatMTRHostWithMPLS(s, HostModeFull, HostNamePTRorIP, "en")
+	return formatMTRHostWithMPLS(s, HostModeFull, HostNamePTRorIP, "en", false)
 }
 
 // ---------------------------------------------------------------------------
@@ -324,12 +343,12 @@ type mtrHostParts struct {
 //
 // waiting 条件：loss ≥ 99.95%（避免浮点边界抖动）且无 Host 和 IP。
 // 若 loss=100% 但仍有 IP/Host（极少见），优先显示真实地址。
-func buildMTRHostParts(s trace.MTRHopStat, mode int, nameMode int, lang string) mtrHostParts {
+func buildMTRHostParts(s trace.MTRHopStat, mode int, nameMode int, lang string, showIPs bool) mtrHostParts {
 	if isWaitingHopStat(s) {
 		return mtrHostParts{waiting: true}
 	}
 
-	base := formatMTRHostBase(s, nameMode)
+	base := formatMTRHostBase(s, nameMode, showIPs)
 
 	var asn string
 	var extras []string
@@ -398,8 +417,8 @@ func buildMTRHostParts(s trace.MTRHopStat, mode int, nameMode int, lang string) 
 //   - ASN\tIP/PTR\t后续信息（空格分隔）
 //   - 无 ASN 时省略 ASN + 首个 tab
 //   - 无后续信息时省略末尾 tab
-func formatTUIHost(s trace.MTRHopStat, mode int, nameMode int, lang string) string {
-	p := buildMTRHostParts(s, mode, nameMode, lang)
+func formatTUIHost(s trace.MTRHopStat, mode int, nameMode int, lang string, showIPs bool) string {
+	p := buildMTRHostParts(s, mode, nameMode, lang, showIPs)
 	if p.waiting {
 		return "(waiting for reply)"
 	}
@@ -418,8 +437,8 @@ func formatTUIHost(s trace.MTRHopStat, mode int, nameMode int, lang string) stri
 }
 
 // formatReportHost 构建 report 格式的 host 文本（空格分隔，waiting 感知，含 MPLS）。
-func formatReportHost(s trace.MTRHopStat, mode int, nameMode int, lang string) string {
-	p := buildMTRHostParts(s, mode, nameMode, lang)
+func formatReportHost(s trace.MTRHopStat, mode int, nameMode int, lang string, showIPs bool) string {
+	p := buildMTRHostParts(s, mode, nameMode, lang, showIPs)
 	if p.waiting {
 		return "(waiting for reply)"
 	}
@@ -493,6 +512,7 @@ type MTRReportOptions struct {
 	StartTime time.Time
 	SrcHost   string
 	Wide      bool
+	ShowIPs   bool
 	Lang      string
 }
 
@@ -529,7 +549,7 @@ func MTRReportPrint(stats []trace.MTRHopStat, opts MTRReportOptions) {
 	// 预先格式化所有 host 字符串，以便确定对齐宽度
 	hosts := make([]string, len(stats))
 	for i, s := range stats {
-		hosts[i] = formatReportHost(s, hostMode, HostNamePTRorIP, lang)
+		hosts[i] = formatReportHost(s, hostMode, HostNamePTRorIP, lang, opts.ShowIPs)
 	}
 
 	// 确定 host 列对齐宽度

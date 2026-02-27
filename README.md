@@ -321,6 +321,11 @@ nexttrace -r -q 5 1.1.1.1  # 5 rounds
 # Wide report: no host column truncation (like mtr -rw)
 nexttrace -w 1.1.1.1       # = --mtr --report --wide
 
+# Show PTR and IP together (PTR first, IP in parentheses) in MTR output
+nexttrace --mtr --show-ips 1.1.1.1
+nexttrace -r --show-ips 1.1.1.1
+nexttrace -w --show-ips 1.1.1.1
+
 # Combine with other options
 nexttrace -t --tcp --max-hops 20 --first 3 --no-rdns 8.8.8.8
 ```
@@ -332,7 +337,9 @@ When running in a terminal (TTY), MTR mode uses an **interactive full-screen TUI
 - **`SPACE`** — resume probing
 - **`r`** — reset statistics (counters are cleared, display mode is preserved)
 - **`y`** — cycle host display mode: ASN → City → Owner → Full
-- **`n`** — toggle host name display: PTR/IP ↔ IP only
+- **`n`** — toggle host name display:
+  - default: PTR (or IP fallback) ↔ IP only
+  - with `--show-ips`: PTR (IP) ↔ IP only
 - The TUI header displays **source → destination**, with `--source`/`--dev` information when specified.
 - When using LeoMoeAPI, the preferred API IP address is shown in the header.
 - Uses the **alternate screen buffer**, so your previous terminal history is preserved on exit.
@@ -437,7 +444,7 @@ usage: nexttrace [-h|--help] [--init] [-4|--ipv4] [-6|--ipv6] [-T|--tcp]
                  [_positionalArg_nexttrace_38 "<value>"] [--dot-server
                  (dnssb|aliyun|dnspod|google|cloudflare)] [-g|--language
                  (en|cn)] [--file "<value>"] [-C|--no-color] [--from "<value>"]
-                 [-t|--mtr] [-r|--report] [-w|--wide]
+                 [-t|--mtr] [-r|--report] [-w|--wide] [--show-ips]
 
                  An open source visual route tracking CLI tool
 
@@ -536,6 +543,8 @@ Arguments:
                                      summary. Implies --mtr. Default rounds: 10
   -w  --wide                         Wide report mode: no host column
                                      truncation. Implies --mtr --report
+      --show-ips                     MTR only: display both PTR hostnames and
+                                     numeric IPs (PTR first, IP in parentheses)
 ```
 
 ## Project screenshot

@@ -41,6 +41,7 @@ type MTRTUIHeader struct {
 	Lang        string // 语言（"en" / "cn"）
 	DisplayMode int    // 显示模式 0-3
 	NameMode    int    // Host 基础显示 0=PTR/IP, 1=IP only
+	ShowIPs     bool   // 是否显示 PTR+IP（nameMode=0 时生效）
 	APIInfo     string // preferred API 信息（纯文本，可为空）
 }
 
@@ -430,6 +431,9 @@ func mtrTUIRenderWithWidth(w io.Writer, header MTRTUIHeader, stats []trace.MTRHo
 		modeLabel = modeNames[header.DisplayMode]
 	}
 	nameLabel := "ptr"
+	if header.ShowIPs {
+		nameLabel = "ptr+ip"
+	}
 	if header.NameMode == 1 {
 		nameLabel = "ip"
 	}
@@ -451,7 +455,7 @@ func mtrTUIRenderWithWidth(w io.Writer, header MTRTUIHeader, stats []trace.MTRHo
 		hopPrefix := formatTUIHopPrefix(s.TTL, prevTTL, lo.prefixW)
 		prevTTL = s.TTL
 
-		host := formatTUIHost(s, header.DisplayMode, nameMode, lang)
+		host := formatTUIHost(s, header.DisplayMode, nameMode, lang, header.ShowIPs)
 		renderDataRow(&b, lo, hopPrefix, host, s)
 
 		// MPLS 多行显示：每个标签独占一行，位于 host 列区域
@@ -606,7 +610,7 @@ func truncateStr(s string, maxLen int) string {
 // MTRTUIPrinter 返回一个可直接用作 MTROnSnapshot 的回调函数，
 // 将帧渲染到 os.Stdout。
 func MTRTUIPrinter(target, domain, targetIP, version string, startTime time.Time,
-	srcHost, srcIP, lang, apiInfo string,
+	srcHost, srcIP, lang, apiInfo string, showIPs bool,
 	isPaused func() bool, displayMode func() int, nameMode func() int) func(iteration int, stats []trace.MTRHopStat) {
 	return func(iteration int, stats []trace.MTRHopStat) {
 		status := MTRTUIRunning
@@ -634,6 +638,7 @@ func MTRTUIPrinter(target, domain, targetIP, version string, startTime time.Time
 			Lang:        lang,
 			DisplayMode: mode,
 			NameMode:    nm,
+			ShowIPs:     showIPs,
 			APIInfo:     apiInfo,
 		}, stats)
 	}

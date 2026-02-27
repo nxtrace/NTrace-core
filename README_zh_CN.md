@@ -319,6 +319,11 @@ nexttrace -r -q 5 1.1.1.1  # 5 轮
 # 宽报告模式：主机列不截断（类似 mtr -rw）
 nexttrace -w 1.1.1.1       # = --mtr --report --wide
 
+# 在 MTR 输出中同时显示 PTR 和 IP（PTR 在前，IP 括号）
+nexttrace --mtr --show-ips 1.1.1.1
+nexttrace -r --show-ips 1.1.1.1
+nexttrace -w --show-ips 1.1.1.1
+
 # 与其他选项组合使用
 nexttrace -t --tcp --max-hops 20 --first 3 --no-rdns 8.8.8.8
 ```
@@ -330,7 +335,9 @@ nexttrace -t --tcp --max-hops 20 --first 3 --no-rdns 8.8.8.8
 - **空格**  — 恢复探测
 - **`r`** — 重置统计（计数器清零，显示模式保持不变）
 - **`y`** — 循环切换主机显示模式：ASN → City → Owner → Full
-- **`n`** — 切换主机名显示方式：PTR/IP ↔ 仅 IP
+- **`n`** — 切换主机名显示方式：
+  - 默认：PTR（无 PTR 时回退 IP）↔ 仅 IP
+  - 启用 `--show-ips`：PTR (IP) ↔ 仅 IP
 - TUI 标题栏显示**源 → 目标**路由信息，指定 `--source`/`--dev` 时会展示对应信息。
 - 使用 LeoMoeAPI 时，标题栏会显示首选 API IP 地址。
 - 使用**备用屏幕缓冲区**，退出后恢复之前的终端历史记录。
@@ -419,7 +426,7 @@ usage: nexttrace [-h|--help] [--init] [-4|--ipv4] [-6|--ipv6] [-T|--tcp]
                  [_positionalArg_nexttrace_38 "<value>"] [--dot-server
                  (dnssb|aliyun|dnspod|google|cloudflare)] [-g|--language
                  (en|cn)] [--file "<value>"] [-C|--no-color] [--from "<value>"]
-                 [-t|--mtr] [-r|--report] [-w|--wide]
+                 [-t|--mtr] [-r|--report] [-w|--wide] [--show-ips]
 
                  An open source visual route tracking CLI tool
 
@@ -517,6 +524,8 @@ Arguments:
                                      summary. Implies --mtr. Default rounds: 10
   -w  --wide                         Wide report mode: no host column
                                      truncation. Implies --mtr --report
+      --show-ips                     MTR only: display both PTR hostnames and
+                                     numeric IPs (PTR first, IP in parentheses)
 ```
 
 ## 项目截图
