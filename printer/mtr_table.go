@@ -54,7 +54,6 @@ func MTRTablePrinter(stats []trace.MTRHopStat, iteration int, mode int, nameMode
 		)
 	}
 
-	fmt.Fprintf(color.Output, "Round: %d\n", iteration)
 	tbl.Print()
 }
 

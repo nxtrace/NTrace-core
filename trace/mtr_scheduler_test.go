@@ -870,11 +870,11 @@ func TestBuildMTRRawRecordFromProbe_RDNSOnlyPath(t *testing.T) {
 // Destination folding tests
 // ---------------------------------------------------------------------------
 
-func TestScheduler_HigherTTLDestinationRepliesFoldIntoFinalTTL(t *testing.T) {
+func TestScheduler_HigherTTLDestinationRepliesDiscarded(t *testing.T) {
 	// Destination is at TTL 3. Higher TTLs also return the destination IP
 	// but with a small delay, ensuring TTL 3's result is processed first
-	// (setting knownFinalTTL=3). The delayed higher-TTL probes then see
-	// disabled=true and fold into TTL 3.
+	// (setting knownFinalTTL=3). The delayed higher-TTL probes are now
+	// DISCARDED — not folded into TTL 3.
 	dstIP := net.ParseIP("10.0.0.99")
 
 	prober := &mockTTLProber{
@@ -936,31 +936,36 @@ func TestScheduler_HigherTTLDestinationRepliesFoldIntoFinalTTL(t *testing.T) {
 		sntByTTL[s.TTL] = s.Snt
 	}
 
-	// TTL 3 (finalTTL) should have received folded probes — Snt >= MaxPerHop
-	if sntByTTL[3] < 3 {
-		t.Errorf("TTL 3 (final): expected Snt >= 3 (with folded), got %d", sntByTTL[3])
+	// TTL 3 (finalTTL) should have ONLY its own probes — Snt == MaxPerHop (no fold)
+	if sntByTTL[3] != 3 {
+		t.Errorf("TTL 3 (final): expected Snt == 3 (own probes only, no fold), got %d", sntByTTL[3])
 	}
 
-	// TTLs above final should NOT appear in aggregator (their probes were folded)
+	// TTLs above final should NOT appear in aggregator (discarded)
 	for ttl := 4; ttl <= 6; ttl++ {
 		if sntByTTL[ttl] > 0 {
-			t.Errorf("TTL %d: expected Snt=0 (folded into final), got %d", ttl, sntByTTL[ttl])
+			t.Errorf("TTL %d: expected Snt=0 (discarded), got %d", ttl, sntByTTL[ttl])
 		}
 	}
 
-	// onProbe callbacks should all report accountTTL (i.e., TTL 3 for folded)
+	// onProbe callbacks must NOT fire for discarded higher-TTL results
 	mu.Lock()
 	defer mu.Unlock()
 	for ttl := 4; ttl <= 6; ttl++ {
 		if probeByTTL[ttl] > 0 {
-			t.Errorf("onProbe: TTL %d should have 0 callbacks (folded to 3), got %d", ttl, probeByTTL[ttl])
+			t.Errorf("onProbe: TTL %d should have 0 callbacks (discarded), got %d", ttl, probeByTTL[ttl])
 		}
+	}
+	// Also verify that NO folded callbacks appeared at TTL 3 from higher-TTL probes:
+	// TTL 3's callback count must equal its Snt.
+	if probeByTTL[3] != sntByTTL[3] {
+		t.Errorf("onProbe: TTL 3 callback count (%d) != Snt (%d); suggests folded callbacks leaked", probeByTTL[3], sntByTTL[3])
 	}
 }
 
-func TestScheduler_FoldedDestinationRepliesRespectMaxPerHop(t *testing.T) {
-	// When folded probes push the finalTTL's completed count to MaxPerHop,
-	// any further folded probes should be silently discarded.
+func TestScheduler_DiscardedDestinationRepliesCannotExceedMaxPerHop(t *testing.T) {
+	// With discard semantics, higher TTL destination replies are discarded
+	// entirely, so they can never push finalTTL's Snt above MaxPerHop.
 	dstIP := net.ParseIP("10.0.0.99")
 
 	var probeCount int32
@@ -1004,12 +1009,19 @@ func TestScheduler_FoldedDestinationRepliesRespectMaxPerHop(t *testing.T) {
 	stats := agg.Snapshot()
 	for _, s := range stats {
 		if s.TTL == 2 {
-			// TTL 2 is the finalTTL; folded probes from higher TTLs should
-			// be discarded once completed >= MaxPerHop. MigrateStats also
-			// caps sent at MaxPerHop, so Snt must not exceed the budget.
+			// TTL 2 is the finalTTL; higher TTL destination replies are
+			// discarded entirely, so Snt must equal exactly MaxPerHop
+			// (only own probes counted).
 			if s.Snt > 2 {
-				t.Errorf("TTL 2 (final): Snt=%d exceeds MaxPerHop=2 (folded overflow)", s.Snt)
+				t.Errorf("TTL 2 (final): Snt=%d exceeds MaxPerHop=2 (discard violation)", s.Snt)
 			}
+		}
+	}
+
+	// Verify no higher TTLs have stats in the aggregator
+	for _, s := range stats {
+		if s.TTL > 2 && s.IP == dstIP.String() {
+			t.Errorf("TTL %d: should not have dst-ip stats (discarded), got Snt=%d", s.TTL, s.Snt)
 		}
 	}
 }
@@ -1249,5 +1261,309 @@ func TestScheduler_FinalTTLLowered_ChainMigration(t *testing.T) {
 		if (s.TTL == 9 || s.TTL == 12) && s.IP == "10.0.0.99" {
 			t.Errorf("TTL %d: ghost row with dst-ip after chain migration", s.TTL)
 		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// New regression tests: discard over-final destination replies
+// ---------------------------------------------------------------------------
+
+func TestScheduler_LateHigherTTLDestinationReply_Discarded_NoSntBump(t *testing.T) {
+	// Scheduler dispatches multiple TTLs concurrently.
+	// TTL 3 hits destination first → sets knownFinalTTL=3 and disables >3.
+	// Later: originTTL=5 returns destination reply (late) → MUST be discarded.
+	dstIP := net.ParseIP("10.0.0.99")
+
+	prober := &mockTTLProber{
+		probeFn: func(_ context.Context, ttl int) (mtrProbeResult, error) {
+			if ttl == 3 {
+				// Destination — returns fast
+				return mtrProbeResult{
+					TTL: ttl, Success: true,
+					Addr: &net.IPAddr{IP: dstIP},
+					RTT:  3 * time.Millisecond,
+				}, nil
+			}
+			if ttl == 5 {
+				// Late destination reply — delayed so TTL 3 is processed first
+				time.Sleep(40 * time.Millisecond)
+				return mtrProbeResult{
+					TTL: ttl, Success: true,
+					Addr: &net.IPAddr{IP: dstIP},
+					RTT:  8 * time.Millisecond,
+				}, nil
+			}
+			return mtrProbeResult{
+				TTL: ttl, Success: true,
+				Addr: &net.IPAddr{IP: net.ParseIP(fmt.Sprintf("10.0.0.%d", ttl))},
+				RTT:  time.Duration(ttl) * time.Millisecond,
+			}, nil
+		},
+	}
+
+	agg := NewMTRAggregator()
+
+	var mu sync.Mutex
+	var callbackCount int
+
+	err := runMTRScheduler(context.Background(), prober, agg, mtrSchedulerConfig{
+		BeginHop:         1,
+		MaxHops:          6,
+		HopInterval:      time.Millisecond,
+		MaxPerHop:        2,
+		ParallelRequests: 6,
+		ProgressThrottle: time.Millisecond,
+		DstIP:            dstIP,
+	}, nil, func(result mtrProbeResult, _ int) {
+		mu.Lock()
+		callbackCount++
+		mu.Unlock()
+	})
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	stats := agg.Snapshot()
+	sntByTTL := map[int]int{}
+	for _, s := range stats {
+		sntByTTL[s.TTL] = s.Snt
+	}
+
+	// Final hop TTL 3 should have exactly MaxPerHop (2) Snt — no bump from TTL 5
+	if sntByTTL[3] != 2 {
+		t.Errorf("TTL 3 (final): expected Snt=2 (MaxPerHop, own probes only), got %d", sntByTTL[3])
+	}
+
+	// TTL 5 should have 0 Snt — discarded
+	if sntByTTL[5] > 0 {
+		t.Errorf("TTL 5: expected Snt=0 (discarded late dst reply), got %d", sntByTTL[5])
+	}
+
+	// Callback count should equal sum of Snt across active TTLs only
+	mu.Lock()
+	totalSnt := 0
+	for _, s := range stats {
+		totalSnt += s.Snt
+	}
+	if callbackCount != totalSnt {
+		t.Errorf("callback count (%d) != total Snt (%d); discarded results may have leaked", callbackCount, totalSnt)
+	}
+	mu.Unlock()
+}
+
+func TestScheduler_DiscardedOverFinal_DoesNotEmitOnProbe(t *testing.T) {
+	// Provide onProbe hook that appends all records.
+	// Trigger late over-final destination reply.
+	// Assert no record appended for discarded result.
+	dstIP := net.ParseIP("10.0.0.99")
+
+	prober := &mockTTLProber{
+		probeFn: func(_ context.Context, ttl int) (mtrProbeResult, error) {
+			if ttl == 2 {
+				return mtrProbeResult{
+					TTL: ttl, Success: true,
+					Addr: &net.IPAddr{IP: dstIP},
+					RTT:  5 * time.Millisecond,
+				}, nil
+			}
+			if ttl > 2 {
+				time.Sleep(30 * time.Millisecond)
+				return mtrProbeResult{
+					TTL: ttl, Success: true,
+					Addr: &net.IPAddr{IP: dstIP},
+					RTT:  10 * time.Millisecond,
+				}, nil
+			}
+			return mtrProbeResult{
+				TTL: ttl, Success: true,
+				Addr: &net.IPAddr{IP: net.ParseIP("10.0.0.1")},
+				RTT:  1 * time.Millisecond,
+			}, nil
+		},
+	}
+
+	agg := NewMTRAggregator()
+
+	var mu sync.Mutex
+	var records []mtrProbeResult
+
+	err := runMTRScheduler(context.Background(), prober, agg, mtrSchedulerConfig{
+		BeginHop:         1,
+		MaxHops:          5,
+		HopInterval:      time.Millisecond,
+		MaxPerHop:        2,
+		ParallelRequests: 5,
+		ProgressThrottle: time.Millisecond,
+		DstIP:            dstIP,
+	}, nil, func(result mtrProbeResult, _ int) {
+		mu.Lock()
+		records = append(records, result)
+		mu.Unlock()
+	})
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	// No record should have TTL > 2 (all discarded)
+	for i, r := range records {
+		if r.TTL > 2 {
+			t.Errorf("record[%d]: TTL %d should not have been emitted (discarded over-final)", i, r.TTL)
+		}
+	}
+
+	// Record count must match aggregator Snt sum
+	stats := agg.Snapshot()
+	totalSnt := 0
+	for _, s := range stats {
+		totalSnt += s.Snt
+	}
+	if len(records) != totalSnt {
+		t.Errorf("record count (%d) != total Snt (%d); 1:1 onProbe/Snt invariant violated", len(records), totalSnt)
+	}
+}
+
+func TestScheduler_FinalTTLLowering_Chain_WithMaxPerHop_NoGhostRow_StableStats(t *testing.T) {
+	// Construct deterministic RTT samples with chain lowering:
+	// Provisional final at TTL 12 → lowered to 9 → lowered to 7.
+	// MaxPerHop=3 (small). Verify no ghost rows, stats stable.
+	dstIP := net.ParseIP("10.0.0.99")
+
+	// RTT values for deterministic stat validation
+	rttMap := map[int][]time.Duration{
+		7:  {5 * time.Millisecond, 6 * time.Millisecond, 7 * time.Millisecond},
+		9:  {10 * time.Millisecond, 11 * time.Millisecond},
+		12: {20 * time.Millisecond},
+	}
+	var mu sync.Mutex
+	callCountByTTL := map[int]int{}
+
+	prober := &mockTTLProber{
+		probeFn: func(_ context.Context, ttl int) (mtrProbeResult, error) {
+			mu.Lock()
+			callCountByTTL[ttl]++
+			n := callCountByTTL[ttl]
+			mu.Unlock()
+
+			if ttl == 12 {
+				// First to return destination
+				rtt := 20 * time.Millisecond
+				if n <= len(rttMap[12]) {
+					rtt = rttMap[12][n-1]
+				}
+				return mtrProbeResult{
+					TTL: ttl, Success: true,
+					Addr: &net.IPAddr{IP: dstIP},
+					RTT:  rtt,
+				}, nil
+			}
+			if ttl == 9 {
+				time.Sleep(30 * time.Millisecond)
+				rtt := 11 * time.Millisecond
+				if n <= len(rttMap[9]) {
+					rtt = rttMap[9][n-1]
+				}
+				return mtrProbeResult{
+					TTL: ttl, Success: true,
+					Addr: &net.IPAddr{IP: dstIP},
+					RTT:  rtt,
+				}, nil
+			}
+			if ttl == 7 {
+				time.Sleep(60 * time.Millisecond)
+				rtt := 7 * time.Millisecond
+				if n <= len(rttMap[7]) {
+					rtt = rttMap[7][n-1]
+				}
+				return mtrProbeResult{
+					TTL: ttl, Success: true,
+					Addr: &net.IPAddr{IP: dstIP},
+					RTT:  rtt,
+				}, nil
+			}
+			return mtrProbeResult{
+				TTL: ttl, Success: true,
+				Addr: &net.IPAddr{IP: net.ParseIP(fmt.Sprintf("10.0.0.%d", ttl))},
+				RTT:  time.Duration(ttl) * time.Millisecond,
+			}, nil
+		},
+	}
+
+	agg := NewMTRAggregator()
+
+	err := runMTRScheduler(context.Background(), prober, agg, mtrSchedulerConfig{
+		BeginHop:         1,
+		MaxHops:          15,
+		HopInterval:      time.Millisecond,
+		MaxPerHop:        3,
+		ParallelRequests: 15,
+		ProgressThrottle: time.Millisecond,
+		DstIP:            dstIP,
+	}, nil, nil)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	stats := agg.Snapshot()
+	sntByTTL := map[int]int{}
+	ipByTTL := map[int]string{}
+	var finalHopStat *MTRHopStat
+	for i, s := range stats {
+		sntByTTL[s.TTL] = s.Snt
+		ipByTTL[s.TTL] = s.IP
+		if s.TTL == 7 && s.IP == dstIP.String() {
+			finalHopStat = &stats[i]
+		}
+	}
+
+	// No ghost rows at TTL 12 or 9 with destination IP
+	for _, ttl := range []int{12, 9} {
+		if ipByTTL[ttl] == dstIP.String() {
+			t.Errorf("TTL %d: ghost row with dst-ip after chain migration", ttl)
+		}
+	}
+
+	// Final hop is TTL 7
+	if finalHopStat == nil {
+		t.Fatal("expected final hop at TTL 7 with destination IP")
+	}
+
+	// Snt <= MaxPerHop
+	if finalHopStat.Snt > 3 {
+		t.Errorf("TTL 7 (final): Snt=%d exceeds MaxPerHop=3", finalHopStat.Snt)
+	}
+
+	// Snt must be > 0 (at least the migrated + own)
+	if finalHopStat.Snt == 0 {
+		t.Error("TTL 7 (final): Snt=0, expected > 0 after migration")
+	}
+
+	// Avg should be reasonable (> 0 and not NaN)
+	if finalHopStat.Avg <= 0 {
+		t.Errorf("TTL 7 (final): Avg=%f, expected > 0 (stable stats)", finalHopStat.Avg)
+	}
+
+	// StDev should be non-negative
+	if finalHopStat.StDev < 0 {
+		t.Errorf("TTL 7 (final): StDev=%f, expected >= 0 (stable stats)", finalHopStat.StDev)
+	}
+
+	// Destination IP should appear exactly once across all stats rows
+	dstIPCount := 0
+	for _, s := range stats {
+		if s.IP == dstIP.String() {
+			dstIPCount++
+			if s.TTL != 7 {
+				t.Errorf("destination IP found at TTL %d, expected only at TTL 7", s.TTL)
+			}
+		}
+	}
+	if dstIPCount != 1 {
+		t.Errorf("expected exactly 1 row with dst-ip (at TTL 7), got %d", dstIPCount)
 	}
 }

@@ -438,10 +438,9 @@ func mtrTUIRenderWithWidth(w io.Writer, header MTRTUIHeader, stats []trace.MTRHo
 		nameLabel = "ip"
 	}
 	keyPrefix := fmt.Sprintf("Keys: q-quit  p-pause  SPACE-resume  r-reset  y-display(%s)  n-host(%s)          ", modeLabel, nameLabel)
-	tuiLine(&b, "%s%s%s",
+	tuiLine(&b, "%s%s",
 		mtrTUIKeyColor(keyPrefix),
-		mtrTUIStatusColor("["+statusStr+"]"),
-		mtrTUIKeyColor(fmt.Sprintf(" Round: %d", header.Iteration)))
+		mtrTUIStatusColor("["+statusStr+"]"))
 	b.WriteString("\r\n") // 空行
 
 	// ── 双层表头 ──

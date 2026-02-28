@@ -255,8 +255,8 @@ func TestMTRTUIRenderString_Header(t *testing.T) {
 	if !strings.Contains(result, "[Running]") {
 		t.Error("missing Running status")
 	}
-	if !strings.Contains(result, "Round: 5") {
-		t.Error("missing round number")
+	if strings.Contains(result, "Round:") {
+		t.Error("TUI header should NOT contain 'Round:' text")
 	}
 	if !strings.Contains(result, "q-quit") {
 		t.Error("missing key hints")
@@ -297,6 +297,26 @@ func TestMTRTUIRenderString_UsesCRLFOnly(t *testing.T) {
 			}
 			t.Fatalf("bare LF at byte %d; context: %q", i, result[start:end])
 		}
+	}
+}
+
+// TestMTRTablePrinter_NoRoundText verifies that the non-TTY fallback
+// (MTRTablePrinter) does NOT contain "Round:" in its output.
+func TestMTRTablePrinter_NoRoundText(t *testing.T) {
+	origNoColor := color.NoColor
+	color.NoColor = true
+	defer func() { color.NoColor = origNoColor }()
+
+	stats := []trace.MTRHopStat{
+		{TTL: 1, IP: "10.0.0.1", Loss: 0, Snt: 5, Last: 1.0, Avg: 1.0, Best: 1.0, Wrst: 1.0, StDev: 0},
+	}
+
+	output := captureStdout(t, func() {
+		MTRTablePrinter(stats, 5, HostModeFull, HostNamePTRorIP, "en", false)
+	})
+
+	if strings.Contains(output, "Round:") {
+		t.Errorf("MTRTablePrinter output should NOT contain 'Round:' text, got:\n%s", output)
 	}
 }
 

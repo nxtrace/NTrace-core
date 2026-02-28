@@ -197,18 +197,11 @@ func runMTRScheduler(
 
 		states[originTTL].inFlight = false
 
-		// For disabled TTLs, only allow through if it's a successful dst-ip reply
-		// that can be folded into the final TTL.
+		// Once knownFinalTTL is determined, all probes from disabled higher TTLs
+		// are discarded. Do NOT fold destination replies into finalTTL; folding
+		// breaks Snt semantics and raw event fidelity.
 		if states[originTTL].disabled {
-			curFinal := atomic.LoadInt32(&knownFinalTTL)
-			if curFinal < 0 || cp.err != nil || !cp.result.Success || cp.result.Addr == nil {
-				return
-			}
-			peerIP := mtrAddrToIP(cp.result.Addr)
-			if peerIP == nil || !peerIP.Equal(cfg.DstIP) || int32(originTTL) <= curFinal {
-				return
-			}
-			// This is a late higher-TTL destination echo — fall through to fold.
+			return
 		}
 
 		if cp.err != nil {
@@ -245,9 +238,8 @@ func runMTRScheduler(
 			return
 		}
 
-		// ── Destination folding logic ──
-		// Determine accountTTL: where this probe's stats should be attributed.
-		accountTTL := originTTL
+		// ── Destination detection logic ──
+		// Determine if this probe reached the destination.
 		if cp.result.Success && cp.result.Addr != nil {
 			peerIP := mtrAddrToIP(cp.result.Addr)
 			if peerIP != nil && peerIP.Equal(cfg.DstIP) {
@@ -271,43 +263,34 @@ func runMTRScheduler(
 					if cfg.MaxPerHop > 0 && states[originTTL].completed > cfg.MaxPerHop {
 						states[originTTL].completed = cfg.MaxPerHop
 					}
-				} else if int32(originTTL) > curFinal {
-					// Late higher-TTL destination echo — fold into finalTTL
-					accountTTL = int(curFinal)
 				}
+				// originTTL > curFinal case: impossible here because disabled
+				// TTLs are discarded above before reaching this point.
 			}
 		}
 
-		// Check MaxPerHop cap on the account TTL (covers own and folded probes).
+		// Check MaxPerHop cap.
 		// In-flight probes launched before the cap was reached may return after
-		// folds/migration pushed completed to MaxPerHop — discard them.
-		if cfg.MaxPerHop > 0 && states[accountTTL].completed >= cfg.MaxPerHop {
+		// migration pushed completed to MaxPerHop — discard them.
+		if cfg.MaxPerHop > 0 && states[originTTL].completed >= cfg.MaxPerHop {
 			// Still update scheduling state so the origin TTL doesn't stall.
-			if accountTTL == originTTL && !states[originTTL].disabled {
-				states[originTTL].consecutiveErrs = 0
-				states[originTTL].nextAt = cp.doneAt.Add(hopInterval)
-			}
+			states[originTTL].consecutiveErrs = 0
+			states[originTTL].nextAt = cp.doneAt.Add(hopInterval)
 			return
 		}
 
 		// Update scheduling state for origin TTL
 		states[originTTL].consecutiveErrs = 0
 		states[originTTL].nextAt = cp.doneAt.Add(hopInterval)
-		if accountTTL == originTTL {
-			states[originTTL].completed++
-		}
-		// For folded probes, increment completed on the account TTL
-		if accountTTL != originTTL {
-			states[accountTTL].completed++
-		}
+		states[originTTL].completed++
 
-		// Feed single-probe result to aggregator using accountTTL
+		// Feed single-probe result to aggregator
 		singleRes := &Result{Hops: make([][]Hop, maxHops)}
 		hop := Hop{
 			Success:  cp.result.Success,
 			Address:  cp.result.Addr,
 			Hostname: cp.result.Hostname,
-			TTL:      accountTTL,
+			TTL:      originTTL,
 			RTT:      cp.result.RTT,
 			MPLS:     cp.result.MPLS,
 			Geo:      cp.result.Geo,
@@ -316,7 +299,7 @@ func runMTRScheduler(
 		if !hop.Success && hop.Address == nil {
 			hop.Error = errHopLimitTimeout
 		}
-		idx := accountTTL - 1
+		idx := originTTL - 1
 		if idx >= 0 && idx < len(singleRes.Hops) {
 			singleRes.Hops[idx] = []Hop{hop}
 		}
@@ -329,13 +312,9 @@ func runMTRScheduler(
 
 		agg.Update(singleRes, 1)
 
-		// Destination detection for non-folded probes was handled above.
-
-		// Emit probe result with accountTTL for raw/onProbe consumers
-		emitResult := cp.result
-		emitResult.TTL = accountTTL
+		// Emit probe result for raw/onProbe consumers
 		if onProbe != nil {
-			onProbe(emitResult, computeIteration())
+			onProbe(cp.result, computeIteration())
 		}
 
 		maybeSnapshot(false)
