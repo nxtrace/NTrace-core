@@ -1,10 +1,15 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"os"
 	"sync/atomic"
 	"testing"
+
+	"github.com/nxtrace/NTrace-core/trace"
+	"github.com/nxtrace/NTrace-core/util"
 )
 
 func TestCheckMTRConflicts_NoConflict(t *testing.T) {
@@ -205,6 +210,59 @@ func TestDeriveMTRRoundParams_DefaultsAndOverrides(t *testing.T) {
 					gotRounds, gotInterval, tt.wantRounds, tt.wantInterval)
 			}
 		})
+	}
+}
+
+func TestNormalizeMTRTraceConfig_UsesDefaultTTLInterval(t *testing.T) {
+	original := trace.Config{
+		TTLInterval:    1200,
+		PacketInterval: 25,
+		Timeout:        3,
+		MaxHops:        18,
+		BeginHop:       4,
+	}
+
+	normalized := normalizeMTRTraceConfig(original)
+
+	if normalized.TTLInterval != defaultTracerouteTTLIntervalMs {
+		t.Fatalf("normalized TTLInterval = %d, want %d", normalized.TTLInterval, defaultTracerouteTTLIntervalMs)
+	}
+	if normalized.PacketInterval != original.PacketInterval {
+		t.Fatalf("normalized PacketInterval = %d, want %d", normalized.PacketInterval, original.PacketInterval)
+	}
+	if normalized.Timeout != original.Timeout || normalized.MaxHops != original.MaxHops || normalized.BeginHop != original.BeginHop {
+		t.Fatalf("unexpected mutation of other fields: %+v", normalized)
+	}
+	if original.TTLInterval != 1200 {
+		t.Fatalf("original config was modified in place: %+v", original)
+	}
+}
+
+func TestBuildRawAPIInfoLine_LeoMoeAPI(t *testing.T) {
+	old := util.FastIPMetaCache
+	t.Cleanup(func() {
+		util.FastIPMetaCache = old
+	})
+
+	util.FastIPMetaCache = util.FastIPMeta{
+		IP:       "2403:18c0:1001:462:dd:38ff:fe48:e0c5",
+		Latency:  "21.33",
+		NodeName: "DMIT.NRT",
+	}
+
+	got := buildRawAPIInfoLine("LeoMoeAPI")
+	want := "[NextTrace API] preferred API IP - [2403:18c0:1001:462:dd:38ff:fe48:e0c5] - 21.33ms - DMIT.NRT"
+	if got != want {
+		t.Fatalf("buildRawAPIInfoLine() = %q, want %q", got, want)
+	}
+}
+
+func TestWriteMTRRawRuntimeError_WritesToProvidedWriter(t *testing.T) {
+	var buf bytes.Buffer
+	err := errors.New("hop timeout")
+	writeMTRRawRuntimeError(&buf, err)
+	if got := buf.String(); got != err.Error()+"\n" {
+		t.Fatalf("writeMTRRawRuntimeError() wrote %q", got)
 	}
 }
 

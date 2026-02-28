@@ -358,7 +358,15 @@ HOST: myhost                    Loss%   Snt   Last    Avg   Best   Wrst  StDev
   2.|-- ???                    100.0%    10    0.00   0.00   0.00   0.00   0.00
 ```
 
-When `--raw` is used together with MTR (`--mtr`, `-r`, or `-w`), NextTrace enters **MTR raw stream mode** and prints one `|`-delimited event per line:
+When `--raw` is used together with MTR (`--mtr`, `-r`, or `-w`), NextTrace enters **MTR raw stream mode**.
+
+If the active data provider is `LeoMoeAPI`, NextTrace first prints one uncolored API info preamble line:
+
+```text
+[NextTrace API] preferred API IP - [2403:18c0:1001:462:dd:38ff:fe48:e0c5] - 21.33ms - DMIT.NRT
+```
+
+After that, it prints one `|`-delimited event per line:
 
 ```
 4|84.17.33.106|po66-3518.cr01.nrt04.jp.misaka.io|0.27|60068|Japan|Tokyo|Tokyo||cdn77.com|35.6804|139.7690
@@ -371,6 +379,8 @@ Field order:
 Timeout rows keep the same 12-column layout:
 
 `ttl|*||||||||||`
+
+In MTR mode (`--mtr`, `-r`, `-w`, including `--raw`), `-i/--ttl-time` means **interval between rounds**. The per-hop TTL group spacing inside each traceroute round stays at the default `50ms`.
 
 > Note: `--show-ips` only takes effect in MTR mode (`--mtr`, `-r`, `-w`); otherwise it is ignored.
 >
@@ -537,8 +547,10 @@ Arguments:
                                      sending packets groups by TTL. Useful when
                                      some routers use rate-limit for ICMP
                                      messages. Default: 50
-                                     (In MTR mode, also controls interval
-                                     between rounds. Default: 1000)
+                                     (In MTR mode --mtr/-r/-w, this means
+                                     interval between rounds. Per-round TTL
+                                     spacing remains 50ms. Default round
+                                     interval: 1000)
       --timeout                      The number of [milliseconds] to keep probe
                                      sockets open before giving up on the
                                      connection. Default: 1000

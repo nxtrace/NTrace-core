@@ -356,7 +356,15 @@ HOST: myhost                    Loss%   Snt   Last    Avg   Best   Wrst  StDev
   2.|-- ???                    100.0%    10    0.00   0.00   0.00   0.00   0.00
 ```
 
-当 `--raw` 与 MTR（`--mtr`、`-r`、`-w`）一起使用时，会进入 **MTR 原始流式模式**，每条事件输出一行 `|` 分隔文本：
+当 `--raw` 与 MTR（`--mtr`、`-r`、`-w`）一起使用时，会进入 **MTR 原始流式模式**。
+
+如果当前数据源是 `LeoMoeAPI`，会先输出一行无色的 API 信息头：
+
+```text
+[NextTrace API] preferred API IP - [2403:18c0:1001:462:dd:38ff:fe48:e0c5] - 21.33ms - DMIT.NRT
+```
+
+之后再逐行输出 `|` 分隔的事件流：
 
 ```
 4|84.17.33.106|po66-3518.cr01.nrt04.jp.misaka.io|0.27|60068|日本|东京都|东京||cdn77.com|35.6804|139.7690
@@ -369,6 +377,8 @@ HOST: myhost                    Loss%   Snt   Last    Avg   Best   Wrst  StDev
 超时行保持固定 12 列：
 
 `ttl|*||||||||||`
+
+在 MTR 模式（`--mtr`、`-r`、`-w`，包括 `--raw`）下，`-i/--ttl-time` 表示**轮次间隔**。每轮 traceroute 内部按 TTL 分组发包的间隔仍固定为默认的 `50ms`。
 
 > 注意：`--show-ips` 仅在 MTR 模式（`--mtr`、`-r`、`-w`）生效，其他模式会忽略。
 >
@@ -519,8 +529,9 @@ Arguments:
                                      sending packets groups by TTL. Useful when
                                      some routers use rate-limit for ICMP
                                      messages. Default: 50
-                                     (In MTR mode, also controls interval
-                                     between rounds. Default: 1000)
+                                     (在 MTR 模式 --mtr/-r/-w 下，该参数表示
+                                     轮次间隔。单轮内 TTL 组间隔仍为 50ms。
+                                     默认轮次间隔: 1000)
       --timeout                      The number of [milliseconds] to keep probe
                                      sockets open before giving up on the
                                      connection. Default: 1000

@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/signal"
@@ -83,6 +84,7 @@ func runMTRTUI(method trace.Method, conf trace.Config, intervalMs int, maxRounds
 
 	// preferred API 信息（仅 LeoMoeAPI 且有结果时展示）
 	apiInfo := buildAPIInfo(dataOrigin)
+	roundConf := normalizeMTRTraceConfig(conf)
 
 	opts := trace.MTROptions{
 		Interval:         time.Duration(intervalMs) * time.Millisecond,
@@ -102,7 +104,7 @@ func runMTRTUI(method trace.Method, conf trace.Config, intervalMs int, maxRounds
 		}
 	}
 
-	err := trace.RunMTR(ctx, method, conf, opts, onSnapshot)
+	err := trace.RunMTR(ctx, method, roundConf, opts, onSnapshot)
 	if err != nil && err != context.Canceled {
 		// 离开备用屏幕后再打印错误
 		ui.Leave()
@@ -153,7 +155,8 @@ func runMTRReport(method trace.Method, conf trace.Config, intervalMs int, maxRou
 		MaxRounds: maxRounds,
 	}
 
-	err := trace.RunMTR(ctx, method, conf, opts, onSnapshot)
+	roundConf := normalizeMTRTraceConfig(conf)
+	err := trace.RunMTR(ctx, method, roundConf, opts, onSnapshot)
 	if err != nil && err != context.Canceled {
 		fmt.Println(err)
 		return
@@ -176,7 +179,7 @@ func runMTRReport(method trace.Method, conf trace.Config, intervalMs int, maxRou
 // runMTRRaw 执行 MTR 原始流式模式（逐事件输出，'|' 分隔）。
 // 行格式固定为 12 列：
 // ttl|ip|ptr|rtt|asn|country|prov|city|district|owner|lat|lng
-func runMTRRaw(method trace.Method, conf trace.Config, intervalMs int, maxRounds int) {
+func runMTRRaw(method trace.Method, conf trace.Config, intervalMs int, maxRounds int, dataOrigin string) {
 	if intervalMs <= 0 {
 		intervalMs = 1000
 	}
@@ -196,12 +199,30 @@ func runMTRRaw(method trace.Method, conf trace.Config, intervalMs int, maxRounds
 		MaxRounds: maxRounds,
 	}
 
-	err := trace.RunMTRRaw(ctx, method, conf, opts, func(rec trace.MTRRawRecord) {
+	roundConf := normalizeMTRTraceConfig(conf)
+	if apiLine := buildRawAPIInfoLine(dataOrigin); apiLine != "" {
+		fmt.Println(apiLine)
+	}
+
+	err := trace.RunMTRRaw(ctx, method, roundConf, opts, func(rec trace.MTRRawRecord) {
 		fmt.Println(printer.FormatMTRRawLine(rec))
 	})
 	if err != nil && err != context.Canceled {
-		fmt.Println(err)
+		writeMTRRawRuntimeError(os.Stderr, err)
 	}
+}
+
+func normalizeMTRTraceConfig(conf trace.Config) trace.Config {
+	normalized := conf
+	normalized.TTLInterval = defaultTracerouteTTLIntervalMs
+	return normalized
+}
+
+func writeMTRRawRuntimeError(w io.Writer, err error) {
+	if err == nil || w == nil {
+		return
+	}
+	_, _ = fmt.Fprintln(w, err)
 }
 
 // resolveSrcIP 按优先级解析源 IP：--source > --dev 推导 > udp dial fallback。
@@ -255,4 +276,24 @@ func buildAPIInfo(dataOrigin string) string {
 		nodeName = "Unknown"
 	}
 	return fmt.Sprintf("preferred API IP: %s[%s]", nodeName, meta.IP)
+}
+
+func buildRawAPIInfoLine(dataOrigin string) string {
+	if !strings.EqualFold(dataOrigin, "LeoMoeAPI") && !strings.EqualFold(dataOrigin, "leomoeapi") {
+		return ""
+	}
+	meta := util.FastIPMetaCache
+	if meta.IP == "" {
+		return ""
+	}
+
+	nodeName := strings.TrimSpace(meta.NodeName)
+	if nodeName == "" {
+		nodeName = "Unknown"
+	}
+	latency := strings.TrimSpace(meta.Latency)
+	if latency == "" {
+		return fmt.Sprintf("[NextTrace API] preferred API IP - [%s] - %s", meta.IP, nodeName)
+	}
+	return fmt.Sprintf("[NextTrace API] preferred API IP - [%s] - %sms - %s", meta.IP, latency, nodeName)
 }

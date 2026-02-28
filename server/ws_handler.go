@@ -3,6 +3,8 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -26,6 +28,16 @@ var traceUpgrader = websocket.Upgrader{
 	},
 }
 
+const (
+	wsSendQueueSize = 1024
+	wsWriteTimeout  = 5 * time.Second
+)
+
+var (
+	errWSSlowConsumer  = errors.New("websocket client too slow for mtr stream")
+	errWSSessionClosed = errors.New("websocket session closed")
+)
+
 type wsEnvelope struct {
 	Type   string      `json:"type"`
 	Data   interface{} `json:"data,omitempty"`
@@ -33,27 +45,102 @@ type wsEnvelope struct {
 	Status int         `json:"status,omitempty"`
 }
 
+type wsConn interface {
+	WriteJSON(v interface{}) error
+	SetWriteDeadline(t time.Time) error
+	WriteControl(messageType int, data []byte, deadline time.Time) error
+	Close() error
+	NextReader() (messageType int, r io.Reader, err error)
+}
+
 type wsTraceSession struct {
-	conn    *websocket.Conn
-	writeMu sync.Mutex
-	closed  atomic.Bool
-	lang    string
-	seen    map[int]int
+	conn       wsConn
+	sendMu     sync.Mutex
+	sendCh     chan wsEnvelope
+	stopCh     chan struct{}
+	writerDone chan struct{}
+	closeOnce  sync.Once
+	finishOnce sync.Once
+	closed     atomic.Bool
+	lang       string
+	seen       map[int]int
+}
+
+func newWSTraceSession(conn wsConn, lang string, queueSize int) *wsTraceSession {
+	if queueSize <= 0 {
+		queueSize = wsSendQueueSize
+	}
+	s := &wsTraceSession{
+		conn:       conn,
+		sendCh:     make(chan wsEnvelope, queueSize),
+		stopCh:     make(chan struct{}),
+		writerDone: make(chan struct{}),
+		lang:       lang,
+		seen:       make(map[int]int),
+	}
+	go s.writeLoop()
+	return s
+}
+
+func (s *wsTraceSession) writeLoop() {
+	defer close(s.writerDone)
+	for {
+		select {
+		case <-s.stopCh:
+			return
+		case msg, ok := <-s.sendCh:
+			if !ok {
+				return
+			}
+			deadline := time.Now().Add(wsWriteTimeout)
+			_ = s.conn.SetWriteDeadline(deadline)
+			err := s.conn.WriteJSON(msg)
+			if err != nil {
+				s.closeWithCode(websocket.CloseInternalServerErr, "write failed")
+				return
+			}
+		}
+	}
 }
 
 func (s *wsTraceSession) send(msg wsEnvelope) error {
+	s.sendMu.Lock()
+	defer s.sendMu.Unlock()
 	if s.closed.Load() {
+		return errWSSessionClosed
+	}
+	select {
+	case s.sendCh <- msg:
 		return nil
+	default:
+		s.closeWithCode(websocket.CloseTryAgainLater, "client too slow for mtr stream")
+		return errWSSlowConsumer
 	}
-	s.writeMu.Lock()
-	defer s.writeMu.Unlock()
-	if err := s.conn.WriteJSON(msg); err != nil {
-		if !s.closed.Load() {
-			s.closed.Store(true)
+}
+
+func (s *wsTraceSession) closeWithCode(code int, reason string) {
+	s.closed.Store(true)
+	s.closeOnce.Do(func() {
+		close(s.stopCh)
+		deadline := time.Now().Add(wsWriteTimeout)
+		_ = s.conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(code, reason), deadline)
+		_ = s.conn.Close()
+	})
+}
+
+func (s *wsTraceSession) finish() {
+	s.finishOnce.Do(func() {
+		s.sendMu.Lock()
+		wasClosed := s.closed.Swap(true)
+		if !wasClosed {
+			close(s.sendCh)
 		}
-		return err
-	}
-	return nil
+		s.sendMu.Unlock()
+		<-s.writerDone
+		s.closeOnce.Do(func() {
+			_ = s.conn.Close()
+		})
+	})
 }
 
 func traceWebsocketHandler(c *gin.Context) {
@@ -88,11 +175,8 @@ func traceWebsocketHandler(c *gin.Context) {
 		return
 	}
 
-	session := &wsTraceSession{
-		conn: conn,
-		lang: setup.Config.Lang,
-		seen: make(map[int]int),
-	}
+	session := newWSTraceSession(conn, setup.Config.Lang, wsSendQueueSize)
+	defer session.finish()
 
 	startPayload := gin.H{
 		"target":        setup.Target,
@@ -103,12 +187,13 @@ func traceWebsocketHandler(c *gin.Context) {
 	}
 	if err := session.send(wsEnvelope{Type: "start", Data: startPayload}); err != nil {
 		log.Printf("[deploy] websocket send start failed: %v", err)
+		return
 	}
 
 	go func() {
 		for {
 			if _, _, err := conn.NextReader(); err != nil {
-				session.closed.Store(true)
+				session.closeWithCode(websocket.CloseNormalClosure, "client disconnected")
 				return
 			}
 		}
@@ -235,7 +320,6 @@ func runMTRTrace(session *wsTraceSession, setup *traceExecution) {
 			iteration = rec.Iteration
 		}
 		if err := session.send(wsEnvelope{Type: "mtr_raw", Data: rec}); err != nil {
-			session.closed.Store(true)
 			cancel()
 		}
 	})

@@ -46,6 +46,11 @@ let mtrStatsStore = [];
 let mtrRawAggStore = new Map();
 let mtrRawOrderSeq = 0;
 let singleModeQueriesValue = '';
+const MTR_RENDER_MIN_INTERVAL_MS = 100;
+let mtrRenderScheduled = false;
+let mtrRenderTimer = null;
+let mtrRenderRAF = null;
+let mtrRenderLastAt = 0;
 
 const uiText = {
   cn: {
@@ -254,6 +259,7 @@ function readNumericValue(inputEl) {
 }
 
 function clearResult(resetState = false) {
+  cancelScheduledMTRRender();
   resultNode.innerHTML = '';
   resultNode.classList.add('hidden');
   resultMetaNode.innerHTML = '';
@@ -264,6 +270,7 @@ function clearResult(resetState = false) {
     mtrStatsStore = [];
     mtrRawAggStore = new Map();
     mtrRawOrderSeq = 0;
+    mtrRenderLastAt = 0;
     stopBtn.classList.add('hidden');
     stopBtn.disabled = true;
   }
@@ -640,6 +647,7 @@ function buildPayload() {
 }
 
 function closeExistingSocket(hideStop = true) {
+  cancelScheduledMTRRender();
   if (socket) {
     socket.onclose = null;
     socket.onerror = null;
@@ -654,6 +662,75 @@ function closeExistingSocket(hideStop = true) {
     stopBtn.classList.add('hidden');
     stopBtn.disabled = true;
   }
+}
+
+function flushMTRRender(force = false) {
+  if (mtrRenderTimer !== null) {
+    clearTimeout(mtrRenderTimer);
+    mtrRenderTimer = null;
+  }
+  if (mtrRenderRAF !== null && typeof cancelAnimationFrame === 'function') {
+    cancelAnimationFrame(mtrRenderRAF);
+    mtrRenderRAF = null;
+  }
+  if (!force) {
+    const now = Date.now();
+    const elapsed = now - mtrRenderLastAt;
+    if (elapsed < MTR_RENDER_MIN_INTERVAL_MS) {
+      const waitMs = MTR_RENDER_MIN_INTERVAL_MS - elapsed;
+      mtrRenderScheduled = true;
+      mtrRenderTimer = setTimeout(() => {
+        mtrRenderTimer = null;
+        flushMTRRender();
+      }, waitMs);
+      return;
+    }
+  }
+  mtrRenderScheduled = false;
+  mtrRenderLastAt = Date.now();
+  renderMTRStats(buildMTRStatsFromRawAgg());
+  renderMeta(latestSummary);
+}
+
+function scheduleMTRRender() {
+  if (mtrRenderScheduled) {
+    return;
+  }
+  mtrRenderScheduled = true;
+
+  const attemptRender = () => {
+    mtrRenderRAF = null;
+    const waitMs = Math.max(0, MTR_RENDER_MIN_INTERVAL_MS - (Date.now() - mtrRenderLastAt));
+    if (waitMs > 0) {
+      mtrRenderTimer = setTimeout(() => {
+        mtrRenderTimer = null;
+        flushMTRRender();
+      }, waitMs);
+      return;
+    }
+    flushMTRRender();
+  };
+
+  if (typeof requestAnimationFrame === 'function') {
+    mtrRenderRAF = requestAnimationFrame(attemptRender);
+    return;
+  }
+  mtrRenderTimer = setTimeout(() => {
+    mtrRenderTimer = null;
+    flushMTRRender();
+  }, 0);
+}
+
+function cancelScheduledMTRRender() {
+  if (mtrRenderTimer !== null) {
+    clearTimeout(mtrRenderTimer);
+    mtrRenderTimer = null;
+  }
+  if (mtrRenderRAF !== null && typeof cancelAnimationFrame === 'function') {
+    cancelAnimationFrame(mtrRenderRAF);
+    mtrRenderRAF = null;
+  }
+  mtrRenderScheduled = false;
 }
 
 function handleSocketMessage(event) {
@@ -681,6 +758,7 @@ function handleSocketMessage(event) {
     case 'mtr': {
       // Backward compatibility with old server snapshots.
       traceCompleted = false;
+      cancelScheduledMTRRender();
       if (msg.data && typeof msg.data.iteration === 'number') {
         latestSummary = {...latestSummary, iteration: msg.data.iteration};
       }
@@ -703,25 +781,26 @@ function handleSocketMessage(event) {
           latestSummary = {...latestSummary, iteration: it};
         }
       }
-      renderMTRStats(buildMTRStatsFromRawAgg());
       setStatus('running', 'statusMtrRunning');
       stopBtn.disabled = false;
-      renderMeta(latestSummary);
+      scheduleMTRRender();
       break;
     }
     case 'complete': {
       traceCompleted = true;
       submitBtn.disabled = false;
       if (currentMode === 'mtr') {
+        if (msg.data && typeof msg.data.iteration === 'number') {
+          latestSummary = {...latestSummary, iteration: msg.data.iteration};
+        }
         stopBtn.disabled = true;
         stopBtn.classList.add('hidden');
         if (msg.data && Array.isArray(msg.data.stats)) {
+          cancelScheduledMTRRender();
           renderMTRStats(msg.data.stats);
+          renderMeta(latestSummary);
         } else {
-          renderMTRStats(buildMTRStatsFromRawAgg());
-        }
-        if (msg.data && typeof msg.data.iteration === 'number') {
-          latestSummary = {...latestSummary, iteration: msg.data.iteration};
+          flushMTRRender(true);
         }
       } else {
         if (msg.data && Array.isArray(msg.data.hops)) {
@@ -734,8 +813,8 @@ function handleSocketMessage(event) {
         }
         latestSummary = {...latestSummary, ...msg.data};
         renderHopsFromStore();
+        renderMeta(latestSummary);
       }
-      renderMeta(latestSummary);
       setStatus('success', 'statusSuccess');
       closeExistingSocket();
       break;
@@ -756,6 +835,7 @@ function handleSocketMessage(event) {
 
 function runTrace(evt) {
   evt.preventDefault();
+  cancelScheduledMTRRender();
   clearResult(true);
   mtrRawAggStore = new Map();
   mtrRawOrderSeq = 0;
@@ -803,6 +883,7 @@ function runTrace(evt) {
   socket.onmessage = handleSocketMessage;
 
   socket.onerror = () => {
+    cancelScheduledMTRRender();
     if (!traceCompleted) {
       traceCompleted = true;
       setStatus('error', 'statusWsError');
@@ -812,6 +893,7 @@ function runTrace(evt) {
   };
 
   socket.onclose = () => {
+    cancelScheduledMTRRender();
     if (!traceCompleted) {
       setStatus('error', 'statusDisconnected');
       submitBtn.disabled = false;

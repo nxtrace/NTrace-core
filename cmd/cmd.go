@@ -36,6 +36,8 @@ type listenInfo struct {
 	Access  string
 }
 
+const defaultTracerouteTTLIntervalMs = 50
+
 func buildListenInfo(addr string) listenInfo {
 	trimmed := strings.TrimSpace(addr)
 	effective := trimmed
@@ -200,7 +202,7 @@ func Execute() {
 	deploy := parser.Flag("", "deploy", &argparse.Options{Help: "Start the Gin powered web console"})
 	//router := parser.Flag("R", "route", &argparse.Options{Help: "Show Routing Table [Provided By BGP.Tools]"})
 	packetInterval := parser.Int("z", "send-time", &argparse.Options{Default: 50, Help: "Set how many [milliseconds] between sending each packet. Useful when some routers use rate-limit for ICMP messages"})
-	ttlInterval := parser.Int("i", "ttl-time", &argparse.Options{Default: 50, Help: "Set how many [milliseconds] between sending packets groups by TTL. Useful when some routers use rate-limit for ICMP messages"})
+	ttlInterval := parser.Int("i", "ttl-time", &argparse.Options{Default: defaultTracerouteTTLIntervalMs, Help: "Set how many [milliseconds] between sending packets groups by TTL. In MTR mode (--mtr/-r/-w, including --raw), this instead controls interval between rounds"})
 	timeout := parser.Int("", "timeout", &argparse.Options{Default: 1000, Help: "The number of [milliseconds] to keep probe sockets open before giving up on the connection"})
 	packetSize := parser.Int("", "psize", &argparse.Options{Default: 52, Help: "Set the payload size"})
 	str := parser.StringPositional(&argparse.Options{Help: "IP Address or domain name"})
@@ -609,7 +611,7 @@ func Execute() {
 
 		switch chooseMTRRunMode(effectiveMTRRaw, effectiveReport) {
 		case mtrRunRaw:
-			runMTRRaw(m, conf, mtrIntervalMs, mtrMaxRounds)
+			runMTRRaw(m, conf, mtrIntervalMs, mtrMaxRounds, *dataOrigin)
 		case mtrRunReport:
 			runMTRReport(m, conf, mtrIntervalMs, mtrMaxRounds, domain, *dataOrigin, effectiveWide, *showIPs)
 		default:
