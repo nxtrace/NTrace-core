@@ -386,7 +386,7 @@ func mtrTUIRenderWithWidth(w io.Writer, header MTRTUIHeader, stats []trace.MTRHo
 		pad := (lo.termWidth - line1W) / 2
 		line1 = strings.Repeat(" ", pad) + line1
 	}
-	tuiLine(&b, "%s", mtrTUIHeaderColor(line1))
+	tuiLine(&b, "%s", mtrTUITitleColor(line1))
 
 	// ── 信息行 2：srcHost (srcIP) -> dstName (dstIP)     RFC3339-time ──
 	srcPart := header.SrcHost
@@ -453,12 +453,14 @@ func mtrTUIRenderWithWidth(w io.Writer, header MTRTUIHeader, stats []trace.MTRHo
 		lang = "en"
 	}
 	nameMode := header.NameMode
+	asnW := computeTUIASNWidth(stats, header.DisplayMode, nameMode, lang, header.ShowIPs)
 	prevTTL := 0
 	for _, s := range stats {
 		hopPrefix := formatTUIHopPrefix(s.TTL, prevTTL, lo.prefixW)
 		prevTTL = s.TTL
 
-		host := formatTUIHost(s, header.DisplayMode, nameMode, lang, header.ShowIPs)
+		parts := buildTUIHostParts(s, header.DisplayMode, nameMode, lang, header.ShowIPs)
+		host := formatTUIHost(parts, asnW)
 		renderDataRow(&b, lo, hopPrefix, host, s)
 
 		// MPLS 多行显示：每个标签独占一行，位于 host 列区域
@@ -473,6 +475,27 @@ func mtrTUIRenderWithWidth(w io.Writer, header MTRTUIHeader, stats []trace.MTRHo
 	}
 
 	fmt.Fprint(w, b.String())
+}
+
+func computeTUIASNWidth(stats []trace.MTRHopStat, mode int, nameMode int, lang string, showIPs bool) int {
+	maxW := 0
+	for _, s := range stats {
+		parts := buildTUIHostParts(s, mode, nameMode, lang, showIPs)
+		if parts.waiting || parts.asn == "" {
+			continue
+		}
+		if w := displayWidth(parts.asn); w > maxW {
+			maxW = w
+		}
+	}
+	if maxW == 0 {
+		return 0
+	}
+	minW := displayWidth("AS???")
+	if maxW < minW {
+		return minW
+	}
+	return maxW
 }
 
 // renderDualHeader 渲染 mtr 风格双层分组表头。

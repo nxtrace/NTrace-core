@@ -410,29 +410,35 @@ func buildMTRHostParts(s trace.MTRHopStat, mode int, nameMode int, lang string, 
 	}
 }
 
-// formatTUIHost 构建 TUI 格式的 host 文本（mixed 分隔，waiting 感知）。
+// buildTUIHostParts 构建仅供 TUI 使用的 host 组成部分。
 //
-// 规则：
-//   - waiting → "(waiting for reply)"
-//   - ASN 与 IP/PTR 之间为 tab
-//   - IP/PTR 与后续信息之间为单个空格
-//   - 无 ASN 时省略 ASN + 首个 tab
-//   - 无后续信息时不追加尾部空格
-func formatTUIHost(s trace.MTRHopStat, mode int, nameMode int, lang string, showIPs bool) string {
+// 与共享 buildMTRHostParts 不同，TUI 会在“有地址但缺失 ASN”时显示 AS???。
+func buildTUIHostParts(s trace.MTRHopStat, mode int, nameMode int, lang string, showIPs bool) mtrHostParts {
 	p := buildMTRHostParts(s, mode, nameMode, lang, showIPs)
 	if p.waiting {
+		return p
+	}
+	if p.asn == "" {
+		p.asn = "AS???"
+	}
+	return p
+}
+
+// formatTUIHost 根据预先构建的 TUI host 组成和 ASN 列宽，生成手动空格对齐的 host 文本。
+func formatTUIHost(parts mtrHostParts, asnW int) string {
+	if parts.waiting {
 		return "(waiting for reply)"
 	}
 
 	var b strings.Builder
-	if p.asn != "" {
-		b.WriteString(p.asn)
-		b.WriteByte('\t')
-	}
-	b.WriteString(p.base)
-	if len(p.extras) > 0 {
+	if asnW > 0 && parts.asn != "" {
+		b.WriteString(padRight(parts.asn, asnW))
 		b.WriteByte(' ')
-		b.WriteString(strings.Join(p.extras, " "))
+	}
+	b.WriteString(parts.base)
+	if len(parts.extras) > 0 {
+		b.WriteByte(' ')
+		b.WriteString(strings.Join(parts.extras, " "))
 	}
 	return b.String()
 }

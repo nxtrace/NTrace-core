@@ -7,6 +7,7 @@ import (
 )
 
 var (
+	mtrTUITitleColor  = func(s string) string { return s }
 	mtrTUIHeaderColor = color.New(color.FgHiCyan, color.Bold).SprintFunc()
 	mtrTUIRouteColor  = color.New(color.FgHiWhite).SprintFunc()
 	mtrTUITimeColor   = color.New(color.FgHiBlue).SprintFunc()

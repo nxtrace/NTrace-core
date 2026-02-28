@@ -1382,7 +1382,7 @@ func TestMTRTUI_ShowIPsRendersPTRAndIP(t *testing.T) {
 	if strings.Contains(out, "one.one.one.one (1.1.1.1)") {
 		t.Errorf("IPOnly should not render PTR (IP), got:\n%s", out)
 	}
-	if !strings.Contains(out, "AS13335\t1.1.1.1") {
+	if !strings.Contains(out, "AS13335 1.1.1.1") {
 		t.Errorf("IPOnly should render IP in host column, got:\n%s", out)
 	}
 }
@@ -1475,11 +1475,11 @@ func TestTUI_WaitingForReplyOn100Loss(t *testing.T) {
 	}
 }
 
-// TestTUI_HostSeparators_MixedTabAndSpace 验证 TUI 中 host 文本的 mixed 分隔规则：
+// TestTUI_HostSeparators_ManualSpaceAlignment 验证 TUI 中 host 文本使用手动空格对齐：
 //   - 序号后 1 空格 + ASN
-//   - ASN 与 IP/PTR 之间为 tab
+//   - ASN 与 IP/PTR 之间为手动空格对齐
 //   - IP/PTR 与后续信息之间为空格
-func TestTUI_HostSeparators_MixedTabAndSpace(t *testing.T) {
+func TestTUI_HostSeparators_ManualSpaceAlignment(t *testing.T) {
 	header := MTRTUIHeader{
 		Target:      "1.1.1.1",
 		StartTime:   time.Now(),
@@ -1517,42 +1517,103 @@ func TestTUI_HostSeparators_MixedTabAndSpace(t *testing.T) {
 		t.Errorf("prefix should be followed by 1 space then ASN, got: %q", hopLine)
 	}
 
-	// ASN 与 IP/PTR 之间应有 tab
-	if !strings.Contains(hopLine, "AS13335\tone.one.one.one") {
-		t.Errorf("ASN and IP/PTR should be separated by tab, got: %q", hopLine)
+	// ASN 与 IP/PTR 之间应为空格对齐，不再使用 tab
+	if !strings.Contains(hopLine, "AS13335 one.one.one.one") {
+		t.Errorf("ASN and IP/PTR should be space-aligned, got: %q", hopLine)
+	}
+	if strings.Contains(hopLine, "\t") {
+		t.Errorf("TUI host line should not contain tab, got: %q", hopLine)
 	}
 
 	// IP/PTR 与后续信息之间应为空格
 	if !strings.Contains(hopLine, "one.one.one.one US Cloudflare") {
 		t.Errorf("IP/PTR and extras should be separated by space, got: %q", hopLine)
 	}
-	if strings.Contains(hopLine, "one.one.one.one\tUS Cloudflare") {
-		t.Errorf("IP/PTR and extras should not be separated by tab, got: %q", hopLine)
-	}
 }
 
-func TestFormatTUIHost_UsesSpaceBetweenBaseAndExtras(t *testing.T) {
-	s := trace.MTRHopStat{
-		TTL:  1,
-		IP:   "1.1.1.1",
-		Host: "one.one.one.one",
-		Geo: &ipgeo.IPGeoData{
-			Asnumber:  "13335",
-			CountryEn: "US",
-			Owner:     "Cloudflare",
-		},
+func TestFormatTUIHost_ManualASNAlignment(t *testing.T) {
+	parts := mtrHostParts{
+		asn:    "AS13335",
+		base:   "one.one.one.one",
+		extras: []string{"US", "Cloudflare"},
 	}
-
-	got := formatTUIHost(s, HostModeFull, HostNamePTRorIP, "en", false)
-	want := "AS13335\tone.one.one.one US Cloudflare"
+	got := formatTUIHost(parts, 7)
+	want := "AS13335 one.one.one.one US Cloudflare"
 	if got != want {
 		t.Fatalf("formatTUIHost() = %q, want %q", got, want)
 	}
+
+	shortASN := mtrHostParts{
+		asn:  "AS969",
+		base: "one.one.one.one",
+	}
+	got = formatTUIHost(shortASN, 8)
+	want = "AS969    one.one.one.one"
+	if got != want {
+		t.Fatalf("formatTUIHost() short ASN = %q, want %q", got, want)
+	}
 }
 
-// TestTUI_TabAwareAlignment_StillRightAnchored 验证含 tab 的 host 行
+func TestBuildTUIHostParts_MissingASNUsesPlaceholder(t *testing.T) {
+	parts := buildTUIHostParts(trace.MTRHopStat{
+		TTL: 1,
+		IP:  "210.78.30.166",
+		Geo: &ipgeo.IPGeoData{},
+	}, HostModeASN, HostNamePTRorIP, "en", false)
+
+	if parts.waiting {
+		t.Fatal("missing ASN hop should not be waiting")
+	}
+	if parts.asn != "AS???" {
+		t.Fatalf("parts.asn = %q, want %q", parts.asn, "AS???")
+	}
+	if parts.base != "210.78.30.166" {
+		t.Fatalf("parts.base = %q, want %q", parts.base, "210.78.30.166")
+	}
+}
+
+func TestBuildTUIHostParts_WaitingDoesNotUsePlaceholder(t *testing.T) {
+	parts := buildTUIHostParts(trace.MTRHopStat{
+		TTL: 2, IP: "", Host: "", Loss: 100, Snt: 5,
+	}, HostModeASN, HostNamePTRorIP, "en", false)
+
+	if !parts.waiting {
+		t.Fatal("waiting hop should keep waiting=true")
+	}
+	if parts.asn != "" {
+		t.Fatalf("waiting hop should not use ASN placeholder, got %q", parts.asn)
+	}
+}
+
+func TestTUI_MissingASNRenderedAsPlaceholder(t *testing.T) {
+	header := MTRTUIHeader{
+		Target:      "1.1.1.1",
+		StartTime:   time.Now(),
+		Iteration:   1,
+		DisplayMode: HostModeASN,
+		Lang:        "en",
+	}
+	stats := []trace.MTRHopStat{
+		{
+			TTL:  15,
+			IP:   "210.78.30.166",
+			Loss: 0, Snt: 5, Last: 53.51, Avg: 53.81, Best: 53.36, Wrst: 54.58, StDev: 0.47,
+			Geo: &ipgeo.IPGeoData{},
+		},
+	}
+
+	out := mtrTUIRenderStringWithWidth(header, stats, 120)
+	if !strings.Contains(out, "AS???") {
+		t.Fatalf("missing ASN placeholder in output:\n%s", out)
+	}
+	if !strings.Contains(out, "AS??? 210.78.30.166") {
+		t.Fatalf("placeholder row should include aligned base host, got:\n%s", out)
+	}
+}
+
+// TestTUI_ManualASNAlignment_StillRightAnchored 验证使用手动空格对齐的 host 行
 // 右侧指标区仍能对齐（metricsStart 稳定）。
-func TestTUI_TabAwareAlignment_StillRightAnchored(t *testing.T) {
+func TestTUI_ManualASNAlignment_StillRightAnchored(t *testing.T) {
 	header := MTRTUIHeader{
 		Target:      "1.1.1.1",
 		StartTime:   time.Now(),
@@ -1596,7 +1657,10 @@ func TestTUI_TabAwareAlignment_StillRightAnchored(t *testing.T) {
 		if !isData {
 			continue
 		}
-		// 行的 tab-aware 宽度不应超过 termWidth
+		if strings.Contains(l, "\t") {
+			t.Errorf("data row should not contain tab after manual alignment, got: %q", l)
+		}
+		// 行宽不应超过 termWidth
 		w := displayWidthWithTabs(l, tuiTabStop)
 		if w > width {
 			t.Errorf("data row exceeds termWidth=%d: displayWidth=%d, line=%q", width, w, l)
