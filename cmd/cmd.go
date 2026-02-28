@@ -36,7 +36,10 @@ type listenInfo struct {
 	Access  string
 }
 
-const defaultTracerouteTTLIntervalMs = 50
+const (
+	defaultPacketIntervalMs        = 50
+	defaultTracerouteTTLIntervalMs = 300
+)
 
 func buildListenInfo(addr string) listenInfo {
 	trimmed := strings.TrimSpace(addr)
@@ -201,8 +204,8 @@ func Execute() {
 	deployListen := parser.String("", "listen", &argparse.Options{Help: "Set listen address for web console (e.g. 127.0.0.1:30080)"})
 	deploy := parser.Flag("", "deploy", &argparse.Options{Help: "Start the Gin powered web console"})
 	//router := parser.Flag("R", "route", &argparse.Options{Help: "Show Routing Table [Provided By BGP.Tools]"})
-	packetInterval := parser.Int("z", "send-time", &argparse.Options{Default: 50, Help: "Set how many [milliseconds] between sending each packet. Useful when some routers use rate-limit for ICMP messages"})
-	ttlInterval := parser.Int("i", "ttl-time", &argparse.Options{Default: defaultTracerouteTTLIntervalMs, Help: "Set how many [milliseconds] between sending packets groups by TTL. In MTR mode (--mtr/-r/-w, including --raw), this instead controls interval between rounds"})
+	packetInterval := parser.Int("z", "send-time", &argparse.Options{Default: defaultPacketIntervalMs, Help: "Set how many [milliseconds] between sending each packet. Default: 50ms"})
+	ttlInterval := parser.Int("i", "ttl-time", &argparse.Options{Default: defaultTracerouteTTLIntervalMs, Help: "Set how many [milliseconds] between sending packet groups by TTL in normal traceroute (default: 300ms). In MTR mode (--mtr/-r/-w, including --raw), this instead controls interval between rounds (default: 1000ms when omitted); per-round TTL spacing stays 50ms"})
 	timeout := parser.Int("", "timeout", &argparse.Options{Default: 1000, Help: "The number of [milliseconds] to keep probe sockets open before giving up on the connection"})
 	packetSize := parser.Int("", "psize", &argparse.Options{Default: 52, Help: "Set the payload size"})
 	str := parser.StringPositional(&argparse.Options{Help: "IP Address or domain name"})

@@ -174,6 +174,9 @@ nexttrace 2606:4700:4700::1111
 # Developer mode: set the ENV variable NEXTTRACE_DEVMODE=1 to make fatal errors panic with a stack trace
 export NEXTTRACE_DEVMODE=1
 
+# Set TTL-group interval in normal traceroute mode (default: 300ms)
+nexttrace -i 300 1.1.1.1
+
 # Disable Path Visualization With the -M parameter
 nexttrace koreacentral.blob.core.windows.net
 # MapTrace URL: https://api.nxtrace.org/tracemap/html/c14e439e-3250-5310-8965-42a1e3545266.html
@@ -551,16 +554,14 @@ Arguments:
                                      127.0.0.1:30080)
       --deploy                       Start the Gin powered web console
   -z  --send-time                    Set how many [milliseconds] between
-                                     sending each packet. Useful when some
-                                     routers use rate-limit for ICMP messages.
-                                     Default: 50
+                                     sending each packet. Default: 50ms
   -i  --ttl-time                     Set how many [milliseconds] between
-                                     sending packets groups by TTL. Useful when
-                                     some routers use rate-limit for ICMP
-                                     messages. Default: 50
-                                     (In MTR mode --mtr/-r/-w, this means
-                                     interval between rounds. Per-round TTL
-                                     spacing remains 50ms. Default round
+                                     sending packet groups by TTL in normal
+                                     traceroute (default: 300ms). In MTR mode
+                                     (--mtr/-r/-w, including --raw), this
+                                     instead controls interval between rounds
+                                     (default: 1000ms when omitted); per-round
+                                     TTL spacing stays 50ms
                                      interval: 1000)
       --timeout                      The number of [milliseconds] to keep probe
                                      sockets open before giving up on the

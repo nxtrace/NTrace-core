@@ -17,6 +17,8 @@ import (
 	"github.com/nxtrace/NTrace-core/util"
 )
 
+const defaultMTRInternalTTLIntervalMs = 50
+
 // MTR 模式下与其他输出/功能标志互斥的检查。
 // 返回 true 表示存在冲突。
 func checkMTRConflicts(flags map[string]bool) (conflict string, ok bool) {
@@ -214,7 +216,7 @@ func runMTRRaw(method trace.Method, conf trace.Config, intervalMs int, maxRounds
 
 func normalizeMTRTraceConfig(conf trace.Config) trace.Config {
 	normalized := conf
-	normalized.TTLInterval = defaultTracerouteTTLIntervalMs
+	normalized.TTLInterval = defaultMTRInternalTTLIntervalMs
 	return normalized
 }
 

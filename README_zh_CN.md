@@ -179,6 +179,9 @@ nexttrace --ipv6 g.co
 # IPv6 ICMP Trace
 nexttrace 2606:4700:4700::1111
 
+# 普通 traceroute 模式下设置 TTL 分组间隔（默认 300ms）
+nexttrace -i 300 1.1.1.1
+
 # 禁用路径可视化 使用 --map / -M 参数
 nexttrace koreacentral.blob.core.windows.net
 # MapTrace URL: https://api.nxtrace.org/tracemap/html/c14e439e-3250-5310-8965-42a1e3545266.html
@@ -533,16 +536,13 @@ Arguments:
                                      127.0.0.1:30080)
       --deploy                       Start the Gin powered web console
   -z  --send-time                    Set how many [milliseconds] between
-                                     sending each packet. Useful when some
-                                     routers use rate-limit for ICMP messages.
-                                     Default: 50
+                                     sending each packet. Default: 50ms
   -i  --ttl-time                     Set how many [milliseconds] between
-                                     sending packets groups by TTL. Useful when
-                                     some routers use rate-limit for ICMP
-                                     messages. Default: 50
-                                     (在 MTR 模式 --mtr/-r/-w 下，该参数表示
-                                     轮次间隔。单轮内 TTL 组间隔仍为 50ms。
-                                     默认轮次间隔: 1000)
+                                     sending packet groups by TTL in normal
+                                     traceroute（默认 300ms）。在 MTR 模式
+                                     （--mtr/-r/-w，包括 --raw）下，该参数改为
+                                     控制轮次间隔（未设置时默认 1000ms）；
+                                     每轮内部 TTL 分组间隔固定为 50ms
       --timeout                      The number of [milliseconds] to keep probe
                                      sockets open before giving up on the
                                      connection. Default: 1000

@@ -215,7 +215,7 @@ func TestDeriveMTRRoundParams_DefaultsAndOverrides(t *testing.T) {
 	}
 }
 
-func TestNormalizeMTRTraceConfig_UsesDefaultTTLInterval(t *testing.T) {
+func TestNormalizeMTRTraceConfig_UsesMTRInternalTTLInterval50(t *testing.T) {
 	original := trace.Config{
 		TTLInterval:    1200,
 		PacketInterval: 25,
@@ -226,8 +226,8 @@ func TestNormalizeMTRTraceConfig_UsesDefaultTTLInterval(t *testing.T) {
 
 	normalized := normalizeMTRTraceConfig(original)
 
-	if normalized.TTLInterval != defaultTracerouteTTLIntervalMs {
-		t.Fatalf("normalized TTLInterval = %d, want %d", normalized.TTLInterval, defaultTracerouteTTLIntervalMs)
+	if normalized.TTLInterval != defaultMTRInternalTTLIntervalMs {
+		t.Fatalf("normalized TTLInterval = %d, want %d", normalized.TTLInterval, defaultMTRInternalTTLIntervalMs)
 	}
 	if normalized.PacketInterval != original.PacketInterval {
 		t.Fatalf("normalized PacketInterval = %d, want %d", normalized.PacketInterval, original.PacketInterval)
@@ -237,6 +237,18 @@ func TestNormalizeMTRTraceConfig_UsesDefaultTTLInterval(t *testing.T) {
 	}
 	if original.TTLInterval != 1200 {
 		t.Fatalf("original config was modified in place: %+v", original)
+	}
+}
+
+func TestDefaultConstants_NormalVsMTR(t *testing.T) {
+	if defaultPacketIntervalMs != 50 {
+		t.Fatalf("defaultPacketIntervalMs = %d, want 50", defaultPacketIntervalMs)
+	}
+	if defaultTracerouteTTLIntervalMs != 300 {
+		t.Fatalf("defaultTracerouteTTLIntervalMs = %d, want 300", defaultTracerouteTTLIntervalMs)
+	}
+	if defaultMTRInternalTTLIntervalMs != 50 {
+		t.Fatalf("defaultMTRInternalTTLIntervalMs = %d, want 50", defaultMTRInternalTTLIntervalMs)
 	}
 }
 
@@ -256,8 +268,8 @@ func TestNormalizeMTRReportConfig_NonWideDisablesGeoAndKeepsRDNS(t *testing.T) {
 
 	normalized := normalizeMTRReportConfig(original, false)
 
-	if normalized.TTLInterval != defaultTracerouteTTLIntervalMs {
-		t.Fatalf("normalized TTLInterval = %d, want %d", normalized.TTLInterval, defaultTracerouteTTLIntervalMs)
+	if normalized.TTLInterval != defaultMTRInternalTTLIntervalMs {
+		t.Fatalf("normalized TTLInterval = %d, want %d", normalized.TTLInterval, defaultMTRInternalTTLIntervalMs)
 	}
 	if normalized.IPGeoSource != nil {
 		t.Fatal("non-wide report should disable IPGeoSource")
@@ -314,8 +326,8 @@ func TestNormalizeMTRReportConfig_WidePreservesGeoSettings(t *testing.T) {
 
 	normalized := normalizeMTRReportConfig(original, true)
 
-	if normalized.TTLInterval != defaultTracerouteTTLIntervalMs {
-		t.Fatalf("normalized TTLInterval = %d, want %d", normalized.TTLInterval, defaultTracerouteTTLIntervalMs)
+	if normalized.TTLInterval != defaultMTRInternalTTLIntervalMs {
+		t.Fatalf("normalized TTLInterval = %d, want %d", normalized.TTLInterval, defaultMTRInternalTTLIntervalMs)
 	}
 	if normalized.IPGeoSource == nil {
 		t.Fatal("wide report should preserve IPGeoSource")
