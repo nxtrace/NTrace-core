@@ -220,6 +220,7 @@ func Execute() {
 	reportMode := parser.Flag("r", "report", &argparse.Options{Help: "MTR report mode (non-interactive, implies --mtr); can trigger MTR without --mtr"})
 	wideMode := parser.Flag("w", "wide", &argparse.Options{Help: "MTR wide report mode (implies --mtr --report); alone equals --mtr --report --wide"})
 	showIPs := parser.Flag("", "show-ips", &argparse.Options{Help: "MTR only: display both PTR hostnames and numeric IPs (PTR first, IP in parentheses)"})
+	mtrInterval := parser.Int("", "mtr-interval", &argparse.Options{Default: 0, Help: "MTR per-hop probe interval in milliseconds (default: 1000 in MTR mode). Overrides -i/--ttl-time for MTR"})
 
 	err := parser.Parse(os.Args)
 	if err != nil {
@@ -254,9 +255,10 @@ func Execute() {
 		}
 	}
 
-	// 判定 -q / -i 是否显式传入（用于 MTR 下参数迁移）
+	// 判定 -q / -i / --mtr-interval 是否显式传入（用于 MTR 下参数迁移）
 	queriesExplicit := false
 	ttlTimeExplicit := false
+	mtrIntervalExplicit := false
 	for _, a := range parser.GetArgs() {
 		if !a.GetParsed() {
 			continue
@@ -266,6 +268,8 @@ func Execute() {
 			queriesExplicit = true
 		case "ttl-time":
 			ttlTimeExplicit = true
+		case "mtr-interval":
+			mtrIntervalExplicit = true
 		}
 	}
 
@@ -604,21 +608,23 @@ func Execute() {
 
 	// ── MTR 连续探测模式 ──
 	if effectiveMTR {
-		mtrMaxRounds, mtrIntervalMs := deriveMTRRoundParams(
+		mtrMaxPerHop, mtrHopIntervalMs := deriveMTRProbeParams(
 			effectiveReport,
 			queriesExplicit,
 			*numMeasurements,
+			mtrIntervalExplicit,
+			*mtrInterval,
 			ttlTimeExplicit,
 			*ttlInterval,
 		)
 
 		switch chooseMTRRunMode(effectiveMTRRaw, effectiveReport) {
 		case mtrRunRaw:
-			runMTRRaw(m, conf, mtrIntervalMs, mtrMaxRounds, *dataOrigin)
+			runMTRRaw(m, conf, mtrHopIntervalMs, mtrMaxPerHop, *dataOrigin)
 		case mtrRunReport:
-			runMTRReport(m, conf, mtrIntervalMs, mtrMaxRounds, domain, *dataOrigin, effectiveWide, *showIPs)
+			runMTRReport(m, conf, mtrHopIntervalMs, mtrMaxPerHop, domain, *dataOrigin, effectiveWide, *showIPs)
 		default:
-			runMTRTUI(m, conf, mtrIntervalMs, mtrMaxRounds, domain, *dataOrigin, *showIPs)
+			runMTRTUI(m, conf, mtrHopIntervalMs, mtrMaxPerHop, domain, *dataOrigin, *showIPs)
 		}
 		return
 	}
@@ -721,6 +727,37 @@ func chooseMTRRunMode(effectiveMTRRaw, effectiveReport bool) mtrRunMode {
 	return mtrRunTUI
 }
 
+// deriveMTRProbeParams computes per-hop scheduling parameters for MTR.
+//
+// maxPerHop priority: explicit -q > report default 10 > TUI/raw default 0 (unlimited).
+// hopIntervalMs priority: explicit --mtr-interval > explicit -i > default 1000.
+func deriveMTRProbeParams(
+	effectiveReport, queriesExplicit bool, numMeasurements int,
+	mtrIntervalExplicit bool, mtrIntervalMs int,
+	ttlTimeExplicit bool, ttlInterval int,
+) (maxPerHop int, hopIntervalMs int) {
+	// maxPerHop
+	if queriesExplicit {
+		maxPerHop = numMeasurements
+	} else if effectiveReport {
+		maxPerHop = 10 // report 默认 10
+	} else {
+		maxPerHop = 0 // TUI/raw → 无限
+	}
+
+	// hopIntervalMs
+	if mtrIntervalExplicit {
+		hopIntervalMs = mtrIntervalMs
+	} else if ttlTimeExplicit {
+		hopIntervalMs = ttlInterval
+	} else {
+		hopIntervalMs = 1000
+	}
+	return
+}
+
+// deriveMTRRoundParams is the legacy round-based parameter derivation.
+// Kept for backward compatibility (Web MTR).
 func deriveMTRRoundParams(effectiveReport, queriesExplicit bool, numMeasurements int, ttlTimeExplicit bool, ttlInterval int) (maxRounds int, intervalMs int) {
 	if effectiveReport {
 		if queriesExplicit {

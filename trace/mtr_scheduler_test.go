@@ -1,0 +1,866 @@
+package trace
+
+import (
+	"context"
+	"errors"
+	"net"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/nxtrace/NTrace-core/ipgeo"
+)
+
+// ---------------------------------------------------------------------------
+// Mock TTL prober for scheduler tests
+// ---------------------------------------------------------------------------
+
+type mockTTLProber struct {
+	mu       sync.Mutex
+	probeFn  func(ctx context.Context, ttl int) (mtrProbeResult, error)
+	resetCnt int32
+	closeCnt int32
+	probeCnt int32
+	probeLog []int // ttl of each probe call
+}
+
+func (m *mockTTLProber) ProbeTTL(ctx context.Context, ttl int) (mtrProbeResult, error) {
+	atomic.AddInt32(&m.probeCnt, 1)
+	m.mu.Lock()
+	m.probeLog = append(m.probeLog, ttl)
+	m.mu.Unlock()
+	if m.probeFn != nil {
+		return m.probeFn(ctx, ttl)
+	}
+	return mtrProbeResult{TTL: ttl}, nil
+}
+
+func (m *mockTTLProber) Reset() error {
+	atomic.AddInt32(&m.resetCnt, 1)
+	return nil
+}
+
+func (m *mockTTLProber) Close() error {
+	atomic.AddInt32(&m.closeCnt, 1)
+	return nil
+}
+
+func (m *mockTTLProber) getProbeCount() int {
+	return int(atomic.LoadInt32(&m.probeCnt))
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+func TestScheduler_MaxPerHopCompletion(t *testing.T) {
+	dstIP := net.ParseIP("10.0.0.5")
+
+	prober := &mockTTLProber{
+		probeFn: func(_ context.Context, ttl int) (mtrProbeResult, error) {
+			// Simulate: TTL 3 is the destination
+			if ttl == 3 {
+				return mtrProbeResult{
+					TTL:     ttl,
+					Success: true,
+					Addr:    &net.IPAddr{IP: dstIP},
+					RTT:     10 * time.Millisecond,
+				}, nil
+			}
+			return mtrProbeResult{
+				TTL:     ttl,
+				Success: true,
+				Addr:    &net.IPAddr{IP: net.ParseIP("10.0.0." + string(rune('0'+ttl)))},
+				RTT:     time.Duration(ttl) * time.Millisecond,
+			}, nil
+		},
+	}
+
+	agg := NewMTRAggregator()
+	var lastIter int
+	var snapshotCount int32
+
+	err := runMTRScheduler(context.Background(), prober, agg, mtrSchedulerConfig{
+		BeginHop:         1,
+		MaxHops:          30,
+		HopInterval:      time.Millisecond,
+		MaxPerHop:        3,
+		ParallelRequests: 5,
+		ProgressThrottle: time.Millisecond,
+		DstIP:            dstIP,
+	}, func(iter int, stats []MTRHopStat) {
+		atomic.AddInt32(&snapshotCount, 1)
+		lastIter = iter
+	}, nil)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should complete: each active TTL (1..3) should have 3 probes
+	if lastIter != 3 {
+		t.Errorf("expected final iteration=3, got %d", lastIter)
+	}
+
+	stats := agg.Snapshot()
+	if len(stats) < 3 {
+		t.Fatalf("expected at least 3 stats rows, got %d", len(stats))
+	}
+
+	for _, s := range stats {
+		if s.TTL >= 1 && s.TTL <= 3 {
+			if s.Snt != 3 {
+				t.Errorf("TTL %d: expected Snt=3, got %d", s.TTL, s.Snt)
+			}
+		}
+	}
+
+	if atomic.LoadInt32(&prober.closeCnt) != 1 {
+		t.Error("prober.Close() not called")
+	}
+}
+
+func TestScheduler_ContextCancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	var probes int32
+	prober := &mockTTLProber{
+		probeFn: func(ctx context.Context, ttl int) (mtrProbeResult, error) {
+			n := atomic.AddInt32(&probes, 1)
+			if n >= 5 {
+				cancel()
+			}
+			return mtrProbeResult{TTL: ttl}, nil
+		},
+	}
+
+	agg := NewMTRAggregator()
+	var snapshotCalled int32
+
+	err := runMTRScheduler(ctx, prober, agg, mtrSchedulerConfig{
+		BeginHop:         1,
+		MaxHops:          5,
+		HopInterval:      time.Millisecond,
+		MaxPerHop:        0, // unlimited
+		ParallelRequests: 5,
+		ProgressThrottle: time.Millisecond,
+	}, func(_ int, _ []MTRHopStat) {
+		atomic.AddInt32(&snapshotCalled, 1)
+	}, nil)
+
+	if err != context.Canceled {
+		t.Errorf("expected context.Canceled, got %v", err)
+	}
+	if atomic.LoadInt32(&prober.closeCnt) != 1 {
+		t.Error("prober.Close() not called on cancel")
+	}
+}
+
+func TestScheduler_DestinationDetection(t *testing.T) {
+	dstIP := net.ParseIP("8.8.8.8")
+
+	prober := &mockTTLProber{
+		probeFn: func(_ context.Context, ttl int) (mtrProbeResult, error) {
+			if ttl >= 5 {
+				return mtrProbeResult{
+					TTL:     ttl,
+					Success: true,
+					Addr:    &net.IPAddr{IP: dstIP},
+					RTT:     50 * time.Millisecond,
+				}, nil
+			}
+			return mtrProbeResult{
+				TTL:     ttl,
+				Success: true,
+				Addr:    &net.IPAddr{IP: net.ParseIP("10.0.0.1")},
+				RTT:     10 * time.Millisecond,
+			}, nil
+		},
+	}
+
+	agg := NewMTRAggregator()
+
+	err := runMTRScheduler(context.Background(), prober, agg, mtrSchedulerConfig{
+		BeginHop:         1,
+		MaxHops:          30,
+		HopInterval:      time.Millisecond,
+		MaxPerHop:        2,
+		ParallelRequests: 1, // serialize to ensure dest detection before higher TTLs
+		ProgressThrottle: time.Millisecond,
+		DstIP:            dstIP,
+	}, nil, nil)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	stats := agg.Snapshot()
+	// TTL 5 is the destination; higher TTLs should be disabled after detection.
+	// With parallelism=1, at most TTL 6 could sneak in before the result is
+	// processed (tick vs result race), so we allow a small margin.
+	maxTTL := 0
+	for _, s := range stats {
+		if s.TTL > maxTTL {
+			maxTTL = s.TTL
+		}
+	}
+	if maxTTL > 6 {
+		t.Errorf("expected max TTL <= 6 (destination detected at 5), got %d", maxTTL)
+	}
+}
+
+func TestScheduler_Reset(t *testing.T) {
+	var probes int32
+	var resetOnce int32
+
+	prober := &mockTTLProber{
+		probeFn: func(_ context.Context, ttl int) (mtrProbeResult, error) {
+			atomic.AddInt32(&probes, 1)
+			return mtrProbeResult{
+				TTL:     ttl,
+				Success: true,
+				Addr:    &net.IPAddr{IP: net.ParseIP("10.0.0.1")},
+				RTT:     5 * time.Millisecond,
+			}, nil
+		},
+	}
+
+	agg := NewMTRAggregator()
+
+	var snapshotIters []int
+	var iterMu sync.Mutex
+
+	err := runMTRScheduler(context.Background(), prober, agg, mtrSchedulerConfig{
+		BeginHop:         1,
+		MaxHops:          2,
+		HopInterval:      time.Millisecond,
+		MaxPerHop:        4,
+		ParallelRequests: 2,
+		ProgressThrottle: time.Millisecond,
+		IsResetRequested: func() bool {
+			// Trigger reset after some probes have been done
+			p := atomic.LoadInt32(&probes)
+			if p >= 4 && atomic.CompareAndSwapInt32(&resetOnce, 0, 1) {
+				return true
+			}
+			return false
+		},
+	}, func(iter int, _ []MTRHopStat) {
+		iterMu.Lock()
+		snapshotIters = append(snapshotIters, iter)
+		iterMu.Unlock()
+	}, nil)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// After reset, iteration should restart from 0→1
+	// Final iteration should be 4 (maxPerHop=4)
+	iterMu.Lock()
+	defer iterMu.Unlock()
+
+	if len(snapshotIters) == 0 {
+		t.Fatal("expected at least one snapshot")
+	}
+	lastIter := snapshotIters[len(snapshotIters)-1]
+	if lastIter != 4 {
+		t.Errorf("expected last iteration=4, got %d", lastIter)
+	}
+
+	// prober.Reset should have been called once
+	if atomic.LoadInt32(&prober.resetCnt) != 1 {
+		t.Errorf("expected 1 Reset call, got %d", atomic.LoadInt32(&prober.resetCnt))
+	}
+}
+
+func TestScheduler_Pause(t *testing.T) {
+	var pauseFlag int32
+	var probes int32
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	prober := &mockTTLProber{
+		probeFn: func(_ context.Context, ttl int) (mtrProbeResult, error) {
+			n := atomic.AddInt32(&probes, 1)
+			if n == 2 {
+				// Pause after 2 probes, resume after 50ms
+				atomic.StoreInt32(&pauseFlag, 1)
+				go func() {
+					time.Sleep(50 * time.Millisecond)
+					atomic.StoreInt32(&pauseFlag, 0)
+				}()
+			}
+			if n >= 10 {
+				cancel()
+			}
+			return mtrProbeResult{TTL: ttl}, nil
+		},
+	}
+
+	agg := NewMTRAggregator()
+
+	err := runMTRScheduler(ctx, prober, agg, mtrSchedulerConfig{
+		BeginHop:         1,
+		MaxHops:          2,
+		HopInterval:      time.Millisecond,
+		MaxPerHop:        0, // unlimited, cancelled by ctx
+		ParallelRequests: 2,
+		ProgressThrottle: time.Millisecond,
+		IsPaused:         func() bool { return atomic.LoadInt32(&pauseFlag) == 1 },
+	}, nil, nil)
+
+	if err != context.Canceled {
+		t.Errorf("expected context.Canceled, got %v", err)
+	}
+	// Should have probed at least 2 (before pause) + some more after resume
+	p := atomic.LoadInt32(&probes)
+	if p < 4 {
+		t.Errorf("expected at least 4 probes (across pause), got %d", p)
+	}
+}
+
+func TestScheduler_IterationIsMinSnt(t *testing.T) {
+	// TTL 1 responds quickly, TTL 2 responds slowly
+	var ttl1Count, ttl2Count int32
+
+	prober := &mockTTLProber{
+		probeFn: func(_ context.Context, ttl int) (mtrProbeResult, error) {
+			if ttl == 1 {
+				atomic.AddInt32(&ttl1Count, 1)
+				return mtrProbeResult{
+					TTL:     1,
+					Success: true,
+					Addr:    &net.IPAddr{IP: net.ParseIP("10.0.0.1")},
+					RTT:     1 * time.Millisecond,
+				}, nil
+			}
+			atomic.AddInt32(&ttl2Count, 1)
+			time.Sleep(10 * time.Millisecond) // slower
+			return mtrProbeResult{
+				TTL:     2,
+				Success: true,
+				Addr:    &net.IPAddr{IP: net.ParseIP("10.0.0.2")},
+				RTT:     10 * time.Millisecond,
+			}, nil
+		},
+	}
+
+	agg := NewMTRAggregator()
+	var finalIter int
+
+	err := runMTRScheduler(context.Background(), prober, agg, mtrSchedulerConfig{
+		BeginHop:         1,
+		MaxHops:          2,
+		HopInterval:      time.Millisecond,
+		MaxPerHop:        3,
+		ParallelRequests: 2,
+		ProgressThrottle: time.Millisecond,
+	}, func(iter int, _ []MTRHopStat) {
+		finalIter = iter
+	}, nil)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Both TTLs should have 3 probes (MaxPerHop=3)
+	if finalIter != 3 {
+		t.Errorf("expected final iteration=3, got %d", finalIter)
+	}
+}
+
+func TestScheduler_OnProbeCallback(t *testing.T) {
+	dstIP := net.ParseIP("10.0.0.3")
+
+	prober := &mockTTLProber{
+		probeFn: func(_ context.Context, ttl int) (mtrProbeResult, error) {
+			if ttl == 3 {
+				return mtrProbeResult{
+					TTL: ttl, Success: true,
+					Addr: &net.IPAddr{IP: dstIP},
+					RTT:  5 * time.Millisecond,
+				}, nil
+			}
+			return mtrProbeResult{
+				TTL: ttl, Success: true,
+				Addr: &net.IPAddr{IP: net.ParseIP("10.0.0.1")},
+				RTT:  1 * time.Millisecond,
+			}, nil
+		},
+	}
+
+	agg := NewMTRAggregator()
+
+	var callbackResults []mtrProbeResult
+	var mu sync.Mutex
+
+	err := runMTRScheduler(context.Background(), prober, agg, mtrSchedulerConfig{
+		BeginHop:         1,
+		MaxHops:          30,
+		HopInterval:      time.Millisecond,
+		MaxPerHop:        1,
+		ParallelRequests: 5,
+		ProgressThrottle: time.Millisecond,
+		DstIP:            dstIP,
+	}, nil, func(result mtrProbeResult, _ int) {
+		mu.Lock()
+		callbackResults = append(callbackResults, result)
+		mu.Unlock()
+	})
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	// Should have callbacks for TTL 1, 2, 3 (dest stops further TTLs)
+	if len(callbackResults) < 3 {
+		t.Errorf("expected at least 3 onProbe callbacks, got %d", len(callbackResults))
+	}
+}
+
+func TestScheduler_BeginHopGreaterThanMaxHops(t *testing.T) {
+	prober := &mockTTLProber{}
+	agg := NewMTRAggregator()
+
+	err := runMTRScheduler(context.Background(), prober, agg, mtrSchedulerConfig{
+		BeginHop:         10,
+		MaxHops:          5,
+		HopInterval:      time.Millisecond,
+		MaxPerHop:        1,
+		ParallelRequests: 1,
+	}, nil, nil)
+
+	if err == nil {
+		t.Fatal("expected error for beginHop > maxHops")
+	}
+}
+
+func TestScheduler_ConcurrencyLimit(t *testing.T) {
+	var maxConcurrent int32
+	var current int32
+
+	prober := &mockTTLProber{
+		probeFn: func(_ context.Context, ttl int) (mtrProbeResult, error) {
+			c := atomic.AddInt32(&current, 1)
+			// Track max concurrent
+			for {
+				old := atomic.LoadInt32(&maxConcurrent)
+				if c <= old || atomic.CompareAndSwapInt32(&maxConcurrent, old, c) {
+					break
+				}
+			}
+			time.Sleep(20 * time.Millisecond) // hold slot
+			atomic.AddInt32(&current, -1)
+			return mtrProbeResult{TTL: ttl}, nil
+		},
+	}
+
+	agg := NewMTRAggregator()
+
+	err := runMTRScheduler(context.Background(), prober, agg, mtrSchedulerConfig{
+		BeginHop:         1,
+		MaxHops:          10,
+		HopInterval:      time.Millisecond,
+		MaxPerHop:        1,
+		ParallelRequests: 3, // limit to 3 concurrent
+		ProgressThrottle: time.Millisecond,
+	}, nil, nil)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	mc := atomic.LoadInt32(&maxConcurrent)
+	if mc > 3 {
+		t.Errorf("expected max concurrent <= 3, got %d", mc)
+	}
+	if mc < 1 {
+		t.Error("expected at least 1 concurrent probe")
+	}
+}
+
+// TestMtrAddrToIP verifies the helper function.
+func TestMtrAddrToIP(t *testing.T) {
+	ip := net.ParseIP("1.2.3.4")
+
+	if got := mtrAddrToIP(&net.IPAddr{IP: ip}); !got.Equal(ip) {
+		t.Errorf("IPAddr: got %v, want %v", got, ip)
+	}
+	if got := mtrAddrToIP(&net.UDPAddr{IP: ip}); !got.Equal(ip) {
+		t.Errorf("UDPAddr: got %v, want %v", got, ip)
+	}
+	if got := mtrAddrToIP(&net.TCPAddr{IP: ip}); !got.Equal(ip) {
+		t.Errorf("TCPAddr: got %v, want %v", got, ip)
+	}
+	if got := mtrAddrToIP(nil); got != nil {
+		t.Errorf("nil: got %v, want nil", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// P1: Error budget tests
+// ---------------------------------------------------------------------------
+
+func TestScheduler_ErrorBudgetExhausted(t *testing.T) {
+	// Every call to ProbeTTL returns an error.
+	// With MaxConsecErrors=3, MaxPerHop=2, each TTL should eventually
+	// complete because every 3 consecutive errors count as one completed timeout.
+	errAlways := errors.New("always fail")
+	prober := &mockTTLProber{
+		probeFn: func(_ context.Context, ttl int) (mtrProbeResult, error) {
+			return mtrProbeResult{TTL: ttl}, errAlways
+		},
+	}
+
+	agg := NewMTRAggregator()
+
+	err := runMTRScheduler(context.Background(), prober, agg, mtrSchedulerConfig{
+		BeginHop:         1,
+		MaxHops:          2,
+		HopInterval:      time.Millisecond,
+		MaxPerHop:        2,
+		MaxConsecErrors:  3,
+		ParallelRequests: 2,
+		ProgressThrottle: time.Millisecond,
+	}, nil, nil)
+
+	if err != nil {
+		t.Fatalf("expected nil (completed), got %v", err)
+	}
+
+	// Each TTL should have 2 completed (timeout) events, each requiring 3 errors.
+	// So total probes = 2 TTLs * 2 completions * 3 errors = 12.
+	totalProbes := prober.getProbeCount()
+	if totalProbes < 12 {
+		t.Errorf("expected at least 12 probes (2 TTLs * 2 * 3 errors), got %d", totalProbes)
+	}
+}
+
+func TestScheduler_ErrorBudgetEmitsOnProbe(t *testing.T) {
+	// When error budget is exhausted, the synthetic timeout must also fire
+	// the onProbe callback so that raw MTR sees the same record count as
+	// the aggregator Snt.
+	errAlways := errors.New("always fail")
+	prober := &mockTTLProber{
+		probeFn: func(_ context.Context, ttl int) (mtrProbeResult, error) {
+			return mtrProbeResult{TTL: ttl}, errAlways
+		},
+	}
+
+	agg := NewMTRAggregator()
+
+	var mu sync.Mutex
+	var rawRecords []mtrProbeResult
+
+	err := runMTRScheduler(context.Background(), prober, agg, mtrSchedulerConfig{
+		BeginHop:         1,
+		MaxHops:          1,
+		HopInterval:      time.Millisecond,
+		MaxPerHop:        2,
+		MaxConsecErrors:  3,
+		ParallelRequests: 1,
+		ProgressThrottle: time.Millisecond,
+	}, nil, func(result mtrProbeResult, _ int) {
+		mu.Lock()
+		rawRecords = append(rawRecords, result)
+		mu.Unlock()
+	})
+
+	if err != nil {
+		t.Fatalf("expected nil (completed), got %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	// MaxPerHop=2, each requiring MaxConsecErrors=3 → 2 onProbe calls for TTL 1.
+	if len(rawRecords) != 2 {
+		t.Errorf("expected 2 onProbe callbacks (synthetic timeouts), got %d", len(rawRecords))
+	}
+	for i, r := range rawRecords {
+		if r.TTL != 1 {
+			t.Errorf("record[%d]: expected TTL=1, got %d", i, r.TTL)
+		}
+		if r.Success {
+			t.Errorf("record[%d]: expected Success=false for timeout", i)
+		}
+	}
+}
+
+func TestScheduler_ErrorResetsOnSuccess(t *testing.T) {
+	// Pattern: fail, fail, succeed, fail, fail, succeed — should never hit budget.
+	var calls int32
+
+	prober := &mockTTLProber{
+		probeFn: func(_ context.Context, ttl int) (mtrProbeResult, error) {
+			n := atomic.AddInt32(&calls, 1)
+			if n%3 != 0 { // every 3rd call succeeds
+				return mtrProbeResult{TTL: ttl}, errors.New("fail")
+			}
+			return mtrProbeResult{
+				TTL:     ttl,
+				Success: true,
+				Addr:    &net.IPAddr{IP: net.ParseIP("10.0.0.1")},
+				RTT:     1 * time.Millisecond,
+			}, nil
+		},
+	}
+
+	agg := NewMTRAggregator()
+
+	err := runMTRScheduler(context.Background(), prober, agg, mtrSchedulerConfig{
+		BeginHop:         1,
+		MaxHops:          1,
+		HopInterval:      time.Millisecond,
+		MaxPerHop:        2, // need 2 successful
+		MaxConsecErrors:  3, // budget = 3 consecutive
+		ParallelRequests: 1,
+		ProgressThrottle: time.Millisecond,
+	}, nil, nil)
+
+	if err != nil {
+		t.Fatalf("expected nil (completed via successes), got %v", err)
+	}
+
+	stats := agg.Snapshot()
+	found := false
+	for _, s := range stats {
+		if s.TTL == 1 && s.Snt >= 2 {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("TTL 1 should have at least 2 successful probes in aggregator")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// P2: Fallback geo/hostname propagation tests
+// ---------------------------------------------------------------------------
+
+func TestScheduler_FallbackGeoCarriedToAggregator(t *testing.T) {
+	fakeGeo := &ipgeo.IPGeoData{
+		Asnumber: "AS13335",
+		Country:  "美国",
+		Prov:     "加利福尼亚",
+		City:     "旧金山",
+		Owner:    "Cloudflare",
+	}
+
+	prober := &mockTTLProber{
+		probeFn: func(_ context.Context, ttl int) (mtrProbeResult, error) {
+			return mtrProbeResult{
+				TTL:      ttl,
+				Success:  true,
+				Addr:     &net.IPAddr{IP: net.ParseIP("1.1.1.1")},
+				RTT:      5 * time.Millisecond,
+				Hostname: "one.one.one.one",
+				Geo:      fakeGeo,
+			}, nil
+		},
+	}
+
+	agg := NewMTRAggregator()
+
+	err := runMTRScheduler(context.Background(), prober, agg, mtrSchedulerConfig{
+		BeginHop:         1,
+		MaxHops:          1,
+		HopInterval:      time.Millisecond,
+		MaxPerHop:        1,
+		ParallelRequests: 1,
+		ProgressThrottle: time.Millisecond,
+		FillGeo:          true, // should NOT re-fetch since probe carries Geo
+	}, nil, nil)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	stats := agg.Snapshot()
+	if len(stats) == 0 {
+		t.Fatal("expected at least 1 stat row")
+	}
+
+	s := stats[0]
+	if s.Host != "one.one.one.one" {
+		t.Errorf("expected Host='one.one.one.one', got %q", s.Host)
+	}
+	if s.Geo == nil {
+		t.Fatal("expected Geo to be set, got nil")
+	}
+	if s.Geo.Asnumber != "AS13335" {
+		t.Errorf("expected ASN='AS13335', got %q", s.Geo.Asnumber)
+	}
+}
+
+func TestBuildMTRRawRecordFromProbe_PreResolvedGeo(t *testing.T) {
+	fakeGeo := &ipgeo.IPGeoData{
+		Asnumber:  "AS9808",
+		Country:   "中国",
+		CountryEn: "China",
+		City:      "广州",
+		CityEn:    "Guangzhou",
+		Owner:     "ChinaMobile",
+	}
+
+	pr := mtrProbeResult{
+		TTL:      3,
+		Success:  true,
+		Addr:     &net.IPAddr{IP: net.ParseIP("120.196.165.24")},
+		RTT:      8 * time.Millisecond,
+		Hostname: "bras-vlan365.gd.gd",
+		Geo:      fakeGeo,
+	}
+
+	rec := buildMTRRawRecordFromProbe(5, pr, Config{Lang: "cn"})
+
+	if rec.ASN != "AS9808" {
+		t.Errorf("expected ASN='AS9808', got %q", rec.ASN)
+	}
+	if rec.Host != "bras-vlan365.gd.gd" {
+		t.Errorf("expected Host='bras-vlan365.gd.gd', got %q", rec.Host)
+	}
+	if rec.City != "广州" {
+		t.Errorf("expected City='广州', got %q", rec.City)
+	}
+	if rec.Country != "中国" {
+		t.Errorf("expected Country='中国', got %q", rec.Country)
+	}
+	if rec.Owner != "ChinaMobile" {
+		t.Errorf("expected Owner='ChinaMobile', got %q", rec.Owner)
+	}
+}
+
+func TestBuildMTRRawRecordFromProbe_NoGeoNoSource_NoHostname(t *testing.T) {
+	// When probe has no pre-resolved geo and config has no IPGeoSource/RDNS,
+	// record should still have IP/RTT but no geo/host fields.
+	pr := mtrProbeResult{
+		TTL:     2,
+		Success: true,
+		Addr:    &net.IPAddr{IP: net.ParseIP("10.0.0.5")},
+		RTT:     3 * time.Millisecond,
+	}
+
+	rec := buildMTRRawRecordFromProbe(1, pr, Config{})
+
+	if rec.IP != "10.0.0.5" {
+		t.Errorf("expected IP='10.0.0.5', got %q", rec.IP)
+	}
+	if rec.ASN != "" || rec.Host != "" || rec.Country != "" {
+		t.Errorf("expected empty geo/host fields, got ASN=%q Host=%q Country=%q",
+			rec.ASN, rec.Host, rec.Country)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// End-to-end: raw record count matches aggregator Snt under error budget
+// ---------------------------------------------------------------------------
+
+func TestScheduler_RawRecordCountMatchesAggSnt_ErrorBudget(t *testing.T) {
+	// Simulate a mix of successes and persistent errors across 2 TTLs.
+	// TTL 1: always succeeds. TTL 2: always errors.
+	// With MaxPerHop=3 and MaxConsecErrors=2, both TTLs should complete
+	// and the raw callback count per TTL must equal the aggregator Snt.
+
+	prober := &mockTTLProber{
+		probeFn: func(_ context.Context, ttl int) (mtrProbeResult, error) {
+			if ttl == 1 {
+				return mtrProbeResult{
+					TTL:     1,
+					Success: true,
+					Addr:    &net.IPAddr{IP: net.ParseIP("10.0.0.1")},
+					RTT:     5 * time.Millisecond,
+				}, nil
+			}
+			return mtrProbeResult{TTL: 2}, errors.New("persistent failure")
+		},
+	}
+
+	agg := NewMTRAggregator()
+
+	var mu sync.Mutex
+	rawCountByTTL := map[int]int{}
+
+	err := runMTRScheduler(context.Background(), prober, agg, mtrSchedulerConfig{
+		BeginHop:         1,
+		MaxHops:          2,
+		HopInterval:      time.Millisecond,
+		MaxPerHop:        3,
+		MaxConsecErrors:  2,
+		ParallelRequests: 1,
+		ProgressThrottle: time.Millisecond,
+	}, nil, func(result mtrProbeResult, _ int) {
+		mu.Lock()
+		rawCountByTTL[result.TTL]++
+		mu.Unlock()
+	})
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	stats := agg.Snapshot()
+	sntByTTL := map[int]int{}
+	for _, s := range stats {
+		sntByTTL[s.TTL] = s.Snt
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	for ttl := 1; ttl <= 2; ttl++ {
+		rawCount := rawCountByTTL[ttl]
+		snt := sntByTTL[ttl]
+		if rawCount != snt {
+			t.Errorf("TTL %d: raw callback count (%d) != aggregator Snt (%d)",
+				ttl, rawCount, snt)
+		}
+		if snt != 3 {
+			t.Errorf("TTL %d: expected Snt=3, got %d", ttl, snt)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// RDNS-only: IPGeoSource=nil && RDNS=true enters fetchIPData path
+// ---------------------------------------------------------------------------
+
+func TestBuildMTRRawRecordFromProbe_RDNSOnlyPath(t *testing.T) {
+	// With IPGeoSource=nil and RDNS=true, the function should enter the
+	// fetchIPData path (not skip it). We use 127.0.0.1 which typically
+	// resolves to "localhost" via PTR. Even if RDNS fails in CI, the test
+	// verifies the code path doesn't panic and the record is well-formed.
+	pr := mtrProbeResult{
+		TTL:     1,
+		Success: true,
+		Addr:    &net.IPAddr{IP: net.ParseIP("127.0.0.1")},
+		RTT:     1 * time.Millisecond,
+	}
+
+	rec := buildMTRRawRecordFromProbe(1, pr, Config{
+		RDNS:        true,
+		IPGeoSource: nil, // no geo source — only RDNS
+		Lang:        "en",
+	})
+
+	// Basic sanity: record must have IP and RTT regardless.
+	if rec.IP != "127.0.0.1" {
+		t.Errorf("expected IP='127.0.0.1', got %q", rec.IP)
+	}
+	if rec.RTTMs <= 0 {
+		t.Errorf("expected positive RTTMs, got %f", rec.RTTMs)
+	}
+	// Geo fields should be empty (no IPGeoSource).
+	if rec.ASN != "" {
+		t.Errorf("expected empty ASN with no geo source, got %q", rec.ASN)
+	}
+	// Host may or may not be set depending on system RDNS for 127.0.0.1.
+	// The key assertion is that we reached here without panic/skip.
+	t.Logf("RDNS-only path: Host=%q (may vary by system)", rec.Host)
+}

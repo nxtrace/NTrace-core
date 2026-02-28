@@ -47,9 +47,9 @@ func checkMTRConflicts(flags map[string]bool) (conflict string, ok bool) {
 // runMTRTUI 执行 MTR 交互式 TUI 模式。
 // 当 stdin 为 TTY 时启用全屏 TUI（备用屏幕、按键控制）；
 // 非 TTY 时降级为简单表格刷新。
-func runMTRTUI(method trace.Method, conf trace.Config, intervalMs int, maxRounds int, domain string, dataOrigin string, showIPs bool) {
-	if intervalMs <= 0 {
-		intervalMs = 1000
+func runMTRTUI(method trace.Method, conf trace.Config, hopIntervalMs int, maxPerHop int, domain string, dataOrigin string, showIPs bool) {
+	if hopIntervalMs <= 0 {
+		hopIntervalMs = 1000
 	}
 
 	// Ctrl-C 优雅退出
@@ -89,8 +89,8 @@ func runMTRTUI(method trace.Method, conf trace.Config, intervalMs int, maxRounds
 	roundConf := normalizeMTRTraceConfig(conf)
 
 	opts := trace.MTROptions{
-		Interval:         time.Duration(intervalMs) * time.Millisecond,
-		MaxRounds:        maxRounds,
+		HopInterval:      time.Duration(hopIntervalMs) * time.Millisecond,
+		MaxPerHop:        maxPerHop,
 		IsResetRequested: ui.ConsumeRestartRequest,
 	}
 
@@ -115,13 +115,13 @@ func runMTRTUI(method trace.Method, conf trace.Config, intervalMs int, maxRounds
 }
 
 // runMTRReport 执行 MTR 非全屏报告模式（对齐 mtr -rzw 风格）。
-// 探测完 maxRounds 后一次性输出最终统计到 stdout，不进入 alternate screen。
-func runMTRReport(method trace.Method, conf trace.Config, intervalMs int, maxRounds int, domain string, dataOrigin string, wide bool, showIPs bool) {
-	if intervalMs <= 0 {
-		intervalMs = 1000
+// 探测完 maxPerHop 后一次性输出最终统计到 stdout，不进入 alternate screen。
+func runMTRReport(method trace.Method, conf trace.Config, hopIntervalMs int, maxPerHop int, domain string, dataOrigin string, wide bool, showIPs bool) {
+	if hopIntervalMs <= 0 {
+		hopIntervalMs = 1000
 	}
-	if maxRounds <= 0 {
-		maxRounds = 10
+	if maxPerHop <= 0 {
+		maxPerHop = 10
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -153,8 +153,8 @@ func runMTRReport(method trace.Method, conf trace.Config, intervalMs int, maxRou
 	}
 
 	opts := trace.MTROptions{
-		Interval:  time.Duration(intervalMs) * time.Millisecond,
-		MaxRounds: maxRounds,
+		HopInterval: time.Duration(hopIntervalMs) * time.Millisecond,
+		MaxPerHop:   maxPerHop,
 	}
 
 	roundConf := normalizeMTRReportConfig(conf, wide)
@@ -181,9 +181,9 @@ func runMTRReport(method trace.Method, conf trace.Config, intervalMs int, maxRou
 // runMTRRaw 执行 MTR 原始流式模式（逐事件输出，'|' 分隔）。
 // 行格式固定为 12 列：
 // ttl|ip|ptr|rtt|asn|country|prov|city|district|owner|lat|lng
-func runMTRRaw(method trace.Method, conf trace.Config, intervalMs int, maxRounds int, dataOrigin string) {
-	if intervalMs <= 0 {
-		intervalMs = 1000
+func runMTRRaw(method trace.Method, conf trace.Config, hopIntervalMs int, maxPerHop int, dataOrigin string) {
+	if hopIntervalMs <= 0 {
+		hopIntervalMs = 1000
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -197,8 +197,8 @@ func runMTRRaw(method trace.Method, conf trace.Config, intervalMs int, maxRounds
 	}()
 
 	opts := trace.MTRRawOptions{
-		Interval:  time.Duration(intervalMs) * time.Millisecond,
-		MaxRounds: maxRounds,
+		HopInterval: time.Duration(hopIntervalMs) * time.Millisecond,
+		MaxPerHop:   maxPerHop,
 	}
 
 	roundConf := normalizeMTRTraceConfig(conf)

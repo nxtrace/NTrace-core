@@ -215,6 +215,86 @@ func TestDeriveMTRRoundParams_DefaultsAndOverrides(t *testing.T) {
 	}
 }
 
+func TestDeriveMTRProbeParams_DefaultsAndOverrides(t *testing.T) {
+	tests := []struct {
+		name                string
+		effectiveReport     bool
+		queriesExplicit     bool
+		numMeasurements     int
+		mtrIntervalExplicit bool
+		mtrIntervalMs       int
+		ttlTimeExplicit     bool
+		ttlInterval         int
+		wantMaxPerHop       int
+		wantHopIntervalMs   int
+	}{
+		{
+			name:              "report default",
+			effectiveReport:   true,
+			wantMaxPerHop:     10,
+			wantHopIntervalMs: 1000,
+		},
+		{
+			name:              "tui default (unlimited)",
+			effectiveReport:   false,
+			wantMaxPerHop:     0,
+			wantHopIntervalMs: 1000,
+		},
+		{
+			name:              "report explicit q",
+			effectiveReport:   true,
+			queriesExplicit:   true,
+			numMeasurements:   20,
+			wantMaxPerHop:     20,
+			wantHopIntervalMs: 1000,
+		},
+		{
+			name:                "explicit --mtr-interval overrides -i",
+			effectiveReport:     true,
+			mtrIntervalExplicit: true,
+			mtrIntervalMs:       500,
+			ttlTimeExplicit:     true,
+			ttlInterval:         2000,
+			wantMaxPerHop:       10,
+			wantHopIntervalMs:   500,
+		},
+		{
+			name:              "explicit -i as compat alias",
+			effectiveReport:   true,
+			ttlTimeExplicit:   true,
+			ttlInterval:       2000,
+			wantMaxPerHop:     10,
+			wantHopIntervalMs: 2000,
+		},
+		{
+			name:              "tui explicit q",
+			effectiveReport:   false,
+			queriesExplicit:   true,
+			numMeasurements:   5,
+			wantMaxPerHop:     5,
+			wantHopIntervalMs: 1000,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotMaxPerHop, gotHopIntervalMs := deriveMTRProbeParams(
+				tt.effectiveReport,
+				tt.queriesExplicit,
+				tt.numMeasurements,
+				tt.mtrIntervalExplicit,
+				tt.mtrIntervalMs,
+				tt.ttlTimeExplicit,
+				tt.ttlInterval,
+			)
+			if gotMaxPerHop != tt.wantMaxPerHop || gotHopIntervalMs != tt.wantHopIntervalMs {
+				t.Fatalf("got maxPerHop=%d hopIntervalMs=%d, want maxPerHop=%d hopIntervalMs=%d",
+					gotMaxPerHop, gotHopIntervalMs, tt.wantMaxPerHop, tt.wantHopIntervalMs)
+			}
+		})
+	}
+}
+
 func TestNormalizeMTRTraceConfig_UsesMTRInternalTTLInterval50(t *testing.T) {
 	original := trace.Config{
 		TTLInterval:    1200,
