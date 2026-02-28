@@ -459,6 +459,19 @@ func formatReportHost(s trace.MTRHopStat, mode int, nameMode int, lang string, s
 	return host
 }
 
+// formatCompactReportHost 构建非 wide report 的精简 Host 文本。
+//
+// 规则：
+//   - waiting → "(waiting for reply)"
+//   - 仅显示 PTR/IP 基础信息
+//   - 不显示 ASN / GEO / Owner / MPLS
+func formatCompactReportHost(s trace.MTRHopStat, nameMode int, showIPs bool) string {
+	if isWaitingHopStat(s) {
+		return "(waiting for reply)"
+	}
+	return formatMTRHostBase(s, nameMode, showIPs)
+}
+
 // formatMTRGeoData 返回简短 geo 描述（向后兼容，等效于英文 HostModeFull geo 部分）。
 func formatMTRGeoData(data *ipgeo.IPGeoData) string {
 	if data == nil {
@@ -527,7 +540,7 @@ type MTRReportOptions struct {
 //	  2. ???                           100.0%    10    0.00   0.00   0.00   0.00   0.00
 //
 // Wide 模式下使用 HostModeFull（完整地址 + 运营商），host 列宽度取所有行最大值；
-// 非 wide 模式使用 HostModeASN，按终端宽度截断：
+// 非 wide 模式仅显示 PTR/IP，不查询/展示 GEO，也不显示 MPLS，按终端宽度截断：
 //
 //	width < 100  → maxHost = 16
 //	100 ≤ width < 140 → maxHost = 20
@@ -538,19 +551,17 @@ func MTRReportPrint(stats []trace.MTRHopStat, opts MTRReportOptions) {
 		lang = "cn"
 	}
 
-	// wide 模式使用完整地址，非 wide 仅 ASN
-	hostMode := HostModeASN
-	if opts.Wide {
-		hostMode = HostModeFull
-	}
-
 	// Start 行
 	fmt.Printf("Start: %s\n", opts.StartTime.Format("2006-01-02T15:04:05-0700"))
 
 	// 预先格式化所有 host 字符串，以便确定对齐宽度
 	hosts := make([]string, len(stats))
 	for i, s := range stats {
-		hosts[i] = formatReportHost(s, hostMode, HostNamePTRorIP, lang, opts.ShowIPs)
+		if opts.Wide {
+			hosts[i] = formatReportHost(s, HostModeFull, HostNamePTRorIP, lang, opts.ShowIPs)
+		} else {
+			hosts[i] = formatCompactReportHost(s, HostNamePTRorIP, opts.ShowIPs)
+		}
 	}
 
 	// 确定 host 列对齐宽度

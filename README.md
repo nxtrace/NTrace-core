@@ -354,9 +354,20 @@ The **report mode** (`-r`/`--report`) produces a one-shot summary after all roun
 ```
 Start: 2025-07-14T09:12:00+0800
 HOST: myhost                    Loss%   Snt   Last    Avg   Best   Wrst  StDev
-  1.|-- AS4134 10.0.0.1          0.0%    10    1.23   1.45   0.98   2.10   0.32
-  2.|-- ???                    100.0%    10    0.00   0.00   0.00   0.00   0.00
+  1. one.one.one.one            0.0%    10    1.23   1.45   0.98   2.10   0.32
+  2. 10.0.0.2                 100.0%    10    0.00   0.00   0.00   0.00   0.00
 ```
+
+Rows shown as `(waiting for reply)` keep the same table layout; the metric cells on that row are left blank.
+
+In non-wide report mode, NextTrace intentionally keeps the host column compact:
+
+- only `PTR/IP` is shown
+- no Geo API lookup is performed
+- no ASN / owner / location fields are shown
+- MPLS labels are hidden
+
+Wide report mode (`-w` / `--wide`) keeps the current full-information behavior, including Geo-derived fields and MPLS output.
 
 When `--raw` is used together with MTR (`--mtr`, `-r`, or `-w`), NextTrace enters **MTR raw stream mode**.
 

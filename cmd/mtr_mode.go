@@ -155,7 +155,7 @@ func runMTRReport(method trace.Method, conf trace.Config, intervalMs int, maxRou
 		MaxRounds: maxRounds,
 	}
 
-	roundConf := normalizeMTRTraceConfig(conf)
+	roundConf := normalizeMTRReportConfig(conf, wide)
 	err := trace.RunMTR(ctx, method, roundConf, opts, onSnapshot)
 	if err != nil && err != context.Canceled {
 		fmt.Println(err)
@@ -215,6 +215,19 @@ func runMTRRaw(method trace.Method, conf trace.Config, intervalMs int, maxRounds
 func normalizeMTRTraceConfig(conf trace.Config) trace.Config {
 	normalized := conf
 	normalized.TTLInterval = defaultTracerouteTTLIntervalMs
+	return normalized
+}
+
+func normalizeMTRReportConfig(conf trace.Config, wide bool) trace.Config {
+	normalized := normalizeMTRTraceConfig(conf)
+	if wide {
+		return normalized
+	}
+
+	normalized.IPGeoSource = nil
+	if normalized.RDNS {
+		normalized.AlwaysWaitRDNS = true
+	}
 	return normalized
 }
 

@@ -2,6 +2,8 @@ package printer
 
 import (
 	"fmt"
+	"io"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -10,6 +12,31 @@ import (
 	"github.com/nxtrace/NTrace-core/ipgeo"
 	"github.com/nxtrace/NTrace-core/trace"
 )
+
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	os.Stdout = w
+	defer func() {
+		os.Stdout = oldStdout
+	}()
+
+	fn()
+
+	_ = w.Close()
+	out, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = r.Close()
+	return string(out)
+}
 
 func TestMTRRenderTable_HeaderOrder(t *testing.T) {
 	// 验证 MTRRow 字段名（即列名）顺序：Hop, Loss%, Snt, Last, Avg, Best, Wrst, StDev, Host
@@ -1630,6 +1657,120 @@ func TestReport_FullExtrasUseSpaces_NoComma(t *testing.T) {
 	want := "AS13335 one.one.one.one US Cloudflare"
 	if host != want {
 		t.Errorf("report host = %q, want %q", host, want)
+	}
+}
+
+func TestFormatCompactReportHost_Waiting(t *testing.T) {
+	host := formatCompactReportHost(trace.MTRHopStat{
+		TTL: 2, IP: "", Host: "", Loss: 100, Snt: 10,
+	}, HostNamePTRorIP, false)
+	if host != "(waiting for reply)" {
+		t.Fatalf("formatCompactReportHost() = %q, want %q", host, "(waiting for reply)")
+	}
+}
+
+func TestFormatCompactReportHost_BaseOnly_NoASNNoGeoNoMPLS(t *testing.T) {
+	s := trace.MTRHopStat{
+		TTL:  1,
+		IP:   "1.1.1.1",
+		Host: "one.one.one.one",
+		Loss: 0, Snt: 10,
+		Geo: &ipgeo.IPGeoData{
+			Asnumber:  "13335",
+			CountryEn: "US",
+			Owner:     "Cloudflare",
+		},
+		MPLS: []string{"[MPLS: Lbl 100, TC 0, S 1, TTL 1]"},
+	}
+	host := formatCompactReportHost(s, HostNamePTRorIP, false)
+	if host != "one.one.one.one" {
+		t.Fatalf("formatCompactReportHost() = %q, want %q", host, "one.one.one.one")
+	}
+	for _, disallowed := range []string{"AS13335", "US", "Cloudflare", "MPLS"} {
+		if strings.Contains(host, disallowed) {
+			t.Fatalf("formatCompactReportHost() should not contain %q, got %q", disallowed, host)
+		}
+	}
+}
+
+func TestFormatCompactReportHost_ShowIPs(t *testing.T) {
+	s := trace.MTRHopStat{
+		TTL:  1,
+		IP:   "1.1.1.1",
+		Host: "one.one.one.one",
+	}
+	host := formatCompactReportHost(s, HostNamePTRorIP, true)
+	if host != "one.one.one.one (1.1.1.1)" {
+		t.Fatalf("formatCompactReportHost() = %q, want %q", host, "one.one.one.one (1.1.1.1)")
+	}
+}
+
+func TestMTRReportPrint_NonWideUsesBaseHostOnly(t *testing.T) {
+	stats := []trace.MTRHopStat{
+		{
+			TTL:  1,
+			IP:   "1.1.1.1",
+			Host: "one.one.one.one",
+			Loss: 0, Snt: 10, Last: 1.23, Avg: 1.45, Best: 0.98, Wrst: 2.10, StDev: 0.32,
+			Geo: &ipgeo.IPGeoData{
+				Asnumber:  "13335",
+				CountryEn: "US",
+				Owner:     "Cloudflare",
+			},
+			MPLS: []string{"[MPLS: Lbl 100, TC 0, S 1, TTL 1]"},
+		},
+	}
+
+	out := captureStdout(t, func() {
+		MTRReportPrint(stats, MTRReportOptions{
+			StartTime: time.Date(2025, 7, 14, 9, 12, 0, 0, time.FixedZone("+0800", 8*3600)),
+			SrcHost:   "myhost",
+			Wide:      false,
+			ShowIPs:   false,
+			Lang:      "en",
+		})
+	})
+
+	if !strings.Contains(out, "one.one.one.one") {
+		t.Fatalf("non-wide report should contain base host, got:\n%s", out)
+	}
+	for _, disallowed := range []string{"AS13335", "Cloudflare", "MPLS", " US "} {
+		if strings.Contains(out, disallowed) {
+			t.Fatalf("non-wide report should not contain %q, got:\n%s", disallowed, out)
+		}
+	}
+}
+
+func TestMTRReportPrint_WideStillIncludesGeoOrMPLS(t *testing.T) {
+	stats := []trace.MTRHopStat{
+		{
+			TTL:  1,
+			IP:   "1.1.1.1",
+			Host: "one.one.one.one",
+			Loss: 0, Snt: 10, Last: 1.23, Avg: 1.45, Best: 0.98, Wrst: 2.10, StDev: 0.32,
+			Geo: &ipgeo.IPGeoData{
+				Asnumber:  "13335",
+				CountryEn: "US",
+				Owner:     "Cloudflare",
+			},
+			MPLS: []string{"[MPLS: Lbl 100, TC 0, S 1, TTL 1]"},
+		},
+	}
+
+	out := captureStdout(t, func() {
+		MTRReportPrint(stats, MTRReportOptions{
+			StartTime: time.Date(2025, 7, 14, 9, 12, 0, 0, time.FixedZone("+0800", 8*3600)),
+			SrcHost:   "myhost",
+			Wide:      true,
+			ShowIPs:   false,
+			Lang:      "en",
+		})
+	})
+
+	for _, expected := range []string{"AS13335", "Cloudflare", "[MPLS: Lbl 100"} {
+		if !strings.Contains(out, expected) {
+			t.Fatalf("wide report should preserve %q, got:\n%s", expected, out)
+		}
 	}
 }
 
