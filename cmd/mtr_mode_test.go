@@ -738,24 +738,32 @@ func TestMTRInputParser_OSCIgnored(t *testing.T) {
 	}
 }
 
-func TestMTRInputParser_BracketedPasteIgnored(t *testing.T) {
-	// Bracketed paste start: ESC [ 2 0 0 ~
-	// Pasted content (including spaces and 'q')
-	// Bracketed paste end: ESC [ 2 0 1 ~
+func TestMTRInputParser_BracketedPasteCSISwallowed(t *testing.T) {
+	// 验证 bracketed paste 开始序列 ESC [ 2 0 0 ~ 被解析器吞掉（作为 CSI），
+	// 且序列终止后后续字节正常回到 ground 状态处理。
+	// 真正的 bracketed paste 防护在 disableTerminalInputModes 已关闭 2004 模式，
+	// 这里仅测试 CSI 终止符 '~' 之后 parser 恢复 ground 的行为。
 	var p mtrInputParser
 	seq := []byte{
-		0x1B, '[', '2', '0', '0', '~', // start
-		'h', 'e', 'l', 'l', 'o', ' ', 'q', // pasted content — 不应触发任何动作
-		// 注意：CSI 序列在 ~ 就终止了，后续字节回到 ground
+		0x1B, '[', '2', '0', '0', '~', // CSI 2 0 0 ~ → 被吞掉
+		'h', 'e', 'l', 'l', 'o', ' ', 'q', // 后续字节回到 ground 正常处理
 	}
 	actions := feedAll(&p, seq)
-	// CSI "200~" 终止在 '~' ，之后 'h','e','l','l','o' 是普通键（无映射→None），
-	// ' ' 触发 resume，'q' 触发 quit
-	// 这是正常行为 —— bracketed paste 的真正防护在 disableTerminalInputModes 已关闭 2004 模式
-	// 此测试验证 CSI 序列本身被正确吞掉
-	// CSI 2 0 0 ~ → 吞掉（~ 是终止符）
-	// 后续 hello q 回到 ground 正常处理
-	if len(actions) < 1 {
-		t.Error("expected at least resume/quit from post-CSI bytes")
+	// CSI "200~" 终止在 '~'，之后：
+	// 'h','e','l','l','o' → 无映射（mtrActionNone）
+	// ' ' → resume
+	// 'q' → quit
+	if len(actions) < 2 {
+		t.Errorf("expected at least resume+quit from post-CSI bytes, got %d actions: %v", len(actions), actions)
+	}
+	// 验证最后两个 action 是 resume 和 quit
+	if len(actions) >= 2 {
+		got := actions[len(actions)-2:]
+		if got[0] != mtrActionResume {
+			t.Errorf("second-to-last action: want resume, got %d", got[0])
+		}
+		if got[1] != mtrActionQuit {
+			t.Errorf("last action: want quit, got %d", got[1])
+		}
 	}
 }

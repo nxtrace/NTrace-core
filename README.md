@@ -10,7 +10,7 @@
 
 <h4 align="center">An open source visual routing tool that pursues light weight, developed using Golang.</h4>
 
----------------------------------------
+---
 
 <h6 align="center">HomePage: www.nxtrace.org</h6>
 
@@ -55,97 +55,97 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
 
 ### Automated Install
 
-* Linux
-    * One-click installation script
+- Linux
+  - One-click installation script
+
+    ```shell
+    curl -sL https://nxtrace.org/nt | bash
+    ```
+
+  - Install nxtrace from the APT repository
+    - Supports AMD64/ARM64 architectures
       ```shell
-      curl -sL https://nxtrace.org/nt | bash
+      curl -fsSL https://github.com/nxtrace/nexttrace-debs/releases/latest/download/nexttrace-archive-keyring.gpg | sudo tee /etc/apt/keyrings/nexttrace.gpg >/dev/null
+      echo "Types: deb
+      URIs: https://github.com/nxtrace/nexttrace-debs/releases/latest/download/
+      Suites: ./
+      Signed-By: /etc/apt/keyrings/nexttrace.gpg" | sudo tee /etc/apt/sources.list.d/nexttrace.sources >/dev/null
+      sudo apt update
+      sudo apt install nexttrace
       ```
+    - APT repository maintained by wcbing and nxtrace
 
-    * Install nxtrace from the APT repository
-        * Supports AMD64/ARM64 architectures
-          ```shell
-          curl -fsSL https://github.com/nxtrace/nexttrace-debs/releases/latest/download/nexttrace-archive-keyring.gpg | sudo tee /etc/apt/keyrings/nexttrace.gpg >/dev/null
-          echo "Types: deb
-          URIs: https://github.com/nxtrace/nexttrace-debs/releases/latest/download/
-          Suites: ./
-          Signed-By: /etc/apt/keyrings/nexttrace.gpg" | sudo tee /etc/apt/sources.list.d/nexttrace.sources >/dev/null
-          sudo apt update
-          sudo apt install nexttrace
-          ```
-        * APT repository maintained by wcbing and nxtrace
-
-    * Arch Linux AUR installation command
-        * Directly download bin package (only supports amd64)
-          ```shell
-          yay -S nexttrace-bin
-          ```
-        * Build from source (only supports amd64)
-          ```shell
-          yay -S nexttrace
-          ```
-        * The AUR builds are maintained by ouuan, huyz
-
-    * Linuxbrew's installation command  
-
-      Same as the macOS Homebrew's installation method (homebrew-core version only supports amd64)
-
-    * deepin installation command
+  - Arch Linux AUR installation command
+    - Directly download bin package (only supports amd64)
       ```shell
-      apt install nexttrace
+      yay -S nexttrace-bin
       ```
-    
-    * [x-cmd](https://www.x-cmd.com/pkg/nexttrace) installation command
+    - Build from source (only supports amd64)
       ```shell
-      x env use nexttrace
+      yay -S nexttrace
       ```
+    - The AUR builds are maintained by ouuan, huyz
 
-    * Termux installation command
+  - Linuxbrew's installation command
+
+    Same as the macOS Homebrew's installation method (homebrew-core version only supports amd64)
+
+  - deepin installation command
+    ```shell
+    apt install nexttrace
+    ```
+  - [x-cmd](https://www.x-cmd.com/pkg/nexttrace) installation command
+
+    ```shell
+    x env use nexttrace
+    ```
+
+  - Termux installation command
+    ```shell
+    pkg install root-repo
+    pkg install nexttrace
+    ```
+  - ImmortalWrt installation command
+    ```shell
+    opkg install nexttrace
+    ```
+
+- macOS
+  - macOS Homebrew's installation command
+    - Homebrew-core version
       ```shell
-      pkg install root-repo
-      pkg install nexttrace
+      brew install nexttrace
       ```
-    
-    * ImmortalWrt installation command
+    - This repository's ACTIONS automatically built version (updates faster)
       ```shell
-      opkg install nexttrace
+      brew tap nxtrace/nexttrace && brew install nxtrace/nexttrace/nexttrace
       ```
+    - The homebrew-core build is maintained by chenrui333, please note that this version's updates may lag behind the repository Action automatically version
 
-* macOS
-    * macOS Homebrew's installation command
-        * Homebrew-core version
-          ```shell
-          brew install nexttrace
-          ```
-        * This repository's ACTIONS automatically built version (updates faster)
-          ```shell
-          brew tap nxtrace/nexttrace && brew install nxtrace/nexttrace/nexttrace
-          ```
-        * The homebrew-core build is maintained by chenrui333, please note that this version's updates may lag behind the repository Action automatically version
+- Windows
+  - Windows WinGet installation command
+    - WinGet version
+      ```powershell
+      winget install nexttrace
+      ```
+    - WinGet build maintained by Dragon1573
 
-* Windows
-    * Windows WinGet installation command
-        * WinGet version
-          ```powershell
-          winget install nexttrace
-          ```
-        * WinGet build maintained by Dragon1573
-
-    * Windows Scoop installation command
-        * Scoop-extras version
-          ```powershell
-          scoop bucket add extras && scoop install extras/nexttrace
-          ```
-        * Scoop-extra is maintained by soenggam
+  - Windows Scoop installation command
+    - Scoop-extras version
+      ```powershell
+      scoop bucket add extras && scoop install extras/nexttrace
+      ```
+    - Scoop-extra is maintained by soenggam
 
 Please note, the repositories for all of the above installation methods are maintained by open source enthusiasts. Availability and timely updates are not guaranteed. If you encounter problems, please contact the repository maintainer to solve them, or use the binary packages provided by the official build of this project.
 
 ### Manual Install
-* Download the precompiled executable
 
-    For users not covered by the above methods, please go directly to [Release](https://www.nxtrace.org/downloads) to download the compiled binary executable.
+- Download the precompiled executable
 
-    * `Release` provides compiled binary executables for many systems and different architectures. If none are available, you can compile it yourself.
-    * Some essential dependencies of this project are not fully implemented on `Windows` by `Golang`, so currently, `NextTrace` is in an experimental support phase on the `Windows` platform.
+  For users not covered by the above methods, please go directly to [Release](https://www.nxtrace.org/downloads) to download the compiled binary executable.
+  - `Release` provides compiled binary executables for many systems and different architectures. If none are available, you can compile it yourself.
+  - Some essential dependencies of this project are not fully implemented on `Windows` by `Golang`, so currently, `NextTrace` is in an experimental support phase on the `Windows` platform.
 
 ### Get Started
 
@@ -193,10 +193,10 @@ The routing visualization function requires the geographical coordinates of each
 
 - **For Normal User Mode:**  
   Only **ICMP mode** can be used, and the firewall must allow `ICMP/ICMPv6` traffic.
-    ```powershell
-    netsh advfirewall firewall add rule name="All ICMP v4" dir=in action=allow protocol=icmpv4:any,any
-    netsh advfirewall firewall add rule name="All ICMP v6" dir=in action=allow protocol=icmpv6:any,any
-    ```  
+  ```powershell
+  netsh advfirewall firewall add rule name="All ICMP v4" dir=in action=allow protocol=icmpv4:any,any
+  netsh advfirewall firewall add rule name="All ICMP v6" dir=in action=allow protocol=icmpv6:any,any
+  ```
 - **For Administrator Mode:**  
   **TCP/UDP mode** requires `WinDivert`.  
   **ICMP mode** supports `1=Socket` and `2=WinDivert` (`0=Auto`). If running in Socket mode, the firewall must allow `ICMP/ICMPv6`.  
@@ -249,7 +249,7 @@ nexttrace --udp 1.0.0.1
 # You can specify the target port yourself [here it is 5353], the default is port 33494
 nexttrace --udp --port 5353 1.0.0.1
 
-# For TCP/UDP Trace, you can specify the source port; by default, a fixed random port is used 
+# For TCP/UDP Trace, you can specify the source port; by default, a fixed random port is used
 # (If you need to use a different random source port for each packet, please set the ENV variable NEXTTRACE_RANDOMPORT, or set the source port to -1)
 nexttrace --tcp --source-port 14514 www.bing.com
 ```
@@ -562,7 +562,6 @@ Arguments:
                                      instead controls interval between rounds
                                      (default: 1000ms when omitted); per-round
                                      TTL spacing stays 50ms
-                                     interval: 1000)
       --timeout                      The number of [milliseconds] to keep probe
                                      sockets open before giving up on the
                                      connection. Default: 1000
@@ -638,6 +637,7 @@ The LeoMoeAPI data is subject to copyright restrictions from multiple data sourc
 We hope you can give us as much feedback as possible on IP geolocation errors (see issue) so that it can be calibrated in the first place and others can benefit from it.
 
 ## Cloudflare Support
+
 This project is sponsored by [Project Alexandria](http://www.cloudflare.com/oss-credits).
 
 <img src="https://cf-assets.www.cloudflare.com/slt3lc6tev37/2I3y49Uz9Y61lBS0kIPZu6/db6df1e6f99a8659267c442b75a0dff9/image.png" alt="Cloudflare Logo" width="331">
@@ -690,19 +690,19 @@ This Project uses [JetBrain Open-Source Project License](https://jb.gg/OpenSourc
 
 - Although other third-party APIs are integrated in this project, please refer to the official website of the third-party APIs for specific TOS and AUP. If you encounter IP data errors, please contact them directly to correct them.
 
-
 - For feedback related to corrections about IP information, we currently have two channels available:
-    >- [IP 错误报告汇总帖](https://github.com/orgs/nxtrace/discussions/222) in the GITHUB ISSUES section of this project (Recommended)
-    >- This project's dedicated correction email: `correct#nxtrace.org` (Please note that this email is only for correcting IP-related information. For other feedback, please submit an ISSUE)
 
+  > - [IP 错误报告汇总帖](https://github.com/orgs/nxtrace/discussions/222) in the GITHUB ISSUES section of this project (Recommended)
+  > - This project's dedicated correction email: `correct#nxtrace.org` (Please note that this email is only for correcting IP-related information. For other feedback, please submit an ISSUE)
 
 - How to obtain the freshly baked binary executable of the latest commit?
-    > Please go to the most recent [Build & Release](https://github.com/nxtrace/NTrace-V1/actions/workflows/build.yml) workflow in GitHub Actions.
+
+  > Please go to the most recent [Build & Release](https://github.com/nxtrace/NTrace-V1/actions/workflows/build.yml) workflow in GitHub Actions.
 
 - Common questions
-    + On Windows, ICMP mode requires manual firewall allowance for ICMP/ICMPv6
-    + On macOS, only ICMP mode does not require elevated privileges
-    + In some cases, running multiple instances of NextTrace simultaneously may interfere with each other’s results (observed so far only in TCP mode)
+  - On Windows, ICMP mode requires manual firewall allowance for ICMP/ICMPv6
+  - On macOS, only ICMP mode does not require elevated privileges
+  - In some cases, running multiple instances of NextTrace simultaneously may interfere with each other’s results (observed so far only in TCP mode)
 
 ## Star History
 

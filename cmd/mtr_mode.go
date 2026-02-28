@@ -279,7 +279,7 @@ func resolveSrcIP(conf trace.Config) string {
 
 // buildAPIInfo 生成首行 preferred API 扩展信息（纯文本，不含 ANSI；仅 LeoMoeAPI）。
 func buildAPIInfo(dataOrigin string) string {
-	if !strings.EqualFold(dataOrigin, "LeoMoeAPI") && !strings.EqualFold(dataOrigin, "leomoeapi") {
+	if !strings.EqualFold(dataOrigin, "LeoMoeAPI") {
 		return ""
 	}
 	meta := util.FastIPMetaCache
@@ -294,7 +294,7 @@ func buildAPIInfo(dataOrigin string) string {
 }
 
 func buildRawAPIInfoLine(dataOrigin string) string {
-	if !strings.EqualFold(dataOrigin, "LeoMoeAPI") && !strings.EqualFold(dataOrigin, "leomoeapi") {
+	if !strings.EqualFold(dataOrigin, "LeoMoeAPI") {
 		return ""
 	}
 	meta := util.FastIPMetaCache

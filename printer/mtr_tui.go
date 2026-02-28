@@ -453,14 +453,18 @@ func mtrTUIRenderWithWidth(w io.Writer, header MTRTUIHeader, stats []trace.MTRHo
 		lang = "en"
 	}
 	nameMode := header.NameMode
-	asnW := computeTUIASNWidth(stats, header.DisplayMode, nameMode, lang, header.ShowIPs)
+	// 预构建所有 hop 的 host 部件，供 ASN 宽度计算和渲染共用
+	allParts := make([]mtrHostParts, len(stats))
+	for i, s := range stats {
+		allParts[i] = buildTUIHostParts(s, header.DisplayMode, nameMode, lang, header.ShowIPs)
+	}
+	asnW := computeTUIASNWidthFromParts(allParts)
 	prevTTL := 0
-	for _, s := range stats {
+	for i, s := range stats {
 		hopPrefix := formatTUIHopPrefix(s.TTL, prevTTL, lo.prefixW)
 		prevTTL = s.TTL
 
-		parts := buildTUIHostParts(s, header.DisplayMode, nameMode, lang, header.ShowIPs)
-		host := formatTUIHost(parts, asnW)
+		host := formatTUIHost(allParts[i], asnW)
 		renderDataRow(&b, lo, hopPrefix, host, s)
 
 		// MPLS 多行显示：每个标签独占一行，位于 host 列区域
@@ -478,9 +482,16 @@ func mtrTUIRenderWithWidth(w io.Writer, header MTRTUIHeader, stats []trace.MTRHo
 }
 
 func computeTUIASNWidth(stats []trace.MTRHopStat, mode int, nameMode int, lang string, showIPs bool) int {
+	allParts := make([]mtrHostParts, len(stats))
+	for i, s := range stats {
+		allParts[i] = buildTUIHostParts(s, mode, nameMode, lang, showIPs)
+	}
+	return computeTUIASNWidthFromParts(allParts)
+}
+
+func computeTUIASNWidthFromParts(allParts []mtrHostParts) int {
 	maxW := 0
-	for _, s := range stats {
-		parts := buildTUIHostParts(s, mode, nameMode, lang, showIPs)
+	for _, parts := range allParts {
 		if parts.waiting || parts.asn == "" {
 			continue
 		}
