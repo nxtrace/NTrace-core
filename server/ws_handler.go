@@ -38,6 +38,23 @@ var (
 	errWSSessionClosed = errors.New("websocket session closed")
 )
 
+// sanitizeLogParam 清理用户输入中的换行和控制字符，防止日志注入。
+func sanitizeLogParam(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		if r == '\n' || r == '\r' {
+			b.WriteString("\\n")
+		} else if r < 0x20 && r != '\t' {
+			// 保留 tab，替换其他 C0 控制字符
+			b.WriteRune('\uFFFD')
+		} else {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
 type wsEnvelope struct {
 	Type   string      `json:"type"`
 	Data   interface{} `json:"data,omitempty"`
@@ -170,7 +187,7 @@ func traceWebsocketHandler(c *gin.Context) {
 		if statusCode == 0 {
 			statusCode = 500
 		}
-		log.Printf("[deploy] websocket prepare trace failed target=%s error=%v", req.Target, err)
+		log.Printf("[deploy] websocket prepare trace failed target=%s error=%v", sanitizeLogParam(req.Target), err)
 		_ = conn.WriteJSON(wsEnvelope{Type: "error", Error: err.Error(), Status: statusCode})
 		return
 	}
@@ -199,8 +216,8 @@ func traceWebsocketHandler(c *gin.Context) {
 		}
 	}()
 
-	log.Printf("[deploy] (ws) trace request target=%s proto=%s provider=%s lang=%s ipv4_only=%t ipv6_only=%t", setup.Target, setup.Protocol, setup.DataProvider, setup.Config.Lang, setup.Req.IPv4Only, setup.Req.IPv6Only)
-	log.Printf("[deploy] (ws) target resolved target=%s ip=%s via dot=%s", setup.Target, setup.IP, strings.ToLower(setup.Req.DotServer))
+	log.Printf("[deploy] (ws) trace request target=%s proto=%s provider=%s lang=%s ipv4_only=%t ipv6_only=%t", sanitizeLogParam(setup.Target), sanitizeLogParam(setup.Protocol), sanitizeLogParam(setup.DataProvider), sanitizeLogParam(setup.Config.Lang), setup.Req.IPv4Only, setup.Req.IPv6Only)
+	log.Printf("[deploy] (ws) target resolved target=%s ip=%s via dot=%s", sanitizeLogParam(setup.Target), setup.IP, sanitizeLogParam(strings.ToLower(setup.Req.DotServer)))
 
 	mode := setup.Req.Mode
 	if mode == "" {
@@ -248,7 +265,7 @@ func runSingleTrace(session *wsTraceSession, setup *traceExecution) {
 	})
 
 	if err != nil {
-		log.Printf("[deploy] websocket trace failed target=%s error=%v", setup.Target, err)
+		log.Printf("[deploy] websocket trace failed target=%s error=%v", sanitizeLogParam(setup.Target), err)
 		_ = session.send(wsEnvelope{Type: "error", Error: err.Error(), Status: 500})
 		return
 	}
@@ -262,7 +279,7 @@ func runSingleTrace(session *wsTraceSession, setup *traceExecution) {
 		if payload, err := json.Marshal(res); err == nil {
 			if url, err := tracemap.GetMapUrl(string(payload)); err == nil {
 				traceMapURL = url
-				log.Printf("[deploy] (ws) trace map generated target=%s url=%s", setup.Target, traceMapURL)
+				log.Printf("[deploy] (ws) trace map generated target=%s url=%s", sanitizeLogParam(setup.Target), traceMapURL)
 			}
 		}
 	}
@@ -281,7 +298,7 @@ func runSingleTrace(session *wsTraceSession, setup *traceExecution) {
 	if err := session.send(wsEnvelope{Type: "complete", Data: final}); err != nil {
 		log.Printf("[deploy] websocket send complete failed: %v", err)
 	}
-	log.Printf("[deploy] (ws) trace completed target=%s hops=%d duration=%s", setup.Target, len(final.Hops), duration)
+	log.Printf("[deploy] (ws) trace completed target=%s hops=%d duration=%s", sanitizeLogParam(setup.Target), len(final.Hops), duration)
 }
 
 func runMTRTrace(session *wsTraceSession, setup *traceExecution) {
@@ -324,7 +341,7 @@ func runMTRTrace(session *wsTraceSession, setup *traceExecution) {
 		}
 	})
 	if err != nil && err != context.Canceled {
-		log.Printf("[deploy] websocket MTR raw trace failed target=%s error=%v", setup.Target, err)
+		log.Printf("[deploy] websocket MTR raw trace failed target=%s error=%v", sanitizeLogParam(setup.Target), err)
 		_ = session.send(wsEnvelope{Type: "error", Error: err.Error(), Status: 500})
 		return
 	}
@@ -337,7 +354,7 @@ func runMTRTrace(session *wsTraceSession, setup *traceExecution) {
 func executeMTRRaw(ctx context.Context, session *wsTraceSession, setup *traceExecution, opts trace.MTRRawOptions, onRecord trace.MTRRawOnRecord) error {
 	config := setup.Config
 	log.Printf("[deploy] (ws) starting MTR raw trace target=%s resolved=%s method=%s lang=%s maxHops=%d interval=%s maxRounds=%d",
-		setup.Target, setup.IP.String(), string(setup.Method), config.Lang, config.MaxHops, opts.Interval, opts.MaxRounds)
+		sanitizeLogParam(setup.Target), setup.IP.String(), string(setup.Method), sanitizeLogParam(config.Lang), config.MaxHops, opts.Interval, opts.MaxRounds)
 
 	if session.closed.Load() {
 		return nil
@@ -362,14 +379,14 @@ func executeMTRRaw(ctx context.Context, session *wsTraceSession, setup *traceExe
 
 		if setup.NeedsLeoWS {
 			if setup.PowProvider != "" {
-				log.Printf("[deploy] (ws) LeoMoeAPI using custom PoW provider=%s", setup.PowProvider)
+				log.Printf("[deploy] (ws) LeoMoeAPI using custom PoW provider=%s", sanitizeLogParam(setup.PowProvider))
 			} else {
 				log.Printf("[deploy] (ws) LeoMoeAPI using default PoW provider")
 			}
 			util.PowProviderParam = setup.PowProvider
 			ensureLeoMoeConnection()
 		} else if setup.PowProvider != "" {
-			log.Printf("[deploy] (ws) overriding PoW provider=%s", setup.PowProvider)
+			log.Printf("[deploy] (ws) overriding PoW provider=%s", sanitizeLogParam(setup.PowProvider))
 			util.PowProviderParam = setup.PowProvider
 		} else {
 			util.PowProviderParam = ""
@@ -409,14 +426,14 @@ func executeTrace(session *wsTraceSession, setup *traceExecution, configure func
 
 	if setup.NeedsLeoWS {
 		if setup.PowProvider != "" {
-			log.Printf("[deploy] (ws) LeoMoeAPI using custom PoW provider=%s", setup.PowProvider)
+			log.Printf("[deploy] (ws) LeoMoeAPI using custom PoW provider=%s", sanitizeLogParam(setup.PowProvider))
 		} else {
 			log.Printf("[deploy] (ws) LeoMoeAPI using default PoW provider")
 		}
 		util.PowProviderParam = setup.PowProvider
 		ensureLeoMoeConnection()
 	} else if setup.PowProvider != "" {
-		log.Printf("[deploy] (ws) overriding PoW provider=%s", setup.PowProvider)
+		log.Printf("[deploy] (ws) overriding PoW provider=%s", sanitizeLogParam(setup.PowProvider))
 		util.PowProviderParam = setup.PowProvider
 	} else {
 		util.PowProviderParam = ""
@@ -440,7 +457,7 @@ func executeTrace(session *wsTraceSession, setup *traceExecution, configure func
 		return nil, 0, nil
 	}
 
-	log.Printf("[deploy] (ws) starting trace target=%s resolved=%s method=%s lang=%s queries=%d maxHops=%d", setup.Target, setup.IP.String(), string(setup.Method), config.Lang, config.NumMeasurements, config.MaxHops)
+	log.Printf("[deploy] (ws) starting trace target=%s resolved=%s method=%s lang=%s queries=%d maxHops=%d", sanitizeLogParam(setup.Target), setup.IP.String(), string(setup.Method), sanitizeLogParam(config.Lang), config.NumMeasurements, config.MaxHops)
 	start := time.Now()
 	res, err := trace.Traceroute(setup.Method, config)
 	duration := time.Since(start)

@@ -155,3 +155,27 @@ func TestWSTraceSessionClose_IsIdempotent(t *testing.T) {
 		t.Fatalf("SetWriteDeadline called %d times during close path, want 0", conn.deadlineCount)
 	}
 }
+
+func TestSanitizeLogParam(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"normal text", "normal text"},
+		{"hello\nworld", "hello\\nworld"},
+		{"hello\r\nworld", "hello\\n\\nworld"},
+		{"line1\nline2\nline3", "line1\\nline2\\nline3"},
+		{"tab\there", "tab\there"},
+		{"null\x00byte", "null\uFFFDbyte"},
+		{"esc\x1b[31m", "esc\uFFFD[31m"},
+		{"", ""},
+		{"safe-host.example.com", "safe-host.example.com"},
+		{"evil\n[deploy] fake log entry", "evil\\n[deploy] fake log entry"},
+	}
+	for _, tt := range tests {
+		got := sanitizeLogParam(tt.input)
+		if got != tt.want {
+			t.Errorf("sanitizeLogParam(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
