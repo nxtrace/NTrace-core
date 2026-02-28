@@ -21,6 +21,7 @@ type mtrUI struct {
 	restartReq  int32       // 1=请求重置统计（atomic）
 	displayMode int32       // 显示模式 0-4（atomic）
 	nameMode    int32       // Host 基础显示 0=PTR/IP, 1=IP only（atomic）
+	disableMPLS int32       // 0=显示 MPLS, 1=隐藏 MPLS（atomic）
 	cancel      context.CancelFunc
 }
 
@@ -85,6 +86,22 @@ func (u *mtrUI) ToggleNameMode() int32 {
 // CurrentNameMode 返回当前 Host 基础显示模式 (0=PTR/IP, 1=IP only)。
 func (u *mtrUI) CurrentNameMode() int {
 	return int(atomic.LoadInt32(&u.nameMode))
+}
+
+// ToggleMPLS 在显示 MPLS (0) 和隐藏 MPLS (1) 之间切换。
+func (u *mtrUI) ToggleMPLS() {
+	for {
+		old := atomic.LoadInt32(&u.disableMPLS)
+		next := int32(1) - old // 0→1, 1→0
+		if atomic.CompareAndSwapInt32(&u.disableMPLS, old, next) {
+			return
+		}
+	}
+}
+
+// IsMPLSDisabled 返回当前是否隐藏 MPLS 显示。
+func (u *mtrUI) IsMPLSDisabled() bool {
+	return atomic.LoadInt32(&u.disableMPLS) != 0
 }
 
 // ---------------------------------------------------------------------------
@@ -161,6 +178,7 @@ const (
 	mtrActionRestart                           // r
 	mtrActionDisplayMode                       // y
 	mtrActionNameToggle                        // n
+	mtrActionMPLSToggle                        // e
 )
 
 // mtrInputParser 是一个字节级状态机，能区分普通按键与
@@ -287,6 +305,8 @@ func mapKeyToAction(b byte) mtrInputAction {
 		return mtrActionDisplayMode
 	case 'n', 'N':
 		return mtrActionNameToggle
+	case 'e', 'E':
+		return mtrActionMPLSToggle
 	default:
 		return mtrActionNone
 	}
@@ -300,6 +320,7 @@ func mapKeyToAction(b byte) mtrInputAction {
 //	r     → 重置统计
 //	y     → 切换显示模式
 //	n     → 切换 Host 显示
+//	e     → 切换 MPLS 显示
 //
 // 使用 mtrInputParser 字节流状态机解析输入，
 // 自动吞掉 CSI/SS3/OSC/鼠标/焦点等转义序列。
@@ -339,6 +360,8 @@ func (u *mtrUI) ReadKeysLoop(ctx context.Context) {
 				u.CycleDisplayMode()
 			case mtrActionNameToggle:
 				u.ToggleNameMode()
+			case mtrActionMPLSToggle:
+				u.ToggleMPLS()
 			}
 		}
 	}
@@ -366,6 +389,8 @@ func ParseMTRKey(b byte) string {
 		return "display_mode"
 	case 'n', 'N':
 		return "name_toggle"
+	case 'e', 'E':
+		return "mpls_toggle"
 	default:
 		return ""
 	}

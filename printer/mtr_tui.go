@@ -43,6 +43,7 @@ type MTRTUIHeader struct {
 	NameMode    int    // Host 基础显示 0=PTR/IP, 1=IP only
 	ShowIPs     bool   // 是否显示 PTR+IP（nameMode=0 时生效）
 	APIInfo     string // preferred API 信息（纯文本，可为空）
+	DisableMPLS bool   // 是否隐藏 MPLS 行（运行时 toggle）
 }
 
 // ---------------------------------------------------------------------------
@@ -372,21 +373,31 @@ func mtrTUIRenderWithWidth(w io.Writer, header MTRTUIHeader, stats []trace.MTRHo
 	if ver == "" {
 		ver = "dev"
 	}
-	line1 := fmt.Sprintf("NextTrace [%s]", ver)
+	titlePart := fmt.Sprintf("NextTrace [%s]", ver)
+	apiPart := ""
 	if header.APIInfo != "" {
-		line1 += "  " + header.APIInfo
+		apiPart = "  " + header.APIInfo
 	}
-	// 截断 + 居中
+	line1 := titlePart + apiPart
 	line1W := displayWidth(line1)
 	if line1W > lo.termWidth {
 		line1 = truncateByDisplayWidth(line1, lo.termWidth)
 		line1W = displayWidth(line1)
+		// 重新确定截断后哪个部分存在
+		titleW := displayWidth(titlePart)
+		if line1W <= titleW {
+			titlePart = line1
+			apiPart = ""
+		} else {
+			// titlePart 是纯 ASCII，byte 长度 == 显示宽度，可以直接切片
+			apiPart = line1[len(titlePart):]
+		}
 	}
+	pad := 0
 	if line1W < lo.termWidth {
-		pad := (lo.termWidth - line1W) / 2
-		line1 = strings.Repeat(" ", pad) + line1
+		pad = (lo.termWidth - line1W) / 2
 	}
-	tuiLine(&b, "%s", mtrTUITitleColor(line1))
+	tuiLine(&b, "%s%s%s", strings.Repeat(" ", pad), mtrTUITitleColor(titlePart), apiPart)
 
 	// ── 信息行 2：srcHost (srcIP) -> dstName (dstIP)     RFC3339-time ──
 	srcPart := header.SrcHost
@@ -437,11 +448,31 @@ func mtrTUIRenderWithWidth(w io.Writer, header MTRTUIHeader, stats []trace.MTRHo
 	if header.NameMode == 1 {
 		nameLabel = "ip"
 	}
-	keyPrefix := fmt.Sprintf("Keys: q-quit  p-pause  SPACE-resume  r-reset  y-display(%s)  n-host(%s)          ", modeLabel, nameLabel)
-	tuiLine(&b, "%s%s",
-		mtrTUIKeyColor(keyPrefix),
-		mtrTUIStatusColor("["+statusStr+"]"))
-	b.WriteString("\r\n") // 空行
+	mplsLabel := "show"
+	if !header.DisableMPLS {
+		mplsLabel = "hide"
+	}
+	// 每项格式: 高亮首字母/按键 + 描述（终端默认色），项之间双空格
+	keyItems := []string{
+		mtrTUIKeyHiColor("Q") + "uit",
+		mtrTUIKeyHiColor("P") + "ause",
+		mtrTUIKeyHiColor("Space") + "-resume",
+		mtrTUIKeyHiColor("R") + "eset",
+		mtrTUIKeyHiColor("Y") + "-display(" + modeLabel + ")",
+		mtrTUIKeyHiColor("N") + "-host(" + nameLabel + ")",
+		mtrTUIKeyHiColor("E") + "-mpls(" + mplsLabel + ")",
+	}
+	keyLine := strings.Join(keyItems, "  ")
+	// 用空格填充到状态标签位置
+	const keysPrefix = "Keys:  "
+	keyW := displayWidth(keysPrefix) + displayWidth(keyLine)
+	statusTag := mtrTUIStatusColor("[" + statusStr + "]")
+	statusTagW := len("[" + statusStr + "]") // 纯文本宽度
+	padNeeded := lo.termWidth - keyW - statusTagW
+	if padNeeded < 2 {
+		padNeeded = 2
+	}
+	tuiLine(&b, "%s%s%s%s", keysPrefix, keyLine, strings.Repeat(" ", padNeeded), statusTag)
 
 	// ── 双层表头 ──
 	renderDualHeader(&b, lo)
@@ -467,7 +498,7 @@ func mtrTUIRenderWithWidth(w io.Writer, header MTRTUIHeader, stats []trace.MTRHo
 		renderDataRow(&b, lo, hopPrefix, host, s)
 
 		// MPLS 多行显示：每个标签独占一行，位于 host 列区域
-		if len(s.MPLS) > 0 {
+		if len(s.MPLS) > 0 && !header.DisableMPLS {
 			for _, mplsLabel := range s.MPLS {
 				var mRow strings.Builder
 				mRow.WriteString(strings.Repeat(" ", lo.prefixW+tuiPrefixGap))
@@ -666,7 +697,7 @@ func truncateStr(s string, maxLen int) string {
 // 将帧渲染到 os.Stdout。
 func MTRTUIPrinter(target, domain, targetIP, version string, startTime time.Time,
 	srcHost, srcIP, lang, apiInfo string, showIPs bool,
-	isPaused func() bool, displayMode func() int, nameMode func() int) func(iteration int, stats []trace.MTRHopStat) {
+	isPaused func() bool, displayMode func() int, nameMode func() int, isMPLSDisabled func() bool) func(iteration int, stats []trace.MTRHopStat) {
 	return func(iteration int, stats []trace.MTRHopStat) {
 		status := MTRTUIRunning
 		if isPaused != nil && isPaused() {
@@ -679,6 +710,10 @@ func MTRTUIPrinter(target, domain, targetIP, version string, startTime time.Time
 		nm := 0
 		if nameMode != nil {
 			nm = nameMode()
+		}
+		noMPLS := false
+		if isMPLSDisabled != nil {
+			noMPLS = isMPLSDisabled()
 		}
 		MTRTUIRender(os.Stdout, MTRTUIHeader{
 			Target:      target,
@@ -695,6 +730,7 @@ func MTRTUIPrinter(target, domain, targetIP, version string, startTime time.Time
 			NameMode:    nm,
 			ShowIPs:     showIPs,
 			APIInfo:     apiInfo,
+			DisableMPLS: noMPLS,
 		}, stats)
 	}
 }

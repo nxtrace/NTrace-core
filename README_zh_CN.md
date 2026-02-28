@@ -309,15 +309,15 @@ nexttrace -t --tcp --port 443 www.bing.com
 # MTR 模式使用 UDP 探测
 nexttrace -t --udp 1.0.0.1
 
-# 设置每轮间隔（MTR 模式下默认 1000ms）
+# 设置每个跳点的探测间隔（MTR 模式下默认 1000ms；-z/--send-time 在 MTR 模式下无效）
 nexttrace -t -i 500 1.1.1.1
 
-# 限制最大轮次（TUI 默认无限，报告模式默认 10）
+# 限制每个跳点的最大探测次数（TUI 默认无限，报告模式默认 10）
 nexttrace -t -q 20 1.1.1.1
 
-# 报告模式：运行 N 轮后一次性输出统计摘要（类似 mtr -r）
-nexttrace -r 1.1.1.1       # = --mtr --report，默认 10 轮
-nexttrace -r -q 5 1.1.1.1  # 5 轮
+# 报告模式：对每个跳点探测 N 次后一次性输出统计摘要（类似 mtr -r）
+nexttrace -r 1.1.1.1       # = --mtr --report，默认每跳点 10 次
+nexttrace -r -q 5 1.1.1.1  # 每跳点 5 次
 
 # 宽报告模式：主机列不截断（类似 mtr -rw）
 nexttrace -w 1.1.1.1       # = --mtr --report --wide
@@ -345,15 +345,16 @@ nexttrace -t --tcp --max-hops 20 --first 3 --no-rdns 8.8.8.8
 - **`n`** — 切换主机名显示方式：
   - 默认：PTR（无 PTR 时回退 IP）↔ 仅 IP
   - 启用 `--show-ips`：PTR (IP) ↔ 仅 IP
+- **`e`** — 切换 MPLS 标签显示开/关
 - TUI 标题栏显示**源 → 目标**路由信息，指定 `--source`/`--dev` 时会展示对应信息。
 - 使用 LeoMoeAPI 时，标题栏会显示首选 API IP 地址。
 - 使用**备用屏幕缓冲区**，退出后恢复之前的终端历史记录。
 - 当 stdin 非 TTY（如管道输入）时，降级为简单表格刷新模式。
 
-**报告模式**（`-r`/`--report`）在所有轮次完成后一次性输出统计，适合脚本使用：
+**报告模式**（`-r`/`--report`）在所有探测完成后一次性输出统计，适合脚本使用：
 
-```
-Start: 2025-07-14T09:12:00+0800
+```text
+Start: 2025-07-14T09:12:00+08:00
 HOST: myhost                    Loss%   Snt   Last    Avg   Best   Wrst  StDev
   1. one.one.one.one            0.0%    10    1.23   1.45   0.98   2.10   0.32
   2. 10.0.0.2                 100.0%    10    0.00   0.00   0.00   0.00   0.00
@@ -392,7 +393,7 @@ wide 报告模式（`-w` / `--wide`）继续保留当前完整信息行为，包
 
 `ttl|*||||||||||`
 
-在 MTR 模式（`--mtr`、`-r`、`-w`，包括 `--raw`）下，`-i/--ttl-time` 表示**轮次间隔**。每轮 traceroute 内部按 TTL 分组发包的间隔仍固定为默认的 `50ms`。
+在 MTR 模式（`--mtr`、`-r`、`-w`，包括 `--raw`）下，`-i/--ttl-time` 设置的是**每个跳点的探测间隔**：同一跳点两次连续探测之间的等待时间（未显式指定时默认 1000ms）。`-z/--send-time` 在 MTR 模式下被忽略。
 
 > 注意：`--show-ips` 仅在 MTR 模式（`--mtr`、`-r`、`-w`）生效，其他模式会忽略。
 >
@@ -467,10 +468,11 @@ usage: nexttrace [-h|--help] [--init] [-4|--ipv4] [-6|--ipv6] [-T|--tcp]
                  <integer>] [-D|--dev "<value>"] [--listen "<value>"]
                  [--deploy] [-z|--send-time <integer>] [-i|--ttl-time
                  <integer>] [--timeout <integer>] [--psize <integer>]
-                 [_positionalArg_nexttrace_38 "<value>"] [--dot-server
+                 [_positionalArg_nexttrace_37 "<value>"] [--dot-server
                  (dnssb|aliyun|dnspod|google|cloudflare)] [-g|--language
                  (en|cn)] [--file "<value>"] [-C|--no-color] [--from "<value>"]
                  [-t|--mtr] [-r|--report] [-w|--wide] [--show-ips]
+                 [-y|--ipinfo <integer>]
 
                  An open source visual route tracking CLI tool
 
@@ -516,8 +518,11 @@ Arguments:
       --dn42                         DN42 Mode
   -o  --output                       Write trace result to file
                                      (RealTimePrinter ONLY)
-      --table                        Output trace results as table
-      --raw                          An Output Easy to Parse
+      --table                        Output trace results as a final summary
+                                     table (traceroute report mode)
+      --raw                          Machine-friendly output. With MTR
+                                     (--mtr/-r/-w), enables streaming raw
+                                     event mode
   -j  --json                         Output trace results as JSON
   -c  --classic                      Classic Output trace results like
                                      BestTrace
@@ -536,18 +541,17 @@ Arguments:
                                      127.0.0.1:30080)
       --deploy                       Start the Gin powered web console
   -z  --send-time                    Set how many [milliseconds] between
-                                     sending each packet. Default: 50ms
-  -i  --ttl-time                     Set how many [milliseconds] between
-                                     sending packet groups by TTL in normal
-                                     traceroute（默认 300ms）。在 MTR 模式
-                                     （--mtr/-r/-w，包括 --raw）下，该参数改为
-                                     控制轮次间隔（未设置时默认 1000ms）；
-                                     每轮内部 TTL 分组间隔固定为 50ms
+                                     sending each packet. Default: 50ms.
+                                     在 MTR 模式下无效。
+  -i  --ttl-time                     TTL 分组发包间隔 [ms]（默认 300ms）。
+                                     在 MTR 模式（--mtr/-r/-w，含 --raw）下，
+                                     设置每个跳点的探测间隔（未显式
+                                     指定时默认 1000ms）。
       --timeout                      The number of [milliseconds] to keep probe
                                      sockets open before giving up on the
                                      connection. Default: 1000
       --psize                        Set the payload size. Default: 52
-      --_positionalArg_nexttrace_38  IP Address or domain name
+      --_positionalArg_nexttrace_37  IP Address or domain name
       --dot-server                   Use DoT Server for DNS Parse [dnssb,
                                      aliyun, dnspod, google, cloudflare]
                                      同时作用于 GeoIP API 域名解析（含 LeoMoe FastIP）
@@ -562,12 +566,15 @@ Arguments:
                                      cities, ASNs, ISPs, or cloud regions.
   -t  --mtr                          Enable MTR (My Traceroute) continuous
                                      probing mode
-  -r  --report                       MTR report mode: run N rounds then print
-                                     summary. Implies --mtr. Default rounds: 10
-  -w  --wide                         Wide report mode: no host column
-                                     truncation. Implies --mtr --report
+  -r  --report                       MTR 报告模式（非交互，隐含 --mtr）;
+                                     可单独触发 MTR 而无需 --mtr
+  -w  --wide                         MTR 宽报告模式（隐含 --mtr --report）;
+                                     单独使用等价于 --mtr --report --wide
       --show-ips                     MTR only: display both PTR hostnames and
                                      numeric IPs (PTR first, IP in parentheses)
+  -y  --ipinfo                       设置 MTR TUI 初始主机信息显示模式 (0-4)。
+                                     仅 TUI；--report/--raw 下忽略。
+                                     0:IP/PTR 1:ASN 2:City 3:Owner 4:Full
 ```
 
 ## 项目截图

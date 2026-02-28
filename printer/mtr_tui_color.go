@@ -7,11 +7,12 @@ import (
 )
 
 var (
-	mtrTUITitleColor  = func(s string) string { return s }
-	mtrTUIHeaderColor = color.New(color.FgHiCyan, color.Bold).SprintFunc()
-	mtrTUIRouteColor  = color.New(color.FgHiWhite).SprintFunc()
-	mtrTUITimeColor   = color.New(color.FgHiBlue).SprintFunc()
-	mtrTUIKeyColor    = color.New(color.FgHiCyan).SprintFunc()
+	mtrTUITitleColor  = color.New(color.FgHiWhite).SprintFunc()
+	mtrTUIHeaderColor = color.New(color.FgHiWhite).SprintFunc()
+	mtrTUIRouteColor  = func(s string) string { return s }
+	mtrTUITimeColor   = func(s string) string { return s }
+	mtrTUIKeyColor    = func(s string) string { return s }
+	mtrTUIKeyHiColor  = color.New(color.FgHiWhite).SprintFunc()
 	mtrTUIStatusColor = color.New(color.FgHiYellow, color.Bold).SprintFunc()
 
 	mtrTUIHopColor  = color.New(color.FgHiCyan, color.Bold).SprintFunc()

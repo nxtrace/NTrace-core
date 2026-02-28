@@ -17,7 +17,7 @@ import (
 	"github.com/nxtrace/NTrace-core/util"
 )
 
-const defaultMTRInternalTTLIntervalMs = 50
+const defaultMTRInternalTTLIntervalMs = 0
 
 // MTR 模式下与其他输出/功能标志互斥的检查。
 // 返回 true 表示存在冲突。
@@ -99,7 +99,7 @@ func runMTRTUI(method trace.Method, conf trace.Config, hopIntervalMs int, maxPer
 	if ui.IsTTY() {
 		opts.IsPaused = ui.IsPaused
 		onSnapshot = printer.MTRTUIPrinter(target, domain, target, config.Version, startTime,
-			srcHost, srcIP, lang, apiInfo, showIPs, ui.IsPaused, ui.CurrentDisplayMode, ui.CurrentNameMode)
+			srcHost, srcIP, lang, apiInfo, showIPs, ui.IsPaused, ui.CurrentDisplayMode, ui.CurrentNameMode, ui.IsMPLSDisabled)
 	} else {
 		onSnapshot = func(iteration int, stats []trace.MTRHopStat) {
 			printer.MTRTablePrinter(stats, iteration, ui.CurrentDisplayMode(), ui.CurrentNameMode(), lang, showIPs)

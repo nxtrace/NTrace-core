@@ -258,13 +258,13 @@ func TestMTRTUIRenderString_Header(t *testing.T) {
 	if strings.Contains(result, "Round:") {
 		t.Error("TUI header should NOT contain 'Round:' text")
 	}
-	if !strings.Contains(result, "q-quit") {
+	if !strings.Contains(result, "Quit") {
 		t.Error("missing key hints")
 	}
-	if !strings.Contains(result, "r-reset") {
+	if !strings.Contains(result, "Reset") {
 		t.Error("missing reset key hint")
 	}
-	if !strings.Contains(result, "y-display") {
+	if !strings.Contains(result, "Y-display") {
 		t.Error("missing display mode key hint")
 	}
 }
@@ -605,7 +605,7 @@ func TestTUI_VeryNarrowNoPanic(t *testing.T) {
 	for _, l := range lines {
 		// 跳过清屏序列、信息行和空行
 		if l == "" || strings.HasPrefix(l, "\033[") ||
-			strings.Contains(l, "NextTrace") || strings.Contains(l, "->") || strings.Contains(l, "Keys:") {
+			strings.Contains(l, "NextTrace") || strings.Contains(l, "->") || strings.Contains(l, "Quit") {
 			continue
 		}
 		w := displayWidthWithTabs(l, tuiTabStop)
@@ -727,8 +727,8 @@ func TestMTRTUI_HeaderContainsResetKey(t *testing.T) {
 		Iteration: 1,
 	}
 	out := mtrTUIRenderStringWithWidth(header, nil, 120)
-	if !strings.Contains(out, "r-reset") {
-		t.Errorf("header should contain 'r-reset', got:\n%s", out)
+	if !strings.Contains(out, "Reset") {
+		t.Errorf("header should contain 'Reset', got:\n%s", out)
 	}
 }
 
@@ -1177,7 +1177,7 @@ func TestMTRTUI_DisplayModeInKeys(t *testing.T) {
 			DisplayMode: mode,
 		}
 		out := mtrTUIRenderStringWithWidth(header, nil, 120)
-		expected := "y-display(" + label + ")"
+		expected := "Y-display(" + label + ")"
 		if !strings.Contains(out, expected) {
 			t.Errorf("mode %d: should contain %q, got:\n%s", mode, expected, out)
 		}
@@ -1414,7 +1414,7 @@ func TestMTRTUI_NameModeInKeys(t *testing.T) {
 			NameMode:  nm,
 		}
 		out := mtrTUIRenderStringWithWidth(header, nil, 120)
-		expected := "n-host(" + label + ")"
+		expected := "N-host(" + label + ")"
 		if !strings.Contains(out, expected) {
 			t.Errorf("nameMode %d: should contain %q, got:\n%s", nm, expected, out)
 		}
@@ -1431,7 +1431,7 @@ func TestMTRTUI_NameModeInKeys_ShowIPs(t *testing.T) {
 			ShowIPs:   true,
 		}
 		out := mtrTUIRenderStringWithWidth(header, nil, 120)
-		expected := "n-host(" + label + ")"
+		expected := "N-host(" + label + ")"
 		if !strings.Contains(out, expected) {
 			t.Errorf("showIPs nameMode %d: should contain %q, got:\n%s", nm, expected, out)
 		}

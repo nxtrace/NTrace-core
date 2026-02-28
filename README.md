@@ -311,15 +311,15 @@ nexttrace -t --tcp --port 443 www.bing.com
 # MTR mode with UDP probing
 nexttrace -t --udp 1.0.0.1
 
-# Set the interval between rounds (default: 1000ms in MTR)
+# Set per-hop probe interval (default: 1000ms in MTR; -z/--send-time is ignored in MTR mode)
 nexttrace -t -i 500 1.1.1.1
 
-# Limit the number of rounds (default: infinite in TUI, 10 in report mode)
+# Limit the max probes per hop (default: infinite in TUI, 10 in report mode)
 nexttrace -t -q 20 1.1.1.1
 
-# Report mode: run N rounds and print a final summary (like mtr -r)
-nexttrace -r 1.1.1.1       # = --mtr --report, 10 rounds by default
-nexttrace -r -q 5 1.1.1.1  # 5 rounds
+# Report mode: probe each hop N times then print a final summary (like mtr -r)
+nexttrace -r 1.1.1.1       # = --mtr --report, 10 probes per hop by default
+nexttrace -r -q 5 1.1.1.1  # 5 probes per hop
 
 # Wide report: no host column truncation (like mtr -rw)
 nexttrace -w 1.1.1.1       # = --mtr --report --wide
@@ -347,15 +347,16 @@ When running in a terminal (TTY), MTR mode uses an **interactive full-screen TUI
 - **`n`** — toggle host name display:
   - default: PTR (or IP fallback) ↔ IP only
   - with `--show-ips`: PTR (IP) ↔ IP only
+- **`e`** — toggle MPLS label display on/off
 - The TUI header displays **source → destination**, with `--source`/`--dev` information when specified.
 - When using LeoMoeAPI, the preferred API IP address is shown in the header.
 - Uses the **alternate screen buffer**, so your previous terminal history is preserved on exit.
 - When stdin is not a TTY (e.g. piped), it falls back to a simple table refresh.
 
-The **report mode** (`-r`/`--report`) produces a one-shot summary after all rounds complete, suitable for scripting:
+The **report mode** (`-r`/`--report`) produces a one-shot summary after all probes complete, suitable for scripting:
 
-```
-Start: 2025-07-14T09:12:00+0800
+```text
+Start: 2025-07-14T09:12:00+08:00
 HOST: myhost                    Loss%   Snt   Last    Avg   Best   Wrst  StDev
   1. one.one.one.one            0.0%    10    1.23   1.45   0.98   2.10   0.32
   2. 10.0.0.2                 100.0%    10    0.00   0.00   0.00   0.00   0.00
@@ -394,7 +395,7 @@ Timeout rows keep the same 12-column layout:
 
 `ttl|*||||||||||`
 
-In MTR mode (`--mtr`, `-r`, `-w`, including `--raw`), `-i/--ttl-time` means **interval between rounds**. The per-hop TTL group spacing inside each traceroute round stays at the default `50ms`.
+In MTR mode (`--mtr`, `-r`, `-w`, including `--raw`), `-i/--ttl-time` sets the **per-hop probe interval**: how long to wait between successive probes to the same hop (default: 1000ms when omitted). `-z/--send-time` is ignored in MTR mode.
 
 > Note: `--show-ips` only takes effect in MTR mode (`--mtr`, `-r`, `-w`); otherwise it is ignored.
 >
@@ -485,10 +486,11 @@ usage: nexttrace [-h|--help] [--init] [-4|--ipv4] [-6|--ipv6] [-T|--tcp]
                  <integer>] [-D|--dev "<value>"] [--listen "<value>"]
                  [--deploy] [-z|--send-time <integer>] [-i|--ttl-time
                  <integer>] [--timeout <integer>] [--psize <integer>]
-                 [_positionalArg_nexttrace_38 "<value>"] [--dot-server
+                 [_positionalArg_nexttrace_37 "<value>"] [--dot-server
                  (dnssb|aliyun|dnspod|google|cloudflare)] [-g|--language
                  (en|cn)] [--file "<value>"] [-C|--no-color] [--from "<value>"]
                  [-t|--mtr] [-r|--report] [-w|--wide] [--show-ips]
+                 [-y|--ipinfo <integer>]
 
                  An open source visual route tracking CLI tool
 
@@ -534,8 +536,11 @@ Arguments:
       --dn42                         DN42 Mode
   -o  --output                       Write trace result to file
                                      (RealTimePrinter ONLY)
-      --table                        Output trace results as table
-      --raw                          An Output Easy to Parse
+      --table                        Output trace results as a final summary
+                                     table (traceroute report mode)
+      --raw                          Machine-friendly output. With MTR
+                                     (--mtr/-r/-w), enables streaming raw
+                                     event mode
   -j  --json                         Output trace results as JSON
   -c  --classic                      Classic Output trace results like
                                      BestTrace
@@ -554,19 +559,18 @@ Arguments:
                                      127.0.0.1:30080)
       --deploy                       Start the Gin powered web console
   -z  --send-time                    Set how many [milliseconds] between
-                                     sending each packet. Default: 50ms
-  -i  --ttl-time                     Set how many [milliseconds] between
-                                     sending packet groups by TTL in normal
+                                     sending each packet. Default: 50ms.
+                                     Ignored in MTR mode.
+  -i  --ttl-time                     Interval [ms] between TTL groups in normal
                                      traceroute (default: 300ms). In MTR mode
-                                     (--mtr/-r/-w, including --raw), this
-                                     instead controls interval between rounds
-                                     (default: 1000ms when omitted); per-round
-                                     TTL spacing stays 50ms
+                                     (--mtr/-r/-w, including --raw), sets
+                                     per-hop probe interval (default: 1000ms
+                                     when omitted).
       --timeout                      The number of [milliseconds] to keep probe
                                      sockets open before giving up on the
                                      connection. Default: 1000
       --psize                        Set the payload size. Default: 52
-      --_positionalArg_nexttrace_38  IP Address or domain name
+      --_positionalArg_nexttrace_37  IP Address or domain name
       --dot-server                   Use DoT Server for DNS Parse [dnssb,
                                      aliyun, dnspod, google, cloudflare]
                                      Also applies to GeoIP API DNS resolution
@@ -582,12 +586,16 @@ Arguments:
                                      cities, ASNs, ISPs, or cloud regions.
   -t  --mtr                          Enable MTR (My Traceroute) continuous
                                      probing mode
-  -r  --report                       MTR report mode: run N rounds then print
-                                     summary. Implies --mtr. Default rounds: 10
-  -w  --wide                         Wide report mode: no host column
-                                     truncation. Implies --mtr --report
+  -r  --report                       MTR report mode (non-interactive, implies
+                                     --mtr); can trigger MTR without --mtr
+  -w  --wide                         MTR wide report mode (implies --mtr
+                                     --report); alone equals --mtr --report
+                                     --wide
       --show-ips                     MTR only: display both PTR hostnames and
                                      numeric IPs (PTR first, IP in parentheses)
+  -y  --ipinfo                       Set initial MTR TUI host info mode (0-4).
+                                     TUI only; ignored in --report/--raw.
+                                     0:IP/PTR 1:ASN 2:City 3:Owner 4:Full
 ```
 
 ## Project screenshot

@@ -205,7 +205,7 @@ func Execute() {
 	deploy := parser.Flag("", "deploy", &argparse.Options{Help: "Start the Gin powered web console"})
 	//router := parser.Flag("R", "route", &argparse.Options{Help: "Show Routing Table [Provided By BGP.Tools]"})
 	packetInterval := parser.Int("z", "send-time", &argparse.Options{Default: defaultPacketIntervalMs, Help: "Set how many [milliseconds] between sending each packet. Default: 50ms"})
-	ttlInterval := parser.Int("i", "ttl-time", &argparse.Options{Default: defaultTracerouteTTLIntervalMs, Help: "Set how many [milliseconds] between sending packet groups by TTL in normal traceroute (default: 300ms). In MTR mode (--mtr/-r/-w, including --raw), this instead controls interval between rounds (default: 1000ms when omitted); per-round TTL spacing stays 50ms"})
+	ttlInterval := parser.Int("i", "ttl-time", &argparse.Options{Default: defaultTracerouteTTLIntervalMs, Help: "Interval [ms] between TTL groups in normal traceroute (default: 300ms). In MTR mode (--mtr/-r/-w, including --raw), sets per-hop probe interval: how long between successive probes to the same hop (default: 1000ms when omitted). -z/--send-time is ignored in MTR mode"})
 	timeout := parser.Int("", "timeout", &argparse.Options{Default: 1000, Help: "The number of [milliseconds] to keep probe sockets open before giving up on the connection"})
 	packetSize := parser.Int("", "psize", &argparse.Options{Default: 52, Help: "Set the payload size"})
 	str := parser.StringPositional(&argparse.Options{Help: "IP Address or domain name"})
@@ -220,7 +220,6 @@ func Execute() {
 	reportMode := parser.Flag("r", "report", &argparse.Options{Help: "MTR report mode (non-interactive, implies --mtr); can trigger MTR without --mtr"})
 	wideMode := parser.Flag("w", "wide", &argparse.Options{Help: "MTR wide report mode (implies --mtr --report); alone equals --mtr --report --wide"})
 	showIPs := parser.Flag("", "show-ips", &argparse.Options{Help: "MTR only: display both PTR hostnames and numeric IPs (PTR first, IP in parentheses)"})
-	mtrInterval := parser.Int("", "mtr-interval", &argparse.Options{Default: 0, Help: "MTR per-hop probe interval in milliseconds (default: 1000 in MTR mode). Overrides -i/--ttl-time for MTR"})
 	ipInfoMode := parser.Int("y", "ipinfo", &argparse.Options{Default: 0, Help: "Set initial MTR TUI host info mode (0-4). TUI only; ignored in --report/--raw. 0:IP/PTR 1:ASN 2:City 3:Owner 4:Full"})
 
 	err := parser.Parse(os.Args)
@@ -256,10 +255,9 @@ func Execute() {
 		}
 	}
 
-	// 判定 -q / -i / --mtr-interval 是否显式传入（用于 MTR 下参数迁移）
+	// 判定 -q / -i 是否显式传入（用于 MTR 下参数迁移）
 	queriesExplicit := false
 	ttlTimeExplicit := false
-	mtrIntervalExplicit := false
 	for _, a := range parser.GetArgs() {
 		if !a.GetParsed() {
 			continue
@@ -269,8 +267,6 @@ func Execute() {
 			queriesExplicit = true
 		case "ttl-time":
 			ttlTimeExplicit = true
-		case "mtr-interval":
-			mtrIntervalExplicit = true
 		}
 	}
 
@@ -613,8 +609,6 @@ func Execute() {
 			effectiveReport,
 			queriesExplicit,
 			*numMeasurements,
-			mtrIntervalExplicit,
-			*mtrInterval,
 			ttlTimeExplicit,
 			*ttlInterval,
 		)
@@ -736,10 +730,9 @@ func chooseMTRRunMode(effectiveMTRRaw, effectiveReport bool) mtrRunMode {
 // deriveMTRProbeParams computes per-hop scheduling parameters for MTR.
 //
 // maxPerHop priority: explicit -q > report default 10 > TUI/raw default 0 (unlimited).
-// hopIntervalMs priority: explicit --mtr-interval > explicit -i > default 1000.
+// hopIntervalMs priority: explicit -i > default 1000.
 func deriveMTRProbeParams(
 	effectiveReport, queriesExplicit bool, numMeasurements int,
-	mtrIntervalExplicit bool, mtrIntervalMs int,
 	ttlTimeExplicit bool, ttlInterval int,
 ) (maxPerHop int, hopIntervalMs int) {
 	// maxPerHop
@@ -752,9 +745,7 @@ func deriveMTRProbeParams(
 	}
 
 	// hopIntervalMs
-	if mtrIntervalExplicit {
-		hopIntervalMs = mtrIntervalMs
-	} else if ttlTimeExplicit {
+	if ttlTimeExplicit {
 		hopIntervalMs = ttlInterval
 	} else {
 		hopIntervalMs = 1000

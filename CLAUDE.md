@@ -32,8 +32,8 @@
 - `-z/--send-time`：每包间隔，默认 `defaultPacketIntervalMs = 50` ms。
 - `-i/--ttl-time`：
   - **常规 traceroute**：TTL 分组间隔，默认 `defaultTracerouteTTLIntervalMs = 300` ms。
-  - **MTR 模式**：`normalizeMTRTraceConfig()` 始终覆盖为 `defaultMTRInternalTTLIntervalMs = 50` ms（每轮内部）。
-  - MTR 轮间隔由 `-i` 显式传值 或 默认 1000ms 决定（见下文 `-q/-i` 语义）。
+  - **MTR 模式**：`normalizeMTRTraceConfig()` 始终覆盖为 `defaultMTRInternalTTLIntervalMs = 0` ms（各 TTL 间不间隔）。
+  - MTR 每跳探测间隔由 `-i` 显式传值 或 默认 1000ms 决定（见下文 `-q/-i` 语义）。`-z/--send-time` 在 MTR 模式下被忽略。
 
 ### MTR 相关参数
 
@@ -52,11 +52,12 @@
 ### MTR 中 `-q/-i/-y` 的新语义
 
 - `-q/--queries`：
-  - 在 MTR report 下表示"轮次"，默认 10（仅当用户未显式传 `-q`）。
-  - 在 MTR TUI 下表示"最大轮次"，未显式传时默认无限运行。
+  - 在 MTR report 下表示每跳探测次数，默认 10（仅当用户未显式传 `-q`）。
+  - 在 MTR TUI 下表示每跳最大探测次数，未显式传时默认无限运行。
 - `-i/--ttl-time`：
-  - 在 MTR 下表示"轮间隔毫秒"，默认 1000ms（仅当用户未显式传 `-i`）。
-  - 每轮内部 TTL 分组间隔固定 50ms（`normalizeMTRTraceConfig` 覆盖）。
+  - 在 MTR 下表示每跳探测间隔毫秒，默认 1000ms（仅当用户未显式传 `-i`）。
+  - 各 TTL 间内部扫描间隔固定 0ms（`normalizeMTRTraceConfig` 覆盖为 `defaultMTRInternalTTLIntervalMs = 0`）。
+  - `-z/--send-time` 在 MTR 模式下被忽略。
 - `-y/--ipinfo <0..4>`：
   - TUI 初始 Host 显示模式，默认 0（IP/PTR only）。
   - 0=Base(IP/PTR) 1=ASN 2=City 3=Owner 4=Full
@@ -101,6 +102,7 @@
 - `r`：重置统计
 - `y`：切换 Host 显示模式（IP/PTR → ASN → City → Owner → Full → 循环）
 - `n`：切换 Host 基名显示（PTR-or-IP / IP-only）
+- `e`：切换 MPLS 标签显示（toggle MPLS on/off）
 
 ## MTR 显示与统计规则（当前）
 
@@ -127,31 +129,24 @@
   - MPLS 独立续行显示
   - 紧凑指标列宽度：Loss=5 Snt=3 RTT=7 RTTMin=5
 
-## MTR 目的地折叠（高 TTL 回包归并）
+## MTR 目的地检测与高 TTL 丢弃
 
-- 当 `knownFinalTTL` 已确定后，仍有的更高 TTL 在途探测可能也到达目的地。
-- `processResult` 中引入 `originTTL`（发送时的 TTL）和 `accountTTL`（统计归属 TTL）分离：
-  - 如果探测返回 dst-IP 且 `originTTL > curFinal`，则 `accountTTL = curFinal`（折叠）。
-  - 已 disabled 的 TTL 仍允许通过成功的 dst-ip 回复去折叠。
-  - 非 dst-ip 的回复在 disabled TTL 上直接丢弃。
-- **通用 MaxPerHop 上限检查**（`states[accountTTL].completed >= MaxPerHop`）：
-  - 适用于所有探测结果（自身探测 + 折叠探测），不仅限于折叠路径。
+- 当 `knownFinalTTL` 已确定后，所有 `TTL > knownFinalTTL` 的调度槽位被标记为 `disabled`。
+- disabled TTL 的探测回包（包括在途探测返回的 dst-ip 回复）**一律丢弃**，不折叠、不计入任何统计。
+- **MaxPerHop 上限检查**（`states[originTTL].completed >= MaxPerHop`）：
   - 在途探测（cap 达到前已发出）返回时亦被丢弃，保证 Snt 严格不超 MaxPerHop。
-  - 被丢弃的自身探测仍更新 `consecutiveErrs`/`nextAt`，防止调度饥饿。
+  - 被丢弃的探测仍更新 `consecutiveErrs`/`nextAt`，防止调度饥饿。
 - `originTTL < curFinal` 时（更低 TTL 先到 dst-ip → 降低 `knownFinalTTL`）：
   - 保存 `oldFinal`，更新 `knownFinalTTL = originTTL`，disable 所有 `originTTL+1..maxHops`。
-  - 调用 `agg.MigrateStats(oldFinal, originTTL, MaxPerHop)`：将旧 finalTTL 的聚合数据搬迁到新 finalTTL，合并后对每个累加器 `sent`/`received` 上限裁剪至 MaxPerHop。
-  - 裁剪 `received` 时同步按比例缩放 `sum`/`sumSq`（`ratio = sent/received`），保证 `Avg` 和 `StDev` 不失真；`best`/`worst`/`last` 为极值/最新值，保持不变。
-  - RTT 缩放数学：`SS = sumSq - sum²/n_orig`，`sumSq_new = SS * (n_new-1)/(n_orig-1) + sum_new²/n_new`，可精确保持样本方差。
-  - 同步迁移 `states[originTTL].completed += states[oldFinal].completed`，结果上限裁剪至 MaxPerHop。
-  - **链式迁移**：若 finalTTL 依次降低（12→10→8→7），每次只从当前 `curFinal` 迁移到新值，数据逐级下沉，最终汇聚到最低 finalTTL。
+  - 调用 `agg.ClearHop(oldFinal)`：清除旧 finalTTL 的聚合数据（避免幽灵行），**不合并**到新 finalTTL。
+  - 新 finalTTL 由独立的 per-hop 调度器自行积累新鲜探测数据，不存在 Snt 膨胀问题。
 - 调度状态（`inFlight`/`nextAt`/`consecutiveErrs`）更新在 `originTTL`。
-- 统计聚合（`completed++`/`agg.Update`/`onProbe`）使用 `accountTTL`。
+- 统计聚合（`completed++`/`agg.Update`/`onProbe`）均使用 `originTTL`（不再有 `accountTTL` 分离）。
 
 ## MTR 引擎关键机制（易踩坑）
 
 - 目的地提前停止：
-  - `knownFinalTTL`（跨轮缓存）+ `roundFinalTTL`（本轮检测）用于缩短后续轮次 TTL 上界。
+  - `knownFinalTTL`（持久缓存）用于缩短后续探测的 TTL 上界；高 TTL 标记 disabled 后不再调度。
 - seq 16 位回卷处理：
   - `seqWillWrap(...)` 触发 `rotateEngine(...)`
   - 轮换 echoID 并重建 listener，协议层隔离新旧回包。

@@ -217,16 +217,14 @@ func TestDeriveMTRRoundParams_DefaultsAndOverrides(t *testing.T) {
 
 func TestDeriveMTRProbeParams_DefaultsAndOverrides(t *testing.T) {
 	tests := []struct {
-		name                string
-		effectiveReport     bool
-		queriesExplicit     bool
-		numMeasurements     int
-		mtrIntervalExplicit bool
-		mtrIntervalMs       int
-		ttlTimeExplicit     bool
-		ttlInterval         int
-		wantMaxPerHop       int
-		wantHopIntervalMs   int
+		name              string
+		effectiveReport   bool
+		queriesExplicit   bool
+		numMeasurements   int
+		ttlTimeExplicit   bool
+		ttlInterval       int
+		wantMaxPerHop     int
+		wantHopIntervalMs int
 	}{
 		{
 			name:              "report default",
@@ -249,17 +247,7 @@ func TestDeriveMTRProbeParams_DefaultsAndOverrides(t *testing.T) {
 			wantHopIntervalMs: 1000,
 		},
 		{
-			name:                "explicit --mtr-interval overrides -i",
-			effectiveReport:     true,
-			mtrIntervalExplicit: true,
-			mtrIntervalMs:       500,
-			ttlTimeExplicit:     true,
-			ttlInterval:         2000,
-			wantMaxPerHop:       10,
-			wantHopIntervalMs:   500,
-		},
-		{
-			name:              "explicit -i as compat alias",
+			name:              "explicit -i",
 			effectiveReport:   true,
 			ttlTimeExplicit:   true,
 			ttlInterval:       2000,
@@ -282,8 +270,6 @@ func TestDeriveMTRProbeParams_DefaultsAndOverrides(t *testing.T) {
 				tt.effectiveReport,
 				tt.queriesExplicit,
 				tt.numMeasurements,
-				tt.mtrIntervalExplicit,
-				tt.mtrIntervalMs,
 				tt.ttlTimeExplicit,
 				tt.ttlInterval,
 			)
@@ -327,8 +313,8 @@ func TestDefaultConstants_NormalVsMTR(t *testing.T) {
 	if defaultTracerouteTTLIntervalMs != 300 {
 		t.Fatalf("defaultTracerouteTTLIntervalMs = %d, want 300", defaultTracerouteTTLIntervalMs)
 	}
-	if defaultMTRInternalTTLIntervalMs != 50 {
-		t.Fatalf("defaultMTRInternalTTLIntervalMs = %d, want 50", defaultMTRInternalTTLIntervalMs)
+	if defaultMTRInternalTTLIntervalMs != 0 {
+		t.Fatalf("defaultMTRInternalTTLIntervalMs = %d, want 0", defaultMTRInternalTTLIntervalMs)
 	}
 }
 
