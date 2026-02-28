@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fatih/color"
 	"github.com/nxtrace/NTrace-core/ipgeo"
 	"github.com/nxtrace/NTrace-core/trace"
 )
@@ -1780,5 +1781,75 @@ func TestTUI_WaitingMetricsBlank(t *testing.T) {
 	}
 	if strings.Contains(waitingLine, "0.00") {
 		t.Errorf("waiting line should not contain '0.00': %q", waitingLine)
+	}
+}
+
+func TestFormatMTRRawLine_Success(t *testing.T) {
+	line := FormatMTRRawLine(trace.MTRRawRecord{
+		TTL:      4,
+		Success:  true,
+		IP:       "84.17.33.106",
+		Host:     "po66-3518.cr01.nrt04.jp.misaka.io",
+		RTTMs:    0.27,
+		ASN:      "60068",
+		Country:  "日本",
+		Prov:     "东京都",
+		City:     "东京",
+		District: "",
+		Owner:    "cdn77.com",
+		Lat:      35.6804,
+		Lng:      139.7690,
+	})
+	want := "4|84.17.33.106|po66-3518.cr01.nrt04.jp.misaka.io|0.27|60068|日本|东京都|东京||cdn77.com|35.6804|139.7690"
+	if line != want {
+		t.Fatalf("FormatMTRRawLine()=%q, want %q", line, want)
+	}
+}
+
+func TestFormatMTRRawLine_TimeoutFixedColumns(t *testing.T) {
+	line := FormatMTRRawLine(trace.MTRRawRecord{
+		TTL:     9,
+		Success: false,
+	})
+	if line != "9|*||||||||||" {
+		t.Fatalf("timeout line = %q", line)
+	}
+	if got := strings.Count(line, "|"); got != 11 {
+		t.Fatalf("timeout line should contain 11 separators (12 columns), got %d: %q", got, line)
+	}
+}
+
+func TestMTRTUI_PacketsColorByLoss(t *testing.T) {
+	cases := []struct {
+		name    string
+		loss    float64
+		waiting bool
+		want    color.Attribute
+	}{
+		{name: "zero", loss: 0, waiting: false, want: color.FgHiGreen},
+		{name: "low", loss: 3, waiting: false, want: color.FgHiCyan},
+		{name: "mid", loss: 12, waiting: false, want: color.FgHiYellow},
+		{name: "high", loss: 35, waiting: false, want: color.FgYellow},
+		{name: "very_high", loss: 80, waiting: false, want: color.FgHiRed},
+		{name: "waiting", loss: 100, waiting: true, want: color.FgHiBlack},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := mtrColorLossBucket(tc.loss, tc.waiting)
+			if got != tc.want {
+				t.Fatalf("loss bucket mismatch: got=%v want=%v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestMTRTUI_ColorDisabled_NoANSI(t *testing.T) {
+	orig := color.NoColor
+	t.Cleanup(func() { color.NoColor = orig })
+	color.NoColor = true
+
+	lossCell, sntCell := mtrColorPacketsByLoss("  0.0%", "   1", 0, false)
+	if strings.Contains(lossCell, "\x1b[") || strings.Contains(sntCell, "\x1b[") {
+		t.Fatalf("NoColor=true should not emit ANSI, got loss=%q snt=%q", lossCell, sntCell)
 	}
 }

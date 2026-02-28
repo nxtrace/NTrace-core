@@ -24,7 +24,6 @@ func checkMTRConflicts(flags map[string]bool) (conflict string, ok bool) {
 		set  bool
 	}{
 		{"--table", flags["table"]},
-		{"--raw", flags["raw"]},
 		{"--classic", flags["classic"]},
 		{"--json", flags["json"]},
 		{"--output", flags["output"]},
@@ -172,6 +171,37 @@ func runMTRReport(method trace.Method, conf trace.Config, intervalMs int, maxRou
 		ShowIPs:   showIPs,
 		Lang:      lang,
 	})
+}
+
+// runMTRRaw 执行 MTR 原始流式模式（逐事件输出，'|' 分隔）。
+// 行格式固定为 12 列：
+// ttl|ip|ptr|rtt|asn|country|prov|city|district|owner|lat|lng
+func runMTRRaw(method trace.Method, conf trace.Config, intervalMs int, maxRounds int) {
+	if intervalMs <= 0 {
+		intervalMs = 1000
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sigCh
+		cancel()
+	}()
+
+	opts := trace.MTRRawOptions{
+		Interval:  time.Duration(intervalMs) * time.Millisecond,
+		MaxRounds: maxRounds,
+	}
+
+	err := trace.RunMTRRaw(ctx, method, conf, opts, func(rec trace.MTRRawRecord) {
+		fmt.Println(printer.FormatMTRRawLine(rec))
+	})
+	if err != nil && err != context.Canceled {
+		fmt.Println(err)
+	}
 }
 
 // resolveSrcIP 按优先级解析源 IP：--source > --dev 推导 > udp dial fallback。

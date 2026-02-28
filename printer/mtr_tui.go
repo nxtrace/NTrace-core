@@ -386,7 +386,7 @@ func mtrTUIRenderWithWidth(w io.Writer, header MTRTUIHeader, stats []trace.MTRHo
 		pad := (lo.termWidth - line1W) / 2
 		line1 = strings.Repeat(" ", pad) + line1
 	}
-	tuiLine(&b, "%s", line1)
+	tuiLine(&b, "%s", mtrTUIHeaderColor(line1))
 
 	// ── 信息行 2：srcHost (srcIP) -> dstName (dstIP)     RFC3339-time ──
 	srcPart := header.SrcHost
@@ -422,7 +422,7 @@ func mtrTUIRenderWithWidth(w io.Writer, header MTRTUIHeader, stats []trace.MTRHo
 		routeLine = truncateByDisplayWidth(routeLine, maxRoute)
 		gap = 2
 	}
-	tuiLine(&b, "%s%s%s", routeLine, strings.Repeat(" ", gap), timeStr)
+	tuiLine(&b, "%s%s%s", mtrTUIRouteColor(routeLine), strings.Repeat(" ", gap), mtrTUITimeColor(timeStr))
 
 	// ── 信息行 3：按键提示 + 显示模式 + 状态 ──
 	modeNames := [4]string{"ASN", "City", "Owner", "Full"}
@@ -437,8 +437,11 @@ func mtrTUIRenderWithWidth(w io.Writer, header MTRTUIHeader, stats []trace.MTRHo
 	if header.NameMode == 1 {
 		nameLabel = "ip"
 	}
-	tuiLine(&b, "Keys: q-quit  p-pause  SPACE-resume  r-reset  y-display(%s)  n-host(%s)          [%s] Round: %d",
-		modeLabel, nameLabel, statusStr, header.Iteration)
+	keyPrefix := fmt.Sprintf("Keys: q-quit  p-pause  SPACE-resume  r-reset  y-display(%s)  n-host(%s)          ", modeLabel, nameLabel)
+	tuiLine(&b, "%s%s%s",
+		mtrTUIKeyColor(keyPrefix),
+		mtrTUIStatusColor("["+statusStr+"]"),
+		mtrTUIKeyColor(fmt.Sprintf(" Round: %d", header.Iteration)))
 	b.WriteString("\r\n") // 空行
 
 	// ── 双层表头 ──
@@ -463,7 +466,7 @@ func mtrTUIRenderWithWidth(w io.Writer, header MTRTUIHeader, stats []trace.MTRHo
 			for _, mplsLabel := range s.MPLS {
 				var mRow strings.Builder
 				mRow.WriteString(strings.Repeat(" ", lo.prefixW+tuiPrefixGap))
-				mRow.WriteString(fitLeft("  "+mplsLabel, lo.hostW))
+				mRow.WriteString(mtrTUIMPLSColor(fitLeft("  "+mplsLabel, lo.hostW)))
 				tuiLine(&b, "%s", mRow.String())
 			}
 		}
@@ -489,25 +492,30 @@ func renderDualHeader(b *strings.Builder, lo mtrTUILayout) {
 	packetsLabel := centerIn("Packets", packetsW)
 	pingsLabel := centerIn("Pings", pingsW)
 
-	tuiLine(b, "%s%s%s%s %s", prefix, hostLabel, gap, packetsLabel, pingsLabel)
+	tuiLine(b, "%s%s%s%s %s",
+		prefix,
+		mtrTUIHeaderColor(hostLabel),
+		gap,
+		mtrTUIHeaderColor(packetsLabel),
+		mtrTUIHeaderColor(pingsLabel))
 
 	// -- 第 2 行 --
 	row := strings.Repeat(" ", lo.prefixW+tuiPrefixGap)
 	row += padRight("", lo.hostW)
 	row += strings.Repeat(" ", tuiHostGap)
-	row += fitRight("Loss%", lo.lossW)
+	row += mtrTUIHeaderColor(fitRight("Loss%", lo.lossW))
 	row += strings.Repeat(" ", tuiMetricGap)
-	row += fitRight("Snt", lo.sntW)
+	row += mtrTUIHeaderColor(fitRight("Snt", lo.sntW))
 	row += strings.Repeat(" ", tuiMetricGap)
-	row += fitRight("Last", lo.lastW)
+	row += mtrTUIHeaderColor(fitRight("Last", lo.lastW))
 	row += strings.Repeat(" ", tuiMetricGap)
-	row += fitRight("Avg", lo.avgW)
+	row += mtrTUIHeaderColor(fitRight("Avg", lo.avgW))
 	row += strings.Repeat(" ", tuiMetricGap)
-	row += fitRight("Best", lo.bestW)
+	row += mtrTUIHeaderColor(fitRight("Best", lo.bestW))
 	row += strings.Repeat(" ", tuiMetricGap)
-	row += fitRight("Wrst", lo.wrstW)
+	row += mtrTUIHeaderColor(fitRight("Wrst", lo.wrstW))
 	row += strings.Repeat(" ", tuiMetricGap)
-	row += fitRight("StDev", lo.stdevW)
+	row += mtrTUIHeaderColor(fitRight("StDev", lo.stdevW))
 	tuiLine(b, "%s", row)
 }
 
@@ -541,7 +549,17 @@ func renderDataRow(b *strings.Builder, lo mtrTUILayout, hopPrefix, host string, 
 	}
 
 	var row strings.Builder
-	row.WriteString(left)
+	waiting := isWaitingHopStat(s)
+	leftColored := mtrTUIHostColor(left)
+	if strings.HasPrefix(left, hopPrefix) {
+		hostPart := left[len(hopPrefix):]
+		hostSty := mtrTUIHostColor
+		if waiting {
+			hostSty = mtrTUIWaitColor
+		}
+		leftColored = mtrTUIHopColor(hopPrefix) + hostSty(hostPart)
+	}
+	row.WriteString(leftColored)
 	// 填充空格到 metricsStart
 	if gap := lo.metricsStart - leftW; gap > 0 {
 		row.WriteString(strings.Repeat(" ", gap))
@@ -549,9 +567,13 @@ func renderDataRow(b *strings.Builder, lo mtrTUILayout, hopPrefix, host string, 
 
 	// 指标列，右对齐
 	m := formatMTRMetricStrings(s)
-	row.WriteString(fitRight(m.loss, lo.lossW))
+	lossCell := fitRight(m.loss, lo.lossW)
+	sntCell := fitRight(m.snt, lo.sntW)
+	lossCell, sntCell = mtrColorPacketsByLoss(lossCell, sntCell, s.Loss, waiting)
+
+	row.WriteString(lossCell)
 	row.WriteString(strings.Repeat(" ", tuiMetricGap))
-	row.WriteString(fitRight(m.snt, lo.sntW))
+	row.WriteString(sntCell)
 	row.WriteString(strings.Repeat(" ", tuiMetricGap))
 	row.WriteString(fitRight(m.last, lo.lastW))
 	row.WriteString(strings.Repeat(" ", tuiMetricGap))

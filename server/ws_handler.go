@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -205,52 +206,104 @@ func runMTRTrace(session *wsTraceSession, setup *traceExecution) {
 	}
 	maxRounds := setup.Req.MaxRounds
 
-	aggregator := newMTRAggregator()
 	iteration := 0
-	queries := setup.Config.NumMeasurements
-	if queries <= 0 {
-		queries = 1
-	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	for {
-		if session.closed.Load() {
-			break
+	// Client disconnect / stop should terminate continuous raw stream.
+	go func() {
+		ticker := time.NewTicker(100 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if session.closed.Load() {
+					cancel()
+					return
+				}
+			}
 		}
+	}()
 
-		res, _, err := executeTrace(session, setup, func(cfg *trace.Config) {
-			cfg.RealtimePrinter = nil
-			cfg.AsyncPrinter = nil
-		})
-
-		if err != nil {
-			log.Printf("[deploy] websocket MTR trace failed target=%s error=%v", setup.Target, err)
-			_ = session.send(wsEnvelope{Type: "error", Error: err.Error(), Status: 500})
-			break
+	err := executeMTRRaw(ctx, session, setup, trace.MTRRawOptions{
+		Interval:  interval,
+		MaxRounds: maxRounds,
+	}, func(rec trace.MTRRawRecord) {
+		if rec.Iteration > iteration {
+			iteration = rec.Iteration
 		}
-
-		iteration++
-		stats := aggregator.Update(res, queries)
-		snapshot := mtrSnapshot{Iteration: iteration, Stats: stats}
-		if err := session.send(wsEnvelope{Type: "mtr", Data: snapshot}); err != nil {
+		if err := session.send(wsEnvelope{Type: "mtr_raw", Data: rec}); err != nil {
 			session.closed.Store(true)
-			break
+			cancel()
 		}
-
-		if maxRounds > 0 && iteration >= maxRounds {
-			break
-		}
-
-		if session.closed.Load() {
-			break
-		}
-
-		time.Sleep(interval)
+	})
+	if err != nil && err != context.Canceled {
+		log.Printf("[deploy] websocket MTR raw trace failed target=%s error=%v", setup.Target, err)
+		_ = session.send(wsEnvelope{Type: "error", Error: err.Error(), Status: 500})
+		return
 	}
 
-	finalStats := aggregator.Snapshot()
 	if !session.closed.Load() {
-		_ = session.send(wsEnvelope{Type: "complete", Data: mtrSnapshot{Iteration: iteration, Stats: finalStats}})
+		_ = session.send(wsEnvelope{Type: "complete", Data: gin.H{"iteration": iteration}})
 	}
+}
+
+func executeMTRRaw(ctx context.Context, session *wsTraceSession, setup *traceExecution, opts trace.MTRRawOptions, onRecord trace.MTRRawOnRecord) error {
+	config := setup.Config
+	log.Printf("[deploy] (ws) starting MTR raw trace target=%s resolved=%s method=%s lang=%s maxHops=%d interval=%s maxRounds=%d",
+		setup.Target, setup.IP.String(), string(setup.Method), config.Lang, config.MaxHops, opts.Interval, opts.MaxRounds)
+
+	if session.closed.Load() {
+		return nil
+	}
+
+	opts.RunRound = func(method trace.Method, cfg trace.Config) (*trace.Result, error) {
+		traceMu.Lock()
+		defer traceMu.Unlock()
+
+		prevSrcPort := util.SrcPort
+		prevDstIP := util.DstIP
+		prevSrcDev := util.SrcDev
+		prevDisableMPLS := util.DisableMPLS
+		prevPowProvider := util.PowProviderParam
+		defer func() {
+			util.SrcPort = prevSrcPort
+			util.DstIP = prevDstIP
+			util.SrcDev = prevSrcDev
+			util.DisableMPLS = prevDisableMPLS
+			util.PowProviderParam = prevPowProvider
+		}()
+
+		if setup.NeedsLeoWS {
+			if setup.PowProvider != "" {
+				log.Printf("[deploy] (ws) LeoMoeAPI using custom PoW provider=%s", setup.PowProvider)
+			} else {
+				log.Printf("[deploy] (ws) LeoMoeAPI using default PoW provider")
+			}
+			util.PowProviderParam = setup.PowProvider
+			ensureLeoMoeConnection()
+		} else if setup.PowProvider != "" {
+			log.Printf("[deploy] (ws) overriding PoW provider=%s", setup.PowProvider)
+			util.PowProviderParam = setup.PowProvider
+		} else {
+			util.PowProviderParam = ""
+		}
+
+		util.SrcPort = setup.Req.SourcePort
+		util.DstIP = setup.IP.String()
+		if setup.Req.SourceDevice != "" {
+			util.SrcDev = setup.Req.SourceDevice
+		} else {
+			util.SrcDev = ""
+		}
+		util.DisableMPLS = setup.Req.DisableMPLS
+
+		return trace.Traceroute(method, cfg)
+	}
+
+	return trace.RunMTRRaw(ctx, setup.Method, config, opts, onRecord)
 }
 
 func executeTrace(session *wsTraceSession, setup *traceExecution, configure func(*trace.Config)) (*trace.Result, time.Duration, error) {

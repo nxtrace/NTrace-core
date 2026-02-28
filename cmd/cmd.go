@@ -186,7 +186,7 @@ func Execute() {
 	dn42 := parser.Flag("", "dn42", &argparse.Options{Help: "DN42 Mode"})
 	output := parser.Flag("o", "output", &argparse.Options{Help: "Write trace result to file (RealTimePrinter ONLY)"})
 	tablePrint := parser.Flag("", "table", &argparse.Options{Help: "Output trace results as a final summary table (traceroute report mode)"})
-	rawPrint := parser.Flag("", "raw", &argparse.Options{Help: "An Output Easy to Parse"})
+	rawPrint := parser.Flag("", "raw", &argparse.Options{Help: "Machine-friendly output. With MTR (--mtr/-r/-w), enables streaming raw event mode"})
 	jsonPrint := parser.Flag("j", "json", &argparse.Options{Help: "Output trace results as JSON"})
 	classicPrint := parser.Flag("c", "classic", &argparse.Options{Help: "Classic Output trace results like BestTrace"})
 	beginHop := parser.Int("f", "first", &argparse.Options{Default: 1, Help: "Start from the first_ttl hop (instead of 1)"})
@@ -228,12 +228,12 @@ func Execute() {
 	effectiveMTR := *mtrMode || *reportMode || *wideMode
 	effectiveReport := *reportMode || *wideMode
 	effectiveWide := *wideMode
+	effectiveMTRRaw := effectiveMTR && *rawPrint
 
 	// MTR 冲突检查必须在所有可能 early-return 的分支之前执行
 	if effectiveMTR {
 		conflictFlags := map[string]bool{
 			"table":     *tablePrint,
-			"raw":       *rawPrint,
 			"classic":   *classicPrint,
 			"json":      *jsonPrint,
 			"output":    *output,
@@ -599,31 +599,20 @@ func Execute() {
 
 	// ── MTR 连续探测模式 ──
 	if effectiveMTR {
-		// MTR 下 -q/-i 参数迁移
-		var mtrMaxRounds int
-		var mtrIntervalMs int
-		if effectiveReport {
-			if queriesExplicit {
-				mtrMaxRounds = *numMeasurements
-			} else {
-				mtrMaxRounds = 10 // report 默认 10 轮
-			}
-		} else {
-			if queriesExplicit {
-				mtrMaxRounds = *numMeasurements
-			} else {
-				mtrMaxRounds = 0 // 非 report → 无限
-			}
-		}
-		if ttlTimeExplicit {
-			mtrIntervalMs = *ttlInterval
-		} else {
-			mtrIntervalMs = 1000 // MTR 默认 1000ms
-		}
+		mtrMaxRounds, mtrIntervalMs := deriveMTRRoundParams(
+			effectiveReport,
+			queriesExplicit,
+			*numMeasurements,
+			ttlTimeExplicit,
+			*ttlInterval,
+		)
 
-		if effectiveReport {
+		switch chooseMTRRunMode(effectiveMTRRaw, effectiveReport) {
+		case mtrRunRaw:
+			runMTRRaw(m, conf, mtrIntervalMs, mtrMaxRounds)
+		case mtrRunReport:
 			runMTRReport(m, conf, mtrIntervalMs, mtrMaxRounds, domain, *dataOrigin, effectiveWide, *showIPs)
-		} else {
+		default:
 			runMTRTUI(m, conf, mtrIntervalMs, mtrMaxRounds, domain, *dataOrigin, *showIPs)
 		}
 		return
@@ -707,6 +696,45 @@ func Execute() {
 	if *jsonPrint {
 		fmt.Println(string(r))
 	}
+}
+
+type mtrRunMode int
+
+const (
+	mtrRunTUI mtrRunMode = iota
+	mtrRunReport
+	mtrRunRaw
+)
+
+func chooseMTRRunMode(effectiveMTRRaw, effectiveReport bool) mtrRunMode {
+	if effectiveMTRRaw {
+		return mtrRunRaw
+	}
+	if effectiveReport {
+		return mtrRunReport
+	}
+	return mtrRunTUI
+}
+
+func deriveMTRRoundParams(effectiveReport, queriesExplicit bool, numMeasurements int, ttlTimeExplicit bool, ttlInterval int) (maxRounds int, intervalMs int) {
+	if effectiveReport {
+		if queriesExplicit {
+			maxRounds = numMeasurements
+		} else {
+			maxRounds = 10 // report 默认 10 轮
+		}
+	} else if queriesExplicit {
+		maxRounds = numMeasurements
+	} else {
+		maxRounds = 0 // 非 report → 无限
+	}
+
+	if ttlTimeExplicit {
+		intervalMs = ttlInterval
+	} else {
+		intervalMs = 1000 // MTR 默认 1000ms
+	}
+	return
 }
 
 func capabilitiesCheck() {

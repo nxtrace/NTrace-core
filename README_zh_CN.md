@@ -324,6 +324,10 @@ nexttrace --mtr --show-ips 1.1.1.1
 nexttrace -r --show-ips 1.1.1.1
 nexttrace -w --show-ips 1.1.1.1
 
+# MTR 原始流式模式（面向程序解析，逐事件输出）
+nexttrace --mtr --raw 1.1.1.1
+nexttrace -r --raw 1.1.1.1
+
 # 与其他选项组合使用
 nexttrace -t --tcp --max-hops 20 --first 3 --no-rdns 8.8.8.8
 ```
@@ -352,7 +356,23 @@ HOST: myhost                    Loss%   Snt   Last    Avg   Best   Wrst  StDev
   2.|-- ???                    100.0%    10    0.00   0.00   0.00   0.00   0.00
 ```
 
-> 注意：`--mtr` 不可与 `--table`、`--raw`、`--classic`、`--json`、`--output`、`--route-path`、`--from`、`--fast-trace`、`--file`、`--deploy` 同时使用。
+当 `--raw` 与 MTR（`--mtr`、`-r`、`-w`）一起使用时，会进入 **MTR 原始流式模式**，每条事件输出一行 `|` 分隔文本：
+
+```
+4|84.17.33.106|po66-3518.cr01.nrt04.jp.misaka.io|0.27|60068|日本|东京都|东京||cdn77.com|35.6804|139.7690
+```
+
+字段顺序：
+
+`ttl|ip|ptr|rtt|asn|一级行政区|二级行政区|三级行政区|四级行政区|owner|纬度|经度`
+
+超时行保持固定 12 列：
+
+`ttl|*||||||||||`
+
+> 注意：`--show-ips` 仅在 MTR 模式（`--mtr`、`-r`、`-w`）生效，其他模式会忽略。
+>
+> 注意：`--mtr` 不可与 `--table`、`--classic`、`--json`、`--output`、`--route-path`、`--from`、`--fast-trace`、`--file`、`--deploy` 同时使用。
 
 #### `NextTrace`支持用户自主选择 IP 数据库（目前支持：`LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`, `IPInfoLocal`, `CHUNZHEN`)
 
@@ -567,6 +587,8 @@ nexttrace --pow-provider sakura
 ## NEXTTRACE WEB API
 
 `NextTraceWebApi`是一个`MTR`风格的`NextTrace`网页版服务端实现，提供了包括`Docker`在内多种部署方式。
+
+在 WebSocket 持续探测模式中，MTR 现改为逐事件推送 `type: "mtr_raw"`（不再使用周期性 `mtr` 快照消息）。
 
 [https://github.com/nxtrace/nexttracewebapi](https://github.com/nxtrace/nexttracewebapi)
 

@@ -43,6 +43,8 @@ let currentLang = 'cn';
 let currentMode = 'single';
 let currentStatus = {state: 'idle', key: 'statusReady', custom: null};
 let mtrStatsStore = [];
+let mtrRawAggStore = new Map();
+let mtrRawOrderSeq = 0;
 let singleModeQueriesValue = '';
 
 const uiText = {
@@ -260,6 +262,8 @@ function clearResult(resetState = false) {
     hopStore.clear();
     latestSummary = {};
     mtrStatsStore = [];
+    mtrRawAggStore = new Map();
+    mtrRawOrderSeq = 0;
     stopBtn.classList.add('hidden');
     stopBtn.disabled = true;
   }
@@ -675,6 +679,7 @@ function handleSocketMessage(event) {
       break;
     }
     case 'mtr': {
+      // Backward compatibility with old server snapshots.
       traceCompleted = false;
       if (msg.data && typeof msg.data.iteration === 'number') {
         latestSummary = {...latestSummary, iteration: msg.data.iteration};
@@ -689,6 +694,21 @@ function handleSocketMessage(event) {
       renderMeta(latestSummary);
       break;
     }
+    case 'mtr_raw': {
+      traceCompleted = false;
+      if (msg.data) {
+        ingestMTRRawRecord(msg.data);
+        const it = Number(msg.data.iteration);
+        if (Number.isFinite(it) && it > 0) {
+          latestSummary = {...latestSummary, iteration: it};
+        }
+      }
+      renderMTRStats(buildMTRStatsFromRawAgg());
+      setStatus('running', 'statusMtrRunning');
+      stopBtn.disabled = false;
+      renderMeta(latestSummary);
+      break;
+    }
     case 'complete': {
       traceCompleted = true;
       submitBtn.disabled = false;
@@ -697,6 +717,8 @@ function handleSocketMessage(event) {
         stopBtn.classList.add('hidden');
         if (msg.data && Array.isArray(msg.data.stats)) {
           renderMTRStats(msg.data.stats);
+        } else {
+          renderMTRStats(buildMTRStatsFromRawAgg());
         }
         if (msg.data && typeof msg.data.iteration === 'number') {
           latestSummary = {...latestSummary, iteration: msg.data.iteration};
@@ -735,6 +757,8 @@ function handleSocketMessage(event) {
 function runTrace(evt) {
   evt.preventDefault();
   clearResult(true);
+  mtrRawAggStore = new Map();
+  mtrRawOrderSeq = 0;
 
   const payload = buildPayload();
   if (!payload.target) {
@@ -961,82 +985,162 @@ function stopTrace() {
   setStatus('idle', 'statusReady');
 }
 
-function renderMTRStats(stats) {
-  mtrStatsStore = Array.isArray(stats) ? stats : [];
-  const ttlGroups = new Map();
-  mtrStatsStore.forEach((stat) => {
-    if (!stat) {
-      return;
-    }
-    const ttl = stat.ttl;
-    let group = ttlGroups.get(ttl);
-    if (!group) {
-      group = {
-        known: [],
-        unknown: null,
-      };
-      ttlGroups.set(ttl, group);
-    }
-    const hasIp = stat.ip && String(stat.ip).trim();
-    const hasHost = stat.host && String(stat.host).trim();
-    if (hasIp || hasHost) {
-      group.known.push(stat);
-    } else {
-      const unknownSent = Number(stat.sent) || 0;
-      const unknownLoss = Number(stat.loss_count) || 0;
-      const unknownErrors = stat.errors || null;
-      const unknownType = stat.failure_type || '';
-      if (!group.unknown) {
-        group.unknown = {
-          sent: unknownSent,
-          loss: unknownLoss,
-          errors: cloneErrors(unknownErrors),
-          failureType: unknownType,
-        };
-      } else {
-        group.unknown.sent += unknownSent;
-        group.unknown.loss += unknownLoss;
-        group.unknown.errors = mergeErrorMaps(group.unknown.errors, unknownErrors);
-        group.unknown.failureType = pickFailureType(group.unknown.failureType, unknownType);
+function mtrRawKey(rec) {
+  const ttl = Number(rec && rec.ttl);
+  const ip = rec && rec.ip ? String(rec.ip).trim() : '';
+  const host = rec && rec.host ? String(rec.host).trim().toLowerCase() : '';
+  if (ip) {
+    return `${ttl}|ip:${ip}`;
+  }
+  if (host) {
+    return `${ttl}|host:${host}`;
+  }
+  return `${ttl}|unknown`;
+}
+
+function onlyTimeoutErrors(errors) {
+  if (!errors) {
+    return true;
+  }
+  const keys = Object.keys(errors);
+  if (keys.length === 0) {
+    return true;
+  }
+  return keys.every((k) => String(k).toLowerCase().includes('timeout'));
+}
+
+function recomputeMTRRawDerived(row) {
+  row.loss_count = Math.max(0, row.sent - row.received);
+  row.loss_percent = row.sent > 0 ? (row.loss_count / row.sent) * 100 : 0;
+  row.avg_ms = row.received > 0 ? row._sum_ms / row.received : 0;
+  if (row.loss_count <= 0) {
+    row.failure_type = '';
+  } else if (onlyTimeoutErrors(row.errors)) {
+    row.failure_type = row.received > 0 ? 'partial_timeout' : 'all_timeout';
+  } else {
+    row.failure_type = 'mixed';
+  }
+}
+
+function ingestMTRRawRecord(rec) {
+  if (!rec || !Number.isFinite(Number(rec.ttl))) {
+    return;
+  }
+  const key = mtrRawKey(rec);
+  let row = mtrRawAggStore.get(key);
+  if (!row) {
+    row = {
+      ttl: Number(rec.ttl),
+      host: '',
+      ip: '',
+      sent: 0,
+      received: 0,
+      loss_percent: 0,
+      loss_count: 0,
+      last_ms: 0,
+      avg_ms: 0,
+      best_ms: 0,
+      worst_ms: 0,
+      geo: null,
+      failure_type: '',
+      errors: null,
+      mpls: [],
+      _sum_ms: 0,
+      _order: mtrRawOrderSeq++,
+    };
+    mtrRawAggStore.set(key, row);
+  }
+
+  row.sent += 1;
+  const ip = rec.ip ? String(rec.ip).trim() : '';
+  const host = rec.host ? String(rec.host).trim() : '';
+  if (ip) {
+    row.ip = ip;
+  }
+  if (host) {
+    row.host = host;
+  }
+
+  const success = !!rec.success;
+  const rtt = Number(rec.rtt_ms) || 0;
+  if (success && (row.ip || row.host)) {
+    row.received += 1;
+    if (rtt > 0) {
+      row.last_ms = rtt;
+      row._sum_ms += rtt;
+      if (row.best_ms <= 0 || rtt < row.best_ms) {
+        row.best_ms = rtt;
+      }
+      if (rtt > row.worst_ms) {
+        row.worst_ms = rtt;
       }
     }
-  });
+  } else {
+    if (!row.errors) {
+      row.errors = Object.create(null);
+    }
+    row.errors.timeout = (Number(row.errors.timeout) || 0) + 1;
+  }
 
-  const ttlHasIdentified = new Map();
-  ttlGroups.forEach((group, ttl) => {
-    const hasKnown = group.known.length > 0;
-    ttlHasIdentified.set(ttl, hasKnown);
-    if (hasKnown && group.unknown) {
-      const primary = group.known[0];
-      const existingSent = Number(primary.sent) || 0;
-      const existingLoss = Number(primary.loss_count) || 0;
-      const existingReceived = Number(primary.received) || 0;
-      const totalSent = existingSent + group.unknown.sent;
-      const totalLoss = existingLoss + group.unknown.loss;
-      const totalReceived = Math.max(0, totalSent - totalLoss);
-      primary.sent = totalSent;
-      primary.loss_count = totalLoss;
-      primary.loss_percent = totalSent > 0 ? (totalLoss / totalSent) * 100 : 0;
-      primary.received = totalReceived;
-      primary.errors = mergeErrorMaps(primary.errors, group.unknown.errors);
-      primary.failure_type = pickFailureType(primary.failure_type, group.unknown.failureType);
+  if (rec.asn || rec.country || rec.prov || rec.city || rec.district || rec.owner || rec.lat || rec.lng) {
+    row.geo = row.geo || {};
+    if (rec.asn) {
+      row.geo.asnumber = String(rec.asn).trim();
     }
-  });
+    if (rec.country) {
+      row.geo.country = String(rec.country).trim();
+    }
+    if (rec.prov) {
+      row.geo.prov = String(rec.prov).trim();
+    }
+    if (rec.city) {
+      row.geo.city = String(rec.city).trim();
+    }
+    if (rec.district) {
+      row.geo.district = String(rec.district).trim();
+    }
+    if (rec.owner) {
+      row.geo.owner = String(rec.owner).trim();
+    }
+    if (Number.isFinite(Number(rec.lat))) {
+      row.geo.lat = Number(rec.lat);
+    }
+    if (Number.isFinite(Number(rec.lng))) {
+      row.geo.lng = Number(rec.lng);
+    }
+  }
 
-  const data = mtrStatsStore.filter((stat) => {
-    if (!stat) {
-      return false;
-    }
-    const hasIp = stat.ip && String(stat.ip).trim();
-    const hasHost = stat.host && String(stat.host).trim();
-    if (hasIp || hasHost) {
-      return true;
-    }
-    if (!ttlHasIdentified.get(stat.ttl)) {
-      return true;
-    }
-    return false;
-  });
+  if (Array.isArray(rec.mpls) && rec.mpls.length > 0) {
+    const existing = new Set((row.mpls || []).map((v) => String(v)));
+    rec.mpls.forEach((m) => {
+      const val = String(m || '').trim();
+      if (val) {
+        existing.add(val);
+      }
+    });
+    row.mpls = Array.from(existing);
+  }
+
+  recomputeMTRRawDerived(row);
+}
+
+function buildMTRStatsFromRawAgg() {
+  const rows = Array.from(mtrRawAggStore.values())
+    .sort((a, b) => (a.ttl - b.ttl) || (a._order - b._order))
+    .map((row) => {
+      const out = {...row};
+      delete out._sum_ms;
+      delete out._order;
+      return out;
+    });
+  mtrStatsStore = rows;
+  return rows;
+}
+
+function renderMTRStats(stats) {
+  mtrStatsStore = Array.isArray(stats) ? stats : [];
+  const normalizer = window.nextTraceMTRAgg && window.nextTraceMTRAgg.normalizeRenderableMTRStats;
+  const data = typeof normalizer === 'function' ? normalizer(mtrStatsStore) : mtrStatsStore;
   if (!data || data.length === 0) {
     resultNode.innerHTML = `<p>${t('noResult')}</p>`;
     resultNode.classList.remove('hidden');
@@ -1125,73 +1229,6 @@ function renderMTRStats(stats) {
   resultNode.innerHTML = '';
   resultNode.appendChild(table);
   resultNode.classList.remove('hidden');
-}
-
-const PROTOTYPE_POLLUTION_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
-
-function normalizeErrorKey(key) {
-  const trimmed = String(key || '').trim();
-  if (!trimmed || PROTOTYPE_POLLUTION_KEYS.has(trimmed)) {
-    return null;
-  }
-  return trimmed;
-}
-
-function mergeErrorMaps(target, source) {
-  const result = Object.create(null);
-  if (target) {
-    Object.keys(target).forEach((key) => {
-      const normalizedKey = normalizeErrorKey(key);
-      if (!normalizedKey) {
-        return;
-      }
-      result[normalizedKey] = Number(target[key]) || 0;
-    });
-  }
-  if (!source) {
-    return result;
-  }
-  Object.keys(source).forEach((key) => {
-    const normalizedKey = normalizeErrorKey(key);
-    if (!normalizedKey) {
-      return;
-    }
-    const current = Number(result[normalizedKey]) || 0;
-    const addition = Number(source[key]) || 0;
-    result[normalizedKey] = current + addition;
-  });
-  return result;
-}
-
-function cloneErrors(source) {
-  if (!source) {
-    return null;
-  }
-  const result = Object.create(null);
-  Object.keys(source).forEach((key) => {
-    const normalizedKey = normalizeErrorKey(key);
-    if (!normalizedKey) {
-      return;
-    }
-    result[normalizedKey] = Number(source[key]) || 0;
-  });
-  return result;
-}
-
-function pickFailureType(current, candidate) {
-  const priority = {
-    all_timeout: 3,
-    partial_timeout: 2,
-    mixed: 1,
-  };
-  const normalizedCurrent = current || '';
-  const normalizedCandidate = candidate || '';
-  const currentPriority = priority[normalizedCurrent] || 0;
-  const candidatePriority = priority[normalizedCandidate] || 0;
-  if (candidatePriority > currentPriority) {
-    return normalizedCandidate;
-  }
-  return normalizedCurrent;
 }
 
 function getHostDisplayParts(stat) {

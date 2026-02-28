@@ -326,6 +326,10 @@ nexttrace --mtr --show-ips 1.1.1.1
 nexttrace -r --show-ips 1.1.1.1
 nexttrace -w --show-ips 1.1.1.1
 
+# MTR raw stream mode (machine-friendly, one event per line)
+nexttrace --mtr --raw 1.1.1.1
+nexttrace -r --raw 1.1.1.1
+
 # Combine with other options
 nexttrace -t --tcp --max-hops 20 --first 3 --no-rdns 8.8.8.8
 ```
@@ -354,7 +358,23 @@ HOST: myhost                    Loss%   Snt   Last    Avg   Best   Wrst  StDev
   2.|-- ???                    100.0%    10    0.00   0.00   0.00   0.00   0.00
 ```
 
-> Note: `--mtr` cannot be used together with `--table`, `--raw`, `--classic`, `--json`, `--output`, `--route-path`, `--from`, `--fast-trace`, `--file`, or `--deploy`.
+When `--raw` is used together with MTR (`--mtr`, `-r`, or `-w`), NextTrace enters **MTR raw stream mode** and prints one `|`-delimited event per line:
+
+```
+4|84.17.33.106|po66-3518.cr01.nrt04.jp.misaka.io|0.27|60068|Japan|Tokyo|Tokyo||cdn77.com|35.6804|139.7690
+```
+
+Field order:
+
+`ttl|ip|ptr|rtt|asn|country|prov|city|district|owner|lat|lng`
+
+Timeout rows keep the same 12-column layout:
+
+`ttl|*||||||||||`
+
+> Note: `--show-ips` only takes effect in MTR mode (`--mtr`, `-r`, `-w`); otherwise it is ignored.
+>
+> Note: `--mtr` cannot be used together with `--table`, `--classic`, `--json`, `--output`, `--route-path`, `--from`, `--fast-trace`, `--file`, or `--deploy`.
 
 #### `NextTrace` supports users to select their own IP API (currently supports: `LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`, `IPInfoLocal`, `CHUNZHEN`)
 
@@ -564,6 +584,8 @@ This software is still in the early stages of development and may have many flaw
 ## NEXTTRACE WEB API
 
 `NextTraceWebApi` is a web-based server implementation of `NextTrace` in the `MTR` style, offering various deployment options including `Docker`.
+
+For WebSocket continuous tracing, MTR now streams per-event payloads with `type: "mtr_raw"` (instead of periodic `mtr` snapshots).
 
 [https://github.com/nxtrace/nexttracewebapi](https://github.com/nxtrace/nexttracewebapi)
 

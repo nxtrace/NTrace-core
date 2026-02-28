@@ -114,6 +114,100 @@ func TestCheckMTRConflicts_AllConflicts(t *testing.T) {
 	}
 }
 
+func TestCheckMTRConflicts_RawAllowed(t *testing.T) {
+	flags := map[string]bool{
+		"table": false, "raw": true, "classic": false,
+		"json": false, "output": false,
+		"routePath": false, "from": false, "fastTrace": false,
+		"file": false, "deploy": false,
+	}
+	if conflict, ok := checkMTRConflicts(flags); !ok {
+		t.Fatalf("raw should be allowed in MTR mode, got conflict=%q", conflict)
+	}
+}
+
+func TestChooseMTRRunMode_RawPriority(t *testing.T) {
+	if mode := chooseMTRRunMode(true, true); mode != mtrRunRaw {
+		t.Fatalf("raw should take precedence over report, got mode=%v", mode)
+	}
+	if mode := chooseMTRRunMode(false, true); mode != mtrRunReport {
+		t.Fatalf("report mode mismatch, got mode=%v", mode)
+	}
+	if mode := chooseMTRRunMode(false, false); mode != mtrRunTUI {
+		t.Fatalf("tui mode mismatch, got mode=%v", mode)
+	}
+}
+
+func TestDeriveMTRRoundParams_DefaultsAndOverrides(t *testing.T) {
+	tests := []struct {
+		name            string
+		effectiveReport bool
+		queriesExplicit bool
+		numMeasurements int
+		ttlTimeExplicit bool
+		ttlInterval     int
+		wantRounds      int
+		wantInterval    int
+	}{
+		{
+			name:            "report default rounds",
+			effectiveReport: true,
+			queriesExplicit: false,
+			numMeasurements: 3,
+			ttlTimeExplicit: false,
+			ttlInterval:     50,
+			wantRounds:      10,
+			wantInterval:    1000,
+		},
+		{
+			name:            "report explicit q",
+			effectiveReport: true,
+			queriesExplicit: true,
+			numMeasurements: 7,
+			ttlTimeExplicit: true,
+			ttlInterval:     250,
+			wantRounds:      7,
+			wantInterval:    250,
+		},
+		{
+			name:            "tui default infinite",
+			effectiveReport: false,
+			queriesExplicit: false,
+			numMeasurements: 9,
+			ttlTimeExplicit: false,
+			ttlInterval:     10,
+			wantRounds:      0,
+			wantInterval:    1000,
+		},
+		{
+			name:            "tui explicit q",
+			effectiveReport: false,
+			queriesExplicit: true,
+			numMeasurements: 4,
+			ttlTimeExplicit: true,
+			ttlInterval:     1200,
+			wantRounds:      4,
+			wantInterval:    1200,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotRounds, gotInterval := deriveMTRRoundParams(
+				tt.effectiveReport,
+				tt.queriesExplicit,
+				tt.numMeasurements,
+				tt.ttlTimeExplicit,
+				tt.ttlInterval,
+			)
+			if gotRounds != tt.wantRounds || gotInterval != tt.wantInterval {
+				t.Fatalf("got rounds=%d interval=%d, want rounds=%d interval=%d",
+					gotRounds, gotInterval, tt.wantRounds, tt.wantInterval)
+			}
+		})
+	}
+}
+
 // ---------------------------------------------------------------------------
 // ParseMTRKey 测试
 // ---------------------------------------------------------------------------
