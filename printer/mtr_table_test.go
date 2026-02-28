@@ -1448,11 +1448,11 @@ func TestTUI_WaitingForReplyOn100Loss(t *testing.T) {
 	}
 }
 
-// TestTUI_HostSeparators_WithTabs 验证 TUI 中 host 文本的 tab 分隔规则：
+// TestTUI_HostSeparators_MixedTabAndSpace 验证 TUI 中 host 文本的 mixed 分隔规则：
 //   - 序号后 1 空格 + ASN
 //   - ASN 与 IP/PTR 之间为 tab
-//   - IP/PTR 与后续信息之间为 tab
-func TestTUI_HostSeparators_WithTabs(t *testing.T) {
+//   - IP/PTR 与后续信息之间为空格
+func TestTUI_HostSeparators_MixedTabAndSpace(t *testing.T) {
 	header := MTRTUIHeader{
 		Target:      "1.1.1.1",
 		StartTime:   time.Now(),
@@ -1495,9 +1495,31 @@ func TestTUI_HostSeparators_WithTabs(t *testing.T) {
 		t.Errorf("ASN and IP/PTR should be separated by tab, got: %q", hopLine)
 	}
 
-	// IP/PTR 与后续信息之间应有 tab
-	if !strings.Contains(hopLine, "one.one.one.one\tUS Cloudflare") {
-		t.Errorf("IP/PTR and extras should be separated by tab, got: %q", hopLine)
+	// IP/PTR 与后续信息之间应为空格
+	if !strings.Contains(hopLine, "one.one.one.one US Cloudflare") {
+		t.Errorf("IP/PTR and extras should be separated by space, got: %q", hopLine)
+	}
+	if strings.Contains(hopLine, "one.one.one.one\tUS Cloudflare") {
+		t.Errorf("IP/PTR and extras should not be separated by tab, got: %q", hopLine)
+	}
+}
+
+func TestFormatTUIHost_UsesSpaceBetweenBaseAndExtras(t *testing.T) {
+	s := trace.MTRHopStat{
+		TTL:  1,
+		IP:   "1.1.1.1",
+		Host: "one.one.one.one",
+		Geo: &ipgeo.IPGeoData{
+			Asnumber:  "13335",
+			CountryEn: "US",
+			Owner:     "Cloudflare",
+		},
+	}
+
+	got := formatTUIHost(s, HostModeFull, HostNamePTRorIP, "en", false)
+	want := "AS13335\tone.one.one.one US Cloudflare"
+	if got != want {
+		t.Fatalf("formatTUIHost() = %q, want %q", got, want)
 	}
 }
 

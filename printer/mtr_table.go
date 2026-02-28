@@ -410,13 +410,14 @@ func buildMTRHostParts(s trace.MTRHopStat, mode int, nameMode int, lang string, 
 	}
 }
 
-// formatTUIHost 构建 TUI 格式的 host 文本（tab 分隔，waiting 感知）。
+// formatTUIHost 构建 TUI 格式的 host 文本（mixed 分隔，waiting 感知）。
 //
 // 规则：
 //   - waiting → "(waiting for reply)"
-//   - ASN\tIP/PTR\t后续信息（空格分隔）
+//   - ASN 与 IP/PTR 之间为 tab
+//   - IP/PTR 与后续信息之间为单个空格
 //   - 无 ASN 时省略 ASN + 首个 tab
-//   - 无后续信息时省略末尾 tab
+//   - 无后续信息时不追加尾部空格
 func formatTUIHost(s trace.MTRHopStat, mode int, nameMode int, lang string, showIPs bool) string {
 	p := buildMTRHostParts(s, mode, nameMode, lang, showIPs)
 	if p.waiting {
@@ -430,7 +431,7 @@ func formatTUIHost(s trace.MTRHopStat, mode int, nameMode int, lang string, show
 	}
 	b.WriteString(p.base)
 	if len(p.extras) > 0 {
-		b.WriteByte('\t')
+		b.WriteByte(' ')
 		b.WriteString(strings.Join(p.extras, " "))
 	}
 	return b.String()
