@@ -209,6 +209,104 @@ func (agg *MTRAggregator) Reset() {
 	agg.nextOrder = 0
 }
 
+// MigrateStats 将 fromTTL 上所有累加器迁移合并到 toTTL，然后删除 fromTTL。
+// 用于 knownFinalTTL 下调时把旧 finalTTL 上已入账的 dst-ip 统计搬到新 finalTTL。
+// maxPerHop > 0 时，合并后对每个累加器的 sent/received 做上限裁剪，
+// 保证 Snt 不超过预算。
+func (agg *MTRAggregator) MigrateStats(fromTTL, toTTL, maxPerHop int) {
+	agg.mu.Lock()
+	defer agg.mu.Unlock()
+
+	fromMap := agg.stats[fromTTL]
+	if len(fromMap) == 0 {
+		return
+	}
+
+	toMap := agg.stats[toTTL]
+	if toMap == nil {
+		toMap = make(map[string]*mtrHopAccum)
+		agg.stats[toTTL] = toMap
+	}
+
+	for key, src := range fromMap {
+		dst := toMap[key]
+		if dst == nil {
+			// Move directly, update TTL.
+			src.ttl = toTTL
+			toMap[key] = src
+		} else {
+			// Merge src into dst.
+			dst.sent += src.sent
+			dst.received += src.received
+			if src.received > 0 {
+				dst.sum += src.sum
+				dst.sumSq += src.sumSq
+				dst.last = src.last
+				if src.best > 0 && src.best < dst.best {
+					dst.best = src.best
+				}
+				if src.worst > dst.worst {
+					dst.worst = src.worst
+				}
+			}
+			if dst.geo == nil && src.geo != nil {
+				dst.geo = src.geo
+			}
+			if dst.host == "" && src.host != "" {
+				dst.host = src.host
+			}
+			if dst.ip == "" && src.ip != "" {
+				dst.ip = src.ip
+			}
+			for label := range src.mplsSet {
+				dst.mplsSet[label] = struct{}{}
+			}
+		}
+	}
+
+	// Cap sent/received per accumulator so Snt never exceeds MaxPerHop.
+	// When received is reduced, recompute sum/sumSq to preserve both Avg
+	// and sample StDev. best/worst/last are extremes and remain untouched.
+	if maxPerHop > 0 {
+		for _, acc := range toMap {
+			if acc.sent > maxPerHop {
+				acc.sent = maxPerHop
+			}
+			if acc.received > acc.sent {
+				nOrig := float64(acc.received)
+				nNew := float64(acc.sent)
+				ratio := nNew / nOrig
+
+				// Preserve Avg: sum_new = sum_orig * ratio
+				sumNew := acc.sum * ratio
+
+				// Preserve sample variance: rebuild sumSq so that
+				//   (sumSq_new - sumNew²/nNew) / (nNew-1) == original variance
+				// SS is the sum-of-squared-deviations from the original data.
+				ss := acc.sumSq - (acc.sum*acc.sum)/nOrig
+				if ss < 0 {
+					ss = 0 // guard floating-point rounding
+				}
+
+				var sumSqNew float64
+				if nOrig > 1 && nNew > 1 {
+					// Scale SS by (nNew-1)/(nOrig-1) to keep variance intact.
+					sumSqNew = ss*(nNew-1)/(nOrig-1) + (sumNew*sumNew)/nNew
+				} else {
+					// n<=1: no meaningful variance; just keep avg-consistent sumSq.
+					sumSqNew = (sumNew * sumNew) / nNew
+				}
+
+				acc.sum = sumNew
+				acc.sumSq = sumSqNew
+				acc.received = acc.sent
+			}
+		}
+	}
+
+	delete(agg.stats, fromTTL)
+}
+
 // Clone 返回深拷贝的聚合器，用于流式预览（不影响原始数据）。
 func (agg *MTRAggregator) Clone() *MTRAggregator {
 	agg.mu.Lock()

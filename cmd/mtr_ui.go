@@ -19,17 +19,19 @@ type mtrUI struct {
 	oldState    *term.State // raw mode 之前的终端状态
 	paused      int32       // 0=running, 1=paused（atomic）
 	restartReq  int32       // 1=请求重置统计（atomic）
-	displayMode int32       // 显示模式 0-3（atomic）
+	displayMode int32       // 显示模式 0-4（atomic）
 	nameMode    int32       // Host 基础显示 0=PTR/IP, 1=IP only（atomic）
 	cancel      context.CancelFunc
 }
 
 // newMTRUI 创建 TUI 控制器。cancel 是用于退出 MTR 的 context cancel 函数。
+// initialDisplayMode 设置 TUI 初始显示模式 (0-4)。
 // stdin 和 stdout 都必须是终端才会启用交互式 TUI。
-func newMTRUI(cancel context.CancelFunc) *mtrUI {
+func newMTRUI(cancel context.CancelFunc, initialDisplayMode int) *mtrUI {
 	return &mtrUI{
-		isTTY:  term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd())),
-		cancel: cancel,
+		isTTY:       term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd())),
+		cancel:      cancel,
+		displayMode: int32(initialDisplayMode),
 	}
 }
 
@@ -53,18 +55,18 @@ func (u *mtrUI) IsPaused() bool {
 	return atomic.LoadInt32(&u.paused) == 1
 }
 
-// CycleDisplayMode 循环切换显示模式 (0 → 1 → 2 → 3 → 0)。
+// CycleDisplayMode 循环切换显示模式 (0 → 1 → 2 → 3 → 4 → 0)。
 func (u *mtrUI) CycleDisplayMode() {
 	for {
 		old := atomic.LoadInt32(&u.displayMode)
-		next := (old + 1) % 4
+		next := (old + 1) % 5
 		if atomic.CompareAndSwapInt32(&u.displayMode, old, next) {
 			return
 		}
 	}
 }
 
-// CurrentDisplayMode 返回当前显示模式 (0-3)。
+// CurrentDisplayMode 返回当前显示模式 (0-4)。
 func (u *mtrUI) CurrentDisplayMode() int {
 	return int(atomic.LoadInt32(&u.displayMode))
 }

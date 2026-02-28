@@ -39,7 +39,7 @@ type MTRTUIHeader struct {
 	SrcHost     string // 源主机名
 	SrcIP       string // 源 IP
 	Lang        string // 语言（"en" / "cn"）
-	DisplayMode int    // 显示模式 0-3
+	DisplayMode int    // 显示模式 0-4
 	NameMode    int    // Host 基础显示 0=PTR/IP, 1=IP only
 	ShowIPs     bool   // 是否显示 PTR+IP（nameMode=0 时生效）
 	APIInfo     string // preferred API 信息（纯文本，可为空）
@@ -83,14 +83,14 @@ const (
 	tuiDefaultTerm = 120
 	tuiTabStop     = 8 // tab 展开步长
 
-	tuiLossDefault = 6
-	tuiSntDefault  = 4
-	tuiRTTDefault  = 8
+	tuiLossDefault = 5
+	tuiSntDefault  = 3
+	tuiRTTDefault  = 7
 	tuiHostDefault = 40
 	tuiHostMin     = 8
 	tuiLossMin     = 5
 	tuiSntMin      = 3
-	tuiRTTMin      = 6
+	tuiRTTMin      = 5
 )
 
 // tuiPrefixWidthForMaxTTL 根据最大 TTL 值返回前缀列宽。
@@ -425,9 +425,9 @@ func mtrTUIRenderWithWidth(w io.Writer, header MTRTUIHeader, stats []trace.MTRHo
 	tuiLine(&b, "%s%s%s", mtrTUIRouteColor(routeLine), strings.Repeat(" ", gap), mtrTUITimeColor(timeStr))
 
 	// ── 信息行 3：按键提示 + 显示模式 + 状态 ──
-	modeNames := [4]string{"ASN", "City", "Owner", "Full"}
-	modeLabel := "ASN"
-	if header.DisplayMode >= 0 && header.DisplayMode < 4 {
+	modeNames := [5]string{"IP/PTR", "ASN", "City", "Owner", "Full"}
+	modeLabel := "IP/PTR"
+	if header.DisplayMode >= 0 && header.DisplayMode < 5 {
 		modeLabel = modeNames[header.DisplayMode]
 	}
 	nameLabel := "ptr"

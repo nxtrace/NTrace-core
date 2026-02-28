@@ -146,10 +146,11 @@ func formatMTRMetricStrings(s trace.MTRHopStat) mtrMetrics {
 // ---------------------------------------------------------------------------
 
 const (
-	HostModeASN   = 0 // ASN + PTR/IP（默认）
-	HostModeCity  = 1 // + 城市/省份/国家
-	HostModeOwner = 2 // + 运营商
-	HostModeFull  = 3 // + 完整地址 + 运营商
+	HostModeBase  = 0 // 仅 IP/PTR
+	HostModeASN   = 1 // ASN + IP/PTR
+	HostModeCity  = 2 // ASN + IP/PTR + 城市
+	HostModeOwner = 3 // ASN + IP/PTR + owner
+	HostModeFull  = 4 // ASN + IP/PTR + full
 )
 
 // ---------------------------------------------------------------------------
@@ -224,17 +225,24 @@ func geoField(cn, en, lang string) string {
 
 // formatMTRHostByMode 按显示模式构建 Host 列（不含 MPLS）。
 //
-//	HostModeASN   (0): ASN + PTR/IP
-//	HostModeCity  (1): + 城市/省份/国家
-//	HostModeOwner (2): + 运营商
-//	HostModeFull  (3): + 完整地址 + 运营商
+//	HostModeBase  (0): 仅 IP/PTR
+//	HostModeASN   (1): ASN + IP/PTR
+//	HostModeCity  (2): ASN + IP/PTR + 城市
+//	HostModeOwner (3): ASN + IP/PTR + owner
+//	HostModeFull  (4): ASN + IP/PTR + full
 //
 // ASN 始终作为前缀（对齐 mtr -rw 风格）：
 //
-//	"AS13335 one.one.one.one"    （模式 0）
-//	"AS13335 one.one.one.one US" （模式 1）
+//	"AS13335 one.one.one.one"    （模式 1）
+//	"AS13335 one.one.one.one US" （模式 2）
 func formatMTRHostByMode(s trace.MTRHopStat, mode int, nameMode int, lang string, showIPs bool) string {
 	base := formatMTRHostBase(s, nameMode, showIPs)
+
+	// HostModeBase: only IP/PTR, no ASN, no geo
+	if mode == HostModeBase {
+		return base
+	}
+
 	if s.Geo == nil {
 		return base
 	}
@@ -359,6 +367,8 @@ func buildMTRHostParts(s trace.MTRHopStat, mode int, nameMode int, lang string, 
 		}
 
 		switch mode {
+		case HostModeBase:
+			// 仅 IP/PTR，无 ASN，无 geo
 		case HostModeASN:
 			// 仅 ASN，无额外 geo
 		case HostModeCity:
@@ -403,6 +413,11 @@ func buildMTRHostParts(s trace.MTRHopStat, mode int, nameMode int, lang string, 
 		}
 	}
 
+	// HostModeBase 不设置 ASN
+	if mode == HostModeBase {
+		asn = ""
+	}
+
 	return mtrHostParts{
 		asn:    asn,
 		base:   base,
@@ -412,10 +427,16 @@ func buildMTRHostParts(s trace.MTRHopStat, mode int, nameMode int, lang string, 
 
 // buildTUIHostParts 构建仅供 TUI 使用的 host 组成部分。
 //
-// 与共享 buildMTRHostParts 不同，TUI 会在“有地址但缺失 ASN”时显示 AS???。
+// 与共享 buildMTRHostParts 不同，TUI 在 mode >= HostModeASN 时
+// 对"有地址但缺失 ASN"的 hop 显示 AS???；HostModeBase 不显示 ASN。
 func buildTUIHostParts(s trace.MTRHopStat, mode int, nameMode int, lang string, showIPs bool) mtrHostParts {
 	p := buildMTRHostParts(s, mode, nameMode, lang, showIPs)
 	if p.waiting {
+		return p
+	}
+	// HostModeBase 不显示 ASN，也不显示 AS???
+	if mode == HostModeBase {
+		p.asn = ""
 		return p
 	}
 	if p.asn == "" {

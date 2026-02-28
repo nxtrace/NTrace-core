@@ -517,7 +517,7 @@ func TestParseMTRKey_Unknown_IncludesY(t *testing.T) {
 func TestMTRUI_ConsumeRestartRequest(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	ui := newMTRUI(cancel)
+	ui := newMTRUI(cancel, 0)
 
 	// 初始状态：无重置请求
 	if ui.ConsumeRestartRequest() {
@@ -547,14 +547,14 @@ func TestMTRUI_ConsumeRestartRequest(t *testing.T) {
 func TestMTRUI_DisplayModeCycle(t *testing.T) {
 	_, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	ui := newMTRUI(cancel)
+	ui := newMTRUI(cancel, 0)
 
 	// 初始模式为 0
 	if got := ui.CurrentDisplayMode(); got != 0 {
 		t.Errorf("initial display mode = %d, want 0", got)
 	}
 
-	// 循环切换 0 → 1 → 2 → 3 → 0
+	// 循环切换 0 → 1 → 2 → 3 → 4 → 0
 	ui.CycleDisplayMode()
 	if got := ui.CurrentDisplayMode(); got != 1 {
 		t.Errorf("after 1st cycle: display mode = %d, want 1", got)
@@ -571,15 +571,20 @@ func TestMTRUI_DisplayModeCycle(t *testing.T) {
 	}
 
 	ui.CycleDisplayMode()
+	if got := ui.CurrentDisplayMode(); got != 4 {
+		t.Errorf("after 4th cycle: display mode = %d, want 4", got)
+	}
+
+	ui.CycleDisplayMode()
 	if got := ui.CurrentDisplayMode(); got != 0 {
-		t.Errorf("after 4th cycle: display mode = %d, want 0 (wrap)", got)
+		t.Errorf("after 5th cycle: display mode = %d, want 0 (wrap)", got)
 	}
 }
 
 func TestMTRUI_DisplayModeNotResetByRestart(t *testing.T) {
 	_, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	ui := newMTRUI(cancel)
+	ui := newMTRUI(cancel, 0)
 
 	// 设置显示模式为 2
 	ui.CycleDisplayMode() // 0 → 1
@@ -592,6 +597,39 @@ func TestMTRUI_DisplayModeNotResetByRestart(t *testing.T) {
 	// 显示模式不应被重置
 	if got := ui.CurrentDisplayMode(); got != 2 {
 		t.Errorf("display mode after restart = %d, want 2 (unchanged)", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// 初始显示模式测试
+// ---------------------------------------------------------------------------
+
+func TestMTRUI_InitialDisplayMode_FromFlag(t *testing.T) {
+	for _, mode := range []int{0, 1, 2, 3, 4} {
+		_, cancel := context.WithCancel(context.Background())
+		ui := newMTRUI(cancel, mode)
+		if got := ui.CurrentDisplayMode(); got != mode {
+			t.Errorf("initialDisplayMode=%d: CurrentDisplayMode() = %d", mode, got)
+		}
+		cancel()
+	}
+}
+
+func TestMTRUI_InitialDisplayMode_CycleFromNonZero(t *testing.T) {
+	_, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ui := newMTRUI(cancel, 3) // start at Owner
+
+	// 3 → 4
+	ui.CycleDisplayMode()
+	if got := ui.CurrentDisplayMode(); got != 4 {
+		t.Errorf("after cycle from 3: got %d, want 4", got)
+	}
+
+	// 4 → 0 (wrap)
+	ui.CycleDisplayMode()
+	if got := ui.CurrentDisplayMode(); got != 0 {
+		t.Errorf("after cycle from 4: got %d, want 0 (wrap)", got)
 	}
 }
 
@@ -655,7 +693,7 @@ func TestParseMTRKey_NameToggle(t *testing.T) {
 func TestMTRUI_NameModeToggle(t *testing.T) {
 	_, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	ui := newMTRUI(cancel)
+	ui := newMTRUI(cancel, 0)
 
 	// 初始为 0 (PTRorIP)
 	if got := ui.CurrentNameMode(); got != 0 {
@@ -678,7 +716,7 @@ func TestMTRUI_NameModeToggle(t *testing.T) {
 func TestMTRUI_NameModeNotResetByRestart(t *testing.T) {
 	_, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	ui := newMTRUI(cancel)
+	ui := newMTRUI(cancel, 0)
 
 	// 设置 nameMode 为 1
 	ui.ToggleNameMode()

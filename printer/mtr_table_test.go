@@ -827,6 +827,70 @@ func TestMTRTUI_HeaderIPNoDuplicate(t *testing.T) {
 // 显示模式测试
 // ---------------------------------------------------------------------------
 
+func TestFormatMTRHostByMode_Base(t *testing.T) {
+	s := trace.MTRHopStat{
+		TTL:  1,
+		IP:   "1.1.1.1",
+		Host: "one.one.one.one",
+		Geo: &ipgeo.IPGeoData{
+			Asnumber:  "13335",
+			CountryEn: "US",
+			Owner:     "Cloudflare",
+		},
+	}
+	// HostModeBase should produce only the base name (PTR or IP), no ASN, no geo.
+	got := formatMTRHostByMode(s, HostModeBase, HostNamePTRorIP, "en", false)
+	want := "one.one.one.one"
+	if got != want {
+		t.Errorf("HostModeBase PTRorIP: got %q, want %q", got, want)
+	}
+
+	// With HostNameIPOnly, should return only IP.
+	got = formatMTRHostByMode(s, HostModeBase, HostNameIPOnly, "en", false)
+	want = "1.1.1.1"
+	if got != want {
+		t.Errorf("HostModeBase IPOnly: got %q, want %q", got, want)
+	}
+}
+
+func TestFormatMTRHostByMode_Base_NilGeo(t *testing.T) {
+	s := trace.MTRHopStat{TTL: 1, IP: "10.0.0.1"}
+	got := formatMTRHostByMode(s, HostModeBase, HostNamePTRorIP, "en", false)
+	if got != "10.0.0.1" {
+		t.Errorf("HostModeBase nil geo: got %q, want %q", got, "10.0.0.1")
+	}
+}
+
+func TestBuildTUIHostParts_BaseModeNoASNPlaceholder(t *testing.T) {
+	// In HostModeBase, even when IP is known and geo has no ASN, the TUI
+	// should NOT inject the "AS???" placeholder that other modes use.
+	s := trace.MTRHopStat{
+		TTL: 1,
+		IP:  "10.0.0.1",
+		Geo: &ipgeo.IPGeoData{CountryEn: "US"},
+	}
+	parts := buildTUIHostParts(s, HostModeBase, HostNamePTRorIP, "en", false)
+	if parts.asn != "" {
+		t.Errorf("HostModeBase: expected empty ASN, got %q", parts.asn)
+	}
+	if parts.base != "10.0.0.1" {
+		t.Errorf("HostModeBase: expected Base='10.0.0.1', got %q", parts.base)
+	}
+}
+
+func TestBuildTUIHostParts_ASNModeHasPlaceholder(t *testing.T) {
+	// In HostModeASN, when IP is known but geo has no ASN, "AS???" placeholder is expected.
+	s := trace.MTRHopStat{
+		TTL: 1,
+		IP:  "10.0.0.1",
+		Geo: &ipgeo.IPGeoData{CountryEn: "US"},
+	}
+	parts := buildTUIHostParts(s, HostModeASN, HostNamePTRorIP, "en", false)
+	if parts.asn != "AS???" {
+		t.Errorf("HostModeASN: expected ASN='AS???', got %q", parts.asn)
+	}
+}
+
 func TestFormatMTRHostByMode_ASN(t *testing.T) {
 	s := trace.MTRHopStat{
 		TTL:  1,
@@ -899,7 +963,7 @@ func TestFormatMTRHostByMode_Full(t *testing.T) {
 
 func TestFormatMTRHostByMode_NilGeo(t *testing.T) {
 	s := trace.MTRHopStat{TTL: 1, IP: "10.0.0.1"}
-	for _, mode := range []int{HostModeASN, HostModeCity, HostModeOwner, HostModeFull} {
+	for _, mode := range []int{HostModeBase, HostModeASN, HostModeCity, HostModeOwner, HostModeFull} {
 		got := formatMTRHostByMode(s, mode, HostNamePTRorIP, "en", false)
 		if got != "10.0.0.1" {
 			t.Errorf("mode %d with nil geo: got %q, want %q", mode, got, "10.0.0.1")
@@ -1085,7 +1149,7 @@ func TestMTRTUI_HeaderNoSrcInfo(t *testing.T) {
 }
 
 func TestMTRTUI_DisplayModeInKeys(t *testing.T) {
-	for mode, label := range map[int]string{0: "ASN", 1: "City", 2: "Owner", 3: "Full"} {
+	for mode, label := range map[int]string{0: "IP/PTR", 1: "ASN", 2: "City", 3: "Owner", 4: "Full"} {
 		header := MTRTUIHeader{
 			Target:      "8.8.8.8",
 			StartTime:   time.Now(),

@@ -380,3 +380,298 @@ func TestUnknownPreserved_Multipath(t *testing.T) {
 		t.Error("expected unknown row preserved in multipath scenario")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// MigrateStats 测试
+// ---------------------------------------------------------------------------
+
+func TestMTRAggregator_MigrateStats_MovesToNewTTL(t *testing.T) {
+	agg := NewMTRAggregator()
+
+	// Record stats at TTL 12
+	res := mkResult(
+		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+		[]Hop{mkHop(12, "8.8.8.8", 10*time.Millisecond)},
+	)
+	agg.Update(res, 1)
+
+	// Verify TTL 12 has data
+	snap := agg.Snapshot()
+	hasTTL12 := false
+	for _, s := range snap {
+		if s.TTL == 12 && s.IP == "8.8.8.8" {
+			hasTTL12 = true
+		}
+	}
+	if !hasTTL12 {
+		t.Fatal("expected stats at TTL 12 before migration")
+	}
+
+	// Migrate TTL 12 → TTL 7
+	agg.MigrateStats(12, 7, 0) // maxPerHop=0 → no cap
+
+	// TTL 12 should be gone, TTL 7 should have the data
+	snap = agg.Snapshot()
+	for _, s := range snap {
+		if s.TTL == 12 {
+			t.Errorf("TTL 12 should have been removed after migration, found IP=%s", s.IP)
+		}
+		if s.TTL == 7 && s.IP == "8.8.8.8" {
+			if s.Snt != 1 {
+				t.Errorf("TTL 7: expected Snt=1, got %d", s.Snt)
+			}
+			return // success
+		}
+	}
+	t.Error("TTL 7 should have migrated data from TTL 12")
+}
+
+func TestMTRAggregator_MigrateStats_MergesIntoExisting(t *testing.T) {
+	agg := NewMTRAggregator()
+
+	// Record 2 probes at TTL 7 (the new final)
+	for i := 0; i < 2; i++ {
+		res := &Result{Hops: make([][]Hop, 12)}
+		res.Hops[6] = []Hop{mkHop(7, "8.8.8.8", 5*time.Millisecond)}
+		agg.Update(res, 1)
+	}
+
+	// Record 3 probes at TTL 12 (the old final)
+	for i := 0; i < 3; i++ {
+		res := &Result{Hops: make([][]Hop, 12)}
+		res.Hops[11] = []Hop{mkHop(12, "8.8.8.8", 10*time.Millisecond)}
+		agg.Update(res, 1)
+	}
+
+	// Migrate 12 → 7 without cap
+	agg.MigrateStats(12, 7, 0)
+
+	snap := agg.Snapshot()
+	for _, s := range snap {
+		if s.TTL == 12 {
+			t.Error("TTL 12 should be gone after migration")
+		}
+		if s.TTL == 7 && s.IP == "8.8.8.8" {
+			// Merged: 2 (existing) + 3 (migrated) = 5
+			if s.Snt != 5 {
+				t.Errorf("TTL 7: expected Snt=5 (2+3), got %d", s.Snt)
+			}
+			return
+		}
+	}
+	t.Error("TTL 7 should have merged data")
+}
+
+func TestMTRAggregator_MigrateStats_NoopIfFromEmpty(t *testing.T) {
+	agg := NewMTRAggregator()
+
+	// Record at TTL 7
+	res := &Result{Hops: make([][]Hop, 8)}
+	res.Hops[6] = []Hop{mkHop(7, "8.8.8.8", 5*time.Millisecond)}
+	agg.Update(res, 1)
+
+	// Migrate from non-existent TTL 12 — should be no-op
+	agg.MigrateStats(12, 7, 0)
+
+	snap := agg.Snapshot()
+	for _, s := range snap {
+		if s.TTL == 7 && s.IP == "8.8.8.8" && s.Snt == 1 {
+			return // unchanged, correct
+		}
+	}
+	t.Error("TTL 7 data should be unchanged after noop migration")
+}
+
+func TestMTRAggregator_MigrateStats_CapsAtMaxPerHop(t *testing.T) {
+	agg := NewMTRAggregator()
+
+	// Record 2 probes at TTL 7
+	for i := 0; i < 2; i++ {
+		res := &Result{Hops: make([][]Hop, 12)}
+		res.Hops[6] = []Hop{mkHop(7, "8.8.8.8", 5*time.Millisecond)}
+		agg.Update(res, 1)
+	}
+
+	// Record 3 probes at TTL 12
+	for i := 0; i < 3; i++ {
+		res := &Result{Hops: make([][]Hop, 12)}
+		res.Hops[11] = []Hop{mkHop(12, "8.8.8.8", 10*time.Millisecond)}
+		agg.Update(res, 1)
+	}
+
+	// Migrate with maxPerHop=3: merged total would be 5, capped to 3.
+	agg.MigrateStats(12, 7, 3)
+
+	snap := agg.Snapshot()
+	for _, s := range snap {
+		if s.TTL == 12 {
+			t.Error("TTL 12 should be gone after migration")
+		}
+		if s.TTL == 7 && s.IP == "8.8.8.8" {
+			if s.Snt != 3 {
+				t.Errorf("TTL 7: expected Snt=3 (capped from 5), got %d", s.Snt)
+			}
+			return
+		}
+	}
+	t.Error("TTL 7 should have capped merged data")
+}
+
+func TestMTRAggregator_MigrateStats_CapsReceived(t *testing.T) {
+	agg := NewMTRAggregator()
+
+	// 2 sent, 2 received at TTL 7
+	for i := 0; i < 2; i++ {
+		res := &Result{Hops: make([][]Hop, 12)}
+		res.Hops[6] = []Hop{mkHop(7, "8.8.8.8", 5*time.Millisecond)}
+		agg.Update(res, 1)
+	}
+
+	// 3 sent, 3 received at TTL 12
+	for i := 0; i < 3; i++ {
+		res := &Result{Hops: make([][]Hop, 12)}
+		res.Hops[11] = []Hop{mkHop(12, "8.8.8.8", 10*time.Millisecond)}
+		agg.Update(res, 1)
+	}
+
+	// maxPerHop=2: sent capped to 2, received capped to min(5,2)=2
+	agg.MigrateStats(12, 7, 2)
+
+	snap := agg.Snapshot()
+	for _, s := range snap {
+		if s.TTL == 7 && s.IP == "8.8.8.8" {
+			if s.Snt != 2 {
+				t.Errorf("TTL 7: expected Snt=2 (capped), got %d", s.Snt)
+			}
+			// Loss should be 0% (received capped to sent=2)
+			if s.Loss > 0.01 {
+				t.Errorf("TTL 7: expected Loss ~0%%, got %.2f%%", s.Loss)
+			}
+			// Avg must stay consistent after proportional RTT scaling.
+			// Pre-merge: 2×5ms + 3×10ms = 40ms total over 5 samples → avg = 8ms.
+			// Proportional scaling preserves avg even after cap.
+			expectedAvg := 8.0 // (2*5 + 3*10) / 5 = 8ms
+			if s.Avg < expectedAvg-0.1 || s.Avg > expectedAvg+0.1 {
+				t.Errorf("TTL 7: expected Avg ~%.1fms (proportional), got %.4fms", expectedAvg, s.Avg)
+			}
+			return
+		}
+	}
+	t.Error("TTL 7 should have capped data")
+}
+
+func TestMTRAggregator_MigrateStats_CapsPreservesAvgStDev(t *testing.T) {
+	agg := NewMTRAggregator()
+
+	// 3 probes at TTL 7: all 4ms
+	for i := 0; i < 3; i++ {
+		res := &Result{Hops: make([][]Hop, 12)}
+		res.Hops[6] = []Hop{mkHop(7, "8.8.8.8", 4*time.Millisecond)}
+		agg.Update(res, 1)
+	}
+
+	// 3 probes at TTL 12: all 4ms (same RTT for zero-variance check)
+	for i := 0; i < 3; i++ {
+		res := &Result{Hops: make([][]Hop, 12)}
+		res.Hops[11] = []Hop{mkHop(12, "8.8.8.8", 4*time.Millisecond)}
+		agg.Update(res, 1)
+	}
+
+	// Pre-cap: 6 probes all 4ms → avg=4, stdev=0
+	// After cap to 3: avg must still be 4, stdev must still be 0.
+	agg.MigrateStats(12, 7, 3)
+
+	snap := agg.Snapshot()
+	for _, s := range snap {
+		if s.TTL == 7 && s.IP == "8.8.8.8" {
+			if s.Snt != 3 {
+				t.Errorf("expected Snt=3, got %d", s.Snt)
+			}
+			if s.Avg < 3.9 || s.Avg > 4.1 {
+				t.Errorf("expected Avg ~4.0ms, got %.4fms", s.Avg)
+			}
+			if s.StDev > 0.1 {
+				t.Errorf("expected StDev ~0, got %.4f", s.StDev)
+			}
+			return
+		}
+	}
+	t.Error("expected TTL 7 data")
+}
+func TestMTRAggregator_MigrateStats_CapsPreservesNonZeroStDev(t *testing.T) {
+	agg := NewMTRAggregator()
+
+	// Build a merged accumulator with mixed RTTs and verify Avg + StDev
+	// are preserved when received is capped.
+	//
+	// TTL 7: 2ms, 4ms (2 probes)
+	// TTL 12: 6ms, 8ms, 10ms (3 probes)
+	// Merged: [2, 4, 6, 8, 10] → 5 probes
+	//   avg = 30/5 = 6.0
+	//   sample var = ((2-6)² + (4-6)² + (6-6)² + (8-6)² + (10-6)²) / 4
+	//             = (16+4+0+4+16) / 4 = 10.0
+	//   stdev = sqrt(10) ≈ 3.1623
+	rtts7 := []time.Duration{2 * time.Millisecond, 4 * time.Millisecond}
+	for _, rtt := range rtts7 {
+		res := &Result{Hops: make([][]Hop, 12)}
+		res.Hops[6] = []Hop{mkHop(7, "8.8.8.8", rtt)}
+		agg.Update(res, 1)
+	}
+	rtts12 := []time.Duration{6 * time.Millisecond, 8 * time.Millisecond, 10 * time.Millisecond}
+	for _, rtt := range rtts12 {
+		res := &Result{Hops: make([][]Hop, 12)}
+		res.Hops[11] = []Hop{mkHop(12, "8.8.8.8", rtt)}
+		agg.Update(res, 1)
+	}
+
+	// Snapshot before cap to get the "ground truth" Avg & StDev.
+	agg.MigrateStats(12, 7, 0) // merge without cap first
+
+	snapBefore := agg.Snapshot()
+	var avgBefore, stdevBefore float64
+	for _, s := range snapBefore {
+		if s.TTL == 7 && s.IP == "8.8.8.8" {
+			avgBefore = s.Avg
+			stdevBefore = s.StDev
+		}
+	}
+	if avgBefore < 5.9 || avgBefore > 6.1 {
+		t.Fatalf("pre-cap Avg wrong: got %.4f, expected ~6.0", avgBefore)
+	}
+
+	// Now build the same scenario fresh, but cap to 3.
+	agg2 := NewMTRAggregator()
+	for _, rtt := range rtts7 {
+		res := &Result{Hops: make([][]Hop, 12)}
+		res.Hops[6] = []Hop{mkHop(7, "8.8.8.8", rtt)}
+		agg2.Update(res, 1)
+	}
+	for _, rtt := range rtts12 {
+		res := &Result{Hops: make([][]Hop, 12)}
+		res.Hops[11] = []Hop{mkHop(12, "8.8.8.8", rtt)}
+		agg2.Update(res, 1)
+	}
+
+	agg2.MigrateStats(12, 7, 3) // cap received from 5 → 3
+
+	snapAfter := agg2.Snapshot()
+	for _, s := range snapAfter {
+		if s.TTL == 7 && s.IP == "8.8.8.8" {
+			if s.Snt != 3 {
+				t.Errorf("expected Snt=3, got %d", s.Snt)
+			}
+			// Avg must be preserved.
+			if s.Avg < avgBefore-0.1 || s.Avg > avgBefore+0.1 {
+				t.Errorf("Avg drifted: expected ~%.4f, got %.4f", avgBefore, s.Avg)
+			}
+			// StDev must be preserved (non-zero variance scenario).
+			if stdevBefore > 0.1 {
+				if s.StDev < stdevBefore-0.15 || s.StDev > stdevBefore+0.15 {
+					t.Errorf("StDev drifted: expected ~%.4f, got %.4f", stdevBefore, s.StDev)
+				}
+			}
+			return
+		}
+	}
+	t.Error("expected TTL 7 data after capped migration")
+}

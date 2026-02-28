@@ -49,7 +49,7 @@
 - MTR 冲突参数（会直接报错退出）：`--table` `--classic` `--json` `--output` `--route-path` `--from` `--fast-trace` `--file` `--deploy`。
   - **注意**：`--raw` 不再是冲突参数。
 
-### MTR 中 `-q/-i` 的新语义
+### MTR 中 `-q/-i/-y` 的新语义
 
 - `-q/--queries`：
   - 在 MTR report 下表示"轮次"，默认 10（仅当用户未显式传 `-q`）。
@@ -57,6 +57,10 @@
 - `-i/--ttl-time`：
   - 在 MTR 下表示"轮间隔毫秒"，默认 1000ms（仅当用户未显式传 `-i`）。
   - 每轮内部 TTL 分组间隔固定 50ms（`normalizeMTRTraceConfig` 覆盖）。
+- `-y/--ipinfo <0..4>`：
+  - TUI 初始 Host 显示模式，默认 0（IP/PTR only）。
+  - 0=Base(IP/PTR) 1=ASN 2=City 3=Owner 4=Full
+  - 仅 TUI 模式生效，report/raw 不受影响。
 
 ### MTR report wide / non-wide 区别
 
@@ -95,13 +99,14 @@
 - `p`：暂停
 - `SPACE`：恢复
 - `r`：重置统计
-- `y`：切换 Host 显示模式（ASN/City/Owner/Full）
+- `y`：切换 Host 显示模式（IP/PTR → ASN → City → Owner → Full → 循环）
 - `n`：切换 Host 基名显示（PTR-or-IP / IP-only）
 
 ## MTR 显示与统计规则（当前）
 
-- Host 显示支持：
-  - `HostModeASN` / `HostModeCity` / `HostModeOwner` / `HostModeFull`
+- Host 显示支持 5 种模式（`-y/--ipinfo` 设初始值，`y` 键运行时循环）：
+  - `HostModeBase=0`：仅 IP/PTR，无 ASN 前缀
+  - `HostModeASN=1` / `HostModeCity=2` / `HostModeOwner=3` / `HostModeFull=4`
   - `HostNamePTRorIP` / `HostNameIPOnly`
 - 默认语言：`cn`（`--language en` 才优先英文字段）
 - waiting 判定：`loss >= 99.95 && IP=="" && Host==""`
@@ -111,7 +116,7 @@
   - `buildTUIHostParts(stat, mode, nameMode, lang, showIPs)` 生成结构化 parts
   - `computeTUIASNWidth(stats, ...)` 扫描所有 hop 确定 ASN 列最大宽度
   - `formatTUIHost(parts, asnW)` 用 `padRight(asn, asnW)` + 空格拼接（不用 `\t`）
-  - ASN 为空但 IP 已知时填 `"AS???"` 占位符，保证列对齐
+  - ASN 为空但 IP 已知时填 `"AS???"` 占位符，保证列对齐（HostModeBase 除外，该模式不显示 ASN）
   - waiting hop 不填占位符
 - compact report host（非 wide report）：
   - `formatCompactReportHost(stat, nameMode, lang)` 仅输出 hostname/IP + ASN
@@ -120,6 +125,28 @@
   - 窄屏右锚定指标区
   - 动态 hop 前缀宽度（覆盖 3 位/4 位 TTL）
   - MPLS 独立续行显示
+  - 紧凑指标列宽度：Loss=5 Snt=3 RTT=7 RTTMin=5
+
+## MTR 目的地折叠（高 TTL 回包归并）
+
+- 当 `knownFinalTTL` 已确定后，仍有的更高 TTL 在途探测可能也到达目的地。
+- `processResult` 中引入 `originTTL`（发送时的 TTL）和 `accountTTL`（统计归属 TTL）分离：
+  - 如果探测返回 dst-IP 且 `originTTL > curFinal`，则 `accountTTL = curFinal`（折叠）。
+  - 已 disabled 的 TTL 仍允许通过成功的 dst-ip 回复去折叠。
+  - 非 dst-ip 的回复在 disabled TTL 上直接丢弃。
+- **通用 MaxPerHop 上限检查**（`states[accountTTL].completed >= MaxPerHop`）：
+  - 适用于所有探测结果（自身探测 + 折叠探测），不仅限于折叠路径。
+  - 在途探测（cap 达到前已发出）返回时亦被丢弃，保证 Snt 严格不超 MaxPerHop。
+  - 被丢弃的自身探测仍更新 `consecutiveErrs`/`nextAt`，防止调度饥饿。
+- `originTTL < curFinal` 时（更低 TTL 先到 dst-ip → 降低 `knownFinalTTL`）：
+  - 保存 `oldFinal`，更新 `knownFinalTTL = originTTL`，disable 所有 `originTTL+1..maxHops`。
+  - 调用 `agg.MigrateStats(oldFinal, originTTL, MaxPerHop)`：将旧 finalTTL 的聚合数据搬迁到新 finalTTL，合并后对每个累加器 `sent`/`received` 上限裁剪至 MaxPerHop。
+  - 裁剪 `received` 时同步按比例缩放 `sum`/`sumSq`（`ratio = sent/received`），保证 `Avg` 和 `StDev` 不失真；`best`/`worst`/`last` 为极值/最新值，保持不变。
+  - RTT 缩放数学：`SS = sumSq - sum²/n_orig`，`sumSq_new = SS * (n_new-1)/(n_orig-1) + sum_new²/n_new`，可精确保持样本方差。
+  - 同步迁移 `states[originTTL].completed += states[oldFinal].completed`，结果上限裁剪至 MaxPerHop。
+  - **链式迁移**：若 finalTTL 依次降低（12→10→8→7），每次只从当前 `curFinal` 迁移到新值，数据逐级下沉，最终汇聚到最低 finalTTL。
+- 调度状态（`inFlight`/`nextAt`/`consecutiveErrs`）更新在 `originTTL`。
+- 统计聚合（`completed++`/`agg.Update`/`onProbe`）使用 `accountTTL`。
 
 ## MTR 引擎关键机制（易踩坑）
 

@@ -47,7 +47,7 @@ func checkMTRConflicts(flags map[string]bool) (conflict string, ok bool) {
 // runMTRTUI 执行 MTR 交互式 TUI 模式。
 // 当 stdin 为 TTY 时启用全屏 TUI（备用屏幕、按键控制）；
 // 非 TTY 时降级为简单表格刷新。
-func runMTRTUI(method trace.Method, conf trace.Config, hopIntervalMs int, maxPerHop int, domain string, dataOrigin string, showIPs bool) {
+func runMTRTUI(method trace.Method, conf trace.Config, hopIntervalMs int, maxPerHop int, domain string, dataOrigin string, showIPs bool, initialDisplayMode int) {
 	if hopIntervalMs <= 0 {
 		hopIntervalMs = 1000
 	}
@@ -64,7 +64,7 @@ func runMTRTUI(method trace.Method, conf trace.Config, hopIntervalMs int, maxPer
 	}()
 
 	// 初始化 TUI 控制器
-	ui := newMTRUI(cancel)
+	ui := newMTRUI(cancel, initialDisplayMode)
 	ui.Enter()
 	defer ui.Leave()
 

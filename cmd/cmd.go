@@ -221,6 +221,7 @@ func Execute() {
 	wideMode := parser.Flag("w", "wide", &argparse.Options{Help: "MTR wide report mode (implies --mtr --report); alone equals --mtr --report --wide"})
 	showIPs := parser.Flag("", "show-ips", &argparse.Options{Help: "MTR only: display both PTR hostnames and numeric IPs (PTR first, IP in parentheses)"})
 	mtrInterval := parser.Int("", "mtr-interval", &argparse.Options{Default: 0, Help: "MTR per-hop probe interval in milliseconds (default: 1000 in MTR mode). Overrides -i/--ttl-time for MTR"})
+	ipInfoMode := parser.Int("y", "ipinfo", &argparse.Options{Default: 0, Help: "Set initial MTR TUI host info mode (0-4). TUI only; ignored in --report/--raw. 0:IP/PTR 1:ASN 2:City 3:Owner 4:Full"})
 
 	err := parser.Parse(os.Args)
 	if err != nil {
@@ -624,7 +625,12 @@ func Execute() {
 		case mtrRunReport:
 			runMTRReport(m, conf, mtrHopIntervalMs, mtrMaxPerHop, domain, *dataOrigin, effectiveWide, *showIPs)
 		default:
-			runMTRTUI(m, conf, mtrHopIntervalMs, mtrMaxPerHop, domain, *dataOrigin, *showIPs)
+			// -y/--ipinfo 仅 TUI 使用，此处校验
+			if *ipInfoMode < 0 || *ipInfoMode > 4 {
+				fmt.Fprintf(os.Stderr, "--ipinfo/-y 必须在 0-4 范围内，当前值: %d\n", *ipInfoMode)
+				os.Exit(1)
+			}
+			runMTRTUI(m, conf, mtrHopIntervalMs, mtrMaxPerHop, domain, *dataOrigin, *showIPs, *ipInfoMode)
 		}
 		return
 	}

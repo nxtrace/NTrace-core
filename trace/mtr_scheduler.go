@@ -190,33 +190,43 @@ func runMTRScheduler(
 			return // stale generation, discard silently
 		}
 
-		ttl := cp.ttl
-		if ttl < beginHop || ttl > maxHops {
+		originTTL := cp.ttl
+		if originTTL < beginHop || originTTL > maxHops {
 			return
 		}
 
-		states[ttl].inFlight = false
+		states[originTTL].inFlight = false
 
-		if states[ttl].disabled {
-			return
+		// For disabled TTLs, only allow through if it's a successful dst-ip reply
+		// that can be folded into the final TTL.
+		if states[originTTL].disabled {
+			curFinal := atomic.LoadInt32(&knownFinalTTL)
+			if curFinal < 0 || cp.err != nil || !cp.result.Success || cp.result.Addr == nil {
+				return
+			}
+			peerIP := mtrAddrToIP(cp.result.Addr)
+			if peerIP == nil || !peerIP.Equal(cfg.DstIP) || int32(originTTL) <= curFinal {
+				return
+			}
+			// This is a late higher-TTL destination echo — fall through to fold.
 		}
 
 		if cp.err != nil {
 			if ctx.Err() != nil {
 				return
 			}
-			states[ttl].consecutiveErrs++
+			states[originTTL].consecutiveErrs++
 			fmt.Fprintf(os.Stderr, "mtr: probe error (%d/%d): %v\n",
-				states[ttl].consecutiveErrs, maxConsecErrors, cp.err)
-			if states[ttl].consecutiveErrs >= maxConsecErrors {
+				states[originTTL].consecutiveErrs, maxConsecErrors, cp.err)
+			if states[originTTL].consecutiveErrs >= maxConsecErrors {
 				// Budget exhausted: count as a completed timeout probe.
-				states[ttl].consecutiveErrs = 0
-				states[ttl].completed++
-				states[ttl].nextAt = cp.doneAt.Add(hopInterval)
+				states[originTTL].consecutiveErrs = 0
+				states[originTTL].completed++
+				states[originTTL].nextAt = cp.doneAt.Add(hopInterval)
 
 				singleRes := &Result{Hops: make([][]Hop, maxHops)}
-				hop := Hop{TTL: ttl, Error: errHopLimitTimeout}
-				idx := ttl - 1
+				hop := Hop{TTL: originTTL, Error: errHopLimitTimeout}
+				idx := originTTL - 1
 				if idx >= 0 && idx < len(singleRes.Hops) {
 					singleRes.Hops[idx] = []Hop{hop}
 				}
@@ -224,28 +234,80 @@ func runMTRScheduler(
 
 				// Emit the synthetic timeout to raw / onProbe consumers.
 				if onProbe != nil {
-					onProbe(mtrProbeResult{TTL: ttl}, computeIteration())
+					onProbe(mtrProbeResult{TTL: originTTL}, computeIteration())
 				}
 
 				maybeSnapshot(false)
 				return
 			}
 			// Below budget: reschedule after interval.
-			states[ttl].nextAt = cp.doneAt.Add(hopInterval)
+			states[originTTL].nextAt = cp.doneAt.Add(hopInterval)
 			return
 		}
 
-		states[ttl].completed++
-		states[ttl].consecutiveErrs = 0
-		states[ttl].nextAt = cp.doneAt.Add(hopInterval)
+		// ── Destination folding logic ──
+		// Determine accountTTL: where this probe's stats should be attributed.
+		accountTTL := originTTL
+		if cp.result.Success && cp.result.Addr != nil {
+			peerIP := mtrAddrToIP(cp.result.Addr)
+			if peerIP != nil && peerIP.Equal(cfg.DstIP) {
+				curFinal := atomic.LoadInt32(&knownFinalTTL)
+				if curFinal < 0 {
+					// First destination detection — set finalTTL
+					atomic.StoreInt32(&knownFinalTTL, int32(originTTL))
+					for t := originTTL + 1; t <= maxHops; t++ {
+						states[t].disabled = true
+					}
+				} else if int32(originTTL) < curFinal {
+					// Earlier TTL reached destination — lower finalTTL and
+					// migrate aggregated stats from old final to new final.
+					oldFinal := int(curFinal)
+					atomic.StoreInt32(&knownFinalTTL, int32(originTTL))
+					for t := originTTL + 1; t <= maxHops; t++ {
+						states[t].disabled = true
+					}
+					agg.MigrateStats(oldFinal, originTTL, cfg.MaxPerHop)
+					states[originTTL].completed += states[oldFinal].completed
+					if cfg.MaxPerHop > 0 && states[originTTL].completed > cfg.MaxPerHop {
+						states[originTTL].completed = cfg.MaxPerHop
+					}
+				} else if int32(originTTL) > curFinal {
+					// Late higher-TTL destination echo — fold into finalTTL
+					accountTTL = int(curFinal)
+				}
+			}
+		}
 
-		// Feed single-probe result to aggregator
+		// Check MaxPerHop cap on the account TTL (covers own and folded probes).
+		// In-flight probes launched before the cap was reached may return after
+		// folds/migration pushed completed to MaxPerHop — discard them.
+		if cfg.MaxPerHop > 0 && states[accountTTL].completed >= cfg.MaxPerHop {
+			// Still update scheduling state so the origin TTL doesn't stall.
+			if accountTTL == originTTL && !states[originTTL].disabled {
+				states[originTTL].consecutiveErrs = 0
+				states[originTTL].nextAt = cp.doneAt.Add(hopInterval)
+			}
+			return
+		}
+
+		// Update scheduling state for origin TTL
+		states[originTTL].consecutiveErrs = 0
+		states[originTTL].nextAt = cp.doneAt.Add(hopInterval)
+		if accountTTL == originTTL {
+			states[originTTL].completed++
+		}
+		// For folded probes, increment completed on the account TTL
+		if accountTTL != originTTL {
+			states[accountTTL].completed++
+		}
+
+		// Feed single-probe result to aggregator using accountTTL
 		singleRes := &Result{Hops: make([][]Hop, maxHops)}
 		hop := Hop{
 			Success:  cp.result.Success,
 			Address:  cp.result.Addr,
 			Hostname: cp.result.Hostname,
-			TTL:      cp.result.TTL,
+			TTL:      accountTTL,
 			RTT:      cp.result.RTT,
 			MPLS:     cp.result.MPLS,
 			Geo:      cp.result.Geo,
@@ -254,7 +316,7 @@ func runMTRScheduler(
 		if !hop.Success && hop.Address == nil {
 			hop.Error = errHopLimitTimeout
 		}
-		idx := ttl - 1
+		idx := accountTTL - 1
 		if idx >= 0 && idx < len(singleRes.Hops) {
 			singleRes.Hops[idx] = []Hop{hop}
 		}
@@ -267,22 +329,13 @@ func runMTRScheduler(
 
 		agg.Update(singleRes, 1)
 
-		// Destination detection
-		if cp.result.Success && cp.result.Addr != nil {
-			peerIP := mtrAddrToIP(cp.result.Addr)
-			if peerIP != nil && peerIP.Equal(cfg.DstIP) {
-				curFinal := atomic.LoadInt32(&knownFinalTTL)
-				if curFinal < 0 || int32(ttl) < curFinal {
-					atomic.StoreInt32(&knownFinalTTL, int32(ttl))
-					for t := ttl + 1; t <= maxHops; t++ {
-						states[t].disabled = true
-					}
-				}
-			}
-		}
+		// Destination detection for non-folded probes was handled above.
 
+		// Emit probe result with accountTTL for raw/onProbe consumers
+		emitResult := cp.result
+		emitResult.TTL = accountTTL
 		if onProbe != nil {
-			onProbe(cp.result, computeIteration())
+			onProbe(emitResult, computeIteration())
 		}
 
 		maybeSnapshot(false)
