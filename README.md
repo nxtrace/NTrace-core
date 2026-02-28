@@ -479,18 +479,17 @@ usage: nexttrace [-h|--help] [--init] [-4|--ipv4] [-6|--ipv6] [-T|--tcp]
                  [-m|--max-hops <integer>] [-d|--data-provider
                  (IP.SB|ip.sb|IPInfo|ipinfo|IPInsight|ipinsight|IPAPI.com|ip-api.com|IPInfoLocal|ipinfolocal|chunzhen|LeoMoeAPI|leomoeapi|ipdb.one|disable-geoip)]
                  [--pow-provider (api.nxtrace.org|sakura)] [-n|--no-rdns]
-                 [-a|--always-rdns] [-P|--route-path] [--dn42]
-                 [-o|--output] [--table] [--raw] [-j|--json] [-c|--classic]
-                 [-f|--first <integer>] [-M|--map] [-e|--disable-mpls]
-                 [-V|--version] [-s|--source "<value>"] [--source-port
-                 <integer>] [-D|--dev "<value>"] [--listen "<value>"]
-                 [--deploy] [-z|--send-time <integer>] [-i|--ttl-time
-                 <integer>] [--timeout <integer>] [--psize <integer>]
-                 [_positionalArg_nexttrace_37 "<value>"] [--dot-server
-                 (dnssb|aliyun|dnspod|google|cloudflare)] [-g|--language
-                 (en|cn)] [--file "<value>"] [-C|--no-color] [--from "<value>"]
-                 [-t|--mtr] [-r|--report] [-w|--wide] [--show-ips]
-                 [-y|--ipinfo <integer>]
+                 [-a|--always-rdns] [-P|--route-path] [--dn42] [-o|--output]
+                 [--table] [--raw] [-j|--json] [-c|--classic] [-f|--first
+                 <integer>] [-M|--map] [-e|--disable-mpls] [-V|--version]
+                 [-s|--source "<value>"] [--source-port <integer>] [-D|--dev
+                 "<value>"] [--listen "<value>"] [--deploy] [-z|--send-time
+                 <integer>] [-i|--ttl-time <integer>] [--timeout <integer>]
+                 [--psize <integer>] [_positionalArg_nexttrace_37 "<value>"]
+                 [--dot-server (dnssb|aliyun|dnspod|google|cloudflare)]
+                 [-g|--language (en|cn)] [--file "<value>"] [-C|--no-color]
+                 [--from "<value>"] [-t|--mtr] [-r|--report] [-w|--wide]
+                 [--show-ips] [-y|--ipinfo <integer>]
 
                  An open source visual route tracking CLI tool
 
@@ -539,8 +538,8 @@ Arguments:
       --table                        Output trace results as a final summary
                                      table (traceroute report mode)
       --raw                          Machine-friendly output. With MTR
-                                     (--mtr/-r/-w), enables streaming raw
-                                     event mode
+                                     (--mtr/-r/-w), enables streaming raw event
+                                     mode
   -j  --json                         Output trace results as JSON
   -c  --classic                      Classic Output trace results like
                                      BestTrace
@@ -560,12 +559,14 @@ Arguments:
       --deploy                       Start the Gin powered web console
   -z  --send-time                    Set how many [milliseconds] between
                                      sending each packet. Default: 50ms.
-                                     Ignored in MTR mode.
+                                     Ignored in MTR mode. Default: 50
   -i  --ttl-time                     Interval [ms] between TTL groups in normal
                                      traceroute (default: 300ms). In MTR mode
                                      (--mtr/-r/-w, including --raw), sets
-                                     per-hop probe interval (default: 1000ms
-                                     when omitted).
+                                     per-hop probe interval: how long between
+                                     successive probes to the same hop
+                                     (default: 1000ms when omitted). Default:
+                                     300
       --timeout                      The number of [milliseconds] to keep probe
                                      sockets open before giving up on the
                                      connection. Default: 1000
@@ -573,8 +574,6 @@ Arguments:
       --_positionalArg_nexttrace_37  IP Address or domain name
       --dot-server                   Use DoT Server for DNS Parse [dnssb,
                                      aliyun, dnspod, google, cloudflare]
-                                     Also applies to GeoIP API DNS resolution
-                                     (including LeoMoe FastIP)
   -g  --language                     Choose the language for displaying [en,
                                      cn]. Default: cn
       --file                         Read IP Address or domain name from file
@@ -595,7 +594,8 @@ Arguments:
                                      numeric IPs (PTR first, IP in parentheses)
   -y  --ipinfo                       Set initial MTR TUI host info mode (0-4).
                                      TUI only; ignored in --report/--raw.
-                                     0:IP/PTR 1:ASN 2:City 3:Owner 4:Full
+                                     0:IP/PTR 1:ASN 2:City 3:Owner 4:Full.
+                                     Default: 0
 ```
 
 ## Project screenshot
