@@ -251,18 +251,18 @@ func runMTRScheduler(
 						states[t].disabled = true
 					}
 				} else if int32(originTTL) < curFinal {
-					// Earlier TTL reached destination — lower finalTTL and
-					// migrate aggregated stats from old final to new final.
+					// Earlier TTL reached destination — lower finalTTL.
+					// Erase old final's stale aggregator data (avoids ghost row)
+					// but do NOT merge it into new final; the per-hop scheduler
+					// will accumulate fresh probes for the new final independently.
+					// This prevents Snt inflation where the final hop ends up
+					// with more probes than other hops.
 					oldFinal := int(curFinal)
 					atomic.StoreInt32(&knownFinalTTL, int32(originTTL))
 					for t := originTTL + 1; t <= maxHops; t++ {
 						states[t].disabled = true
 					}
-					agg.MigrateStats(oldFinal, originTTL, cfg.MaxPerHop)
-					states[originTTL].completed += states[oldFinal].completed
-					if cfg.MaxPerHop > 0 && states[originTTL].completed > cfg.MaxPerHop {
-						states[originTTL].completed = cfg.MaxPerHop
-					}
+					agg.ClearHop(oldFinal)
 				}
 				// originTTL > curFinal case: impossible here because disabled
 				// TTLs are discarded above before reaching this point.

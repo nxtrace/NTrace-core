@@ -382,6 +382,101 @@ func TestUnknownPreserved_Multipath(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// ClearHop 测试
+// ---------------------------------------------------------------------------
+
+func TestMTRAggregator_ClearHop_RemovesData(t *testing.T) {
+	agg := NewMTRAggregator()
+
+	// Record stats at TTL 5
+	res := mkResult(
+		nil, nil, nil, nil,
+		[]Hop{mkHop(5, "10.0.0.99", 5*time.Millisecond)},
+	)
+	agg.Update(res, 1)
+
+	// Verify TTL 5 exists
+	snap := agg.Snapshot()
+	found := false
+	for _, s := range snap {
+		if s.TTL == 5 {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("expected TTL 5 in snapshot before ClearHop")
+	}
+
+	// Clear TTL 5
+	agg.ClearHop(5)
+
+	// Verify TTL 5 is gone
+	snap = agg.Snapshot()
+	for _, s := range snap {
+		if s.TTL == 5 {
+			t.Error("TTL 5 should not exist after ClearHop")
+		}
+	}
+}
+
+func TestMTRAggregator_ClearHop_NoopIfMissing(t *testing.T) {
+	agg := NewMTRAggregator()
+
+	// Record stats at TTL 3 only
+	res := mkResult(
+		nil, nil,
+		[]Hop{mkHop(3, "10.0.0.3", 3*time.Millisecond)},
+	)
+	agg.Update(res, 1)
+
+	// Clear non-existent TTL — should not panic
+	agg.ClearHop(99)
+
+	// TTL 3 should still exist
+	snap := agg.Snapshot()
+	found := false
+	for _, s := range snap {
+		if s.TTL == 3 {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("TTL 3 should still exist after clearing non-existent TTL")
+	}
+}
+
+func TestMTRAggregator_ClearHop_DoesNotAffectOtherTTLs(t *testing.T) {
+	agg := NewMTRAggregator()
+
+	// Record stats at TTLs 3 and 5
+	res := mkResult(
+		nil, nil,
+		[]Hop{mkHop(3, "10.0.0.3", 3*time.Millisecond)},
+		nil,
+		[]Hop{mkHop(5, "10.0.0.5", 5*time.Millisecond)},
+	)
+	agg.Update(res, 1)
+
+	// Clear TTL 5
+	agg.ClearHop(5)
+
+	// TTL 3 should still have its data
+	snap := agg.Snapshot()
+	for _, s := range snap {
+		if s.TTL == 3 {
+			if s.IP != "10.0.0.3" {
+				t.Errorf("TTL 3 IP = %q, want 10.0.0.3", s.IP)
+			}
+			if s.Snt != 1 {
+				t.Errorf("TTL 3 Snt = %d, want 1", s.Snt)
+			}
+			return
+		}
+	}
+	t.Error("TTL 3 not found in snapshot after clearing TTL 5")
+}
+
+// ---------------------------------------------------------------------------
 // MigrateStats 测试
 // ---------------------------------------------------------------------------
 

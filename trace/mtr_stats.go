@@ -209,6 +209,15 @@ func (agg *MTRAggregator) Reset() {
 	agg.nextOrder = 0
 }
 
+// ClearHop 删除指定 TTL 上的所有聚合数据。
+// 用于 per-hop 调度器中 knownFinalTTL 下调时，擦除旧 finalTTL 的过期统计，
+// 避免 ghost row，同时不会把旧 final 的 Snt 合并到新 final（防止 Snt 膨胀）。
+func (agg *MTRAggregator) ClearHop(ttl int) {
+	agg.mu.Lock()
+	defer agg.mu.Unlock()
+	delete(agg.stats, ttl)
+}
+
 // MigrateStats 将 fromTTL 上所有累加器迁移合并到 toTTL，然后删除 fromTTL。
 // 用于 knownFinalTTL 下调时把旧 finalTTL 上已入账的 dst-ip 统计搬到新 finalTTL。
 // maxPerHop > 0 时，合并后对每个累加器的 sent/received 做上限裁剪，

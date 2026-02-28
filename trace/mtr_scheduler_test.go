@@ -1167,12 +1167,12 @@ func TestScheduler_FinalTTLLowered_MigratesStatsToNewFinal(t *testing.T) {
 		ipByTTL[s.TTL] = s.IP
 	}
 
-	// TTL 12 should have NO stats — all migrated to TTL 7
+	// TTL 12 should have NO stats — cleared when finalTTL lowered to 7
 	if sntByTTL[12] > 0 {
-		t.Errorf("TTL 12 should have 0 stats after migration, got Snt=%d (ghost row!)", sntByTTL[12])
+		t.Errorf("TTL 12 should have 0 stats after clearing, got Snt=%d (ghost row!)", sntByTTL[12])
 	}
 
-	// TTL 7 (new final) should have stats (its own + migrated from 12)
+	// TTL 7 (new final) should have stats (its own probes only)
 	if sntByTTL[7] < 3 {
 		t.Errorf("TTL 7 (final): expected Snt >= 3, got %d", sntByTTL[7])
 	}
@@ -1252,14 +1252,14 @@ func TestScheduler_FinalTTLLowered_ChainMigration(t *testing.T) {
 	stats := agg.Snapshot()
 	for _, s := range stats {
 		if s.IP == "10.0.0.99" && s.TTL != 7 {
-			t.Errorf("destination IP at TTL %d, expected only at TTL 7 after chain migration", s.TTL)
+			t.Errorf("destination IP at TTL %d, expected only at TTL 7 after chain lowering", s.TTL)
 		}
 	}
 
-	// TTLs 9 and 12 should not have dst-ip stats
+	// TTLs 9 and 12 should not have dst-ip stats (cleared during lowering)
 	for _, s := range stats {
 		if (s.TTL == 9 || s.TTL == 12) && s.IP == "10.0.0.99" {
-			t.Errorf("TTL %d: ghost row with dst-ip after chain migration", s.TTL)
+			t.Errorf("TTL %d: ghost row with dst-ip after chain lowering", s.TTL)
 		}
 	}
 }
@@ -1540,7 +1540,7 @@ func TestScheduler_FinalTTLLowering_Chain_WithMaxPerHop_NoGhostRow_StableStats(t
 
 	// Snt must be > 0 (at least the migrated + own)
 	if finalHopStat.Snt == 0 {
-		t.Error("TTL 7 (final): Snt=0, expected > 0 after migration")
+		t.Error("TTL 7 (final): Snt=0, expected > 0 after chain lowering")
 	}
 
 	// Avg should be reasonable (> 0 and not NaN)
@@ -1565,5 +1565,129 @@ func TestScheduler_FinalTTLLowering_Chain_WithMaxPerHop_NoGhostRow_StableStats(t
 	}
 	if dstIPCount != 1 {
 		t.Errorf("expected exactly 1 row with dst-ip (at TTL 7), got %d", dstIPCount)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Regression: final hop Snt must NOT exceed other hops
+// ---------------------------------------------------------------------------
+
+func TestScheduler_FinalHopSntNotInflated_NoLowering(t *testing.T) {
+	// Simple case: destination is at TTL 5, no lowering occurs.
+	// All active TTLs should have equal Snt after completion.
+	dstIP := net.ParseIP("10.0.0.99")
+
+	prober := &mockTTLProber{
+		probeFn: func(_ context.Context, ttl int) (mtrProbeResult, error) {
+			if ttl == 5 {
+				return mtrProbeResult{
+					TTL: ttl, Success: true,
+					Addr: &net.IPAddr{IP: dstIP},
+					RTT:  5 * time.Millisecond,
+				}, nil
+			}
+			return mtrProbeResult{
+				TTL: ttl, Success: true,
+				Addr: &net.IPAddr{IP: net.ParseIP(fmt.Sprintf("10.0.0.%d", ttl))},
+				RTT:  time.Duration(ttl) * time.Millisecond,
+			}, nil
+		},
+	}
+
+	agg := NewMTRAggregator()
+
+	err := runMTRScheduler(context.Background(), prober, agg, mtrSchedulerConfig{
+		BeginHop:         1,
+		MaxHops:          30,
+		HopInterval:      time.Millisecond,
+		MaxPerHop:        5,
+		ParallelRequests: 30,
+		ProgressThrottle: time.Millisecond,
+		DstIP:            dstIP,
+	}, nil, nil)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	stats := agg.Snapshot()
+	sntByTTL := map[int]int{}
+	for _, s := range stats {
+		sntByTTL[s.TTL] = s.Snt
+	}
+
+	// All active TTLs (1-5) should have exactly MaxPerHop Snt
+	for ttl := 1; ttl <= 5; ttl++ {
+		if sntByTTL[ttl] != 5 {
+			t.Errorf("TTL %d: Snt=%d, expected 5 (MaxPerHop)", ttl, sntByTTL[ttl])
+		}
+	}
+}
+
+func TestScheduler_FinalHopSntNotInflated_WithLowering(t *testing.T) {
+	// Lowering scenario: TTL 8 hits destination first, then TTL 5 lowers it.
+	// After completion, TTL 5 (final) should have Snt == MaxPerHop, same as
+	// other hops — NOT inflated by migrated data from TTL 8.
+	dstIP := net.ParseIP("10.0.0.99")
+
+	prober := &mockTTLProber{
+		probeFn: func(_ context.Context, ttl int) (mtrProbeResult, error) {
+			if ttl == 8 {
+				// Returns destination quickly (discovered first as provisional final)
+				return mtrProbeResult{
+					TTL: ttl, Success: true,
+					Addr: &net.IPAddr{IP: dstIP},
+					RTT:  3 * time.Millisecond,
+				}, nil
+			}
+			if ttl == 5 {
+				// Real final — returns after delay so TTL 8 is processed first
+				time.Sleep(30 * time.Millisecond)
+				return mtrProbeResult{
+					TTL: ttl, Success: true,
+					Addr: &net.IPAddr{IP: dstIP},
+					RTT:  5 * time.Millisecond,
+				}, nil
+			}
+			return mtrProbeResult{
+				TTL: ttl, Success: true,
+				Addr: &net.IPAddr{IP: net.ParseIP(fmt.Sprintf("10.0.0.%d", ttl))},
+				RTT:  time.Duration(ttl) * time.Millisecond,
+			}, nil
+		},
+	}
+
+	agg := NewMTRAggregator()
+
+	err := runMTRScheduler(context.Background(), prober, agg, mtrSchedulerConfig{
+		BeginHop:         1,
+		MaxHops:          15,
+		HopInterval:      time.Millisecond,
+		MaxPerHop:        4,
+		ParallelRequests: 15,
+		ProgressThrottle: time.Millisecond,
+		DstIP:            dstIP,
+	}, nil, nil)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	stats := agg.Snapshot()
+	sntByTTL := map[int]int{}
+	for _, s := range stats {
+		sntByTTL[s.TTL] = s.Snt
+	}
+
+	// All active TTLs (1-5) should have exactly MaxPerHop Snt
+	for ttl := 1; ttl <= 5; ttl++ {
+		if sntByTTL[ttl] != 4 {
+			t.Errorf("TTL %d: Snt=%d, expected 4 (MaxPerHop, no inflation)", ttl, sntByTTL[ttl])
+		}
+	}
+
+	// Old provisional final (TTL 8) should have NO data (cleared, not migrated)
+	if sntByTTL[8] > 0 {
+		t.Errorf("TTL 8 (old provisional final): Snt=%d, expected 0 (cleared)", sntByTTL[8])
 	}
 }
