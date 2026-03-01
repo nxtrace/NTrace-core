@@ -36,6 +36,11 @@ type listenInfo struct {
 	Access  string
 }
 
+const (
+	defaultPacketIntervalMs        = 50
+	defaultTracerouteTTLIntervalMs = 300
+)
+
 func buildListenInfo(addr string) listenInfo {
 	trimmed := strings.TrimSpace(addr)
 	effective := trimmed
@@ -161,8 +166,37 @@ func hasIPv6Loopback() bool {
 	return false
 }
 
+// sanitizeUsagePositionalArgs replaces the auto-generated positional argument
+// name (e.g. "_positionalArg_nexttrace_33") with a friendlier label in the
+// usage string produced by argparse.
+func sanitizeUsagePositionalArgs(usage string) string {
+	// argparse generates names like "_positionalArg_nexttrace_<N>"
+	// We scan for the prefix and replace the whole token with "TARGET".
+	const prefix = "_positionalArg_"
+	for {
+		idx := strings.Index(usage, prefix)
+		if idx < 0 {
+			break
+		}
+		// Find the end of the token (next space, newline, or end of string).
+		end := idx + len(prefix)
+		for end < len(usage) && usage[end] != ' ' && usage[end] != '\n' && usage[end] != '\r' && usage[end] != '\t' && usage[end] != ']' {
+			end++
+		}
+		usage = usage[:idx] + "TARGET" + usage[end:]
+	}
+	// argparse renders the positional as "--TARGET" in the description list;
+	// strip the leading "--" so it reads as a plain positional placeholder.
+	usage = strings.ReplaceAll(usage, "--TARGET", "TARGET")
+	return usage
+}
+
 func Execute() {
 	parser := argparse.NewParser("nexttrace", "An open source visual route tracking CLI tool")
+	// Override HelpFunc so positional arg names are sanitized in --help output
+	parser.HelpFunc = func(c *argparse.Command, msg interface{}) string {
+		return sanitizeUsagePositionalArgs(c.Usage(msg))
+	}
 	// Create string flag
 	init := parser.Flag("", "init", &argparse.Options{Help: "Windows ONLY: Extract WinDivert runtime to current directory"})
 	ipv4Only := parser.Flag("4", "ipv4", &argparse.Options{Help: "Use IPv4 only"})
@@ -183,11 +217,10 @@ func Execute() {
 	norDNS := parser.Flag("n", "no-rdns", &argparse.Options{Help: "Do not resolve IP addresses to their domain names"})
 	alwaysrDNS := parser.Flag("a", "always-rdns", &argparse.Options{Help: "Always resolve IP addresses to their domain names"})
 	routePath := parser.Flag("P", "route-path", &argparse.Options{Help: "Print traceroute hop path by ASN and location"})
-	report := parser.Flag("r", "report", &argparse.Options{Help: "output using report mode"})
 	dn42 := parser.Flag("", "dn42", &argparse.Options{Help: "DN42 Mode"})
 	output := parser.Flag("o", "output", &argparse.Options{Help: "Write trace result to file (RealTimePrinter ONLY)"})
-	tablePrint := parser.Flag("t", "table", &argparse.Options{Help: "Output trace results as table"})
-	rawPrint := parser.Flag("", "raw", &argparse.Options{Help: "An Output Easy to Parse"})
+	tablePrint := parser.Flag("", "table", &argparse.Options{Help: "Output trace results as a final summary table (traceroute report mode)"})
+	rawPrint := parser.Flag("", "raw", &argparse.Options{Help: "Machine-friendly output. With MTR (--mtr/-r/-w), enables streaming raw event mode"})
 	jsonPrint := parser.Flag("j", "json", &argparse.Options{Help: "Output trace results as JSON"})
 	classicPrint := parser.Flag("c", "classic", &argparse.Options{Help: "Classic Output trace results like BestTrace"})
 	beginHop := parser.Int("f", "first", &argparse.Options{Default: 1, Help: "Start from the first_ttl hop (instead of 1)"})
@@ -200,8 +233,8 @@ func Execute() {
 	deployListen := parser.String("", "listen", &argparse.Options{Help: "Set listen address for web console (e.g. 127.0.0.1:30080)"})
 	deploy := parser.Flag("", "deploy", &argparse.Options{Help: "Start the Gin powered web console"})
 	//router := parser.Flag("R", "route", &argparse.Options{Help: "Show Routing Table [Provided By BGP.Tools]"})
-	packetInterval := parser.Int("z", "send-time", &argparse.Options{Default: 50, Help: "Set how many [milliseconds] between sending each packet. Useful when some routers use rate-limit for ICMP messages"})
-	ttlInterval := parser.Int("i", "ttl-time", &argparse.Options{Default: 50, Help: "Set how many [milliseconds] between sending packets groups by TTL. Useful when some routers use rate-limit for ICMP messages"})
+	packetInterval := parser.Int("z", "send-time", &argparse.Options{Default: defaultPacketIntervalMs, Help: "Set how many [milliseconds] between sending each packet. Default: 50ms. Ignored in MTR mode"})
+	ttlInterval := parser.Int("i", "ttl-time", &argparse.Options{Default: defaultTracerouteTTLIntervalMs, Help: "Interval [ms] between TTL groups in normal traceroute (default: 300ms). In MTR mode (--mtr/-r/-w, including --raw), sets per-hop probe interval: how long between successive probes to the same hop (default: 1000ms when omitted)"})
 	timeout := parser.Int("", "timeout", &argparse.Options{Default: 1000, Help: "The number of [milliseconds] to keep probe sockets open before giving up on the connection"})
 	packetSize := parser.Int("", "psize", &argparse.Options{Default: 52, Help: "Set the payload size"})
 	str := parser.StringPositional(&argparse.Options{Help: "IP Address or domain name"})
@@ -212,13 +245,58 @@ func Execute() {
 	file := parser.String("", "file", &argparse.Options{Help: "Read IP Address or domain name from file"})
 	noColor := parser.Flag("C", "no-color", &argparse.Options{Help: "Disable Colorful Output"})
 	from := parser.String("", "from", &argparse.Options{Help: "Run traceroute via Globalping (https://globalping.io/network) from a specified location. The location field accepts continents, countries, regions, cities, ASNs, ISPs, or cloud regions."})
+	mtrMode := parser.Flag("t", "mtr", &argparse.Options{Help: "Enable MTR (My Traceroute) continuous probing mode"})
+	reportMode := parser.Flag("r", "report", &argparse.Options{Help: "MTR report mode (non-interactive, implies --mtr); can trigger MTR without --mtr"})
+	wideMode := parser.Flag("w", "wide", &argparse.Options{Help: "MTR wide report mode (implies --mtr --report); alone equals --mtr --report --wide"})
+	showIPs := parser.Flag("", "show-ips", &argparse.Options{Help: "MTR only: display both PTR hostnames and numeric IPs (PTR first, IP in parentheses)"})
+	ipInfoMode := parser.Int("y", "ipinfo", &argparse.Options{Default: 0, Help: "Set initial MTR TUI host info mode (0-4). TUI only; ignored in --report/--raw. 0:IP/PTR 1:ASN 2:City 3:Owner 4:Full"})
 
 	err := parser.Parse(os.Args)
 	if err != nil {
 		// In case of error print error and print usage
 		// This can also be done by passing -h or --help flags
-		fmt.Print(parser.Usage(err))
+		fmt.Print(sanitizeUsagePositionalArgs(parser.Usage(err)))
 		return
+	}
+
+	// ── 统一 MTR 有效开关 ──
+	effectiveMTR := *mtrMode || *reportMode || *wideMode
+	effectiveReport := *reportMode || *wideMode
+	effectiveWide := *wideMode
+	effectiveMTRRaw := effectiveMTR && *rawPrint
+
+	// MTR 冲突检查必须在所有可能 early-return 的分支之前执行
+	if effectiveMTR {
+		conflictFlags := map[string]bool{
+			"table":     *tablePrint,
+			"classic":   *classicPrint,
+			"json":      *jsonPrint,
+			"output":    *output,
+			"routePath": *routePath,
+			"from":      *from != "",
+			"fastTrace": *fast_trace,
+			"file":      *file != "",
+			"deploy":    *deploy,
+		}
+		if conflict, ok := checkMTRConflicts(conflictFlags); !ok {
+			fmt.Printf("--mtr 不能与 %s 同时使用\n", conflict)
+			os.Exit(1)
+		}
+	}
+
+	// 判定 -q / -i 是否显式传入（用于 MTR 下参数迁移）
+	queriesExplicit := false
+	ttlTimeExplicit := false
+	for _, a := range parser.GetArgs() {
+		if !a.GetParsed() {
+			continue
+		}
+		switch a.GetLname() {
+		case "queries":
+			queriesExplicit = true
+		case "ttl-time":
+			ttlTimeExplicit = true
+		}
 	}
 
 	if *noColor {
@@ -227,7 +305,7 @@ func Execute() {
 		color.NoColor = false
 	}
 
-	if !*jsonPrint {
+	if !*jsonPrint && !effectiveMTR {
 		printer.Version()
 	}
 
@@ -314,6 +392,13 @@ func Execute() {
 
 	domain := *str
 
+	// 将 --dot-server 配置注入 Geo DNS 解析策略层，
+	// 使 GeoIP API 域名解析（含 LeoMoe FastIP）也走 DoT。
+	// 必须在 fast-trace / wshandle.New() / GetFastIP 之前执行。
+	if *dot != "" {
+		util.SetGeoDNSResolver(*dot)
+	}
+
 	var m trace.Method
 	switch {
 	case *tcp:
@@ -353,7 +438,7 @@ func Execute() {
 
 	// DOMAIN处理开始
 	if domain == "" {
-		fmt.Print(parser.Usage(err))
+		fmt.Print(sanitizeUsagePositionalArgs(parser.Usage(err)))
 		return
 	}
 
@@ -396,6 +481,12 @@ func Execute() {
 	//go func() {
 	//	defer wg.Done()
 	//}()
+	// MTR 使用 TUI 备用屏，必须在 wshandle.New() / GetFastIP 之前
+	// 禁止彩色横幅输出，避免污染主终端历史。
+	if effectiveMTR {
+		util.SuppressFastIPOutput = true
+	}
+
 	var leoWs *wshandle.WsConn
 	needsLeoWS := strings.EqualFold(*dataOrigin, "LEOMOEAPI")
 	if needsLeoWS {
@@ -474,12 +565,20 @@ func Execute() {
 	}
 
 	if *srcDev != "" {
-		dev, _ := net.InterfaceByName(*srcDev)
+		dev, devErr := net.InterfaceByName(*srcDev)
+		if devErr != nil || dev == nil {
+			fmt.Printf("无法找到网卡 %q: %v\n", *srcDev, devErr)
+			os.Exit(1)
+		}
 		util.SrcDev = dev.Name
 		if addrs, err := dev.Addrs(); err == nil {
 			for _, addr := range addrs {
-				if (addr.(*net.IPNet).IP.To4() == nil) == (ip.To4() == nil) {
-					*srcAddr = addr.(*net.IPNet).IP.String()
+				ipNet, ok := addr.(*net.IPNet)
+				if !ok {
+					continue // 跳过非 *net.IPNet 类型（如 *net.IPAddr）
+				}
+				if (ipNet.IP.To4() == nil) == (ip.To4() == nil) {
+					*srcAddr = ipNet.IP.String()
 					// 检查是否是内网IP
 					if !(net.ParseIP(*srcAddr).IsPrivate() ||
 						net.ParseIP(*srcAddr).IsLoopback() ||
@@ -499,7 +598,7 @@ func Execute() {
 		*packetSize = 2
 	}
 
-	if !*jsonPrint {
+	if !*jsonPrint && !effectiveMTR {
 		printer.PrintTraceRouteNav(ip, domain, *dataOrigin, *maxHops, *packetSize, *srcAddr, string(m))
 	}
 
@@ -528,6 +627,37 @@ func Execute() {
 		PktSize:          *packetSize,
 	}
 
+	// --disable-mpls 需在 MTR 分支之前生效
+	if *disableMPLS {
+		util.DisableMPLS = true
+	}
+
+	// ── MTR 连续探测模式 ──
+	if effectiveMTR {
+		mtrMaxPerHop, mtrHopIntervalMs := deriveMTRProbeParams(
+			effectiveReport,
+			queriesExplicit,
+			*numMeasurements,
+			ttlTimeExplicit,
+			*ttlInterval,
+		)
+
+		switch chooseMTRRunMode(effectiveMTRRaw, effectiveReport) {
+		case mtrRunRaw:
+			runMTRRaw(m, conf, mtrHopIntervalMs, mtrMaxPerHop, *dataOrigin)
+		case mtrRunReport:
+			runMTRReport(m, conf, mtrHopIntervalMs, mtrMaxPerHop, domain, *dataOrigin, effectiveWide, *showIPs)
+		default:
+			// -y/--ipinfo 仅 TUI 使用，此处校验
+			if *ipInfoMode < 0 || *ipInfoMode > 4 {
+				fmt.Fprintf(os.Stderr, "--ipinfo/-y 必须在 0-4 范围内，当前值: %d\n", *ipInfoMode)
+				os.Exit(1)
+			}
+			runMTRTUI(m, conf, mtrHopIntervalMs, mtrMaxPerHop, domain, *dataOrigin, *showIPs, *ipInfoMode)
+		}
+		return
+	}
+
 	// 暂时弃用
 	router := new(bool)
 	*router = false
@@ -546,10 +676,6 @@ func Execute() {
 				conf.RealtimePrinter = printer.RealtimePrinter
 			}
 		}
-	} else {
-		if !*report {
-			conf.AsyncPrinter = printer.TracerouteTablePrinter
-		}
 	}
 
 	if *jsonPrint {
@@ -564,10 +690,6 @@ func Execute() {
 				fmt.Println(err)
 			}
 		}
-	}
-
-	if *disableMPLS {
-		util.DisableMPLS = true
 	}
 
 	res, err := trace.Traceroute(m, conf)
@@ -614,6 +736,73 @@ func Execute() {
 	if *jsonPrint {
 		fmt.Println(string(r))
 	}
+}
+
+type mtrRunMode int
+
+const (
+	mtrRunTUI mtrRunMode = iota
+	mtrRunReport
+	mtrRunRaw
+)
+
+func chooseMTRRunMode(effectiveMTRRaw, effectiveReport bool) mtrRunMode {
+	if effectiveMTRRaw {
+		return mtrRunRaw
+	}
+	if effectiveReport {
+		return mtrRunReport
+	}
+	return mtrRunTUI
+}
+
+// deriveMTRProbeParams computes per-hop scheduling parameters for MTR.
+//
+// maxPerHop priority: explicit -q > report default 10 > TUI/raw default 0 (unlimited).
+// hopIntervalMs priority: explicit -i > default 1000.
+func deriveMTRProbeParams(
+	effectiveReport, queriesExplicit bool, numMeasurements int,
+	ttlTimeExplicit bool, ttlInterval int,
+) (maxPerHop int, hopIntervalMs int) {
+	// maxPerHop
+	if queriesExplicit {
+		maxPerHop = numMeasurements
+	} else if effectiveReport {
+		maxPerHop = 10 // report 默认 10
+	} else {
+		maxPerHop = 0 // TUI/raw → 无限
+	}
+
+	// hopIntervalMs
+	if ttlTimeExplicit {
+		hopIntervalMs = ttlInterval
+	} else {
+		hopIntervalMs = 1000
+	}
+	return
+}
+
+// deriveMTRRoundParams is the legacy round-based parameter derivation.
+// Kept for backward compatibility (Web MTR).
+func deriveMTRRoundParams(effectiveReport, queriesExplicit bool, numMeasurements int, ttlTimeExplicit bool, ttlInterval int) (maxRounds int, intervalMs int) {
+	if effectiveReport {
+		if queriesExplicit {
+			maxRounds = numMeasurements
+		} else {
+			maxRounds = 10 // report 默认 10 轮
+		}
+	} else if queriesExplicit {
+		maxRounds = numMeasurements
+	} else {
+		maxRounds = 0 // 非 report → 无限
+	}
+
+	if ttlTimeExplicit {
+		intervalMs = ttlInterval
+	} else {
+		intervalMs = 1000 // MTR 默认 1000ms
+	}
+	return
 }
 
 func capabilitiesCheck() {

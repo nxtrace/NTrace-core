@@ -8,14 +8,13 @@ import (
 	"time"
 
 	"github.com/tidwall/gjson"
+
+	"github.com/nxtrace/NTrace-core/util"
 )
 
 func IPSB(ip string, timeout time.Duration, _ string, _ bool) (*IPGeoData, error) {
 	url := token.BaseOrDefault("https://api.ip.sb/geoip/") + ip
-	client := &http.Client{
-		// 2 秒超时
-		Timeout: timeout,
-	}
+	client := util.NewGeoHTTPClient(timeout)
 	req, _ := http.NewRequest("GET", url, nil)
 	// 设置 UA，ip.sb 默认禁止 go-client User-Agent 的 api 请求
 	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:100.0) Gecko/20100101 Firefox/100.0")

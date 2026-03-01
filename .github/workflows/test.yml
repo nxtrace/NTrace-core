@@ -42,7 +42,7 @@ jobs:
       - name: Set up Go (built-in cache)
         uses: actions/setup-go@v6
         with:
-          go-version: '1.25.x'
+          go-version: '1.26.x'
           check-latest: true
           cache: true
 
@@ -50,11 +50,11 @@ jobs:
         if: ${{ matrix.os != 'windows-latest' }}
         shell: bash
         run: |
-          sudo go env -w GOTOOLCHAIN=go1.25.4+auto
+          sudo go env -w GOTOOLCHAIN=go1.26.0+auto
           sudo go test -v -ldflags=-checklinkname=0 -covermode=count -coverprofile='coverage.out' ./...
 
       - name: Test with windows
         if: ${{ matrix.os == 'windows-latest' }}
         run: |
-          go env -w GOTOOLCHAIN=go1.25.4+auto
+          go env -w GOTOOLCHAIN=go1.26.0+auto
           go test -v -ldflags=-checklinkname=0 -covermode=count -coverprofile="coverage.out" ./...

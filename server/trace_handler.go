@@ -212,13 +212,13 @@ func traceHandler(c *gin.Context) {
 		if statusCode == 0 {
 			statusCode = 500
 		}
-		log.Printf("[deploy] prepare trace failed target=%s error=%v", strings.TrimSpace(req.Target), err)
+		log.Printf("[deploy] prepare trace failed target=%s error=%v", sanitizeLogParam(req.Target), err)
 		c.JSON(statusCode, gin.H{"error": err.Error()})
 		return
 	}
 
-	log.Printf("[deploy] trace request target=%s proto=%s provider=%s lang=%s ipv4_only=%t ipv6_only=%t", setup.Target, setup.Protocol, setup.DataProvider, setup.Config.Lang, setup.Req.IPv4Only, setup.Req.IPv6Only)
-	log.Printf("[deploy] target resolved target=%s ip=%s via dot=%s", setup.Target, setup.IP, strings.ToLower(setup.Req.DotServer))
+	log.Printf("[deploy] trace request target=%s proto=%s provider=%s lang=%s ipv4_only=%t ipv6_only=%t", sanitizeLogParam(setup.Target), sanitizeLogParam(setup.Protocol), sanitizeLogParam(setup.DataProvider), sanitizeLogParam(setup.Config.Lang), setup.Req.IPv4Only, setup.Req.IPv6Only)
+	log.Printf("[deploy] target resolved target=%s ip=%s via dot=%s", sanitizeLogParam(setup.Target), setup.IP, sanitizeLogParam(strings.ToLower(setup.Req.DotServer)))
 
 	traceMu.Lock()
 	defer traceMu.Unlock()
@@ -238,14 +238,14 @@ func traceHandler(c *gin.Context) {
 
 	if setup.NeedsLeoWS {
 		if setup.PowProvider != "" {
-			log.Printf("[deploy] LeoMoeAPI using custom PoW provider=%s", setup.PowProvider)
+			log.Printf("[deploy] LeoMoeAPI using custom PoW provider=%s", sanitizeLogParam(setup.PowProvider))
 		} else {
 			log.Printf("[deploy] LeoMoeAPI using default PoW provider")
 		}
 		util.PowProviderParam = setup.PowProvider
 		ensureLeoMoeConnection()
 	} else if setup.PowProvider != "" {
-		log.Printf("[deploy] overriding PoW provider=%s", setup.PowProvider)
+		log.Printf("[deploy] overriding PoW provider=%s", sanitizeLogParam(setup.PowProvider))
 		util.PowProviderParam = setup.PowProvider
 	} else {
 		util.PowProviderParam = ""
@@ -261,13 +261,13 @@ func traceHandler(c *gin.Context) {
 	util.DisableMPLS = setup.Req.DisableMPLS
 
 	configured := setup.Config
-	log.Printf("[deploy] starting trace target=%s resolved=%s method=%s lang=%s queries=%d maxHops=%d", setup.Target, setup.IP.String(), string(setup.Method), configured.Lang, configured.NumMeasurements, configured.MaxHops)
+	log.Printf("[deploy] starting trace target=%s resolved=%s method=%s lang=%s queries=%d maxHops=%d", sanitizeLogParam(setup.Target), setup.IP.String(), string(setup.Method), sanitizeLogParam(configured.Lang), configured.NumMeasurements, configured.MaxHops)
 
 	start := time.Now()
 	res, err := trace.Traceroute(setup.Method, configured)
 	duration := time.Since(start)
 	if err != nil {
-		log.Printf("[deploy] trace failed target=%s error=%v", setup.Target, err)
+		log.Printf("[deploy] trace failed target=%s error=%v", sanitizeLogParam(setup.Target), err)
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
@@ -277,7 +277,7 @@ func traceHandler(c *gin.Context) {
 		if payload, err := json.Marshal(res); err == nil {
 			if mapUrl, err := tracemap.GetMapUrl(string(payload)); err == nil {
 				traceMapURL = mapUrl
-				log.Printf("[deploy] trace map generated target=%s mapUrl=%s", setup.Target, traceMapURL)
+				log.Printf("[deploy] trace map generated target=%s mapUrl=%s", sanitizeLogParam(setup.Target), traceMapURL)
 			}
 		}
 	}
@@ -293,7 +293,7 @@ func traceHandler(c *gin.Context) {
 		DurationMs:   duration.Milliseconds(),
 	}
 
-	log.Printf("[deploy] trace completed target=%s hops=%d duration=%s", setup.Target, len(response.Hops), duration)
+	log.Printf("[deploy] trace completed target=%s hops=%d duration=%s", sanitizeLogParam(setup.Target), len(response.Hops), duration)
 	c.JSON(200, response)
 }
 

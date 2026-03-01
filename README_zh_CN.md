@@ -165,7 +165,7 @@ nexttrace 1.0.0.1
 # URL
 nexttrace http://example.com:8080/index.html?q=1
 
-# 表格打印，使用 --table / -t 参数，将实时显示结果
+# 表格输出（报告模式）：运行一次探测后打印最终汇总表格
 nexttrace --table 1.0.0.1
 
 # 一个方便供机器读取转化的模式
@@ -178,6 +178,9 @@ nexttrace --ipv6 g.co
 
 # IPv6 ICMP Trace
 nexttrace 2606:4700:4700::1111
+
+# 普通 traceroute 模式下设置 TTL 分组间隔（默认 300ms）
+nexttrace -i 300 1.1.1.1
 
 # 禁用路径可视化 使用 --map / -M 参数
 nexttrace koreacentral.blob.core.windows.net
@@ -292,6 +295,110 @@ nexttrace --no-color 1.1.1.1
 export NO_COLOR=1
 ```
 
+#### `NextTrace` 支持 MTR（My Traceroute）连续探测模式
+
+```bash
+# MTR 模式：使用 ICMP（默认）连续探测，实时刷新表格
+nexttrace -t 1.1.1.1
+# 等价写法：
+nexttrace --mtr 1.1.1.1
+
+# MTR 模式使用 TCP SYN 探测
+nexttrace -t --tcp --port 443 www.bing.com
+
+# MTR 模式使用 UDP 探测
+nexttrace -t --udp 1.0.0.1
+
+# 设置每个跳点的探测间隔（MTR 模式下默认 1000ms；-z/--send-time 在 MTR 模式下无效）
+nexttrace -t -i 500 1.1.1.1
+
+# 限制每个跳点的最大探测次数（TUI 默认无限，报告模式默认 10）
+nexttrace -t -q 20 1.1.1.1
+
+# 报告模式：对每个跳点探测 N 次后一次性输出统计摘要（类似 mtr -r）
+nexttrace -r 1.1.1.1       # = --mtr --report，默认每跳点 10 次
+nexttrace -r -q 5 1.1.1.1  # 每跳点 5 次
+
+# 宽报告模式：主机列不截断（类似 mtr -rw）
+nexttrace -w 1.1.1.1       # = --mtr --report --wide
+
+# 在 MTR 输出中同时显示 PTR 和 IP（PTR 在前，IP 括号）
+nexttrace --mtr --show-ips 1.1.1.1
+nexttrace -r --show-ips 1.1.1.1
+nexttrace -w --show-ips 1.1.1.1
+
+# MTR 原始流式模式（面向程序解析，逐事件输出）
+nexttrace --mtr --raw 1.1.1.1
+nexttrace -r --raw 1.1.1.1
+
+# 与其他选项组合使用
+nexttrace -t --tcp --max-hops 20 --first 3 --no-rdns 8.8.8.8
+```
+
+在终端（TTY）中运行时，MTR 模式使用**交互式全屏 TUI**：
+
+- **`q` / `Q`** — 退出（恢复终端，不留下输出）
+- **`p`** — 暂停探测
+- **空格**  — 恢复探测
+- **`r`** — 重置统计（计数器清零，显示模式保持不变）
+- **`y`** — 循环切换主机显示模式：ASN → City → Owner → Full
+- **`n`** — 切换主机名显示方式：
+  - 默认：PTR（无 PTR 时回退 IP）↔ 仅 IP
+  - 启用 `--show-ips`：PTR (IP) ↔ 仅 IP
+- **`e`** — 切换 MPLS 标签显示开/关
+- TUI 标题栏显示**源 → 目标**路由信息，指定 `--source`/`--dev` 时会展示对应信息。
+- 使用 LeoMoeAPI 时，标题栏会显示首选 API IP 地址。
+- 使用**备用屏幕缓冲区**，退出后恢复之前的终端历史记录。
+- 当 stdin 非 TTY（如管道输入）时，降级为简单表格刷新模式。
+
+**报告模式**（`-r`/`--report`）在所有探测完成后一次性输出统计，适合脚本使用：
+
+```text
+Start: 2025-07-14T09:12:00+08:00
+HOST: myhost                    Loss%   Snt   Last    Avg   Best   Wrst  StDev
+  1. one.one.one.one            0.0%    10    1.23   1.45   0.98   2.10   0.32
+  2. 10.0.0.2                 100.0%    10    0.00   0.00   0.00   0.00   0.00
+```
+
+显示为 `(waiting for reply)` 的行仍然保留同样的表格列布局，只是该行的指标单元格会留空。
+
+非 wide 报告模式会刻意保持 Host 列精简：
+
+- 只显示 `PTR/IP`
+- 不发起 Geo API 查询
+- 不显示 ASN / 运营商 / 地理位置字段
+- 不显示 MPLS 标签
+
+wide 报告模式（`-w` / `--wide`）继续保留当前完整信息行为，包括 Geo 衍生字段和 MPLS 输出。
+
+当 `--raw` 与 MTR（`--mtr`、`-r`、`-w`）一起使用时，会进入 **MTR 原始流式模式**。
+
+如果当前数据源是 `LeoMoeAPI`，会先输出一行无色的 API 信息头：
+
+```text
+[NextTrace API] preferred API IP - [2403:18c0:1001:462:dd:38ff:fe48:e0c5] - 21.33ms - DMIT.NRT
+```
+
+之后再逐行输出 `|` 分隔的事件流：
+
+```
+4|84.17.33.106|po66-3518.cr01.nrt04.jp.misaka.io|0.27|60068|日本|东京都|东京||cdn77.com|35.6804|139.7690
+```
+
+字段顺序：
+
+`ttl|ip|ptr|rtt|asn|一级行政区|二级行政区|三级行政区|四级行政区|owner|纬度|经度`
+
+超时行保持固定 12 列：
+
+`ttl|*||||||||||`
+
+在 MTR 模式（`--mtr`、`-r`、`-w`，包括 `--raw`）下，`-i/--ttl-time` 设置的是**每个跳点的探测间隔**：同一跳点两次连续探测之间的等待时间（未显式指定时默认 1000ms）。`-z/--send-time` 在 MTR 模式下被忽略。
+
+> 注意：`--show-ips` 仅在 MTR 模式（`--mtr`、`-r`、`-w`）生效，其他模式会忽略。
+>
+> 注意：`--mtr` 不可与 `--table`、`--classic`、`--json`、`--output`、`--route-path`、`--from`、`--fast-trace`、`--file`、`--deploy` 同时使用。
+
 #### `NextTrace`支持用户自主选择 IP 数据库（目前支持：`LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`, `IPInfoLocal`, `CHUNZHEN`)
 
 ```bash
@@ -324,7 +431,7 @@ nexttrace -tcp --queries 2 --parallel-requests 1 --table --route-path 2001:4860:
 
 Equivalent to:
 nexttrace -d ip-api.com -m 20 -T -p 443 -q 5 -n 1.1.1.1
-nexttrace -T -q 2 --parallel-requests 1 -t -P 2001:4860:4860::8888
+nexttrace -T -q 2 --parallel-requests 1 --table -P 2001:4860:4860::8888
 ```
 
 ### Globalping
@@ -354,16 +461,17 @@ usage: nexttrace [-h|--help] [--init] [-4|--ipv4] [-6|--ipv6] [-T|--tcp]
                  [-m|--max-hops <integer>] [-d|--data-provider
                  (IP.SB|ip.sb|IPInfo|ipinfo|IPInsight|ipinsight|IPAPI.com|ip-api.com|IPInfoLocal|ipinfolocal|chunzhen|LeoMoeAPI|leomoeapi|ipdb.one|disable-geoip)]
                  [--pow-provider (api.nxtrace.org|sakura)] [-n|--no-rdns]
-                 [-a|--always-rdns] [-P|--route-path] [-r|--report] [--dn42]
-                 [-o|--output] [-t|--table] [--raw] [-j|--json] [-c|--classic]
-                 [-f|--first <integer>] [-M|--map] [-e|--disable-mpls]
-                 [-V|--version] [-s|--source "<value>"] [--source-port
-                 <integer>] [-D|--dev "<value>"] [--listen "<value>"]
-                 [--deploy] [-z|--send-time <integer>] [-i|--ttl-time
-                 <integer>] [--timeout <integer>] [--psize <integer>]
-                 [_positionalArg_nexttrace_38 "<value>"] [--dot-server
-                 (dnssb|aliyun|dnspod|google|cloudflare)] [-g|--language
-                 (en|cn)] [--file "<value>"] [-C|--no-color] [--from "<value>"]
+                 [-a|--always-rdns] [-P|--route-path] [--dn42] [-o|--output]
+                 [--table] [--raw] [-j|--json] [-c|--classic] [-f|--first
+                 <integer>] [-M|--map] [-e|--disable-mpls] [-V|--version]
+                 [-s|--source "<value>"] [--source-port <integer>] [-D|--dev
+                 "<value>"] [--listen "<value>"] [--deploy] [-z|--send-time
+                 <integer>] [-i|--ttl-time <integer>] [--timeout <integer>]
+                 [--psize <integer>] [_positionalArg_nexttrace_37 "<value>"]
+                 [--dot-server (dnssb|aliyun|dnspod|google|cloudflare)]
+                 [-g|--language (en|cn)] [--file "<value>"] [-C|--no-color]
+                 [--from "<value>"] [-t|--mtr] [-r|--report] [-w|--wide]
+                 [--show-ips] [-y|--ipinfo <integer>]
 
                  An open source visual route tracking CLI tool
 
@@ -406,12 +514,14 @@ Arguments:
                                      domain names
   -P  --route-path                   Print traceroute hop path by ASN and
                                      location
-  -r  --report                       output using report mode
       --dn42                         DN42 Mode
   -o  --output                       Write trace result to file
                                      (RealTimePrinter ONLY)
-  -t  --table                        Output trace results as table
-      --raw                          An Output Easy to Parse
+      --table                        Output trace results as a final summary
+                                     table (traceroute report mode)
+      --raw                          Machine-friendly output. With MTR
+                                     (--mtr/-r/-w), enables streaming raw event
+                                     mode
   -j  --json                         Output trace results as JSON
   -c  --classic                      Classic Output trace results like
                                      BestTrace
@@ -430,18 +540,20 @@ Arguments:
                                      127.0.0.1:30080)
       --deploy                       Start the Gin powered web console
   -z  --send-time                    Set how many [milliseconds] between
-                                     sending each packet. Useful when some
-                                     routers use rate-limit for ICMP messages.
-                                     Default: 50
-  -i  --ttl-time                     Set how many [milliseconds] between
-                                     sending packets groups by TTL. Useful when
-                                     some routers use rate-limit for ICMP
-                                     messages. Default: 50
+                                     sending each packet. Default: 50ms.
+                                     Ignored in MTR mode. Default: 50
+  -i  --ttl-time                     Interval [ms] between TTL groups in normal
+                                     traceroute (default: 300ms). In MTR mode
+                                     (--mtr/-r/-w, including --raw), sets
+                                     per-hop probe interval: how long between
+                                     successive probes to the same hop
+                                     (default: 1000ms when omitted). Default:
+                                     300
       --timeout                      The number of [milliseconds] to keep probe
                                      sockets open before giving up on the
                                      connection. Default: 1000
       --psize                        Set the payload size. Default: 52
-      --_positionalArg_nexttrace_38  IP Address or domain name
+      --_positionalArg_nexttrace_37  IP Address or domain name
       --dot-server                   Use DoT Server for DNS Parse [dnssb,
                                      aliyun, dnspod, google, cloudflare]
   -g  --language                     Choose the language for displaying [en,
@@ -453,6 +565,19 @@ Arguments:
                                      specified location. The location field
                                      accepts continents, countries, regions,
                                      cities, ASNs, ISPs, or cloud regions.
+  -t  --mtr                          Enable MTR (My Traceroute) continuous
+                                     probing mode
+  -r  --report                       MTR report mode (non-interactive, implies
+                                     --mtr); can trigger MTR without --mtr
+  -w  --wide                         MTR wide report mode (implies --mtr
+                                     --report); alone equals --mtr --report
+                                     --wide
+      --show-ips                     MTR only: display both PTR hostnames and
+                                     numeric IPs (PTR first, IP in parentheses)
+  -y  --ipinfo                       Set initial MTR TUI host info mode (0-4).
+                                     TUI only; ignored in --report/--raw.
+                                     0:IP/PTR 1:ASN 2:City 3:Owner 4:Full.
+                                     Default: 0
 ```
 
 ## 项目截图
@@ -494,6 +619,8 @@ nexttrace --pow-provider sakura
 ## NEXTTRACE WEB API
 
 `NextTraceWebApi`是一个`MTR`风格的`NextTrace`网页版服务端实现，提供了包括`Docker`在内多种部署方式。
+
+在 WebSocket 持续探测模式中，MTR 现改为逐事件推送 `type: "mtr_raw"`（不再使用周期性 `mtr` 快照消息）。
 
 [https://github.com/nxtrace/nexttracewebapi](https://github.com/nxtrace/nexttracewebapi)
 

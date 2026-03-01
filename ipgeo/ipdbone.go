@@ -76,9 +76,7 @@ func NewIPDBOneClient() *IPDBOneClient {
 	return &IPDBOneClient{
 		config:     GetDefaultConfig(),
 		tokenCache: &IPDBOneTokenCache{},
-		httpClient: &http.Client{
-			Timeout: 3 * time.Second,
-		},
+		httpClient: util.NewGeoHTTPClient(3 * time.Second),
 	}
 }
 

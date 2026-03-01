@@ -1,0 +1,1015 @@
+package trace
+
+import (
+	"context"
+	"fmt"
+	"math/rand"
+	"net"
+	"os"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/google/gopacket/layers"
+
+	"github.com/nxtrace/NTrace-core/trace/internal"
+	"github.com/nxtrace/NTrace-core/util"
+)
+
+// ---------------------------------------------------------------------------
+// MTR 长驻运行器
+// ---------------------------------------------------------------------------
+
+// MTROptions 控制 MTR 连续探测行为。
+type MTROptions struct {
+	// Interval 每轮之间的等待间隔（默认 1s）。
+	// 仅在 legacy round-based 模式（Web MTR）使用。
+	Interval time.Duration
+	// MaxRounds 最大轮次，0 表示无限运行直到取消。
+	// 仅在 legacy round-based 模式使用。
+	MaxRounds int
+	// HopInterval 同一 TTL 两次探测之间的间隔（per-hop 调度模式）。
+	// > 0 时启用 per-hop 调度，忽略 Interval / MaxRounds。
+	HopInterval time.Duration
+	// MaxPerHop 每个 TTL 最大探测次数，0 表示无限。
+	MaxPerHop int
+	// IsPaused 可选：返回 true 时暂停探测（轮询检查）。
+	IsPaused func() bool
+	// IsResetRequested 可选：返回 true（原子消费）时重置统计。
+	IsResetRequested func() bool
+	// ProgressThrottle 流式预览最小刷新间隔（默认 200ms）。
+	ProgressThrottle time.Duration
+}
+
+// MTROnSnapshot 每轮完成后的回调，用于刷新 CLI 表格。
+// iteration 是当前轮次（从 1 开始），stats 是截至当前的聚合快照。
+type MTROnSnapshot func(iteration int, stats []MTRHopStat)
+
+// mtrBackoffCfg 控制连续错误时的指数退避行为。
+type mtrBackoffCfg struct {
+	Initial   time.Duration
+	Max       time.Duration
+	MaxConsec int
+}
+
+var defaultBackoff = mtrBackoffCfg{
+	Initial:   500 * time.Millisecond,
+	Max:       30 * time.Second,
+	MaxConsec: 10,
+}
+
+// mtrProber 抽象一轮探测，允许测试注入 mock。
+type mtrProber interface {
+	probeRound(ctx context.Context) (*Result, error)
+	close()
+}
+
+// mtrResetter 可选接口：重置统计时清除 prober 内部缓存。
+type mtrResetter interface {
+	resetFinalTTL()
+}
+
+// mtrPeeker 可选接口：支持流式预览探测进度。
+// 引擎在 probeRound 执行期间，外部可调用 peekPartialResult 获取当前已收到的部分响应。
+type mtrPeeker interface {
+	peekPartialResult() *Result
+}
+
+// RunMTR 启动 MTR 连续探测模式。
+//
+// 当 opts.HopInterval > 0 时使用 per-hop 独立调度（CLI MTR 模式）：
+//
+//	每个 TTL 独立计时，完成后等 HopInterval 再发下一个。
+//
+// 当 opts.HopInterval == 0 时使用 legacy round-based 调度（Web MTR 兼容）：
+//
+//	ICMP 使用持久 raw socket 跨轮复用；TCP/UDP 以 per-round Traceroute 回退。
+func RunMTR(ctx context.Context, method Method, baseConfig Config, opts MTROptions, onSnapshot MTROnSnapshot) error {
+	if opts.HopInterval > 0 {
+		return runMTRPerHop(ctx, method, baseConfig, opts, onSnapshot)
+	}
+	return runMTRRoundBased(ctx, method, baseConfig, opts, onSnapshot)
+}
+
+// runMTRPerHop 使用 per-hop 独立调度模式。
+func runMTRPerHop(ctx context.Context, method Method, baseConfig Config, opts MTROptions, onSnapshot MTROnSnapshot) error {
+	baseConfig.NumMeasurements = 1
+	baseConfig.MaxAttempts = 1
+	baseConfig.RealtimePrinter = nil
+	baseConfig.AsyncPrinter = nil
+
+	if baseConfig.MaxHops == 0 {
+		baseConfig.MaxHops = 30
+	}
+	if baseConfig.ICMPMode <= 0 && util.EnvICMPMode > 0 {
+		baseConfig.ICMPMode = util.EnvICMPMode
+	}
+	switch baseConfig.ICMPMode {
+	case 0, 1, 2:
+	default:
+		baseConfig.ICMPMode = 0
+	}
+
+	agg := NewMTRAggregator()
+	var prober mtrTTLProber
+
+	if method == ICMPTrace {
+		engine, err := newMTRICMPEngine(baseConfig)
+		if err != nil {
+			return fmt.Errorf("mtr: %w", err)
+		}
+		if err := engine.start(ctx); err != nil {
+			return fmt.Errorf("mtr: %w", err)
+		}
+		prober = engine
+	} else {
+		prober = &mtrFallbackTTLProber{method: method, config: baseConfig}
+	}
+
+	return runMTRScheduler(ctx, prober, agg, mtrSchedulerConfig{
+		BeginHop:         baseConfig.BeginHop,
+		MaxHops:          baseConfig.MaxHops,
+		HopInterval:      opts.HopInterval,
+		MaxPerHop:        opts.MaxPerHop,
+		ParallelRequests: baseConfig.ParallelRequests,
+		ProgressThrottle: opts.ProgressThrottle,
+		FillGeo:          true,
+		BaseConfig:       baseConfig,
+		DstIP:            baseConfig.DstIP,
+		IsPaused:         opts.IsPaused,
+		IsResetRequested: opts.IsResetRequested,
+	}, onSnapshot, nil)
+}
+
+// runMTRRoundBased 使用 legacy round-based 调度模式（Web MTR 兼容）。
+func runMTRRoundBased(ctx context.Context, method Method, baseConfig Config, opts MTROptions, onSnapshot MTROnSnapshot) error {
+	if opts.Interval <= 0 {
+		opts.Interval = time.Second
+	}
+
+	// MTR：每轮每 hop 仅一个探测包
+	baseConfig.NumMeasurements = 1
+	baseConfig.MaxAttempts = 1
+	// 注意：不覆盖 ParallelRequests——尊重用户 --parallel-requests 设定
+	baseConfig.RealtimePrinter = nil
+	baseConfig.AsyncPrinter = nil
+
+	// 与 Traceroute() 保持一致的默认值
+	if baseConfig.MaxHops == 0 {
+		baseConfig.MaxHops = 30
+	}
+	if baseConfig.ICMPMode <= 0 && util.EnvICMPMode > 0 {
+		baseConfig.ICMPMode = util.EnvICMPMode
+	}
+	switch baseConfig.ICMPMode {
+	case 0, 1, 2:
+	default:
+		baseConfig.ICMPMode = 0
+	}
+
+	agg := NewMTRAggregator()
+
+	if method == ICMPTrace {
+		engine, err := newMTRICMPEngine(baseConfig)
+		if err != nil {
+			return fmt.Errorf("mtr: %w", err)
+		}
+		if err := engine.start(ctx); err != nil {
+			return fmt.Errorf("mtr: %w", err)
+		}
+		return mtrLoop(ctx, engine, baseConfig, opts, agg, onSnapshot, true, nil)
+	}
+
+	prober := &mtrFallbackProber{method: method, config: baseConfig}
+	// Traceroute 内部已做 geo/rdns 查询，无需再填充
+	return mtrLoop(ctx, prober, baseConfig, opts, agg, onSnapshot, false, nil)
+}
+
+// ---------------------------------------------------------------------------
+// 主循环（ICMP 持久引擎 / TCP·UDP 回退共用）
+// ---------------------------------------------------------------------------
+
+func mtrLoop(
+	ctx context.Context,
+	prober mtrProber,
+	config Config,
+	opts MTROptions,
+	agg *MTRAggregator,
+	onSnapshot MTROnSnapshot,
+	fillGeo bool,
+	bo *mtrBackoffCfg,
+) error {
+	defer prober.close()
+
+	if bo == nil {
+		bo = &defaultBackoff
+	}
+
+	if opts.ProgressThrottle <= 0 {
+		opts.ProgressThrottle = 200 * time.Millisecond
+	}
+
+	iteration := 0
+	consecutiveErrors := 0
+	backoff := bo.Initial
+
+	for {
+		// ── 优先检测取消 ──
+		select {
+		case <-ctx.Done():
+			if onSnapshot != nil {
+				onSnapshot(iteration, agg.Snapshot())
+			}
+			return ctx.Err()
+		default:
+		}
+
+		// ── 检测重置请求 ──
+		if opts.IsResetRequested != nil && opts.IsResetRequested() {
+			agg.Reset()
+			iteration = 0
+			consecutiveErrors = 0
+			backoff = bo.Initial
+			if r, ok := prober.(mtrResetter); ok {
+				r.resetFinalTTL()
+			}
+		}
+
+		// ── 暂停等待 ──
+		if opts.IsPaused != nil {
+			for opts.IsPaused() {
+				select {
+				case <-ctx.Done():
+					if onSnapshot != nil {
+						onSnapshot(iteration, agg.Snapshot())
+					}
+					return ctx.Err()
+				case <-time.After(200 * time.Millisecond):
+				}
+			}
+		}
+
+		// ── 执行一轮探测（含流式预览）──
+		var res *Result
+		var err error
+
+		peeker, canPeek := prober.(mtrPeeker)
+		if canPeek && onSnapshot != nil {
+			// 流式模式：后台探测 + 节流预览
+			done := make(chan struct{})
+			go func() {
+				res, err = prober.probeRound(ctx)
+				close(done)
+			}()
+
+			ticker := time.NewTicker(opts.ProgressThrottle)
+		progressLoop:
+			for {
+				select {
+				case <-done:
+					break progressLoop
+				case <-ticker.C:
+					if partial := peeker.peekPartialResult(); partial != nil {
+						preview := agg.Clone()
+						previewStats := preview.Update(partial, 1)
+						onSnapshot(iteration+1, previewStats)
+					}
+				case <-ctx.Done():
+					<-done // 等待 probeRound 响应 ctx 取消
+					break progressLoop
+				}
+			}
+			ticker.Stop()
+		} else {
+			res, err = prober.probeRound(ctx)
+		}
+
+		if err != nil {
+			if ctx.Err() != nil {
+				if onSnapshot != nil {
+					onSnapshot(iteration, agg.Snapshot())
+				}
+				return ctx.Err()
+			}
+			consecutiveErrors++
+			fmt.Fprintf(os.Stderr, "mtr: probe error (%d/%d): %v\n",
+				consecutiveErrors, bo.MaxConsec, err)
+			if consecutiveErrors >= bo.MaxConsec {
+				return fmt.Errorf("mtr: too many consecutive errors (%d), last: %w",
+					consecutiveErrors, err)
+			}
+			select {
+			case <-ctx.Done():
+				if onSnapshot != nil {
+					onSnapshot(iteration, agg.Snapshot())
+				}
+				return ctx.Err()
+			case <-time.After(backoff):
+			}
+			backoff *= 2
+			if backoff > bo.Max {
+				backoff = bo.Max
+			}
+			continue
+		}
+
+		// ── 成功：填充 Geo/RDNS、更新聚合器 ──
+		if fillGeo {
+			mtrFillGeoRDNS(res, config)
+		}
+
+		consecutiveErrors = 0
+		backoff = bo.Initial
+
+		iteration++
+		stats := agg.Update(res, 1)
+		if onSnapshot != nil {
+			onSnapshot(iteration, stats)
+		}
+
+		if opts.MaxRounds > 0 && iteration >= opts.MaxRounds {
+			return nil
+		}
+
+		// ── 等待间隔或取消 ──
+		select {
+		case <-ctx.Done():
+			if onSnapshot != nil {
+				onSnapshot(iteration, agg.Snapshot())
+			}
+			return ctx.Err()
+		case <-time.After(opts.Interval):
+		}
+	}
+}
+
+// mtrFillGeoRDNS 并发查询 Result 中各 hop 的地理信息与反向 DNS。
+// fetchIPData 内部有 singleflight + geoCache，重复 IP 不会重复查询。
+func mtrFillGeoRDNS(res *Result, config Config) {
+	var wg sync.WaitGroup
+	for idx := range res.Hops {
+		for j := range res.Hops[idx] {
+			h := &res.Hops[idx][j]
+			if !h.Success || h.Address == nil {
+				continue
+			}
+			h.Lang = config.Lang
+			wg.Add(1)
+			go func(hop *Hop) {
+				defer wg.Done()
+				_ = hop.fetchIPData(config)
+			}(h)
+		}
+	}
+	wg.Wait()
+}
+
+// ---------------------------------------------------------------------------
+// 持久 ICMP 引擎（mtr 风格：raw socket 只创建一次，跨轮复用）
+// ---------------------------------------------------------------------------
+
+type mtrICMPEngine struct {
+	config Config
+	spec   *internal.ICMPSpec
+	echoID int
+	srcIP  net.IP
+	ipVer  int
+
+	// 单调递增序列号，避免跨轮 seq 冲突
+	seqCounter uint32
+
+	// per-round 探针/响应匹配
+	mu       sync.Mutex
+	sentAt   map[int]mtrProbeMeta // seq → probe metadata
+	replied  map[int]*mtrProbeReply
+	notifyCh chan struct{}
+
+	// 当前轮次 ID，用于丢弃过期响应
+	roundID uint32
+
+	// 已知目的地 TTL（-1 = 未知），跨轮保留以减少无效探测
+	knownFinalTTL int32
+	// 当前轮次内发现的目的地 TTL（-1 = 本轮未发现）
+	roundFinalTTL int32
+
+	// 流式预览状态（peekPartialResult 使用，受 mu 保护）
+	curTtlSeq       map[int]int
+	curBeginHop     int
+	curEffectiveMax int
+
+	// Per-probe notification channels for ProbeTTL（受 mu 保护）。
+	probeNotify map[int]chan struct{} // seq → done chan
+
+	// sendMu serializes seq allocation + rotation check in concurrent ProbeTTL calls.
+	sendMu sync.Mutex
+}
+
+// mtrProbeMeta 记录已发送探针的元信息，用于响应匹配。
+type mtrProbeMeta struct {
+	ttl     int
+	start   time.Time
+	roundID uint32
+}
+
+type mtrProbeReply struct {
+	peer net.Addr
+	rtt  time.Duration
+	mpls []string
+}
+
+func newMTRICMPEngine(config Config) (*mtrICMPEngine, error) {
+	ipVer := 4
+	if config.DstIP.To4() == nil {
+		ipVer = 6
+	}
+
+	var srcAddr net.IP
+	if config.SrcAddr != "" {
+		srcAddr = net.ParseIP(config.SrcAddr)
+		if ipVer == 4 && srcAddr != nil {
+			srcAddr = srcAddr.To4()
+		}
+	}
+
+	var srcIP net.IP
+	if ipVer == 6 {
+		srcIP, _ = util.LocalIPPortv6(config.DstIP, srcAddr, "icmp6")
+	} else {
+		srcIP, _ = util.LocalIPPort(config.DstIP, srcAddr, "icmp")
+	}
+	if srcIP == nil {
+		return nil, fmt.Errorf("cannot determine local IP for MTR ICMP")
+	}
+
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	echoID := (r.Intn(256) << 8) | (os.Getpid() & 0xFF)
+
+	return &mtrICMPEngine{
+		config:        config,
+		ipVer:         ipVer,
+		echoID:        echoID,
+		srcIP:         srcIP,
+		knownFinalTTL: -1,
+	}, nil
+}
+
+// start 创建持久 ICMP 套接字及监听协程。ctx 生命周期控制整个引擎。
+func (e *mtrICMPEngine) start(ctx context.Context) error {
+	e.spec = internal.NewICMPSpec(e.ipVer, e.config.ICMPMode, e.echoID, e.srcIP, e.config.DstIP)
+	e.spec.InitICMP()
+
+	e.notifyCh = make(chan struct{}, 1)
+	e.sentAt = make(map[int]mtrProbeMeta)
+	e.replied = make(map[int]*mtrProbeReply)
+	e.probeNotify = make(map[int]chan struct{})
+
+	ready := make(chan struct{})
+	go e.spec.ListenICMP(ctx, ready, e.onICMP)
+
+	select {
+	case <-ready:
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(5 * time.Second):
+		return fmt.Errorf("ICMP listener startup timeout")
+	}
+	time.Sleep(100 * time.Millisecond)
+	return nil
+}
+
+func (e *mtrICMPEngine) close() {
+	if e.spec != nil {
+		e.spec.Close()
+	}
+}
+
+// resetFinalTTL 清除已知目的地 TTL 缓存（r 键重置统计时调用）。
+func (e *mtrICMPEngine) resetFinalTTL() {
+	atomic.StoreInt32(&e.knownFinalTTL, -1)
+}
+
+// peekPartialResult 返回当前轮次已收到的部分探测结果（用于流式预览）。
+// 在 probeRound 运行期间由外部 ticker 调用，与 probeRound 共享 mu 保护。
+func (e *mtrICMPEngine) peekPartialResult() *Result {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	beginHop := e.curBeginHop
+	effectiveMax := e.curEffectiveMax
+	if effectiveMax <= 0 || e.curTtlSeq == nil {
+		return nil
+	}
+
+	// 若已检测到目的地，缩小预览范围
+	if rf := atomic.LoadInt32(&e.roundFinalTTL); rf > 0 && int(rf) < effectiveMax {
+		effectiveMax = int(rf)
+	}
+
+	res := &Result{Hops: make([][]Hop, effectiveMax)}
+	for ttl := beginHop; ttl <= effectiveMax; ttl++ {
+		idx := ttl - 1
+		seq, sent := e.curTtlSeq[ttl]
+		if !sent {
+			// 尚未发送，保持 nil 槽位让聚合器跳过
+			continue
+		}
+		if reply, ok := e.replied[seq]; ok {
+			res.Hops[idx] = []Hop{{
+				Success: true,
+				Address: reply.peer,
+				TTL:     ttl,
+				RTT:     reply.rtt,
+				MPLS:    reply.mpls,
+			}}
+		} else {
+			// 已发送但未收到响应，显示为超时
+			res.Hops[idx] = []Hop{{
+				Success: false,
+				Address: nil,
+				TTL:     ttl,
+				RTT:     0,
+			}}
+		}
+	}
+	return res
+}
+
+// seqWillWrap 判断再发 probeCount 个探针后 16 位 wire seq 是否会回卷。
+// probeCount <= 0 时不发包，不可能回卷。
+func seqWillWrap(seqCounter uint32, probeCount int) bool {
+	if probeCount <= 0 {
+		return false
+	}
+	return (seqCounter&0xFFFF)+uint32(probeCount) > 0xFFFF
+}
+
+// rotateEngine 关闭旧 ICMP 监听器，生成新 echoID 并重建引擎。
+// 新 listener 过滤新 echoID，旧 echoID 的迟到回包在协议层即被丢弃，
+// 从而彻底消除 seq 16 位回卷导致的跨轮误匹配。
+func (e *mtrICMPEngine) rotateEngine(ctx context.Context) error {
+	e.spec.Close()
+
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	e.echoID = (r.Intn(256) << 8) | (os.Getpid() & 0xFF)
+	atomic.StoreUint32(&e.seqCounter, 0)
+
+	e.spec = internal.NewICMPSpec(e.ipVer, e.config.ICMPMode, e.echoID, e.srcIP, e.config.DstIP)
+	e.spec.InitICMP()
+
+	e.mu.Lock()
+	// Notify any ProbeTTL waiters about rotation (they'll see no reply)
+	for seq, ch := range e.probeNotify {
+		close(ch)
+		delete(e.probeNotify, seq)
+	}
+	e.notifyCh = make(chan struct{}, 1)
+	e.sentAt = make(map[int]mtrProbeMeta)
+	e.replied = make(map[int]*mtrProbeReply)
+	e.probeNotify = make(map[int]chan struct{})
+	e.mu.Unlock()
+
+	ready := make(chan struct{})
+	go e.spec.ListenICMP(ctx, ready, e.onICMP)
+
+	select {
+	case <-ready:
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(5 * time.Second):
+		return fmt.Errorf("ICMP listener restart timeout on echoID rotation")
+	}
+	return nil
+}
+
+// onICMP 是 ListenICMP 的回调：将响应匹配到已发送的探针。
+func (e *mtrICMPEngine) onICMP(msg internal.ReceivedMessage, finish time.Time, seq int) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	start, ok := e.sentAt[seq]
+	if !ok {
+		return
+	}
+
+	// 丢弃过期轮次的响应
+	if start.roundID != atomic.LoadUint32(&e.roundID) {
+		delete(e.sentAt, seq)
+		if ch, ok := e.probeNotify[seq]; ok {
+			close(ch)
+			delete(e.probeNotify, seq)
+		}
+		return
+	}
+
+	// seq 只有 16 位，长期运行会回卷。迟到回包的 seq 可能恰好
+	// 与当前轮次的某个探针重合，而 roundID 检查无法区分。
+	// 通过 RTT 合理性检查兜底：RTT ≤ 0 或超过探测超时的响应一律丢弃。
+	rtt := finish.Sub(start.start)
+	maxRTT := e.config.Timeout
+	if maxRTT <= 0 {
+		maxRTT = 2 * time.Second
+	}
+	if rtt <= 0 || rtt > maxRTT {
+		delete(e.sentAt, seq)
+		if ch, ok := e.probeNotify[seq]; ok {
+			close(ch)
+			delete(e.probeNotify, seq)
+		}
+		return
+	}
+
+	e.replied[seq] = &mtrProbeReply{
+		peer: msg.Peer,
+		rtt:  rtt,
+		mpls: extractMPLS(msg),
+	}
+	delete(e.sentAt, seq)
+
+	// Notify per-probe ProbeTTL waiter
+	if ch, ok := e.probeNotify[seq]; ok {
+		close(ch)
+		delete(e.probeNotify, seq)
+	}
+
+	// 检测是否为目的地 hop：peer IP 匹配 DstIP
+	if msg.Peer != nil {
+		var peerIP net.IP
+		switch a := msg.Peer.(type) {
+		case *net.IPAddr:
+			peerIP = a.IP
+		case *net.UDPAddr:
+			peerIP = a.IP
+		case *net.TCPAddr:
+			peerIP = a.IP
+		}
+		if peerIP != nil && peerIP.Equal(e.config.DstIP) {
+			curFinal := atomic.LoadInt32(&e.roundFinalTTL)
+			if curFinal < 0 || int32(start.ttl) < curFinal {
+				atomic.StoreInt32(&e.roundFinalTTL, int32(start.ttl))
+			}
+		}
+	}
+
+	select {
+	case e.notifyCh <- struct{}{}:
+	default:
+	}
+}
+
+// sendProbe 发送一个 ICMP echo（IPv4 或 IPv6），返回发送时间戳。
+func (e *mtrICMPEngine) sendProbe(ctx context.Context, ttl, seq int) (time.Time, error) {
+	payload := make([]byte, e.config.PktSize)
+	if len(payload) >= 3 {
+		copy(payload[len(payload)-3:], []byte{'n', 't', 'r'})
+	}
+
+	if e.ipVer == 4 {
+		ipHdr := &layers.IPv4{
+			Version:  4,
+			SrcIP:    e.srcIP,
+			DstIP:    e.config.DstIP,
+			Protocol: layers.IPProtocolICMPv4,
+			TTL:      uint8(ttl),
+		}
+		icmpHdr := &layers.ICMPv4{
+			TypeCode: layers.CreateICMPv4TypeCode(layers.ICMPv4TypeEchoRequest, 0),
+			Id:       uint16(e.echoID),
+			Seq:      uint16(seq),
+		}
+		return e.spec.SendICMP(ctx, ipHdr, icmpHdr, nil, payload)
+	}
+
+	// IPv6
+	ipHdr := &layers.IPv6{
+		Version:    6,
+		SrcIP:      e.srcIP,
+		DstIP:      e.config.DstIP,
+		NextHeader: layers.IPProtocolICMPv6,
+		HopLimit:   uint8(ttl),
+	}
+	icmpHdr := &layers.ICMPv6{
+		TypeCode: layers.CreateICMPv6TypeCode(layers.ICMPv6TypeEchoRequest, 0),
+	}
+	_ = icmpHdr.SetNetworkLayerForChecksum(ipHdr)
+	icmpEcho := &layers.ICMPv6Echo{
+		Identifier: uint16(e.echoID),
+		SeqNumber:  uint16(seq),
+	}
+	return e.spec.SendICMP(ctx, ipHdr, icmpHdr, icmpEcho, payload)
+}
+
+// probeRound 执行一轮持久探测：对每个 TTL 发送一个 ICMP echo，
+// 收集响应后构造与 Traceroute 兼容的 *Result。
+// 若已知目的地 TTL 则提前停止发送。
+func (e *mtrICMPEngine) probeRound(ctx context.Context) (*Result, error) {
+	maxHops := e.config.MaxHops
+	beginHop := e.config.BeginHop
+	if beginHop <= 0 {
+		beginHop = 1
+	}
+
+	// 重置 per-round 状态，递增轮次 ID
+	curRound := atomic.AddUint32(&e.roundID, 1)
+	atomic.StoreInt32(&e.roundFinalTTL, -1)
+	e.mu.Lock()
+	e.sentAt = make(map[int]mtrProbeMeta)
+	e.replied = make(map[int]*mtrProbeReply)
+	e.mu.Unlock()
+
+	// 排空 notify 通道
+	select {
+	case <-e.notifyCh:
+	default:
+	}
+
+	// 检查 seq 回卷：如果本轮探测会导致 16 位序列号跨越 0xFFFF 边界，
+	// 轮换 echoID 并重建 ICMP 引擎，确保新旧探针在协议层彻底隔离。
+	probeCount := maxHops - beginHop + 1
+	if seqWillWrap(atomic.LoadUint32(&e.seqCounter), probeCount) {
+		if err := e.rotateEngine(ctx); err != nil {
+			return nil, fmt.Errorf("echoID rotation: %w", err)
+		}
+	}
+
+	// inter-probe delay：优先使用 Config.PacketInterval，默认 5ms
+	probeDelay := time.Millisecond * time.Duration(e.config.PacketInterval)
+	if probeDelay <= 0 {
+		probeDelay = 5 * time.Millisecond
+	}
+
+	// 目的地 TTL 上界：第一轮全量探测，后续轮次使用已知上界
+	effectiveMax := maxHops
+	if kf := atomic.LoadInt32(&e.knownFinalTTL); kf > 0 && int(kf) < effectiveMax {
+		effectiveMax = int(kf)
+	}
+
+	// 初始化流式预览状态
+	e.mu.Lock()
+	e.curTtlSeq = make(map[int]int, effectiveMax-beginHop+1)
+	e.curBeginHop = beginHop
+	e.curEffectiveMax = effectiveMax
+	e.mu.Unlock()
+
+	// ── 逐 TTL 发送探针（mtr 风格顺序发送）──
+	for ttl := beginHop; ttl <= effectiveMax; ttl++ {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+
+		seq := int(atomic.AddUint32(&e.seqCounter, 1) & 0xFFFF)
+
+		start, err := e.sendProbe(ctx, ttl, seq)
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			// 该 TTL 发送失败，当作超时处理
+			continue
+		}
+
+		e.mu.Lock()
+		e.sentAt[seq] = mtrProbeMeta{ttl: ttl, start: start, roundID: curRound}
+		e.curTtlSeq[ttl] = seq
+		e.mu.Unlock()
+
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(probeDelay):
+		}
+	}
+
+	// ── 等待响应（带超时）──
+	timeout := e.config.Timeout
+	if timeout <= 0 {
+		timeout = 2 * time.Second
+	}
+	deadline := time.After(timeout)
+
+waitLoop:
+	for {
+		e.mu.Lock()
+		pending := len(e.sentAt)
+		e.mu.Unlock()
+		if pending == 0 {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			break waitLoop
+		case <-deadline:
+			break waitLoop
+		case <-e.notifyCh:
+			// 有新响应到达，继续检查
+		}
+	}
+
+	// 更新 knownFinalTTL（轮次结果 → 跨轮缓存）
+	if rf := atomic.LoadInt32(&e.roundFinalTTL); rf > 0 {
+		kf := atomic.LoadInt32(&e.knownFinalTTL)
+		if kf < 0 || rf < kf {
+			atomic.StoreInt32(&e.knownFinalTTL, rf)
+		}
+	}
+
+	// 最终 effectiveMax 取 knownFinalTTL（本轮可能刚更新）
+	finalMax := effectiveMax
+	if rf := atomic.LoadInt32(&e.roundFinalTTL); rf > 0 && int(rf) < finalMax {
+		finalMax = int(rf)
+	}
+
+	// ── 构造 Result ──
+	res := &Result{Hops: make([][]Hop, finalMax)}
+
+	e.mu.Lock()
+	for ttl := beginHop; ttl <= finalMax; ttl++ {
+		idx := ttl - 1
+		seq, sent := e.curTtlSeq[ttl]
+		if sent {
+			if reply, ok := e.replied[seq]; ok {
+				res.Hops[idx] = []Hop{{
+					Success: true,
+					Address: reply.peer,
+					TTL:     ttl,
+					RTT:     reply.rtt,
+					MPLS:    reply.mpls,
+				}}
+				continue
+			}
+		}
+		res.Hops[idx] = []Hop{{
+			Success: false,
+			Address: nil,
+			TTL:     ttl,
+			RTT:     0,
+			Error:   errHopLimitTimeout,
+		}}
+	}
+	e.mu.Unlock()
+
+	return res, nil
+}
+
+// ---------------------------------------------------------------------------
+// TCP/UDP 回退 prober：每轮调用 Traceroute + 指数退避
+// ---------------------------------------------------------------------------
+
+type mtrFallbackProber struct {
+	method Method
+	config Config
+}
+
+func (p *mtrFallbackProber) probeRound(_ context.Context) (*Result, error) {
+	return Traceroute(p.method, p.config)
+}
+
+func (p *mtrFallbackProber) close() {}
+
+// ---------------------------------------------------------------------------
+// ProbeTTL — single-TTL probing for per-hop scheduler
+// ---------------------------------------------------------------------------
+
+// ProbeTTL sends one ICMP echo at the given TTL and blocks until a response
+// arrives, the timeout elapses, or ctx is cancelled.
+func (e *mtrICMPEngine) ProbeTTL(ctx context.Context, ttl int) (mtrProbeResult, error) {
+	// Serialize seq allocation + rotation check across concurrent ProbeTTL calls.
+	e.sendMu.Lock()
+	if seqWillWrap(atomic.LoadUint32(&e.seqCounter), 1) {
+		if err := e.rotateEngine(ctx); err != nil {
+			e.sendMu.Unlock()
+			return mtrProbeResult{TTL: ttl}, fmt.Errorf("echoID rotation: %w", err)
+		}
+	}
+	seq := int(atomic.AddUint32(&e.seqCounter, 1) & 0xFFFF)
+	e.sendMu.Unlock()
+
+	curRound := atomic.LoadUint32(&e.roundID)
+
+	sendStart, err := e.sendProbe(ctx, ttl, seq)
+	if err != nil {
+		if ctx.Err() != nil {
+			return mtrProbeResult{TTL: ttl}, ctx.Err()
+		}
+		// Send failed: treat as timeout (no response for this TTL)
+		return mtrProbeResult{TTL: ttl}, nil
+	}
+
+	done := make(chan struct{})
+
+	e.mu.Lock()
+	e.sentAt[seq] = mtrProbeMeta{ttl: ttl, start: sendStart, roundID: curRound}
+	e.probeNotify[seq] = done
+	e.mu.Unlock()
+
+	timeout := e.config.Timeout
+	if timeout <= 0 {
+		timeout = 2 * time.Second
+	}
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
+	select {
+	case <-done:
+		e.mu.Lock()
+		reply, ok := e.replied[seq]
+		if ok {
+			delete(e.replied, seq)
+		}
+		e.mu.Unlock()
+
+		if ok && reply != nil {
+			return mtrProbeResult{
+				TTL:     ttl,
+				Success: true,
+				Addr:    reply.peer,
+				RTT:     reply.rtt,
+				MPLS:    reply.mpls,
+			}, nil
+		}
+		// Notified but no reply → was discarded (stale/bad RTT)
+		return mtrProbeResult{TTL: ttl}, nil
+
+	case <-timer.C:
+		e.mu.Lock()
+		delete(e.sentAt, seq)
+		delete(e.probeNotify, seq)
+		e.mu.Unlock()
+		return mtrProbeResult{TTL: ttl}, nil
+
+	case <-ctx.Done():
+		e.mu.Lock()
+		delete(e.sentAt, seq)
+		delete(e.probeNotify, seq)
+		e.mu.Unlock()
+		return mtrProbeResult{TTL: ttl}, ctx.Err()
+	}
+}
+
+// Reset invalidates all in-flight probes (bumps roundID) and clears
+// knownFinalTTL. In-flight ProbeTTL calls get notified and return immediately.
+func (e *mtrICMPEngine) Reset() error {
+	e.resetFinalTTL()
+	atomic.AddUint32(&e.roundID, 1)
+
+	e.mu.Lock()
+	for seq, ch := range e.probeNotify {
+		close(ch)
+		delete(e.probeNotify, seq)
+	}
+	e.sentAt = make(map[int]mtrProbeMeta)
+	e.replied = make(map[int]*mtrProbeReply)
+	e.mu.Unlock()
+
+	return nil
+}
+
+// Close releases the underlying ICMP socket.
+func (e *mtrICMPEngine) Close() error {
+	e.close()
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// TCP/UDP 回退 TTL prober：单 TTL 探测
+// ---------------------------------------------------------------------------
+
+// mtrFallbackTTLProber uses Traceroute for single-TTL probing (TCP/UDP fallback).
+type mtrFallbackTTLProber struct {
+	method Method
+	config Config
+}
+
+func (p *mtrFallbackTTLProber) ProbeTTL(_ context.Context, ttl int) (mtrProbeResult, error) {
+	cfg := p.config
+	cfg.BeginHop = ttl
+	cfg.MaxHops = ttl
+	cfg.NumMeasurements = 1
+	cfg.MaxAttempts = 1
+	cfg.ParallelRequests = 1
+	cfg.RealtimePrinter = nil
+	cfg.AsyncPrinter = nil
+
+	res, err := Traceroute(p.method, cfg)
+	if err != nil {
+		return mtrProbeResult{TTL: ttl}, err
+	}
+
+	idx := ttl - 1
+	if idx < 0 || idx >= len(res.Hops) || len(res.Hops[idx]) == 0 {
+		return mtrProbeResult{TTL: ttl}, nil
+	}
+
+	h := res.Hops[idx][0]
+	return mtrProbeResult{
+		TTL:      ttl,
+		Success:  h.Success && h.Address != nil,
+		Addr:     h.Address,
+		RTT:      h.RTT,
+		MPLS:     h.MPLS,
+		Hostname: h.Hostname,
+		Geo:      h.Geo,
+	}, nil
+}
+
+func (p *mtrFallbackTTLProber) Reset() error { return nil }
+func (p *mtrFallbackTTLProber) Close() error { return nil }

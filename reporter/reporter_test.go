@@ -1,7 +1,11 @@
 package reporter
 
 import (
+	"bytes"
+	"io"
 	"net"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -109,7 +113,64 @@ var testResult = &trace.Result{
 	},
 }
 
+// captureStdout redirects os.Stdout to a pipe and returns the captured output.
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("failed to create pipe: %v", err)
+	}
+	os.Stdout = w
+
+	fn()
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	r.Close()
+	return buf.String()
+}
+
 func TestPrint(t *testing.T) {
-	r := New(testResult, "213.226.68.73")
-	r.Print()
+	output := captureStdout(t, func() {
+		r := New(testResult, "213.226.68.73")
+		r.Print()
+	})
+
+	// 验证实验标签
+	if !strings.Contains(output, "Route-Path 功能实验室") {
+		t.Error("expected output to contain experiment tag 'Route-Path 功能实验室'")
+	}
+
+	// 验证包含各 ASN
+	for _, asn := range []string{"AS4808", "AS4837", "AS1299", "AS56630"} {
+		if !strings.Contains(output, asn) {
+			t.Errorf("expected output to contain %s", asn)
+		}
+	}
+
+	// 验证包含 ISP 名称
+	for _, isp := range []string{"中国联通", "Telia Company AB", "Melbikomas UAB"} {
+		if !strings.Contains(output, isp) {
+			t.Errorf("expected output to contain ISP %q", isp)
+		}
+	}
+
+	// 验证包含跨 ASN 分隔符
+	if !strings.Contains(output, "╭╯") || !strings.Contains(output, "╰") {
+		t.Error("expected output to contain ASN transition markers (╭╯/╰)")
+	}
+
+	// 验证包含地理信息括号
+	if !strings.Contains(output, "「") || !strings.Contains(output, "」") {
+		t.Error("expected output to contain geographic brackets (「」)")
+	}
+
+	// 验证包含城市分隔
+	if !strings.Contains(output, "『") || !strings.Contains(output, "』") {
+		t.Error("expected output to contain city brackets (『』)")
+	}
 }

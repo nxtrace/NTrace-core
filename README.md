@@ -10,7 +10,7 @@
 
 <h4 align="center">An open source visual routing tool that pursues light weight, developed using Golang.</h4>
 
----------------------------------------
+---
 
 <h6 align="center">HomePage: www.nxtrace.org</h6>
 
@@ -55,97 +55,97 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
 
 ### Automated Install
 
-* Linux
-    * One-click installation script
+- Linux
+  - One-click installation script
+
+    ```shell
+    curl -sL https://nxtrace.org/nt | bash
+    ```
+
+  - Install nxtrace from the APT repository
+    - Supports AMD64/ARM64 architectures
       ```shell
-      curl -sL https://nxtrace.org/nt | bash
+      curl -fsSL https://github.com/nxtrace/nexttrace-debs/releases/latest/download/nexttrace-archive-keyring.gpg | sudo tee /etc/apt/keyrings/nexttrace.gpg >/dev/null
+      echo "Types: deb
+      URIs: https://github.com/nxtrace/nexttrace-debs/releases/latest/download/
+      Suites: ./
+      Signed-By: /etc/apt/keyrings/nexttrace.gpg" | sudo tee /etc/apt/sources.list.d/nexttrace.sources >/dev/null
+      sudo apt update
+      sudo apt install nexttrace
       ```
+    - APT repository maintained by wcbing and nxtrace
 
-    * Install nxtrace from the APT repository
-        * Supports AMD64/ARM64 architectures
-          ```shell
-          curl -fsSL https://github.com/nxtrace/nexttrace-debs/releases/latest/download/nexttrace-archive-keyring.gpg | sudo tee /etc/apt/keyrings/nexttrace.gpg >/dev/null
-          echo "Types: deb
-          URIs: https://github.com/nxtrace/nexttrace-debs/releases/latest/download/
-          Suites: ./
-          Signed-By: /etc/apt/keyrings/nexttrace.gpg" | sudo tee /etc/apt/sources.list.d/nexttrace.sources >/dev/null
-          sudo apt update
-          sudo apt install nexttrace
-          ```
-        * APT repository maintained by wcbing and nxtrace
-
-    * Arch Linux AUR installation command
-        * Directly download bin package (only supports amd64)
-          ```shell
-          yay -S nexttrace-bin
-          ```
-        * Build from source (only supports amd64)
-          ```shell
-          yay -S nexttrace
-          ```
-        * The AUR builds are maintained by ouuan, huyz
-
-    * Linuxbrew's installation command  
-
-      Same as the macOS Homebrew's installation method (homebrew-core version only supports amd64)
-
-    * deepin installation command
+  - Arch Linux AUR installation command
+    - Directly download bin package (only supports amd64)
       ```shell
-      apt install nexttrace
+      yay -S nexttrace-bin
       ```
-    
-    * [x-cmd](https://www.x-cmd.com/pkg/nexttrace) installation command
+    - Build from source (only supports amd64)
       ```shell
-      x env use nexttrace
+      yay -S nexttrace
       ```
+    - The AUR builds are maintained by ouuan, huyz
 
-    * Termux installation command
+  - Linuxbrew's installation command
+
+    Same as the macOS Homebrew's installation method (homebrew-core version only supports amd64)
+
+  - deepin installation command
+    ```shell
+    apt install nexttrace
+    ```
+  - [x-cmd](https://www.x-cmd.com/pkg/nexttrace) installation command
+
+    ```shell
+    x env use nexttrace
+    ```
+
+  - Termux installation command
+    ```shell
+    pkg install root-repo
+    pkg install nexttrace
+    ```
+  - ImmortalWrt installation command
+    ```shell
+    opkg install nexttrace
+    ```
+
+- macOS
+  - macOS Homebrew's installation command
+    - Homebrew-core version
       ```shell
-      pkg install root-repo
-      pkg install nexttrace
+      brew install nexttrace
       ```
-    
-    * ImmortalWrt installation command
+    - This repository's ACTIONS automatically built version (updates faster)
       ```shell
-      opkg install nexttrace
+      brew tap nxtrace/nexttrace && brew install nxtrace/nexttrace/nexttrace
       ```
+    - The homebrew-core build is maintained by chenrui333, please note that this version's updates may lag behind the repository Action automatically version
 
-* macOS
-    * macOS Homebrew's installation command
-        * Homebrew-core version
-          ```shell
-          brew install nexttrace
-          ```
-        * This repository's ACTIONS automatically built version (updates faster)
-          ```shell
-          brew tap nxtrace/nexttrace && brew install nxtrace/nexttrace/nexttrace
-          ```
-        * The homebrew-core build is maintained by chenrui333, please note that this version's updates may lag behind the repository Action automatically version
+- Windows
+  - Windows WinGet installation command
+    - WinGet version
+      ```powershell
+      winget install nexttrace
+      ```
+    - WinGet build maintained by Dragon1573
 
-* Windows
-    * Windows WinGet installation command
-        * WinGet version
-          ```powershell
-          winget install nexttrace
-          ```
-        * WinGet build maintained by Dragon1573
-
-    * Windows Scoop installation command
-        * Scoop-extras version
-          ```powershell
-          scoop bucket add extras && scoop install extras/nexttrace
-          ```
-        * Scoop-extra is maintained by soenggam
+  - Windows Scoop installation command
+    - Scoop-extras version
+      ```powershell
+      scoop bucket add extras && scoop install extras/nexttrace
+      ```
+    - Scoop-extra is maintained by soenggam
 
 Please note, the repositories for all of the above installation methods are maintained by open source enthusiasts. Availability and timely updates are not guaranteed. If you encounter problems, please contact the repository maintainer to solve them, or use the binary packages provided by the official build of this project.
 
 ### Manual Install
-* Download the precompiled executable
 
-    For users not covered by the above methods, please go directly to [Release](https://www.nxtrace.org/downloads) to download the compiled binary executable.
+- Download the precompiled executable
 
-    * `Release` provides compiled binary executables for many systems and different architectures. If none are available, you can compile it yourself.
-    * Some essential dependencies of this project are not fully implemented on `Windows` by `Golang`, so currently, `NextTrace` is in an experimental support phase on the `Windows` platform.
+  For users not covered by the above methods, please go directly to [Release](https://www.nxtrace.org/downloads) to download the compiled binary executable.
+  - `Release` provides compiled binary executables for many systems and different architectures. If none are available, you can compile it yourself.
+  - Some essential dependencies of this project are not fully implemented on `Windows` by `Golang`, so currently, `NextTrace` is in an experimental support phase on the `Windows` platform.
 
 ### Get Started
 
@@ -157,7 +157,7 @@ nexttrace 1.0.0.1
 # URL
 nexttrace http://example.com:8080/index.html?q=1
 
-# Form printing
+# Table output (report mode): runs trace once and prints a final summary table
 nexttrace --table 1.0.0.1
 
 # An Output Easy to Parse
@@ -173,6 +173,9 @@ nexttrace 2606:4700:4700::1111
 
 # Developer mode: set the ENV variable NEXTTRACE_DEVMODE=1 to make fatal errors panic with a stack trace
 export NEXTTRACE_DEVMODE=1
+
+# Set TTL-group interval in normal traceroute mode (default: 300ms)
+nexttrace -i 300 1.1.1.1
 
 # Disable Path Visualization With the -M parameter
 nexttrace koreacentral.blob.core.windows.net
@@ -190,10 +193,10 @@ The routing visualization function requires the geographical coordinates of each
 
 - **For Normal User Mode:**  
   Only **ICMP mode** can be used, and the firewall must allow `ICMP/ICMPv6` traffic.
-    ```powershell
-    netsh advfirewall firewall add rule name="All ICMP v4" dir=in action=allow protocol=icmpv4:any,any
-    netsh advfirewall firewall add rule name="All ICMP v6" dir=in action=allow protocol=icmpv6:any,any
-    ```  
+  ```powershell
+  netsh advfirewall firewall add rule name="All ICMP v4" dir=in action=allow protocol=icmpv4:any,any
+  netsh advfirewall firewall add rule name="All ICMP v6" dir=in action=allow protocol=icmpv6:any,any
+  ```
 - **For Administrator Mode:**  
   **TCP/UDP mode** requires `WinDivert`.  
   **ICMP mode** supports `1=Socket` and `2=WinDivert` (`0=Auto`). If running in Socket mode, the firewall must allow `ICMP/ICMPv6`.  
@@ -246,7 +249,7 @@ nexttrace --udp 1.0.0.1
 # You can specify the target port yourself [here it is 5353], the default is port 33494
 nexttrace --udp --port 5353 1.0.0.1
 
-# For TCP/UDP Trace, you can specify the source port; by default, a fixed random port is used 
+# For TCP/UDP Trace, you can specify the source port; by default, a fixed random port is used
 # (If you need to use a different random source port for each packet, please set the ENV variable NEXTTRACE_RANDOMPORT, or set the source port to -1)
 nexttrace --tcp --source-port 14514 www.bing.com
 ```
@@ -294,6 +297,110 @@ nexttrace --no-color 1.1.1.1
 export NO_COLOR=1
 ```
 
+#### `NextTrace` supports MTR (My Traceroute) continuous probing mode
+
+```bash
+# MTR mode: continuous probing with ICMP (default), refreshes table in real-time
+nexttrace -t 1.1.1.1
+# or equivalently:
+nexttrace --mtr 1.1.1.1
+
+# MTR mode with TCP SYN probing
+nexttrace -t --tcp --port 443 www.bing.com
+
+# MTR mode with UDP probing
+nexttrace -t --udp 1.0.0.1
+
+# Set per-hop probe interval (default: 1000ms in MTR; -z/--send-time is ignored in MTR mode)
+nexttrace -t -i 500 1.1.1.1
+
+# Limit the max probes per hop (default: infinite in TUI, 10 in report mode)
+nexttrace -t -q 20 1.1.1.1
+
+# Report mode: probe each hop N times then print a final summary (like mtr -r)
+nexttrace -r 1.1.1.1       # = --mtr --report, 10 probes per hop by default
+nexttrace -r -q 5 1.1.1.1  # 5 probes per hop
+
+# Wide report: no host column truncation (like mtr -rw)
+nexttrace -w 1.1.1.1       # = --mtr --report --wide
+
+# Show PTR and IP together (PTR first, IP in parentheses) in MTR output
+nexttrace --mtr --show-ips 1.1.1.1
+nexttrace -r --show-ips 1.1.1.1
+nexttrace -w --show-ips 1.1.1.1
+
+# MTR raw stream mode (machine-friendly, one event per line)
+nexttrace --mtr --raw 1.1.1.1
+nexttrace -r --raw 1.1.1.1
+
+# Combine with other options
+nexttrace -t --tcp --max-hops 20 --first 3 --no-rdns 8.8.8.8
+```
+
+When running in a terminal (TTY), MTR mode uses an **interactive full-screen TUI**:
+
+- **`q` / `Q`** — quit (restores terminal, no output left behind)
+- **`p`** — pause probing
+- **`SPACE`** — resume probing
+- **`r`** — reset statistics (counters are cleared, display mode is preserved)
+- **`y`** — cycle host display mode: ASN → City → Owner → Full
+- **`n`** — toggle host name display:
+  - default: PTR (or IP fallback) ↔ IP only
+  - with `--show-ips`: PTR (IP) ↔ IP only
+- **`e`** — toggle MPLS label display on/off
+- The TUI header displays **source → destination**, with `--source`/`--dev` information when specified.
+- When using LeoMoeAPI, the preferred API IP address is shown in the header.
+- Uses the **alternate screen buffer**, so your previous terminal history is preserved on exit.
+- When stdin is not a TTY (e.g. piped), it falls back to a simple table refresh.
+
+The **report mode** (`-r`/`--report`) produces a one-shot summary after all probes complete, suitable for scripting:
+
+```text
+Start: 2025-07-14T09:12:00+08:00
+HOST: myhost                    Loss%   Snt   Last    Avg   Best   Wrst  StDev
+  1. one.one.one.one            0.0%    10    1.23   1.45   0.98   2.10   0.32
+  2. 10.0.0.2                 100.0%    10    0.00   0.00   0.00   0.00   0.00
+```
+
+Rows shown as `(waiting for reply)` keep the same table layout; the metric cells on that row are left blank.
+
+In non-wide report mode, NextTrace intentionally keeps the host column compact:
+
+- only `PTR/IP` is shown
+- no Geo API lookup is performed
+- no ASN / owner / location fields are shown
+- MPLS labels are hidden
+
+Wide report mode (`-w` / `--wide`) keeps the current full-information behavior, including Geo-derived fields and MPLS output.
+
+When `--raw` is used together with MTR (`--mtr`, `-r`, or `-w`), NextTrace enters **MTR raw stream mode**.
+
+If the active data provider is `LeoMoeAPI`, NextTrace first prints one uncolored API info preamble line:
+
+```text
+[NextTrace API] preferred API IP - [2403:18c0:1001:462:dd:38ff:fe48:e0c5] - 21.33ms - DMIT.NRT
+```
+
+After that, it prints one `|`-delimited event per line:
+
+```
+4|84.17.33.106|po66-3518.cr01.nrt04.jp.misaka.io|0.27|60068|Japan|Tokyo|Tokyo||cdn77.com|35.6804|139.7690
+```
+
+Field order:
+
+`ttl|ip|ptr|rtt|asn|country|prov|city|district|owner|lat|lng`
+
+Timeout rows keep the same 12-column layout:
+
+`ttl|*||||||||||`
+
+In MTR mode (`--mtr`, `-r`, `-w`, including `--raw`), `-i/--ttl-time` sets the **per-hop probe interval**: how long to wait between successive probes to the same hop (default: 1000ms when omitted). `-z/--send-time` is ignored in MTR mode.
+
+> Note: `--show-ips` only takes effect in MTR mode (`--mtr`, `-r`, `-w`); otherwise it is ignored.
+>
+> Note: `--mtr` cannot be used together with `--table`, `--classic`, `--json`, `--output`, `--route-path`, `--from`, `--fast-trace`, `--file`, or `--deploy`.
+
 #### `NextTrace` supports users to select their own IP API (currently supports: `LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`, `IPInfoLocal`, `CHUNZHEN`)
 
 ```bash
@@ -327,7 +434,7 @@ nexttrace -tcp --queries 2 --parallel-requests 1 --table --route-path 2001:4860:
 
 Equivalent to:
 nexttrace -d ip-api.com -m 20 -T -p 443 -q 5 -n 1.1.1.1
-nexttrace -T -q 2 --parallel-requests 1 -t -P 2001:4860:4860::8888
+nexttrace -T -q 2 --parallel-requests 1 --table -P 2001:4860:4860::8888
 ```
 
 ### Globalping
@@ -372,16 +479,17 @@ usage: nexttrace [-h|--help] [--init] [-4|--ipv4] [-6|--ipv6] [-T|--tcp]
                  [-m|--max-hops <integer>] [-d|--data-provider
                  (IP.SB|ip.sb|IPInfo|ipinfo|IPInsight|ipinsight|IPAPI.com|ip-api.com|IPInfoLocal|ipinfolocal|chunzhen|LeoMoeAPI|leomoeapi|ipdb.one|disable-geoip)]
                  [--pow-provider (api.nxtrace.org|sakura)] [-n|--no-rdns]
-                 [-a|--always-rdns] [-P|--route-path] [-r|--report] [--dn42]
-                 [-o|--output] [-t|--table] [--raw] [-j|--json] [-c|--classic]
-                 [-f|--first <integer>] [-M|--map] [-e|--disable-mpls]
-                 [-V|--version] [-s|--source "<value>"] [--source-port
-                 <integer>] [-D|--dev "<value>"] [--listen "<value>"]
-                 [--deploy] [-z|--send-time <integer>] [-i|--ttl-time
-                 <integer>] [--timeout <integer>] [--psize <integer>]
-                 [_positionalArg_nexttrace_38 "<value>"] [--dot-server
-                 (dnssb|aliyun|dnspod|google|cloudflare)] [-g|--language
-                 (en|cn)] [--file "<value>"] [-C|--no-color] [--from "<value>"]
+                 [-a|--always-rdns] [-P|--route-path] [--dn42] [-o|--output]
+                 [--table] [--raw] [-j|--json] [-c|--classic] [-f|--first
+                 <integer>] [-M|--map] [-e|--disable-mpls] [-V|--version]
+                 [-s|--source "<value>"] [--source-port <integer>] [-D|--dev
+                 "<value>"] [--listen "<value>"] [--deploy] [-z|--send-time
+                 <integer>] [-i|--ttl-time <integer>] [--timeout <integer>]
+                 [--psize <integer>] [_positionalArg_nexttrace_37 "<value>"]
+                 [--dot-server (dnssb|aliyun|dnspod|google|cloudflare)]
+                 [-g|--language (en|cn)] [--file "<value>"] [-C|--no-color]
+                 [--from "<value>"] [-t|--mtr] [-r|--report] [-w|--wide]
+                 [--show-ips] [-y|--ipinfo <integer>]
 
                  An open source visual route tracking CLI tool
 
@@ -424,12 +532,14 @@ Arguments:
                                      domain names
   -P  --route-path                   Print traceroute hop path by ASN and
                                      location
-  -r  --report                       output using report mode
       --dn42                         DN42 Mode
   -o  --output                       Write trace result to file
                                      (RealTimePrinter ONLY)
-  -t  --table                        Output trace results as table
-      --raw                          An Output Easy to Parse
+      --table                        Output trace results as a final summary
+                                     table (traceroute report mode)
+      --raw                          Machine-friendly output. With MTR
+                                     (--mtr/-r/-w), enables streaming raw event
+                                     mode
   -j  --json                         Output trace results as JSON
   -c  --classic                      Classic Output trace results like
                                      BestTrace
@@ -448,18 +558,20 @@ Arguments:
                                      127.0.0.1:30080)
       --deploy                       Start the Gin powered web console
   -z  --send-time                    Set how many [milliseconds] between
-                                     sending each packet. Useful when some
-                                     routers use rate-limit for ICMP messages.
-                                     Default: 50
-  -i  --ttl-time                     Set how many [milliseconds] between
-                                     sending packets groups by TTL. Useful when
-                                     some routers use rate-limit for ICMP
-                                     messages. Default: 50
+                                     sending each packet. Default: 50ms.
+                                     Ignored in MTR mode. Default: 50
+  -i  --ttl-time                     Interval [ms] between TTL groups in normal
+                                     traceroute (default: 300ms). In MTR mode
+                                     (--mtr/-r/-w, including --raw), sets
+                                     per-hop probe interval: how long between
+                                     successive probes to the same hop
+                                     (default: 1000ms when omitted). Default:
+                                     300
       --timeout                      The number of [milliseconds] to keep probe
                                      sockets open before giving up on the
                                      connection. Default: 1000
       --psize                        Set the payload size. Default: 52
-      --_positionalArg_nexttrace_38  IP Address or domain name
+      --_positionalArg_nexttrace_37  IP Address or domain name
       --dot-server                   Use DoT Server for DNS Parse [dnssb,
                                      aliyun, dnspod, google, cloudflare]
   -g  --language                     Choose the language for displaying [en,
@@ -471,6 +583,19 @@ Arguments:
                                      specified location. The location field
                                      accepts continents, countries, regions,
                                      cities, ASNs, ISPs, or cloud regions.
+  -t  --mtr                          Enable MTR (My Traceroute) continuous
+                                     probing mode
+  -r  --report                       MTR report mode (non-interactive, implies
+                                     --mtr); can trigger MTR without --mtr
+  -w  --wide                         MTR wide report mode (implies --mtr
+                                     --report); alone equals --mtr --report
+                                     --wide
+      --show-ips                     MTR only: display both PTR hostnames and
+                                     numeric IPs (PTR first, IP in parentheses)
+  -y  --ipinfo                       Set initial MTR TUI host info mode (0-4).
+                                     TUI only; ignored in --report/--raw.
+                                     0:IP/PTR 1:ASN 2:City 3:Owner 4:Full.
+                                     Default: 0
 ```
 
 ## Project screenshot
@@ -490,6 +615,8 @@ This software is still in the early stages of development and may have many flaw
 ## NEXTTRACE WEB API
 
 `NextTraceWebApi` is a web-based server implementation of `NextTrace` in the `MTR` style, offering various deployment options including `Docker`.
+
+For WebSocket continuous tracing, MTR now streams per-event payloads with `type: "mtr_raw"` (instead of periodic `mtr` snapshots).
 
 [https://github.com/nxtrace/nexttracewebapi](https://github.com/nxtrace/nexttracewebapi)
 
@@ -518,6 +645,7 @@ The LeoMoeAPI data is subject to copyright restrictions from multiple data sourc
 We hope you can give us as much feedback as possible on IP geolocation errors (see issue) so that it can be calibrated in the first place and others can benefit from it.
 
 ## Cloudflare Support
+
 This project is sponsored by [Project Alexandria](http://www.cloudflare.com/oss-credits).
 
 <img src="https://cf-assets.www.cloudflare.com/slt3lc6tev37/2I3y49Uz9Y61lBS0kIPZu6/db6df1e6f99a8659267c442b75a0dff9/image.png" alt="Cloudflare Logo" width="331">
@@ -570,19 +698,19 @@ This Project uses [JetBrain Open-Source Project License](https://jb.gg/OpenSourc
 
 - Although other third-party APIs are integrated in this project, please refer to the official website of the third-party APIs for specific TOS and AUP. If you encounter IP data errors, please contact them directly to correct them.
 
-
 - For feedback related to corrections about IP information, we currently have two channels available:
-    >- [IP 错误报告汇总帖](https://github.com/orgs/nxtrace/discussions/222) in the GITHUB ISSUES section of this project (Recommended)
-    >- This project's dedicated correction email: `correct#nxtrace.org` (Please note that this email is only for correcting IP-related information. For other feedback, please submit an ISSUE)
 
+  > - [IP 错误报告汇总帖](https://github.com/orgs/nxtrace/discussions/222) in the GITHUB ISSUES section of this project (Recommended)
+  > - This project's dedicated correction email: `correct#nxtrace.org` (Please note that this email is only for correcting IP-related information. For other feedback, please submit an ISSUE)
 
 - How to obtain the freshly baked binary executable of the latest commit?
-    > Please go to the most recent [Build & Release](https://github.com/nxtrace/NTrace-V1/actions/workflows/build.yml) workflow in GitHub Actions.
+
+  > Please go to the most recent [Build & Release](https://github.com/nxtrace/NTrace-V1/actions/workflows/build.yml) workflow in GitHub Actions.
 
 - Common questions
-    + On Windows, ICMP mode requires manual firewall allowance for ICMP/ICMPv6
-    + On macOS, only ICMP mode does not require elevated privileges
-    + In some cases, running multiple instances of NextTrace simultaneously may interfere with each other’s results (observed so far only in TCP mode)
+  - On Windows, ICMP mode requires manual firewall allowance for ICMP/ICMPv6
+  - On macOS, only ICMP mode does not require elevated privileges
+  - In some cases, running multiple instances of NextTrace simultaneously may interfere with each other’s results (observed so far only in TCP mode)
 
 ## Star History
 
