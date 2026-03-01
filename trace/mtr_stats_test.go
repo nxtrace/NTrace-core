@@ -31,9 +31,7 @@ func mkResult(hopsByTTL ...[]Hop) *Result {
 	res := &Result{
 		Hops: make([][]Hop, len(hopsByTTL)),
 	}
-	for i, hops := range hopsByTTL {
-		res.Hops[i] = hops
-	}
+	copy(res.Hops, hopsByTTL)
 	return res
 }
 

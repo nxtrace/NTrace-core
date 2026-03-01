@@ -329,9 +329,7 @@ func CanonicalHostname(s string) string {
 		return ""
 	}
 	// 去掉尾点
-	if strings.HasSuffix(s, ".") {
-		s = strings.TrimSuffix(s, ".")
-	}
+	s = strings.TrimSuffix(s, ".")
 	// 按标签逐个处理，确保仅对需要的标签做 IDNA 转换
 	parts := strings.Split(s, ".")
 	for i, label := range parts {
