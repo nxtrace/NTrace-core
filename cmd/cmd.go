@@ -166,8 +166,37 @@ func hasIPv6Loopback() bool {
 	return false
 }
 
+// sanitizeUsagePositionalArgs replaces the auto-generated positional argument
+// name (e.g. "_positionalArg_nexttrace_33") with a friendlier label in the
+// usage string produced by argparse.
+func sanitizeUsagePositionalArgs(usage string) string {
+	// argparse generates names like "_positionalArg_nexttrace_<N>"
+	// We scan for the prefix and replace the whole token with "TARGET".
+	const prefix = "_positionalArg_"
+	for {
+		idx := strings.Index(usage, prefix)
+		if idx < 0 {
+			break
+		}
+		// Find the end of the token (next space, newline, or end of string).
+		end := idx + len(prefix)
+		for end < len(usage) && usage[end] != ' ' && usage[end] != '\n' && usage[end] != '\r' && usage[end] != '\t' && usage[end] != ']' {
+			end++
+		}
+		usage = usage[:idx] + "TARGET" + usage[end:]
+	}
+	// argparse renders the positional as "--TARGET" in the description list;
+	// strip the leading "--" so it reads as a plain positional placeholder.
+	usage = strings.ReplaceAll(usage, "--TARGET", "TARGET")
+	return usage
+}
+
 func Execute() {
 	parser := argparse.NewParser("nexttrace", "An open source visual route tracking CLI tool")
+	// Override HelpFunc so positional arg names are sanitized in --help output
+	parser.HelpFunc = func(c *argparse.Command, msg interface{}) string {
+		return sanitizeUsagePositionalArgs(c.Usage(msg))
+	}
 	// Create string flag
 	init := parser.Flag("", "init", &argparse.Options{Help: "Windows ONLY: Extract WinDivert runtime to current directory"})
 	ipv4Only := parser.Flag("4", "ipv4", &argparse.Options{Help: "Use IPv4 only"})
@@ -226,7 +255,7 @@ func Execute() {
 	if err != nil {
 		// In case of error print error and print usage
 		// This can also be done by passing -h or --help flags
-		fmt.Print(parser.Usage(err))
+		fmt.Print(sanitizeUsagePositionalArgs(parser.Usage(err)))
 		return
 	}
 
@@ -409,7 +438,7 @@ func Execute() {
 
 	// DOMAIN处理开始
 	if domain == "" {
-		fmt.Print(parser.Usage(err))
+		fmt.Print(sanitizeUsagePositionalArgs(parser.Usage(err)))
 		return
 	}
 

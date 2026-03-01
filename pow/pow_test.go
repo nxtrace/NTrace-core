@@ -2,6 +2,7 @@ package pow
 
 import (
 	"fmt"
+	"net"
 	"testing"
 	"time"
 
@@ -9,6 +10,13 @@ import (
 )
 
 func TestGetToken(t *testing.T) {
+	// 网络可达性前置检查：尝试 TCP 连接目标服务器
+	conn, err := net.DialTimeout("tcp", "origin-fallback.nxtrace.org:443", 3*time.Second)
+	if err != nil {
+		t.Skipf("skipping: network unreachable (origin-fallback.nxtrace.org:443): %v", err)
+	}
+	conn.Close()
+
 	// 计时开始
 	start := time.Now()
 	token, err := GetToken("origin-fallback.nxtrace.org", "origin-fallback.nxtrace.org", "443")
