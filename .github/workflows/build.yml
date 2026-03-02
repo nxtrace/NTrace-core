@@ -158,7 +158,7 @@ jobs:
           fi
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.ASSET_NAME }}
           path: dist/${{ env.ASSET_NAME }}
@@ -236,7 +236,7 @@ jobs:
                       -w -s"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.ASSET_NAME }}
           path: dist/${{ env.ASSET_NAME }}
@@ -270,7 +270,7 @@ jobs:
           ls -l dist
 
       - name: Upload universal as artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: nexttrace_darwin_universal
           path: dist/nexttrace_darwin_universal
