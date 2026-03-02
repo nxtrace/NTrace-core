@@ -129,17 +129,18 @@ func FastTest(traceMode trace.Method, outEnable bool, paramsFastTrace ParamsFast
 	}
 	if c == "2" {
 		if paramsFastTrace.SrcDev != "" {
-			dev, _ := net.InterfaceByName(paramsFastTrace.SrcDev)
-			if addrs, err := dev.Addrs(); err == nil {
-				for _, addr := range addrs {
-					if (addr.(*net.IPNet).IP.To4() == nil) == true {
-						paramsFastTrace.SrcAddr = addr.(*net.IPNet).IP.String()
-						// 检查是否是内网IP
-						if !(net.ParseIP(paramsFastTrace.SrcAddr).IsPrivate() ||
-							net.ParseIP(paramsFastTrace.SrcAddr).IsLoopback() ||
-							net.ParseIP(paramsFastTrace.SrcAddr).IsLinkLocalUnicast() ||
-							net.ParseIP(paramsFastTrace.SrcAddr).IsLinkLocalMulticast()) {
-							// 若不是则跳出
+			dev, devErr := net.InterfaceByName(paramsFastTrace.SrcDev)
+			if devErr == nil && dev != nil {
+				if addrs, err := dev.Addrs(); err == nil {
+					for _, addr := range addrs {
+						ipNet, ok := addr.(*net.IPNet)
+						if !ok || ipNet.IP.To4() != nil {
+							continue
+						}
+						paramsFastTrace.SrcAddr = ipNet.IP.String()
+						parsed := net.ParseIP(paramsFastTrace.SrcAddr)
+						if parsed != nil && !(parsed.IsPrivate() || parsed.IsLoopback() ||
+							parsed.IsLinkLocalUnicast() || parsed.IsLinkLocalMulticast()) {
 							break
 						}
 					}
@@ -150,17 +151,18 @@ func FastTest(traceMode trace.Method, outEnable bool, paramsFastTrace ParamsFast
 		return
 	}
 	if paramsFastTrace.SrcDev != "" {
-		dev, _ := net.InterfaceByName(paramsFastTrace.SrcDev)
-		if addrs, err := dev.Addrs(); err == nil {
-			for _, addr := range addrs {
-				if (addr.(*net.IPNet).IP.To4() == nil) == false {
-					paramsFastTrace.SrcAddr = addr.(*net.IPNet).IP.String()
-					// 检查是否是内网IP
-					if !(net.ParseIP(paramsFastTrace.SrcAddr).IsPrivate() ||
-						net.ParseIP(paramsFastTrace.SrcAddr).IsLoopback() ||
-						net.ParseIP(paramsFastTrace.SrcAddr).IsLinkLocalUnicast() ||
-						net.ParseIP(paramsFastTrace.SrcAddr).IsLinkLocalMulticast()) {
-						// 若不是则跳出
+		dev, devErr := net.InterfaceByName(paramsFastTrace.SrcDev)
+		if devErr == nil && dev != nil {
+			if addrs, err := dev.Addrs(); err == nil {
+				for _, addr := range addrs {
+					ipNet, ok := addr.(*net.IPNet)
+					if !ok || ipNet.IP.To4() == nil {
+						continue
+					}
+					paramsFastTrace.SrcAddr = ipNet.IP.String()
+					parsed := net.ParseIP(paramsFastTrace.SrcAddr)
+					if parsed != nil && !(parsed.IsPrivate() || parsed.IsLoopback() ||
+						parsed.IsLinkLocalUnicast() || parsed.IsLinkLocalMulticast()) {
 						break
 					}
 				}
@@ -303,40 +305,25 @@ func testFile(paramsFastTrace ParamsFastTrace, traceMode trace.Method) {
 			fmt.Printf("traceroute to %s, %d hops max, %d bytes payload, %s mode\n", util.HideIPPart(ip.Ip), paramsFastTrace.MaxHops, paramsFastTrace.PktSize, strings.ToUpper(string(tracerouteMethod)))
 		}
 		var srcAddr string
-		if ip.Version4 {
-			if paramsFastTrace.SrcDev != "" {
-				dev, _ := net.InterfaceByName(paramsFastTrace.SrcDev)
+		if paramsFastTrace.SrcDev != "" {
+			dev, devErr := net.InterfaceByName(paramsFastTrace.SrcDev)
+			if devErr == nil && dev != nil {
 				if addrs, err := dev.Addrs(); err == nil {
+					wantV4 := ip.Version4
 					for _, addr := range addrs {
-						if (addr.(*net.IPNet).IP.To4() == nil) == false {
-							srcAddr = addr.(*net.IPNet).IP.String()
-							// 检查是否是内网IP
-							if !(net.ParseIP(srcAddr).IsPrivate() ||
-								net.ParseIP(srcAddr).IsLoopback() ||
-								net.ParseIP(srcAddr).IsLinkLocalUnicast() ||
-								net.ParseIP(srcAddr).IsLinkLocalMulticast()) {
-								// 若不是则跳出
-								break
-							}
+						ipNet, ok := addr.(*net.IPNet)
+						if !ok {
+							continue
 						}
-					}
-				}
-			}
-		} else {
-			if paramsFastTrace.SrcDev != "" {
-				dev, _ := net.InterfaceByName(paramsFastTrace.SrcDev)
-				if addrs, err := dev.Addrs(); err == nil {
-					for _, addr := range addrs {
-						if (addr.(*net.IPNet).IP.To4() == nil) == true {
-							srcAddr = addr.(*net.IPNet).IP.String()
-							// 检查是否是内网IP
-							if !(net.ParseIP(srcAddr).IsPrivate() ||
-								net.ParseIP(srcAddr).IsLoopback() ||
-								net.ParseIP(srcAddr).IsLinkLocalUnicast() ||
-								net.ParseIP(srcAddr).IsLinkLocalMulticast()) {
-								// 若不是则跳出
-								break
-							}
+						isV4 := ipNet.IP.To4() != nil
+						if isV4 != wantV4 {
+							continue
+						}
+						srcAddr = ipNet.IP.String()
+						parsed := net.ParseIP(srcAddr)
+						if parsed != nil && !(parsed.IsPrivate() || parsed.IsLoopback() ||
+							parsed.IsLinkLocalUnicast() || parsed.IsLinkLocalMulticast()) {
+							break
 						}
 					}
 				}

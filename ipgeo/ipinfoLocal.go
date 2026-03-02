@@ -2,6 +2,7 @@ package ipgeo
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -63,39 +64,42 @@ func getIPInfoLocalPath() error {
 
 func IPInfoLocal(ip string, _ time.Duration, _ string, _ bool) (*IPGeoData, error) {
 	if err := getIPInfoLocalPath(); err != nil {
-		panic("Cannot find ipinfoLocal.mmdb")
+		return nil, fmt.Errorf("ipinfoLocal: cannot find ipinfoLocal.mmdb: %w", err)
 	}
 	region, err := maxminddb.Open(ipinfoDataBasePath)
 	if err != nil {
-		panic("Cannot open ipinfoLocal.mmdb at " + ipinfoDataBasePath)
+		return nil, fmt.Errorf("ipinfoLocal: cannot open %s: %w", ipinfoDataBasePath, err)
 	}
 	defer func(region *maxminddb.Reader) {
-		err := region.Close()
-		if err != nil {
-			panic(err)
-		}
+		_ = region.Close()
 	}(region)
 	var record interface{}
 	searchErr := region.Lookup(net.ParseIP(ip), &record)
 	if searchErr != nil {
 		return &IPGeoData{}, errors.New("no results")
 	}
-	recordMap := record.(map[string]interface{})
-	countryName := recordMap["country_name"].(string)
+	recordMap, ok := record.(map[string]interface{})
+	if !ok {
+		return &IPGeoData{}, errors.New("ipinfoLocal: unexpected record format")
+	}
+	countryName, _ := recordMap["country_name"].(string)
+	countryCode, _ := recordMap["country"].(string)
 	prov := ""
-	if recordMap["country"].(string) == "HK" {
+	if countryCode == "HK" {
 		countryName = "China"
 		prov = "Hong Kong"
 	}
-	if recordMap["country"].(string) == "TW" {
+	if countryCode == "TW" {
 		countryName = "China"
 		prov = "Taiwan"
 	}
+	asnStr, _ := recordMap["asn"].(string)
+	asName, _ := recordMap["as_name"].(string)
 	return &IPGeoData{
-		Asnumber: strings.TrimPrefix(recordMap["asn"].(string), "AS"),
+		Asnumber: strings.TrimPrefix(asnStr, "AS"),
 		Country:  countryName,
 		City:     "",
 		Prov:     prov,
-		Owner:    recordMap["as_name"].(string),
+		Owner:    asName,
 	}, nil
 }

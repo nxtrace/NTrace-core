@@ -2,6 +2,7 @@ package ipgeo
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -76,9 +77,7 @@ func NewIPDBOneClient() *IPDBOneClient {
 	return &IPDBOneClient{
 		config:     GetDefaultConfig(),
 		tokenCache: &IPDBOneTokenCache{},
-		httpClient: &http.Client{
-			Timeout: 3 * time.Second,
-		},
+		httpClient: util.NewGeoHTTPClient(3 * time.Second),
 	}
 }
 
@@ -155,7 +154,7 @@ func (c *IPDBOneClient) LookupIP(ip string, lang string) (*IPGeoData, error) {
 
 	// Ensure we have a valid token
 	if err := c.ensureToken(); err != nil {
-		return &IPGeoData{}, nil
+		return &IPGeoData{}, fmt.Errorf("ipdbone auth: %w", err)
 	}
 
 	// Map language code if needed

@@ -2,7 +2,6 @@ package ipgeo
 
 import (
 	"io"
-	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -14,10 +13,7 @@ import (
 
 func IPInfo(ip string, timeout time.Duration, _ string, _ bool) (*IPGeoData, error) {
 	url := token.BaseOrDefault("http://ipinfo.io/") + ip + "?token=" + token.ipinfo
-	client := &http.Client{
-		// 2 秒超时
-		Timeout: timeout,
-	}
+	client := util.NewGeoHTTPClient(timeout)
 	resp, err := client.Get(url)
 	//resp, err := http.Get("https://ipinfo.io/" + ip + "?token=" + token.ipinfo)
 	if err != nil {

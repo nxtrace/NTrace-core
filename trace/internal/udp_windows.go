@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/google/gopacket"
@@ -100,12 +101,14 @@ func (s *UDPSpec) listenICMPWinDivert(ctx context.Context, ready chan struct{}, 
 		}
 		log.Fatalf("(ListenICMP) WinDivert open failed: %v (filter=%q)", err, filter)
 	}
-	defer sniffHandle.Close()
+	var closeOnce sync.Once
+	closeHandle := func() { closeOnce.Do(func() { _ = sniffHandle.Close() }) }
+	defer closeHandle()
 
 	// context 取消时关闭 handle，使阻塞的 Recv() 立即返回错误
 	go func() {
 		<-ctx.Done()
-		_ = sniffHandle.Close()
+		closeHandle()
 	}()
 
 	_ = sniffHandle.SetParam(wd.QueueLength, 8192)
@@ -188,6 +191,9 @@ func (s *UDPSpec) listenICMPWinDivert(ctx context.Context, ready chan struct{}, 
 			if !ok || ic6 == nil {
 				continue
 			}
+			if len(ic6.Payload) < 4 {
+				continue
+			}
 			data = ic6.Payload[4:]
 
 			switch ic6.TypeCode.Type() {
@@ -224,7 +230,9 @@ func (s *UDPSpec) SendUDP(ctx context.Context, ipHdr ipLayer, udpHdr *layers.UDP
 	default:
 	}
 
-	_ = udpHdr.SetNetworkLayerForChecksum(ipHdr)
+	if err := udpHdr.SetNetworkLayerForChecksum(ipHdr); err != nil {
+		return time.Time{}, fmt.Errorf("SetNetworkLayerForChecksum: %w", err)
+	}
 
 	buf := gopacket.NewSerializeBuffer()
 	opts := gopacket.SerializeOptions{

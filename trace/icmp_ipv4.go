@@ -3,7 +3,7 @@ package trace
 import (
 	"context"
 	"errors"
-	"log"
+	"fmt"
 	"math/rand"
 	"net"
 	"os"
@@ -106,7 +106,7 @@ func (t *ICMPTracer) launchTTL(ctx context.Context, s *internal.ICMPSpec, ttl in
 					if util.EnvDevMode {
 						panic(err)
 					}
-					log.Fatal(err)
+					fmt.Fprintf(os.Stderr, "send error (ttl=%d, attempt=%d): %v\n", ttl, i, err)
 				}
 			}(ttl, i)
 

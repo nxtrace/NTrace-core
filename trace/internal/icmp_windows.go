@@ -137,12 +137,14 @@ func (s *ICMPSpec) listenICMPWinDivert(ctx context.Context, ready chan struct{},
 		}
 		log.Fatalf("(ListenICMP) WinDivert open failed: %v (filter=%q)", err, filter)
 	}
-	defer handle.Close()
+	var closeOnce sync.Once
+	closeHandle := func() { closeOnce.Do(func() { _ = handle.Close() }) }
+	defer closeHandle()
 
 	// context 取消时关闭 handle，使阻塞的 Recv() 立即返回错误
 	go func() {
 		<-ctx.Done()
-		_ = handle.Close()
+		closeHandle()
 	}()
 
 	// 增大队列防丢包
@@ -248,6 +250,9 @@ func (s *ICMPSpec) listenICMPWinDivert(ctx context.Context, ready chan struct{},
 			// 从包中获取 ICMPv6 层信息
 			ic6, ok := pkt.Layer(layers.LayerTypeICMPv6).(*layers.ICMPv6)
 			if !ok || ic6 == nil {
+				continue
+			}
+			if len(ic6.Payload) < 4 {
 				continue
 			}
 			data = ic6.Payload[4:]
@@ -369,7 +374,9 @@ func (s *ICMPSpec) SendICMP(ctx context.Context, ipHdr gopacket.NetworkLayer, ic
 		return time.Time{}, errors.New("SendICMP: expect *layers.ICMPv6 when s.IPVersion==6")
 	}
 
-	_ = ic6.SetNetworkLayerForChecksum(ipHdr)
+	if err := ic6.SetNetworkLayerForChecksum(ipHdr); err != nil {
+		return time.Time{}, fmt.Errorf("SetNetworkLayerForChecksum: %w", err)
+	}
 
 	buf := gopacket.NewSerializeBuffer()
 	opts := gopacket.SerializeOptions{

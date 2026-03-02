@@ -140,7 +140,7 @@ func GlobalpingTraceroute(opts *GlobalpingOptions, config *Config) (*Result, *gl
 
 func mapGlobalpingHop(ttl int, gpHop *globalping.MTRHop, timing *globalping.MTRTiming, geoMap map[string]*ipgeo.IPGeoData, config *Config) Hop {
 	resolvedHostname := ""
-	if config.RDNS {
+	if config != nil && config.RDNS {
 		if raw := strings.TrimSpace(gpHop.ResolvedHostname); raw != "" {
 			trimmed := strings.TrimSuffix(raw, ".")
 			if net.ParseIP(trimmed) == nil {
@@ -152,7 +152,9 @@ func mapGlobalpingHop(ttl int, gpHop *globalping.MTRHop, timing *globalping.MTRT
 	hop := Hop{
 		Hostname: resolvedHostname,
 		TTL:      ttl,
-		Lang:     config.Lang,
+	}
+	if config != nil {
+		hop.Lang = config.Lang
 	}
 
 	if gpHop.ResolvedAddress != "" {
@@ -161,8 +163,7 @@ func mapGlobalpingHop(ttl int, gpHop *globalping.MTRHop, timing *globalping.MTRT
 		}
 		if geo, ok := geoMap[gpHop.ResolvedAddress]; ok {
 			hop.Geo = geo
-		} else {
-			// 此处不处理错误
+		} else if config != nil {
 			_ = hop.fetchIPData(*config)
 			geoMap[gpHop.ResolvedAddress] = hop.Geo
 		}

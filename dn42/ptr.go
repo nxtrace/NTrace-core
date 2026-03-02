@@ -31,7 +31,10 @@ func matchesPattern(prefix string, s string) bool {
 }
 
 func FindPtrRecord(ptr string) (PtrRow, error) {
-	path := viper.Get("ptrPath").(string)
+	path := viper.GetString("ptrPath")
+	if path == "" {
+		return PtrRow{}, errors.New("ptrPath not configured")
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return PtrRow{}, err

@@ -2,6 +2,7 @@ package ipgeo
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -13,28 +14,36 @@ import (
 
 func Chunzhen(ip string, timeout time.Duration, _ string, _ bool) (*IPGeoData, error) {
 	url := util.GetEnvDefault("NEXTTRACE_CHUNZHENURL", "http://127.0.0.1:2060") + "?ip=" + ip
-	client := &http.Client{
-		// 2 秒超时
-		Timeout: timeout,
+	client := util.NewGeoHTTPClient(timeout)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return &IPGeoData{}, fmt.Errorf("chunzhen: failed to create request: %w", err)
 	}
-	req, _ := http.NewRequest("GET", url, nil)
 	content, err := client.Do(req)
 	if err != nil {
 		log.Println("纯真 请求超时(2s)，请切换其他API使用")
 		return &IPGeoData{}, err
 	}
-	body, _ := io.ReadAll(content.Body)
+	defer content.Body.Close()
+	body, err := io.ReadAll(content.Body)
+	if err != nil {
+		return &IPGeoData{}, fmt.Errorf("chunzhen: failed to read response: %w", err)
+	}
 
 	var data map[string]interface{}
 	err = json.Unmarshal(body, &data)
 	if err != nil {
 		return &IPGeoData{}, err
 	}
-	city := data[ip].(map[string]interface{})["area"].(string)
-	region := data[ip].(map[string]interface{})["country"].(string)
+	ipData, ok := data[ip].(map[string]interface{})
+	if !ok {
+		return &IPGeoData{}, fmt.Errorf("chunzhen: unexpected response format for ip %s", ip)
+	}
+	city, _ := ipData["area"].(string)
+	region, _ := ipData["country"].(string)
 	var asn string
-	if data[ip].(map[string]interface{})["asn"] != nil {
-		asn = data[ip].(map[string]interface{})["asn"].(string)
+	if ipData["asn"] != nil {
+		asn, _ = ipData["asn"].(string)
 	}
 	// 判断是否前两个字为香港或台湾
 	var country string

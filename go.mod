@@ -1,6 +1,6 @@
 module github.com/nxtrace/NTrace-core
 
-go 1.25.4
+go 1.26.0
 
 require (
 	github.com/akamensky/argparse v1.4.0
@@ -9,6 +9,7 @@ require (
 	github.com/google/gopacket v1.1.19
 	github.com/gorilla/websocket v1.5.3
 	github.com/jsdelivr/globalping-cli v1.5.1
+	github.com/mattn/go-runewidth v0.0.16
 	github.com/oschwald/maxminddb-golang v1.13.1
 	github.com/rodaine/table v1.3.0
 	github.com/spf13/viper v1.21.0
@@ -20,6 +21,7 @@ require (
 	golang.org/x/net v0.50.0
 	golang.org/x/sync v0.19.0
 	golang.org/x/sys v0.41.0
+	golang.org/x/term v0.40.0
 )
 
 require (
@@ -49,6 +51,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/quic-go/quic-go v0.57.0 // indirect
+	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/sagikazarmark/locafero v0.12.0 // indirect
 	github.com/spf13/afero v1.15.0 // indirect
 	github.com/spf13/cast v1.10.0 // indirect

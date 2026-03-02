@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/google/gopacket"
@@ -98,12 +99,14 @@ func (s *TCPSpec) listenICMPWinDivert(ctx context.Context, ready chan struct{}, 
 		}
 		log.Fatalf("(ListenICMP) WinDivert open failed: %v (filter=%q)", err, filter)
 	}
-	defer sniffHandle.Close()
+	var closeOnceICMP sync.Once
+	closeHandleICMP := func() { closeOnceICMP.Do(func() { _ = sniffHandle.Close() }) }
+	defer closeHandleICMP()
 
 	// context 取消时关闭 handle，使阻塞的 Recv() 立即返回错误
 	go func() {
 		<-ctx.Done()
-		_ = sniffHandle.Close()
+		closeHandleICMP()
 	}()
 
 	_ = sniffHandle.SetParam(wd.QueueLength, 8192)
@@ -186,6 +189,9 @@ func (s *TCPSpec) listenICMPWinDivert(ctx context.Context, ready chan struct{}, 
 			if !ok || ic6 == nil {
 				continue
 			}
+			if len(ic6.Payload) < 4 {
+				continue
+			}
 			data = ic6.Payload[4:]
 
 			switch ic6.TypeCode.Type() {
@@ -238,12 +244,14 @@ func (s *TCPSpec) ListenTCP(ctx context.Context, ready chan struct{}, onTCP func
 		}
 		log.Fatalf("(ListenTCP) WinDivert open failed: %v (filter=%q)", err, filter)
 	}
-	defer sniffHandle.Close()
+	var closeOnceTCP sync.Once
+	closeHandleTCP := func() { closeOnceTCP.Do(func() { _ = sniffHandle.Close() }) }
+	defer closeHandleTCP()
 
 	// context 取消时关闭 handle，使阻塞的 Recv() 立即返回错误
 	go func() {
 		<-ctx.Done()
-		_ = sniffHandle.Close()
+		closeHandleTCP()
 	}()
 
 	_ = sniffHandle.SetParam(wd.QueueLength, 8192)
@@ -330,7 +338,9 @@ func (s *TCPSpec) SendTCP(ctx context.Context, ipHdr ipLayer, tcpHdr *layers.TCP
 	default:
 	}
 
-	_ = tcpHdr.SetNetworkLayerForChecksum(ipHdr)
+	if err := tcpHdr.SetNetworkLayerForChecksum(ipHdr); err != nil {
+		return time.Time{}, fmt.Errorf("SetNetworkLayerForChecksum: %w", err)
+	}
 
 	buf := gopacket.NewSerializeBuffer()
 	opts := gopacket.SerializeOptions{

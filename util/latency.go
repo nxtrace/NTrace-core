@@ -1,6 +1,7 @@
 package util
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"io"
@@ -27,6 +28,20 @@ var (
 )
 var FastIpCache = ""
 
+// FastIPMeta 存储 FastIP 节点的结构化元数据。
+type FastIPMeta struct {
+	IP       string // 节点 IP
+	Latency  string // 延迟（ms 字符串）
+	NodeName string // 节点名称（API 返回的 Content 去除前后空白）
+}
+
+// FastIPMetaCache 缓存最近一次 FastIP 探测返回的节点元数据。
+var FastIPMetaCache FastIPMeta
+
+// SuppressFastIPOutput 为 true 时，GetFastIP 即使 enableOutput=true 也不打印彩色输出。
+// MTR 模式在进入备用屏前设置此标志，避免污染主终端历史。
+var SuppressFastIPOutput bool
+
 func GetFastIP(domain string, port string, enableOutput bool) string {
 	proxyUrl := GetProxy()
 	if proxyUrl != nil {
@@ -39,9 +54,9 @@ func GetFastIP(domain string, port string, enableOutput bool) string {
 	var ips []net.IP
 	var err error
 	if domain == "api.nxtrace.org" {
-		ips, err = net.LookupIP("api.nxtrace.org")
+		ips, err = LookupHostForGeo(context.Background(), "api.nxtrace.org")
 	} else {
-		ips, err = net.LookupIP(domain)
+		ips, err = LookupHostForGeo(context.Background(), domain)
 	}
 
 	if err != nil {
@@ -74,7 +89,14 @@ func GetFastIP(domain string, port string, enableOutput bool) string {
 	}
 
 	//if len(ips) > 0 {
-	if enableOutput {
+	// 填充结构化缓存
+	FastIPMetaCache = FastIPMeta{
+		IP:       result.IP,
+		Latency:  result.Latency,
+		NodeName: strings.TrimSpace(result.Content),
+	}
+
+	if enableOutput && !SuppressFastIPOutput {
 		_, _ = fmt.Fprintf(color.Output, "%s preferred API IP - %s - %s - %s",
 			color.New(color.FgWhite, color.Bold).Sprintf("[NextTrace API]"),
 			color.New(color.FgGreen, color.Bold).Sprintf("%s", result.IP),

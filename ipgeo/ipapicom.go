@@ -2,6 +2,7 @@ package ipgeo
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -16,18 +17,22 @@ import (
 
 func IPApiCom(ip string, timeout time.Duration, _ string, _ bool) (*IPGeoData, error) {
 	url := token.BaseOrDefault("http://ip-api.com/json/") + ip + "?fields=status,message,country,regionName,city,isp,district,as,lat,lon"
-	client := &http.Client{
-		// 2 秒超时
-		Timeout: timeout,
+	client := util.NewGeoHTTPClient(timeout)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("ip-api.com: failed to create request: %w", err)
 	}
-	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:100.0) Gecko/20100101 Firefox/100.0")
 	content, err := client.Do(req)
 	if err != nil {
 		log.Println("ip-api.com 请求超时(2s)，请切换其他API使用")
 		return nil, err
 	}
-	body, _ := io.ReadAll(content.Body)
+	defer content.Body.Close()
+	body, err := io.ReadAll(content.Body)
+	if err != nil {
+		return nil, fmt.Errorf("ip-api.com: failed to read response: %w", err)
+	}
 	res := gjson.ParseBytes(body)
 
 	if res.Get("status").String() != "success" {

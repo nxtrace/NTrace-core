@@ -78,10 +78,14 @@ func (s *UDPSpec) ListenOut(ctx context.Context, ready chan struct{}, onOut func
 	}
 	defer handle.Close()
 
-	// 过滤：只抓 ip + udp，来自本机 s.SrcIP → 目标 s.DstIP，且目标端口为 s.DstPort
+	// 过滤：只抓对应协议族 + udp，来自本机 s.SrcIP → 目标 s.DstIP，且目标端口为 s.DstPort
+	ipPrefix := "ip"
+	if s.IPVersion == 6 {
+		ipPrefix = "ip6"
+	}
 	filter := fmt.Sprintf(
-		"ip and udp and src host %s and dst host %s and dst port %d",
-		s.SrcIP.String(), s.DstIP.String(), s.DstPort,
+		"%s and udp and src host %s and dst host %s and dst port %d",
+		ipPrefix, s.SrcIP.String(), s.DstIP.String(), s.DstPort,
 	)
 
 	if err := handle.SetBPFFilter(filter); err != nil {
@@ -149,7 +153,9 @@ func (s *UDPSpec) SendUDP(ctx context.Context, ipHdr gopacket.NetworkLayer, udpH
 		}
 		ttl := int(ip4.TTL)
 
-		_ = udpHdr.SetNetworkLayerForChecksum(ipHdr)
+		if err := udpHdr.SetNetworkLayerForChecksum(ipHdr); err != nil {
+			return time.Time{}, fmt.Errorf("SetNetworkLayerForChecksum: %w", err)
+		}
 
 		buf := gopacket.NewSerializeBuffer()
 		opts := gopacket.SerializeOptions{
@@ -184,7 +190,9 @@ func (s *UDPSpec) SendUDP(ctx context.Context, ipHdr gopacket.NetworkLayer, udpH
 	}
 	ttl := int(ip6.HopLimit)
 
-	_ = udpHdr.SetNetworkLayerForChecksum(ipHdr)
+	if err := udpHdr.SetNetworkLayerForChecksum(ipHdr); err != nil {
+		return time.Time{}, fmt.Errorf("SetNetworkLayerForChecksum: %w", err)
+	}
 
 	buf := gopacket.NewSerializeBuffer()
 	opts := gopacket.SerializeOptions{

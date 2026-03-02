@@ -2,6 +2,7 @@ package dn42
 
 import (
 	"encoding/csv"
+	"fmt"
 	"net"
 	"os"
 	"sort"
@@ -22,8 +23,8 @@ type GeoFeedRow struct {
 func GetGeoFeed(ip string) (GeoFeedRow, bool) {
 	rows, err := ReadGeoFeed()
 	if err != nil {
-		// 处理错误
-		panic(err)
+		// 无法加载 geofeed 数据，返回未找到
+		return GeoFeedRow{}, false
 	}
 
 	row, find := FindGeoFeedRow(ip, rows)
@@ -32,7 +33,10 @@ func GetGeoFeed(ip string) (GeoFeedRow, bool) {
 }
 
 func ReadGeoFeed() ([]GeoFeedRow, error) {
-	path := viper.Get("geoFeedPath").(string)
+	path := viper.GetString("geoFeedPath")
+	if path == "" {
+		return nil, fmt.Errorf("geoFeedPath not configured")
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -62,7 +66,7 @@ func ReadGeoFeed() ([]GeoFeedRow, error) {
 				ISO3166: row[2],
 				City:    row[3],
 			})
-		} else {
+		} else if len(row) >= 6 {
 			rowsSlice = append(rowsSlice, GeoFeedRow{
 				IPNet:   ipnet,
 				CIDR:    cidr,

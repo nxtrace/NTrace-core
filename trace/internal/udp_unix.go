@@ -94,7 +94,9 @@ func (s *UDPSpec) SendUDP(ctx context.Context, ipHdr ipLayer, udpHdr *layers.UDP
 			return time.Time{}, errors.New("SendUDP: expect *layers.IPv4 when s.IPVersion==4")
 		}
 
-		_ = udpHdr.SetNetworkLayerForChecksum(ipHdr)
+		if err := udpHdr.SetNetworkLayerForChecksum(ipHdr); err != nil {
+			return time.Time{}, fmt.Errorf("SetNetworkLayerForChecksum: %w", err)
+		}
 
 		buf := gopacket.NewSerializeBuffer()
 		opts := gopacket.SerializeOptions{
@@ -151,7 +153,9 @@ func (s *UDPSpec) SendUDP(ctx context.Context, ipHdr ipLayer, udpHdr *layers.UDP
 	}
 	ttl := int(ip6.HopLimit)
 
-	_ = udpHdr.SetNetworkLayerForChecksum(ipHdr)
+	if err := udpHdr.SetNetworkLayerForChecksum(ipHdr); err != nil {
+		return time.Time{}, fmt.Errorf("SetNetworkLayerForChecksum: %w", err)
+	}
 
 	buf := gopacket.NewSerializeBuffer()
 	opts := gopacket.SerializeOptions{

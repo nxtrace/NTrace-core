@@ -43,7 +43,9 @@ func GetMapUrl(r string) (string, error) {
 	}
 	proxyUrl := util.GetProxy()
 	if proxyUrl != nil {
-		client.Transport.(*http.Transport).Proxy = http.ProxyURL(proxyUrl)
+		if t, ok := client.Transport.(*http.Transport); ok {
+			t.Proxy = http.ProxyURL(proxyUrl)
+		}
 	}
 	req, err := http.NewRequest("POST", tracemapUrl, strings.NewReader(r))
 	if err != nil {

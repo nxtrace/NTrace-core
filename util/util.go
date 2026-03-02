@@ -57,7 +57,9 @@ func LookupAddr(addr string) ([]string, error) {
 	// 如果在缓存中找到，直接返回
 	if hostname, ok := rDNSCache.Load(addr); ok {
 		//fmt.Println("hit rDNSCache for", addr, hostname)
-		return []string{hostname.(string)}, nil
+		if s, ok := hostname.(string); ok {
+			return []string{s}, nil
+		}
 	}
 
 	// 如果缓存中未找到，进行 DNS 查询

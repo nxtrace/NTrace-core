@@ -11,6 +11,9 @@ import (
 	"github.com/nxtrace/NTrace-core/trace"
 )
 
+// Deprecated: websocket MTR now streams probe-level "mtr_raw" events via trace.RunMTRRaw.
+// This legacy snapshot aggregator is kept temporarily for compatibility/reference.
+
 type mtrAggregator struct {
 	mu        sync.Mutex
 	stats     map[int]map[string]*hopAccum

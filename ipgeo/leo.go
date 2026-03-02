@@ -44,7 +44,11 @@ func receiveParse() {
 	defer wsConn.ConnMux.Unlock()
 	for {
 		// 接收到了一条IP信息
-		data := <-wsConn.MsgReceiveCh
+		data, ok := <-wsConn.MsgReceiveCh
+		if !ok {
+			// channel 已关闭，退出循环
+			return
+		}
 
 		// json解析 -> data
 		res := gjson.Parse(data)

@@ -132,7 +132,9 @@ func (s *TCPSpec) SendTCP(ctx context.Context, ipHdr gopacket.NetworkLayer, tcpH
 		}
 		ttl := int(ip4.TTL)
 
-		_ = tcpHdr.SetNetworkLayerForChecksum(ipHdr)
+		if err := tcpHdr.SetNetworkLayerForChecksum(ipHdr); err != nil {
+			return time.Time{}, fmt.Errorf("SetNetworkLayerForChecksum: %w", err)
+		}
 
 		buf := gopacket.NewSerializeBuffer()
 		opts := gopacket.SerializeOptions{
@@ -167,7 +169,9 @@ func (s *TCPSpec) SendTCP(ctx context.Context, ipHdr gopacket.NetworkLayer, tcpH
 	}
 	ttl := int(ip6.HopLimit)
 
-	_ = tcpHdr.SetNetworkLayerForChecksum(ipHdr)
+	if err := tcpHdr.SetNetworkLayerForChecksum(ipHdr); err != nil {
+		return time.Time{}, fmt.Errorf("SetNetworkLayerForChecksum: %w", err)
+	}
 
 	buf := gopacket.NewSerializeBuffer()
 	opts := gopacket.SerializeOptions{

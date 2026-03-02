@@ -1,0 +1,52 @@
+package printer
+
+import (
+	"strings"
+
+	"github.com/fatih/color"
+)
+
+var (
+	mtrTUITitleColor  = color.New(color.FgHiWhite).SprintFunc()
+	mtrTUIHeaderColor = color.New(color.FgHiWhite).SprintFunc()
+	mtrTUIRouteColor  = func(s string) string { return s }
+	mtrTUITimeColor   = func(s string) string { return s }
+	mtrTUIKeyColor    = func(s string) string { return s }
+	mtrTUIKeyHiColor  = color.New(color.FgHiWhite).SprintFunc()
+	mtrTUIStatusColor = color.New(color.FgHiYellow, color.Bold).SprintFunc()
+
+	mtrTUIHopColor  = color.New(color.FgHiCyan, color.Bold).SprintFunc()
+	mtrTUIHostColor = color.New(color.FgHiWhite).SprintFunc()
+	mtrTUIMPLSColor = color.New(color.FgHiBlack).SprintFunc()
+	mtrTUIWaitColor = color.New(color.FgHiBlack).SprintFunc()
+)
+
+func mtrColorLossBucket(loss float64, waiting bool) color.Attribute {
+	if waiting {
+		return color.FgHiBlack
+	}
+	switch {
+	case loss <= 0:
+		return color.FgHiGreen
+	case loss <= 5:
+		return color.FgHiCyan
+	case loss <= 20:
+		return color.FgHiYellow
+	case loss <= 50:
+		return color.FgYellow
+	default:
+		return color.FgHiRed
+	}
+}
+
+func mtrColorPacketsByLoss(lossCell, sntCell string, loss float64, waiting bool) (string, string) {
+	attr := mtrColorLossBucket(loss, waiting)
+	sty := color.New(attr, color.Bold).SprintFunc()
+	if strings.TrimSpace(lossCell) != "" {
+		lossCell = sty(lossCell)
+	}
+	if strings.TrimSpace(sntCell) != "" {
+		sntCell = sty(sntCell)
+	}
+	return lossCell, sntCell
+}
