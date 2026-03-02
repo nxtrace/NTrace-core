@@ -65,7 +65,7 @@ jobs:
           - { goos: openbsd, goarch: arm64 }
           - { goos: openbsd, goarch: arm,    goarm: 7 }
     env:
-      CGO_ENABLED: 0
+      CGO_ENABLED: ${{ matrix.goos == 'android' && 1 || 0 }}
       GOOS:   ${{ matrix.goos }}
       GOARCH: ${{ matrix.goarch }}
       GOARM:  ${{ matrix.goarm }}
@@ -89,6 +89,14 @@ jobs:
           set -Eeuo pipefail
           go version && go env && echo "Supported targets (dist list):" && go tool dist list | sort -u
 
+      - name: Setup Android NDK
+        if: matrix.goos == 'android'
+        id: setup-ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r26d
+          add-to-path: false
+
       - name: Resolve build metadata
         run: |
           set -Eeuo pipefail
@@ -101,7 +109,12 @@ jobs:
           NAME="nexttrace_${GOOS}_${GOARCH}${ARM_SUFFIX}"
           if [ "${GOOS}" = "windows" ]; then NAME="${NAME}.exe"; fi
           if [ "${GOMIPS:-}" = "softfloat" ]; then NAME="${NAME}_softfloat"; fi
-
+          if [ "$GOOS" = "android" ]; then
+            ANDROID_API=21
+            TOOLCHAIN_BIN="${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin"
+            export CC="$TOOLCHAIN_BIN/aarch64-linux-android${ANDROID_API}-clang"
+            echo "CC=${CC}" >> "$GITHUB_ENV"
+          fi
           echo "BUILD_VERSION=${BUILD_VERSION}" >> "$GITHUB_ENV"
           echo "BUILD_DATE=${BUILD_DATE}"       >> "$GITHUB_ENV"
           echo "COMMIT_SHA1=${COMMIT_SHA1}"     >> "$GITHUB_ENV"
