@@ -21,7 +21,7 @@ COMMIT_SHA1="${COMMIT_SHA1:-unknown}"
 LD_BASE="-X github.com/nxtrace/NTrace-core/config.Version=${BUILD_VERSION} \
          -X github.com/nxtrace/NTrace-core/config.BuildDate=${BUILD_DATE} \
          -X github.com/nxtrace/NTrace-core/config.CommitID=${COMMIT_SHA1} \
-         -w -s -checklinkname=0"
+         -w -s"
 
 GO_BUILD_FLAGS=(-trimpath)
 if [[ "${DEBUG_MODE}" == "debug" ]]; then

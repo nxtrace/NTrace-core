@@ -13,12 +13,15 @@
 
 ## 构建与测试（必须遵守）
 
-- 由于 Darwin 下 `trace/internal/icmp_darwin.go` 使用 `//go:linkname`，构建/测试必须带：
-  - `-ldflags "-checklinkname=0"`
 - 常用命令：
-  - 构建：`go build -ldflags "-checklinkname=0" ./...`
-  - 测试：`go test -ldflags "-checklinkname=0" ./...`
-- 交叉编译脚本：`.cross_compile.sh`（`LD_BASE` 已内置 `-checklinkname=0`）
+  - 构建：`go build ./...`
+  - 测试：`go test ./...`
+- 交叉编译脚本：`.cross_compile.sh`
+- Darwin 下 `trace/internal/icmp_darwin.go` 已不再使用 `//go:linkname`，改为
+  `syscall.Socket` + `os.NewFile` + 自定义 `icmpPacketConn`（实现 `net.PacketConn` /
+  `net.Conn` / `syscall.Conn` + `ReadMsgIP` 以满足 `x/net/internal/socket.ipConn`
+  接口），并在 `ReadFrom` 中调用 `stripIPv4Header` 剥离 macOS DGRAM ICMP socket
+  返回的外层 IP 头。
 
 ## 当前 CLI 语义（重点）
 
