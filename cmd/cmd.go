@@ -23,13 +23,16 @@ import (
 	"github.com/nxtrace/NTrace-core/ipgeo"
 	"github.com/nxtrace/NTrace-core/printer"
 	"github.com/nxtrace/NTrace-core/reporter"
-	"github.com/nxtrace/NTrace-core/server"
 	"github.com/nxtrace/NTrace-core/trace"
 	"github.com/nxtrace/NTrace-core/tracelog"
 	"github.com/nxtrace/NTrace-core/tracemap"
 	"github.com/nxtrace/NTrace-core/util"
 	"github.com/nxtrace/NTrace-core/wshandle"
 )
+
+func ptrBool(v bool) *bool    { return &v }
+func ptrStr(v string) *string { return &v }
+func ptrInt(v int) *int       { return &v }
 
 type listenInfo struct {
 	Binding string
@@ -246,7 +249,7 @@ func fixPositionalAlignment(usage string) string {
 }
 
 func Execute() {
-	parser := argparse.NewParser("nexttrace", "An open source visual route tracking CLI tool")
+	parser := argparse.NewParser(appBinName, "An open source visual route tracking CLI tool")
 	// Override HelpFunc so positional arg names are sanitized in --help output
 	parser.HelpFunc = func(c *argparse.Command, msg interface{}) string {
 		return sanitizeUsagePositionalArgs(c.Usage(msg))
@@ -257,10 +260,20 @@ func Execute() {
 	ipv6Only := parser.Flag("6", "ipv6", &argparse.Options{Help: "Use IPv6 only"})
 	tcp := parser.Flag("T", "tcp", &argparse.Options{Help: "Use TCP SYN for tracerouting (default dest-port is 80)"})
 	udp := parser.Flag("U", "udp", &argparse.Options{Help: "Use UDP SYN for tracerouting (default dest-port is 33494)"})
-	fast_trace := parser.Flag("F", "fast-trace", &argparse.Options{Help: "One-Key Fast Trace to China ISPs"})
+	// ── Fast-trace: hidden in ntr (always conflicts with default MTR mode) ──
+	var fast_trace *bool
+	if !defaultMTR {
+		fast_trace = parser.Flag("F", "fast-trace", &argparse.Options{Help: "One-Key Fast Trace to China ISPs"})
+	} else {
+		fast_trace = ptrBool(false)
+	}
 	port := parser.Int("p", "port", &argparse.Options{Help: "Set the destination port to use. With default of 80 for \"tcp\", 33494 for \"udp\""})
 	icmpMode := parser.Int("", "icmp-mode", &argparse.Options{Help: "Windows ONLY: Choose the method to listen for ICMP packets (1=Socket, 2=WinDivert; 0=Auto)"})
-	numMeasurements := parser.Int("q", "queries", &argparse.Options{Default: 3, Help: "Set the number of latency samples to display for each hop"})
+	queriesHelp := "Set the number of latency samples to display for each hop"
+	if defaultMTR {
+		queriesHelp = "Set the max number of probes per hop in MTR mode (0 = unlimited for TUI; default 10 for --report)"
+	}
+	numMeasurements := parser.Int("q", "queries", &argparse.Options{Default: 3, Help: queriesHelp})
 	maxAttempts := parser.Int("", "max-attempts", &argparse.Options{Help: "Set the maximum number of probe packets per hop (instead of a fixed auto value)"})
 	parallelRequests := parser.Int("", "parallel-requests", &argparse.Options{Default: 18, Help: "Set ParallelRequests number. It should be 1 when there is a multi-routing"})
 	maxHops := parser.Int("m", "max-hops", &argparse.Options{Default: 30, Help: "Set the max number of hops (max TTL to be reached)"})
@@ -270,25 +283,73 @@ func Execute() {
 		Help: "Choose PoW Provider [api.nxtrace.org, sakura] For China mainland users, please use sakura"})
 	norDNS := parser.Flag("n", "no-rdns", &argparse.Options{Help: "Do not resolve IP addresses to their domain names"})
 	alwaysrDNS := parser.Flag("a", "always-rdns", &argparse.Options{Help: "Always resolve IP addresses to their domain names"})
-	routePath := parser.Flag("P", "route-path", &argparse.Options{Help: "Print traceroute hop path by ASN and location"})
+	// ── Traceroute-only output flags (hidden in ntr — always conflict with default MTR mode) ──
+	var routePath, output, tablePrint, jsonPrint, classicPrint *bool
+	if !defaultMTR {
+		routePath = parser.Flag("P", "route-path", &argparse.Options{Help: "Print traceroute hop path by ASN and location"})
+		output = parser.Flag("o", "output", &argparse.Options{Help: "Write trace result to file (RealTimePrinter ONLY)"})
+		tablePrint = parser.Flag("", "table", &argparse.Options{Help: "Output trace results as a final summary table (traceroute report mode)"})
+		jsonPrint = parser.Flag("j", "json", &argparse.Options{Help: "Output trace results as JSON"})
+		classicPrint = parser.Flag("c", "classic", &argparse.Options{Help: "Classic Output trace results like BestTrace"})
+	} else {
+		routePath = ptrBool(false)
+		output = ptrBool(false)
+		tablePrint = ptrBool(false)
+		jsonPrint = ptrBool(false)
+		classicPrint = ptrBool(false)
+	}
 	dn42 := parser.Flag("", "dn42", &argparse.Options{Help: "DN42 Mode"})
-	output := parser.Flag("o", "output", &argparse.Options{Help: "Write trace result to file (RealTimePrinter ONLY)"})
-	tablePrint := parser.Flag("", "table", &argparse.Options{Help: "Output trace results as a final summary table (traceroute report mode)"})
-	rawPrint := parser.Flag("", "raw", &argparse.Options{Help: "Machine-friendly output. With MTR (--mtr/-r/-w), enables streaming raw event mode"})
-	jsonPrint := parser.Flag("j", "json", &argparse.Options{Help: "Output trace results as JSON"})
-	classicPrint := parser.Flag("c", "classic", &argparse.Options{Help: "Classic Output trace results like BestTrace"})
+	rawHelp := "Machine-friendly output"
+	if enableMTR {
+		rawHelp += ". With MTR (--mtr/-r/-w), enables streaming raw event mode"
+	}
+	rawPrint := parser.Flag("", "raw", &argparse.Options{Help: rawHelp})
 	beginHop := parser.Int("f", "first", &argparse.Options{Default: 1, Help: "Start from the first_ttl hop (instead of 1)"})
-	disableMaptrace := parser.Flag("M", "map", &argparse.Options{Help: "Disable Print Trace Map"})
+	// ── Map: hidden in ntr (MTR mode never prints a trace map) ──
+	var disableMaptrace *bool
+	if !defaultMTR {
+		disableMaptrace = parser.Flag("M", "map", &argparse.Options{Help: "Disable Print Trace Map"})
+	} else {
+		disableMaptrace = ptrBool(true) // map is always suppressed in ntr
+	}
 	disableMPLS := parser.Flag("e", "disable-mpls", &argparse.Options{Help: "Disable MPLS"})
 	ver := parser.Flag("V", "version", &argparse.Options{Help: "Print version info and exit"})
 	srcAddr := parser.String("s", "source", &argparse.Options{Help: "Use source address src_addr for outgoing packets"})
 	srcPort := parser.Int("", "source-port", &argparse.Options{Help: "Use source port src_port for outgoing packets"})
 	srcDev := parser.String("D", "dev", &argparse.Options{Help: "Use the following Network Devices as the source address in outgoing packets"})
-	deployListen := parser.String("", "listen", &argparse.Options{Help: "Set listen address for web console (e.g. 127.0.0.1:30080)"})
-	deploy := parser.Flag("", "deploy", &argparse.Options{Help: "Start the Gin powered web console"})
+
+	// ── WebUI flags (full only) ──
+	var deployListen *string
+	var deploy *bool
+	if enableWebUI {
+		deployListen = parser.String("", "listen", &argparse.Options{Help: "Set listen address for web console (e.g. 127.0.0.1:30080)"})
+		deploy = parser.Flag("", "deploy", &argparse.Options{Help: "Start the Gin powered web console"})
+	} else {
+		deployListen = ptrStr("")
+		deploy = ptrBool(false)
+	}
+
 	//router := parser.Flag("R", "route", &argparse.Options{Help: "Show Routing Table [Provided By BGP.Tools]"})
-	packetInterval := parser.Int("z", "send-time", &argparse.Options{Default: defaultPacketIntervalMs, Help: "Set how many [milliseconds] between sending each packet. Default: 50ms. Ignored in MTR mode"})
-	ttlInterval := parser.Int("i", "ttl-time", &argparse.Options{Default: defaultTracerouteTTLIntervalMs, Help: "Interval [ms] between TTL groups in normal traceroute (default: 300ms). In MTR mode (--mtr/-r/-w, including --raw), sets per-hop probe interval: how long between successive probes to the same hop (default: 1000ms when omitted)"})
+	// ── Send-time: hidden in ntr (always ignored in MTR mode) ──
+	var packetInterval *int
+	if !defaultMTR {
+		sendTimeHelp := "Set how many [milliseconds] between sending each packet. Default: 50ms"
+		if enableMTR {
+			sendTimeHelp += ". Ignored in MTR mode"
+		}
+		packetInterval = parser.Int("z", "send-time", &argparse.Options{Default: defaultPacketIntervalMs, Help: sendTimeHelp})
+	} else {
+		packetInterval = ptrInt(defaultPacketIntervalMs)
+	}
+	var ttlIntervalHelp string
+	if !enableMTR {
+		ttlIntervalHelp = "Set the interval [ms] between TTL groups for traceroute (default: 300ms)"
+	} else if defaultMTR {
+		ttlIntervalHelp = "Set the per-hop probe interval [ms] in MTR mode (default: 1000ms when omitted)"
+	} else {
+		ttlIntervalHelp = "Interval [ms] between TTL groups in normal traceroute (default: 300ms). In MTR mode (--mtr/-r/-w, including --raw), sets per-hop probe interval: how long between successive probes to the same hop (default: 1000ms when omitted)"
+	}
+	ttlInterval := parser.Int("i", "ttl-time", &argparse.Options{Default: defaultTracerouteTTLIntervalMs, Help: ttlIntervalHelp})
 	timeout := parser.Int("", "timeout", &argparse.Options{Default: 1000, Help: "The number of [milliseconds] to keep probe sockets open before giving up on the connection"})
 	packetSize := parser.Int("", "psize", &argparse.Options{Default: 52, Help: "Set the payload size"})
 	dot := parser.Selector("", "dot-server", []string{"dnssb", "aliyun", "dnspod", "google", "cloudflare"}, &argparse.Options{
@@ -296,13 +357,44 @@ func Execute() {
 	lang := parser.Selector("g", "language", []string{"en", "cn"}, &argparse.Options{Default: "cn",
 		Help: "Choose the language for displaying [en, cn]"})
 	noColor := parser.Flag("C", "no-color", &argparse.Options{Help: "Disable Colorful Output"})
-	from := parser.String("", "from", &argparse.Options{Help: "Run traceroute via Globalping (https://globalping.io/network) from a specified location. The location field accepts continents, countries, regions, cities, ASNs, ISPs, or cloud regions."})
-	mtrMode := parser.Flag("t", "mtr", &argparse.Options{Help: "Enable MTR (My Traceroute) continuous probing mode"})
-	reportMode := parser.Flag("r", "report", &argparse.Options{Help: "MTR report mode (non-interactive, implies --mtr); can trigger MTR without --mtr"})
-	wideMode := parser.Flag("w", "wide", &argparse.Options{Help: "MTR wide report mode (implies --mtr --report); alone equals --mtr --report --wide"})
-	showIPs := parser.Flag("", "show-ips", &argparse.Options{Help: "MTR only: display both PTR hostnames and numeric IPs (PTR first, IP in parentheses)"})
-	ipInfoMode := parser.Int("y", "ipinfo", &argparse.Options{Default: 0, Help: "Set initial MTR TUI host info mode (0-4). TUI only; ignored in --report/--raw. 0:IP/PTR 1:ASN 2:City 3:Owner 4:Full"})
-	file := parser.String("", "file", &argparse.Options{Help: "Read IP Address or domain name from file"})
+
+	// ── Globalping flag (full only) ──
+	var from *string
+	if enableGlobalping {
+		from = parser.String("", "from", &argparse.Options{Help: "Run traceroute via Globalping (https://globalping.io/network) from a specified location. The location field accepts continents, countries, regions, cities, ASNs, ISPs, or cloud regions."})
+	} else {
+		from = ptrStr("")
+	}
+
+	// ── MTR flags (full & ntr only) ──
+	var mtrMode, reportMode, wideMode, showIPs *bool
+	var ipInfoMode *int
+	if enableMTR {
+		// ── -t/--mtr: hidden in ntr (always active by default) ──
+		if !defaultMTR {
+			mtrMode = parser.Flag("t", "mtr", &argparse.Options{Help: "Enable MTR (My Traceroute) continuous probing mode"})
+		} else {
+			mtrMode = ptrBool(true)
+		}
+		reportMode = parser.Flag("r", "report", &argparse.Options{Help: "MTR report mode (non-interactive, implies --mtr); can trigger MTR without --mtr"})
+		wideMode = parser.Flag("w", "wide", &argparse.Options{Help: "MTR wide report mode (implies --mtr --report); alone equals --mtr --report --wide"})
+		showIPs = parser.Flag("", "show-ips", &argparse.Options{Help: "MTR only: display both PTR hostnames and numeric IPs (PTR first, IP in parentheses)"})
+		ipInfoMode = parser.Int("y", "ipinfo", &argparse.Options{Default: 0, Help: "Set initial MTR TUI host info mode (0-4). TUI only; ignored in --report/--raw. 0:IP/PTR 1:ASN 2:City 3:Owner 4:Full"})
+	} else {
+		mtrMode = ptrBool(false)
+		reportMode = ptrBool(false)
+		wideMode = ptrBool(false)
+		showIPs = ptrBool(false)
+		ipInfoMode = ptrInt(0)
+	}
+
+	// ── File: hidden in ntr (conflicts with default MTR mode) ──
+	var file *string
+	if !defaultMTR {
+		file = parser.String("", "file", &argparse.Options{Help: "Read IP Address or domain name from file"})
+	} else {
+		file = ptrStr("")
+	}
 	str := parser.StringPositional(&argparse.Options{Help: "Trace target: IPv4 address (e.g. 8.8.8.8), IPv6 address (e.g. 2001:db8::1), domain name (e.g. example.com), or URL (e.g. https://example.com)"})
 
 	err := parser.Parse(os.Args)
@@ -314,7 +406,7 @@ func Execute() {
 	}
 
 	// ── 统一 MTR 有效开关 ──
-	effectiveMTR := *mtrMode || *reportMode || *wideMode
+	effectiveMTR := *mtrMode || *reportMode || *wideMode || defaultMTR
 	effectiveReport := *reportMode || *wideMode
 	effectiveWide := *wideMode
 	effectiveMTRRaw := effectiveMTR && *rawPrint
@@ -396,7 +488,7 @@ func Execute() {
 			}
 		}
 		fmt.Println("注意：Web 控制台的安全性有限，请在确保安全的前提下使用，如有必要请使用ACL等方式加强安全性")
-		if err := server.Run(listenAddr); err != nil {
+		if err := runDeploy(listenAddr); err != nil {
 			if util.EnvDevMode {
 				panic(err)
 			}
@@ -572,7 +664,7 @@ func Execute() {
 	}
 
 	if *from != "" {
-		executeGlobalpingTraceroute(
+		handleGlobalpingTrace(
 			&trace.GlobalpingOptions{
 				Target:  *str,
 				From:    *from,
@@ -912,65 +1004,7 @@ func capabilitiesCheck() {
 	} else {
 		// 没权限啦
 		fmt.Println("您正在以普通用户权限运行 NextTrace，但 NextTrace 未被赋予监听网络套接字的ICMP消息包、修改IP头信息（TTL）等路由跟踪所需的权限")
-		fmt.Println("请使用管理员用户执行 `sudo setcap cap_net_raw,cap_net_admin+eip ${your_nexttrace_path}/nexttrace` 命令，赋予相关权限后再运行~")
+		fmt.Printf("请使用管理员用户执行 `sudo setcap cap_net_raw,cap_net_admin+eip ${your_nexttrace_path}/%s` 命令，赋予相关权限后再运行~\n", appBinName)
 		fmt.Println("什么？为什么 ping 普通用户执行不要 root 权限？因为这些工具在管理员安装时就已经被赋予了一些必要的权限，具体请使用 `getcap /usr/bin/ping` 查看")
-	}
-}
-
-func executeGlobalpingTraceroute(opts *trace.GlobalpingOptions, config *trace.Config) {
-	res, measurement, err := trace.GlobalpingTraceroute(opts, config)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	if !opts.DisableMaptrace &&
-		(util.StringInSlice(strings.ToUpper(opts.DataOrigin), []string{"LEOMOEAPI", "IPINFO", "IP-API.COM", "IPAPI.COM"})) {
-		r, err := json.Marshal(res)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-		url, err := tracemap.GetMapUrl(string(r))
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-		res.TraceMapUrl = url
-	}
-
-	if opts.JSONPrint {
-		r, err := json.Marshal(res)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-		fmt.Println(string(r))
-		return
-	}
-
-	if measurement == nil || len(measurement.Results) == 0 {
-		fmt.Println("Globalping 未返回可用的探测结果，已跳过输出。")
-		return
-	}
-
-	fmt.Fprintln(color.Output, color.New(color.FgGreen, color.Bold).Sprintf("> %s", trace.GlobalpingFormatLocation(&measurement.Results[0])))
-
-	if opts.TablePrint {
-		printer.TracerouteTablePrinter(res)
-	} else {
-		for i := range res.Hops {
-			if opts.ClassicPrint {
-				printer.ClassicPrinter(res, i)
-			} else if opts.RawPrint {
-				printer.EasyPrinter(res, i)
-			} else {
-				printer.RealtimePrinter(res, i)
-			}
-		}
-	}
-
-	if res.TraceMapUrl != "" {
-		tracemap.PrintMapUrl(res.TraceMapUrl)
 	}
 }

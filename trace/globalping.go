@@ -1,3 +1,5 @@
+//go:build !flavor_tiny && !flavor_ntr
+
 package trace
 
 import (
@@ -12,26 +14,6 @@ import (
 	"github.com/nxtrace/NTrace-core/ipgeo"
 	"github.com/nxtrace/NTrace-core/util"
 )
-
-type GlobalpingOptions struct {
-	Target  string
-	From    string
-	IPv4    bool
-	IPv6    bool
-	TCP     bool
-	UDP     bool
-	Port    int
-	Packets int
-	MaxHops int
-
-	DisableMaptrace bool
-	DataOrigin      string
-
-	TablePrint   bool
-	ClassicPrint bool
-	RawPrint     bool
-	JSONPrint    bool
-}
 
 func GlobalpingTraceroute(opts *GlobalpingOptions, config *Config) (*Result, *globalping.Measurement, error) {
 	c := globalping.Config{

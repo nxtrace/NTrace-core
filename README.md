@@ -147,6 +147,79 @@ Please note, the repositories for all of the above installation methods are main
   - `Release` provides compiled binary executables for many systems and different architectures. If none are available, you can compile it yourself.
   - Some essential dependencies of this project are not fully implemented on `Windows` by `Golang`, so currently, `NextTrace` is in an experimental support phase on the `Windows` platform.
 
+### Build Variants
+
+Starting from this release, NextTrace is published in **three flavors** under the same tag. Choose the one that best fits your use case:
+
+| Feature               | `nexttrace` (Full) | `nexttrace-tiny` |    `ntr`     |
+| --------------------- | :----------------: | :--------------: | :----------: |
+| Normal traceroute     |         ✅         |        ✅        |      —       |
+| MTR TUI               |         ✅         |        —         | ✅ (default) |
+| MTR report (`-r`)     |         ✅         |        —         |      ✅      |
+| MTR wide (`-w`)       |         ✅         |        —         |      ✅      |
+| MTR raw (`--raw`)     |         ✅         |        —         |      ✅      |
+| Globalping (`--from`) |         ✅         |        —         |      —       |
+| WebUI (`--deploy`)    |         ✅         |        —         |      —       |
+| Fast Trace (`-F`)     |         ✅         |        ✅        |      —       |
+| Default mode          |     traceroute     |    traceroute    |   MTR TUI    |
+| Binary name           |    `nexttrace`     | `nexttrace-tiny` |    `ntr`     |
+
+> **Note:** Package managers (Homebrew, AUR, Scoop, etc.) currently install the **Full** (`nexttrace`) version only.
+
+### Feature Matrix
+
+- **`nexttrace`** — Full-featured build. Includes everything: traceroute, MTR, Globalping, and WebUI.
+- **`nexttrace-tiny`** — Lightweight build. Normal traceroute only, no MTR / Globalping / WebUI. Suitable for embedded or minimal environments.
+- **`ntr`** — MTR-focused build. Runs MTR TUI by default. No Globalping / WebUI; no normal traceroute mode.
+
+### Manual Build
+
+Build from source with Go 1.22+ installed:
+
+```bash
+# Full (all features)
+go build -trimpath -o dist/nexttrace -ldflags "-w -s" .
+
+# Tiny (no MTR, no Globalping, no WebUI)
+go build -tags flavor_tiny -trimpath -o dist/nexttrace-tiny -ldflags "-w -s" .
+
+# NTR (MTR-only)
+go build -tags flavor_ntr -trimpath -o dist/ntr -ldflags "-w -s" .
+```
+
+Cross-compile example:
+
+```bash
+# Linux arm64, Tiny flavor
+GOOS=linux GOARCH=arm64 CGO_ENABLED=0 \
+  go build -tags flavor_tiny -trimpath -o dist/nexttrace-tiny_linux_arm64 -ldflags "-w -s" .
+```
+
+The `tiny` and `ntr` flavors use **compile-time build tags** to exclude modules — this is not a runtime switch. You can verify with `go version -m <binary>` that `gin` and `globalping-cli` are absent from `nexttrace-tiny` and `ntr`.
+
+The `.cross_compile.sh` script supports building flavors:
+
+```bash
+./.cross_compile.sh all     # Build all three flavors for all platforms
+./.cross_compile.sh full    # Build only nexttrace (Full)
+./.cross_compile.sh tiny    # Build only nexttrace-tiny
+./.cross_compile.sh ntr     # Build only ntr
+```
+
+### Release Assets Naming
+
+Release binaries follow this naming convention:
+
+```
+{binary}_{os}_{arch}[v{arm}][.exe][_softfloat]
+```
+
+Examples:
+
+- `nexttrace_linux_amd64`, `nexttrace-tiny_linux_amd64`, `ntr_linux_amd64`
+- `nexttrace_darwin_universal`, `nexttrace-tiny_darwin_universal`, `ntr_darwin_universal`
+- `nexttrace_windows_amd64.exe`, `ntr_windows_amd64.exe`
+
 ### Get Started
 
 `NextTrace` uses the `ICMP` protocol to perform TraceRoute requests by default, which supports both `IPv4` and `IPv6`
