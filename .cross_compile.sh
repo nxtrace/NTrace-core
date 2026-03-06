@@ -60,10 +60,12 @@ build_one() {
   local bin="$1" tags="$2" goos="$3" goarch="$4"
   shift 4
   local target="${TARGET_DIR}/${bin}_${goos}_${goarch}"
+  local target_arm=""
   # Apply extra env vars (e.g. GOARM=7 suffix)
   for ev in "$@"; do
     local key="${ev%%=*}" val="${ev#*=}"
     if [[ "${key}" == "GOARM" ]]; then
+      target_arm="${val}"
       target="${target}v${val}"
     elif [[ "${key}" == "GOMIPS" && "${val}" == "softfloat" ]]; then
       target="${target}_softfloat"
@@ -73,12 +75,14 @@ build_one() {
     target="${target}.exe"
   fi
 
-  local tags_flag=""
-  if [[ -n "${tags}" ]]; then tags_flag="-tags ${tags}"; fi
+  local tags_flag=()
+  if [[ -n "${tags}" ]]; then
+    tags_flag=(-tags "${tags}")
+  fi
 
   echo "build => ${target}  (tags: ${tags:-none})"
-  env "$@" go build "${GO_BUILD_FLAGS[@]}" ${tags_flag} -o "${target}" -ldflags "${LD_BASE}"
-  compress_with_upx "${target}" "${goos}" "${goarch}" "" "quiet"
+  env "$@" go build "${GO_BUILD_FLAGS[@]}" "${tags_flag[@]}" -o "${target}" -ldflags "${LD_BASE}"
+  compress_with_upx "${target}" "${goos}" "${goarch}" "${target_arm}" "quiet"
 }
 
 compress_with_upx() {

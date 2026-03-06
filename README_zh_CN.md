@@ -215,7 +215,7 @@ GOOS=linux GOARCH=arm64 CGO_ENABLED=0 \
 
 Release 二进制文件命名格式：
 
-```
+```text
 {二进制名}_{操作系统}_{架构}[v{arm版本}][.exe][_softfloat]
 ```
 

@@ -126,6 +126,7 @@ func runMTRRawPerHop(ctx context.Context, method Method, cfg Config, opts MTRRaw
 
 // runMTRRawRoundBased is the legacy round-based raw streaming path.
 func runMTRRawRoundBased(ctx context.Context, method Method, cfg Config, opts MTRRawOptions, onRecord MTRRawOnRecord) error {
+	normalizeRuntimeConfig(&cfg)
 	if opts.Interval <= 0 {
 		opts.Interval = time.Second
 	}

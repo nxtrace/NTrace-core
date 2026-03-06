@@ -48,7 +48,7 @@ func handleGlobalpingTrace(opts *trace.GlobalpingOptions, config *trace.Config) 
 	}
 
 	if measurement == nil || len(measurement.Results) == 0 {
-		fmt.Println("Globalping 未返回可用的探测结果，已跳过输出。")
+		fmt.Println(globalpingNoResultMessage(config.Lang))
 		return
 	}
 
@@ -71,4 +71,11 @@ func handleGlobalpingTrace(opts *trace.GlobalpingOptions, config *trace.Config) 
 	if res.TraceMapUrl != "" {
 		tracemap.PrintMapUrl(res.TraceMapUrl)
 	}
+}
+
+func globalpingNoResultMessage(lang string) string {
+	if strings.EqualFold(strings.TrimSpace(lang), "en") {
+		return "Globalping returned no usable probe results; skipping output."
+	}
+	return "Globalping 未返回可用的探测结果，已跳过输出。"
 }

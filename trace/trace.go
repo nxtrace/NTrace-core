@@ -194,9 +194,6 @@ func normalizeRuntimeConfig(config *Config) {
 	if config.SourceDevice == "" && util.SrcDev != "" {
 		config.SourceDevice = util.SrcDev
 	}
-	if !config.DisableMPLS && util.DisableMPLS {
-		config.DisableMPLS = true
-	}
 }
 
 type Result struct {

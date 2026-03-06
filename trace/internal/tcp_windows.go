@@ -30,7 +30,21 @@ type TCPSpec struct {
 	handle       wd.Handle
 }
 
+func (s *TCPSpec) sourceDeviceUnsupportedErr() error {
+	if s.SourceDevice == "" {
+		return nil
+	}
+	return fmt.Errorf("source_device %q is not supported on Windows TCP traces", s.SourceDevice)
+}
+
 func (s *TCPSpec) InitTCP() {
+	if err := s.sourceDeviceUnsupportedErr(); err != nil {
+		if util.EnvDevMode {
+			panic(err)
+		}
+		log.Fatal(err)
+	}
+
 	handle, err := wd.Open("false", wd.LayerNetwork, 0, 0)
 	if err != nil {
 		if util.EnvDevMode {
@@ -84,6 +98,13 @@ func (s *TCPSpec) ListenICMP(ctx context.Context, ready chan struct{}, onICMP fu
 }
 
 func (s *TCPSpec) listenICMPWinDivert(ctx context.Context, ready chan struct{}, onICMP func(msg ReceivedMessage, finish time.Time, data []byte)) {
+	if err := s.sourceDeviceUnsupportedErr(); err != nil {
+		if util.EnvDevMode {
+			panic(err)
+		}
+		log.Fatal(err)
+	}
+
 	// 构造 WinDivert 过滤器：入站 ICMP/ICMPv6，目标为本机 s.SrcIP
 	var filter string
 	if s.IPVersion == 4 {
@@ -223,6 +244,13 @@ func (s *TCPSpec) listenICMPWinDivert(ctx context.Context, ready chan struct{}, 
 }
 
 func (s *TCPSpec) ListenTCP(ctx context.Context, ready chan struct{}, onTCP func(srcPort, seq int, peer net.Addr, finish time.Time)) {
+	if err := s.sourceDeviceUnsupportedErr(); err != nil {
+		if util.EnvDevMode {
+			panic(err)
+		}
+		log.Fatal(err)
+	}
+
 	// 构造 WinDivert 过滤器：入站 TCP，来自目标 s.DstIP → 本机 s.SrcIP，且源端口为 s.DstPort
 	var filter string
 	if s.IPVersion == 4 {
@@ -333,6 +361,10 @@ func (s *TCPSpec) ListenTCP(ctx context.Context, ready chan struct{}, onTCP func
 }
 
 func (s *TCPSpec) SendTCP(ctx context.Context, ipHdr ipLayer, tcpHdr *layers.TCP, payload []byte) (time.Time, error) {
+	if err := s.sourceDeviceUnsupportedErr(); err != nil {
+		return time.Time{}, err
+	}
+
 	select {
 	case <-ctx.Done():
 		return time.Time{}, context.Canceled

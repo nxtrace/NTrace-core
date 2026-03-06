@@ -196,6 +196,7 @@
 - `executeMTRRaw()` 两路分支：
   - `HopInterval > 0`：per-hop 模式，仅在 LeoMoe/FastIP 初始化阶段短暂加锁；长期探测不再依赖 `SrcDev` / `DisableMPLS` 等进程级全局。
   - fallback：legacy round-based 模式（保留兼容），`RunRound` 回调内 per-round 锁定。
+  - `trace/runMTRRawRoundBased()` 也会先做 `normalizeRuntimeConfig(&cfg)`，因此 legacy raw 路径同样能继承 `SourceDevice`；`DisableMPLS` 不再从全局反向覆盖会话配置。
 - `traceRequest` 新增 `HopIntervalMs` 字段（`json:"hop_interval_ms"`），与 `IntervalMs` 解耦。
 - 前端 MTR 请求现在发送 `hop_interval_ms=1000`，不再把旧的 `interval_ms=2000` 当默认值。
 
@@ -218,7 +219,7 @@
 - `--dot-server` 不仅影响目标域名解析，也影响 GeoIP API / LeoMoe FastIP 的域名解析链路。
 - 关键文件：`util/dns_resolver.go`
   - `SetGeoDNSResolver(dotServer)`
-  - `WithGeoDNSResolver(dotServer, fn)`：为 Web/API 请求提供作用域化的 resolver 切换，避免并发请求互相污染。
+  - `WithGeoDNSResolver(dotServer, fn)`：为 Web/API 请求提供作用域化的 resolver 切换；不同 resolver 串行切换，相同 resolver 允许安全嵌套，避免 `GetSourceWithGeoDNS` + 外层作用域组合时死锁。
   - `LookupHostForGeo(ctx, host)`：IP 字面量短路 -> DoT -> 失败时按配置 fallback 系统 DNS
 - `cmd/cmd.go` 在早期阶段（fast-trace / ws 初始化之前）注入 DoT 解析策略，避免早期分支绕过。
 - `server/trace_handler.go` 通过 `ipgeo.GetSourceWithGeoDNS(...)` + `WithGeoDNSResolver(...)` 让 Web/API 请求也遵守 `dot_server`，包括 LeoMoe/FastIP 初始化阶段。
@@ -237,6 +238,7 @@
 
 - `--dev` 在 `cmd/cmd.go` 先解析网卡并推导 `srcAddr`（已处理非 `*net.IPNet` 地址类型，避免 panic）。
 - `trace.Config` 现在显式携带 `SourceDevice` / `DisableMPLS`，Darwin TCP/UDP 抓包与 MPLS 解析优先走会话级配置，不再依赖 Web 侧临时改写全局变量。
+- Windows TCP 目前仍无法把 `SourceDevice` 映射到 WinDivert 接口选择；当前策略是显式报错拒绝，而不是静默忽略该字段。
 - MTR 标题显示源信息来自：
   - `--source`（最高优先）
   - `--dev` 推导
@@ -251,6 +253,7 @@
   - `.github/workflows/test.yml` 使用 `setup-go@v6` + `go-version: 1.26.x`
   - test workflow 中 `GOTOOLCHAIN=go1.26.0+auto`
   - build matrix 已移除 `windows/arm`
+- `.cross_compile.sh` 与 workflow 里的 `go build` 现在都用数组构造 `-tags` 参数，避免 shell word-splitting；脚本也会把当前 `GOARM` 传给 `compress_with_upx`，使 linux/armv7 目标能命中对应压缩分支。
 
 ## 关键文件导航
 

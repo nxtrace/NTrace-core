@@ -152,10 +152,11 @@ jobs:
             BIN="${SPEC%%:*}"
             TAGS="${SPEC#*:}"
             NAME="${BIN}_${PLATFORM}${EXT}${SOFT}"
-            TAGS_FLAG=""
-            if [ -n "$TAGS" ]; then TAGS_FLAG="-tags $TAGS"; fi
+            BUILD_ARGS=(-trimpath)
+            if [ -n "$TAGS" ]; then BUILD_ARGS+=( -tags "$TAGS" ); fi
+            BUILD_ARGS+=( -o "dist/${NAME}" -ldflags "$LD_BASE" )
             echo "build => dist/${NAME}  (tags: ${TAGS:-none})"
-            go build -trimpath $TAGS_FLAG -o "dist/${NAME}" -ldflags "$LD_BASE"
+            go build "${BUILD_ARGS[@]}"
             if command -v upx >/dev/null 2>&1; then
               case "${GOOS}-${GOARCH}-${GOARM:-}" in
                 linux-amd64-*|linux-386-*|linux-arm64-*|linux-arm-7) upx -9 "dist/${NAME}" ;;
@@ -254,10 +255,11 @@ jobs:
             BIN="${SPEC%%:*}"
             TAGS="${SPEC#*:}"
             NAME="${BIN}_${GOOS}_${GOARCH}"
-            TAGS_FLAG=""
-            if [ -n "$TAGS" ]; then TAGS_FLAG="-tags $TAGS"; fi
+            BUILD_ARGS=(-trimpath)
+            if [ -n "$TAGS" ]; then BUILD_ARGS+=( -tags "$TAGS" ); fi
+            BUILD_ARGS+=( -o "dist/${NAME}" -ldflags "$LD_BASE" )
             echo "build => dist/${NAME}  (tags: ${TAGS:-none})"
-            go build -trimpath $TAGS_FLAG -o "dist/${NAME}" -ldflags "$LD_BASE"
+            go build "${BUILD_ARGS[@]}"
           done
 
       - name: Verify tiny/ntr decoupling

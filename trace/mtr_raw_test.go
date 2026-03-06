@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/nxtrace/NTrace-core/ipgeo"
+	"github.com/nxtrace/NTrace-core/util"
 )
 
 func TestRunMTRRaw_EmitsPerAttemptRecords(t *testing.T) {
@@ -136,6 +137,39 @@ func TestRunMTRRaw_UsesRunRoundOverride(t *testing.T) {
 			calls++
 			if cfg.RealtimePrinter == nil {
 				t.Fatal("expected RealtimePrinter to be populated for raw streaming")
+			}
+			return &Result{Hops: make([][]Hop, 0)}, nil
+		},
+	}, nil)
+	if err != nil {
+		t.Fatalf("RunMTRRaw returned error: %v", err)
+	}
+	if calls != 1 {
+		t.Fatalf("RunRound override called %d times, want 1", calls)
+	}
+}
+
+func TestRunMTRRaw_RoundBasedNormalizesRuntimeConfig(t *testing.T) {
+	oldSrcDev := util.SrcDev
+	oldDisableMPLS := util.DisableMPLS
+	t.Cleanup(func() {
+		util.SrcDev = oldSrcDev
+		util.DisableMPLS = oldDisableMPLS
+	})
+
+	util.SrcDev = "en0"
+	util.DisableMPLS = true
+
+	calls := 0
+	err := RunMTRRaw(context.Background(), ICMPTrace, Config{}, MTRRawOptions{
+		MaxRounds: 1,
+		RunRound: func(_ Method, cfg Config) (*Result, error) {
+			calls++
+			if cfg.SourceDevice != "en0" {
+				t.Fatalf("cfg.SourceDevice = %q, want en0", cfg.SourceDevice)
+			}
+			if cfg.DisableMPLS {
+				t.Fatal("cfg.DisableMPLS = true, want false")
 			}
 			return &Result{Hops: make([][]Hop, 0)}, nil
 		},

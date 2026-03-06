@@ -301,7 +301,11 @@ func Execute() {
 	dn42 := parser.Flag("", "dn42", &argparse.Options{Help: "DN42 Mode"})
 	rawHelp := "Machine-friendly output"
 	if enableMTR {
-		rawHelp += ". With MTR (--mtr/-r/-w), enables streaming raw event mode"
+		mtrFlags := "--mtr/-r/-w"
+		if defaultMTR {
+			mtrFlags = "-r/-w"
+		}
+		rawHelp += ". With MTR (" + mtrFlags + "), enables streaming raw event mode"
 	}
 	rawPrint := parser.Flag("", "raw", &argparse.Options{Help: rawHelp})
 	beginHop := parser.Int("f", "first", &argparse.Options{Default: 1, Help: "Start from the first_ttl hop (instead of 1)"})
