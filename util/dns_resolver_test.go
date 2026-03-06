@@ -172,3 +172,36 @@ func TestGeoDNSConfig_ConcurrentAccess(t *testing.T) {
 	<-done
 	// 无 data race = 通过
 }
+
+func TestWithGeoDNSResolver_RestoresPreviousConfig(t *testing.T) {
+	SetGeoDNSResolver("google")
+	SetGeoDNSFallback(false)
+	defer func() {
+		SetGeoDNSResolver("")
+		SetGeoDNSFallback(true)
+	}()
+
+	seenDot := ""
+	seenFallback := true
+	got, err := WithGeoDNSResolver("cloudflare", func() (string, error) {
+		seenDot, seenFallback = getGeoDNSConfig()
+		return "ok", nil
+	})
+	if err != nil {
+		t.Fatalf("WithGeoDNSResolver returned error: %v", err)
+	}
+	if got != "ok" {
+		t.Fatalf("WithGeoDNSResolver result = %q, want ok", got)
+	}
+	if seenDot != "cloudflare" {
+		t.Fatalf("callback saw dot resolver %q, want cloudflare", seenDot)
+	}
+	if seenFallback {
+		t.Fatalf("callback saw fallback=true, want inherited false")
+	}
+
+	dot, fallback := getGeoDNSConfig()
+	if dot != "google" || fallback {
+		t.Fatalf("resolver restored to (%q, %t), want (%q, %t)", dot, fallback, "google", false)
+	}
+}

@@ -256,8 +256,12 @@ func resolveSrcIP(conf trace.Config) string {
 	}
 
 	// 2. --dev 推导（已在 cmd.go 中赋值到 conf.SrcAddr，这里做兜底）
-	if util.SrcDev != "" {
-		if dev, err := net.InterfaceByName(util.SrcDev); err == nil {
+	sourceDevice := conf.SourceDevice
+	if sourceDevice == "" {
+		sourceDevice = util.SrcDev
+	}
+	if sourceDevice != "" {
+		if dev, err := net.InterfaceByName(sourceDevice); err == nil {
 			if addrs, err2 := dev.Addrs(); err2 == nil {
 				for _, addr := range addrs {
 					if ipNet, ok := addr.(*net.IPNet); ok {

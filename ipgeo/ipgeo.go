@@ -3,6 +3,8 @@ package ipgeo
 import (
 	"strings"
 	"time"
+
+	"github.com/nxtrace/NTrace-core/util"
 )
 
 type IPGeoData struct {
@@ -54,6 +56,19 @@ func GetSource(s string) Source {
 		return IPDBOne
 	default:
 		return LeoIP
+	}
+}
+
+func GetSourceWithGeoDNS(s string, dotServer string) Source {
+	base := GetSource(s)
+	dotServer = strings.TrimSpace(strings.ToLower(dotServer))
+	if base == nil || dotServer == "" {
+		return base
+	}
+	return func(ip string, timeout time.Duration, lang string, maptrace bool) (*IPGeoData, error) {
+		return util.WithGeoDNSResolver(dotServer, func() (*IPGeoData, error) {
+			return base(ip, timeout, lang, maptrace)
+		})
 	}
 }
 

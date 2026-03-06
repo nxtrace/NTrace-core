@@ -761,6 +761,7 @@ func Execute() {
 		DN42:             *dn42,
 		SrcAddr:          *srcAddr,
 		SrcPort:          *srcPort,
+		SourceDevice:     util.SrcDev,
 		BeginHop:         *beginHop,
 		DstIP:            ip,
 		DstPort:          *port,
@@ -776,11 +777,7 @@ func Execute() {
 		IPGeoSource:      ipgeo.GetSource(*dataOrigin),
 		Timeout:          time.Duration(*timeout) * time.Millisecond,
 		PktSize:          *packetSize,
-	}
-
-	// --disable-mpls 需在 MTR 分支之前生效
-	if *disableMPLS {
-		util.DisableMPLS = true
+		DisableMPLS:      *disableMPLS,
 	}
 
 	// ── MTR 连续探测模式 ──

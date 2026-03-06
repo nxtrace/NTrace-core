@@ -19,6 +19,7 @@ var (
 	geoDotServer string        // 当前 dot-server 选项（如 "dnssb"）
 	geoFallback  bool   = true // DoT 失败时是否回退系统 DNS
 	geoMu        sync.RWMutex
+	geoApplyMu   sync.Mutex
 
 	// geoResolverOverride 允许测试注入自定义 resolver（仅测试用）。
 	// 非 nil 时 LookupHostForGeo 的 DoT 阶段使用该 resolver 替代 ResolverForDot 的结果。
@@ -38,6 +39,30 @@ func SetGeoDNSFallback(enabled bool) {
 	geoMu.Lock()
 	defer geoMu.Unlock()
 	geoFallback = enabled
+}
+
+// WithGeoDNSResolver 在 callback 生命周期内临时切换 Geo DNS resolver。
+// 该辅助会串行化切换与恢复，避免并发请求互相污染 resolver 状态。
+func WithGeoDNSResolver[T any](dotServer string, callback func() (T, error)) (T, error) {
+	if callback == nil {
+		var zero T
+		return zero, nil
+	}
+	if dotServer == "" {
+		return callback()
+	}
+
+	geoApplyMu.Lock()
+	defer geoApplyMu.Unlock()
+
+	prevDotServer, prevFallback := getGeoDNSConfig()
+	SetGeoDNSResolver(dotServer)
+	defer func() {
+		SetGeoDNSResolver(prevDotServer)
+		SetGeoDNSFallback(prevFallback)
+	}()
+
+	return callback()
 }
 
 // getGeoDNSConfig 返回当前快照；并发安全。

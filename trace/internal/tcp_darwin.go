@@ -26,6 +26,7 @@ type TCPSpec struct {
 	DstIP        net.IP
 	DstPort      int
 	PktSize      int
+	SourceDevice string
 	icmp         net.PacketConn
 	tcp          net.PacketConn
 	tcp4         *ipv4.PacketConn
@@ -67,8 +68,8 @@ func (s *TCPSpec) ListenICMP(ctx context.Context, ready chan struct{}, onICMP fu
 func (s *TCPSpec) ListenTCP(ctx context.Context, ready chan struct{}, onTCP func(srcPort, seq int, peer net.Addr, finish time.Time)) {
 	// 选择捕获设备与本地接口
 	dev := "en0"
-	if util.SrcDev != "" {
-		dev = util.SrcDev
+	if s.SourceDevice != "" {
+		dev = s.SourceDevice
 	} else if d, err := util.PcapDeviceByIP(s.SrcIP); err == nil {
 		dev = d
 	}

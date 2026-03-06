@@ -12,11 +12,11 @@ type IPv4Fragment struct {
 	Body []byte
 }
 
-// GetMTUByIP 根据给定 IPv4/IPv6 源地址返回所属网卡 MTU，找不到返回 0
-func GetMTUByIP(srcIP net.IP) int {
+// GetMTUByIPForDevice 根据给定 IPv4/IPv6 源地址返回所属网卡 MTU，优先使用指定网卡名。
+func GetMTUByIPForDevice(srcIP net.IP, srcDev string) int {
 	// 若已指定网卡名，直接取该网卡的 MTU
-	if SrcDev != "" {
-		if ifi, err := net.InterfaceByName(SrcDev); err == nil && ifi != nil {
+	if srcDev != "" {
+		if ifi, err := net.InterfaceByName(srcDev); err == nil && ifi != nil {
 			return ifi.MTU
 		}
 	}
@@ -61,6 +61,11 @@ func GetMTUByIP(srcIP net.IP) int {
 		}
 	}
 	return 0
+}
+
+// GetMTUByIP 保持旧调用点兼容，优先使用全局 SrcDev。
+func GetMTUByIP(srcIP net.IP) int {
+	return GetMTUByIPForDevice(srcIP, SrcDev)
 }
 
 // IPv4Fragmentize 将 base（IPv4 头）与 body（IPv4 负载：传输层头+数据）按 mtu 进行 IP 层分片

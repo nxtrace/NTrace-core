@@ -18,14 +18,15 @@ import (
 )
 
 type UDPSpec struct {
-	IPVersion int
-	ICMPMode  int
-	SrcIP     net.IP
-	DstIP     net.IP
-	DstPort   int
-	icmp      net.PacketConn
-	addr      wd.Address
-	handle    wd.Handle
+	IPVersion    int
+	ICMPMode     int
+	SrcIP        net.IP
+	DstIP        net.IP
+	DstPort      int
+	SourceDevice string
+	icmp         net.PacketConn
+	addr         wd.Address
+	handle       wd.Handle
 }
 
 func (s *UDPSpec) InitUDP() {

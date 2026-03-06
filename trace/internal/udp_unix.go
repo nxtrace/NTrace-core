@@ -25,6 +25,7 @@ type UDPSpec struct {
 	SrcIP        net.IP
 	DstIP        net.IP
 	DstPort      int
+	SourceDevice string
 	icmp         net.PacketConn
 	udp          net.PacketConn
 	udp4         *ipv4.RawConn
@@ -60,7 +61,7 @@ func (s *UDPSpec) InitUDP() {
 
 		// 获取本地接口的 MTU
 		mtu := 1500
-		if m := util.GetMTUByIP(s.SrcIP); m > 0 {
+		if m := util.GetMTUByIPForDevice(s.SrcIP, s.SourceDevice); m > 0 {
 			mtu = m
 		}
 		s.mtu = mtu

@@ -632,7 +632,7 @@ function buildPayload() {
   }
 
   if (payload.mode === 'mtr') {
-    payload.interval_ms = 2000;
+    payload.hop_interval_ms = 1000;
     payload.max_rounds = 0;
   }
   const dstPort = readNumericValue(dstPortInput);

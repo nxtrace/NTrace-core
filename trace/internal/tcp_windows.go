@@ -18,15 +18,16 @@ import (
 )
 
 type TCPSpec struct {
-	IPVersion int
-	ICMPMode  int
-	SrcIP     net.IP
-	DstIP     net.IP
-	DstPort   int
-	icmp      net.PacketConn
-	PktSize   int
-	addr      wd.Address
-	handle    wd.Handle
+	IPVersion    int
+	ICMPMode     int
+	SrcIP        net.IP
+	DstIP        net.IP
+	DstPort      int
+	icmp         net.PacketConn
+	PktSize      int
+	SourceDevice string
+	addr         wd.Address
+	handle       wd.Handle
 }
 
 func (s *TCPSpec) InitTCP() {

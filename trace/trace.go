@@ -34,6 +34,7 @@ type Config struct {
 	ICMPMode         int
 	SrcAddr          string
 	SrcPort          int
+	SourceDevice     string
 	BeginHop         int
 	MaxHops          int
 	NumMeasurements  int
@@ -54,6 +55,7 @@ type Config struct {
 	AsyncPrinter     func(res *Result)
 	PktSize          int
 	Maptrace         bool
+	DisableMPLS      bool
 }
 
 type Method string
@@ -95,6 +97,8 @@ type Tracer interface {
 
 func Traceroute(method Method, config Config) (*Result, error) {
 	var tracer Tracer
+
+	normalizeRuntimeConfig(&config)
 
 	if config.MaxHops == 0 {
 		config.MaxHops = 30
@@ -181,6 +185,18 @@ func Traceroute(method Method, config Config) (*Result, error) {
 		}
 	}
 	return result, err
+}
+
+func normalizeRuntimeConfig(config *Config) {
+	if config == nil {
+		return
+	}
+	if config.SourceDevice == "" && util.SrcDev != "" {
+		config.SourceDevice = util.SrcDev
+	}
+	if !config.DisableMPLS && util.DisableMPLS {
+		config.DisableMPLS = true
+	}
 }
 
 type Result struct {
@@ -725,8 +741,8 @@ func findValid(hexStr string) string {
 	return ""
 }
 
-func extractMPLS(msg internal.ReceivedMessage) []string {
-	if util.DisableMPLS {
+func extractMPLS(msg internal.ReceivedMessage, disableMPLS bool) []string {
+	if disableMPLS {
 		return nil
 	}
 

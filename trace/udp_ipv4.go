@@ -318,6 +318,7 @@ func (t *UDPTracer) Execute() (res *Result, err error) {
 		t.DstIP,
 		t.DstPort,
 	)
+	s.SourceDevice = t.SourceDevice
 
 	s.InitICMP()
 	s.InitUDP()
@@ -403,7 +404,7 @@ func (t *UDPTracer) Execute() (res *Result, err error) {
 }
 
 func (t *UDPTracer) handleICMPMessage(msg internal.ReceivedMessage, finish time.Time, data []byte) {
-	mpls := extractMPLS(msg)
+	mpls := extractMPLS(msg, t.DisableMPLS)
 
 	seq, err := util.GetUDPSeq(data)
 	if err != nil {

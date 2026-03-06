@@ -271,6 +271,7 @@ func (t *TCPTracer) Execute() (res *Result, err error) {
 		t.DstPort,
 		t.PktSize,
 	)
+	s.SourceDevice = t.SourceDevice
 
 	s.InitICMP()
 	s.InitTCP()
@@ -354,7 +355,7 @@ func (t *TCPTracer) Execute() (res *Result, err error) {
 }
 
 func (t *TCPTracer) handleICMPMessage(msg internal.ReceivedMessage, finish time.Time, data []byte) {
-	mpls := extractMPLS(msg)
+	mpls := extractMPLS(msg, t.DisableMPLS)
 
 	header, err := util.GetICMPResponsePayload(data)
 	if err != nil {

@@ -93,6 +93,7 @@ func RunMTR(ctx context.Context, method Method, baseConfig Config, opts MTROptio
 
 // runMTRPerHop 使用 per-hop 独立调度模式。
 func runMTRPerHop(ctx context.Context, method Method, baseConfig Config, opts MTROptions, onSnapshot MTROnSnapshot) error {
+	normalizeRuntimeConfig(&baseConfig)
 	baseConfig.NumMeasurements = 1
 	baseConfig.MaxAttempts = 1
 	baseConfig.RealtimePrinter = nil
@@ -145,6 +146,7 @@ func runMTRPerHop(ctx context.Context, method Method, baseConfig Config, opts MT
 
 // runMTRRoundBased 使用 legacy round-based 调度模式（Web MTR 兼容）。
 func runMTRRoundBased(ctx context.Context, method Method, baseConfig Config, opts MTROptions, onSnapshot MTROnSnapshot) error {
+	normalizeRuntimeConfig(&baseConfig)
 	if opts.Interval <= 0 {
 		opts.Interval = time.Second
 	}
@@ -625,7 +627,7 @@ func (e *mtrICMPEngine) onICMP(msg internal.ReceivedMessage, finish time.Time, s
 	e.replied[seq] = &mtrProbeReply{
 		peer: msg.Peer,
 		rtt:  rtt,
-		mpls: extractMPLS(msg),
+		mpls: extractMPLS(msg, e.config.DisableMPLS),
 	}
 	delete(e.sentAt, seq)
 

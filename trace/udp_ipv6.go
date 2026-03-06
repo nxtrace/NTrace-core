@@ -270,6 +270,7 @@ func (t *UDPTracerIPv6) Execute() (res *Result, err error) {
 		t.DstIP,
 		t.DstPort,
 	)
+	s.SourceDevice = t.SourceDevice
 
 	s.InitICMP()
 	s.InitUDP()
@@ -339,7 +340,7 @@ func (t *UDPTracerIPv6) Execute() (res *Result, err error) {
 }
 
 func (t *UDPTracerIPv6) handleICMPMessage(msg internal.ReceivedMessage, finish time.Time, data []byte) {
-	mpls := extractMPLS(msg)
+	mpls := extractMPLS(msg, t.DisableMPLS)
 
 	header, err := util.GetICMPResponsePayload(data)
 	if err != nil {

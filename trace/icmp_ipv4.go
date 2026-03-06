@@ -348,7 +348,7 @@ func (t *ICMPTracer) Execute() (res *Result, err error) {
 }
 
 func (t *ICMPTracer) handleICMPMessage(msg internal.ReceivedMessage, finish time.Time, seq int) {
-	mpls := extractMPLS(msg)
+	mpls := extractMPLS(msg, t.DisableMPLS)
 
 	// 非阻塞投递；如果队列已满则直接丢弃该任务
 	select {

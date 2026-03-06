@@ -123,7 +123,7 @@ func prepareTrace(req traceRequest) (*traceExecution, int, error) {
 	}
 
 	if exec.Req.IntervalMs <= 0 {
-		exec.Req.IntervalMs = 2000
+		exec.Req.IntervalMs = 0
 	}
 	if exec.Req.MaxRounds < 0 {
 		exec.Req.MaxRounds = 0
@@ -224,42 +224,16 @@ func traceHandler(c *gin.Context) {
 	traceMu.Lock()
 	defer traceMu.Unlock()
 
-	prevSrcPort := util.SrcPort
-	prevDstIP := util.DstIP
-	prevSrcDev := util.SrcDev
-	prevDisableMPLS := util.DisableMPLS
-	prevPowProvider := util.PowProviderParam
-	defer func() {
-		util.SrcPort = prevSrcPort
-		util.DstIP = prevDstIP
-		util.SrcDev = prevSrcDev
-		util.DisableMPLS = prevDisableMPLS
-		util.PowProviderParam = prevPowProvider
-	}()
-
 	if setup.NeedsLeoWS {
-		if setup.PowProvider != "" {
-			log.Printf("[deploy] LeoMoeAPI using custom PoW provider=%s", sanitizeLogParam(setup.PowProvider))
-		} else {
-			log.Printf("[deploy] LeoMoeAPI using default PoW provider")
+		if _, err := withTraceSetupContext(setup, func() (struct{}, error) {
+			ensureLeoMoeConnection()
+			return struct{}{}, nil
+		}); err != nil {
+			log.Printf("[deploy] failed to initialize LeoMoeAPI connection target=%s error=%v", sanitizeLogParam(setup.Target), err)
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
 		}
-		util.PowProviderParam = setup.PowProvider
-		ensureLeoMoeConnection()
-	} else if setup.PowProvider != "" {
-		log.Printf("[deploy] overriding PoW provider=%s", sanitizeLogParam(setup.PowProvider))
-		util.PowProviderParam = setup.PowProvider
-	} else {
-		util.PowProviderParam = ""
 	}
-
-	util.SrcPort = setup.Req.SourcePort
-	util.DstIP = setup.IP.String()
-	if setup.Req.SourceDevice != "" {
-		util.SrcDev = setup.Req.SourceDevice
-	} else {
-		util.SrcDev = ""
-	}
-	util.DisableMPLS = setup.Req.DisableMPLS
 
 	configured := setup.Config
 	log.Printf("[deploy] starting trace target=%s resolved=%s method=%s lang=%s queries=%d maxHops=%d", sanitizeLogParam(setup.Target), setup.IP.String(), string(setup.Method), sanitizeLogParam(configured.Lang), configured.NumMeasurements, configured.MaxHops)
@@ -356,6 +330,7 @@ func buildTraceConfig(req traceRequest, ip net.IP, dataProvider string, port int
 		ICMPMode:         req.ICMPMode,
 		SrcAddr:          req.SourceAddress,
 		SrcPort:          req.SourcePort,
+		SourceDevice:     strings.TrimSpace(req.SourceDevice),
 		BeginHop:         beginHop,
 		MaxHops:          maxHops,
 		NumMeasurements:  queries,
@@ -364,7 +339,7 @@ func buildTraceConfig(req traceRequest, ip net.IP, dataProvider string, port int
 		Timeout:          time.Duration(timeout) * time.Millisecond,
 		DstIP:            ip,
 		DstPort:          port,
-		IPGeoSource:      ipgeo.GetSource(dataProvider),
+		IPGeoSource:      ipgeo.GetSourceWithGeoDNS(dataProvider, req.DotServer),
 		RDNS:             !req.DisableRDNS,
 		AlwaysWaitRDNS:   alwaysWait,
 		PacketInterval:   req.PacketInterval,
@@ -373,7 +348,39 @@ func buildTraceConfig(req traceRequest, ip net.IP, dataProvider string, port int
 		DN42:             req.DN42,
 		PktSize:          packetSize,
 		Maptrace:         !req.DisableMaptrace,
+		DisableMPLS:      req.DisableMPLS,
 	}
+}
+
+func withTraceSetupContext[T any](setup *traceExecution, callback func() (T, error)) (T, error) {
+	if callback == nil {
+		var zero T
+		return zero, nil
+	}
+
+	prevPowProvider := util.PowProviderParam
+	util.PowProviderParam = ""
+	if setup != nil {
+		util.PowProviderParam = setup.PowProvider
+		if setup.NeedsLeoWS {
+			if setup.PowProvider != "" {
+				log.Printf("[deploy] LeoMoeAPI using custom PoW provider=%s", sanitizeLogParam(setup.PowProvider))
+			} else {
+				log.Printf("[deploy] LeoMoeAPI using default PoW provider")
+			}
+		} else if setup.PowProvider != "" {
+			log.Printf("[deploy] overriding PoW provider=%s", sanitizeLogParam(setup.PowProvider))
+		}
+	}
+	defer func() {
+		util.PowProviderParam = prevPowProvider
+	}()
+
+	dotServer := ""
+	if setup != nil {
+		dotServer = strings.TrimSpace(strings.ToLower(setup.Req.DotServer))
+	}
+	return util.WithGeoDNSResolver(dotServer, callback)
 }
 
 func convertHops(res *trace.Result, lang string) []hopResponse {

@@ -194,10 +194,11 @@
   - `MaxRounds` → `MaxPerHop`（0 = 无限运行直到客户端断开）。
   - 不再使用 legacy round-based 的 `Interval` / `RunRound`。
 - `executeMTRRaw()` 两路分支：
-  - `HopInterval > 0`：per-hop 模式，仅在 LeoMoe/FastIP 初始化阶段短暂加锁；长期探测不再依赖 `SrcDev` / `DisableMPLS` 等进程级全局。
+  - `HopInterval > 0`：per-hop 模式，**短暂加锁** `setupTraceGlobals` 后立即释放 `traceMu`，不阻塞其他请求。
   - fallback：legacy round-based 模式（保留兼容），`RunRound` 回调内 per-round 锁定。
+- `setupTraceGlobals(setup)` / `restoreTraceGlobals(setup)`：统一全局变量设置逻辑，`executeTrace` 也已复用。
 - `traceRequest` 新增 `HopIntervalMs` 字段（`json:"hop_interval_ms"`），与 `IntervalMs` 解耦。
-- 前端 MTR 请求现在发送 `hop_interval_ms=1000`，不再把旧的 `interval_ms=2000` 当默认值。
+- 前端（`app.js`、`mtr_agg.js`）无需改动——已有客户端聚合，与调度模型无关。
 
 ### 前端渲染节流（`server/web/assets/app.js`）
 
@@ -218,10 +219,8 @@
 - `--dot-server` 不仅影响目标域名解析，也影响 GeoIP API / LeoMoe FastIP 的域名解析链路。
 - 关键文件：`util/dns_resolver.go`
   - `SetGeoDNSResolver(dotServer)`
-  - `WithGeoDNSResolver(dotServer, fn)`：为 Web/API 请求提供作用域化的 resolver 切换，避免并发请求互相污染。
   - `LookupHostForGeo(ctx, host)`：IP 字面量短路 -> DoT -> 失败时按配置 fallback 系统 DNS
 - `cmd/cmd.go` 在早期阶段（fast-trace / ws 初始化之前）注入 DoT 解析策略，避免早期分支绕过。
-- `server/trace_handler.go` 通过 `ipgeo.GetSourceWithGeoDNS(...)` + `WithGeoDNSResolver(...)` 让 Web/API 请求也遵守 `dot_server`，包括 LeoMoe/FastIP 初始化阶段。
 - Geo HTTP 请求统一走 `util.NewGeoHTTPClient(...)`（`util/http_client_geo.go`）。
 
 ## LeoMoe FastIP 与 MTR 首行
@@ -236,7 +235,6 @@
 ## `--source` / `--dev` 现状
 
 - `--dev` 在 `cmd/cmd.go` 先解析网卡并推导 `srcAddr`（已处理非 `*net.IPNet` 地址类型，避免 panic）。
-- `trace.Config` 现在显式携带 `SourceDevice` / `DisableMPLS`，Darwin TCP/UDP 抓包与 MPLS 解析优先走会话级配置，不再依赖 Web 侧临时改写全局变量。
 - MTR 标题显示源信息来自：
   - `--source`（最高优先）
   - `--dev` 推导
