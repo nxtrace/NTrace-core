@@ -54,16 +54,10 @@ func runMTRTUI(method trace.Method, conf trace.Config, hopIntervalMs int, maxPer
 	}
 
 	// Ctrl-C 优雅退出
-	ctx, cancel := context.WithCancel(context.Background())
+	sigCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	ctx, cancel := context.WithCancel(sigCtx)
 	defer cancel()
-
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
-	defer signal.Stop(sigCh)
-	go func() {
-		<-sigCh
-		cancel()
-	}()
 
 	// 初始化 TUI 控制器
 	ui := newMTRUI(cancel, initialDisplayMode)
@@ -114,7 +108,6 @@ func runMTRTUI(method trace.Method, conf trace.Config, hopIntervalMs int, maxPer
 	err := trace.RunMTR(ctx, method, roundConf, opts, onSnapshot)
 	if err != nil && !errors.Is(err, context.Canceled) {
 		// 离开备用屏幕后再打印错误
-		ui.Leave()
 		fmt.Println(err)
 	}
 }
@@ -129,16 +122,8 @@ func runMTRReport(method trace.Method, conf trace.Config, hopIntervalMs int, max
 		maxPerHop = 10
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
-	defer signal.Stop(sigCh)
-	go func() {
-		<-sigCh
-		cancel()
-	}()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	startTime := time.Now()
 
@@ -192,16 +177,8 @@ func runMTRRaw(method trace.Method, conf trace.Config, hopIntervalMs int, maxPer
 		hopIntervalMs = 1000
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
-	defer signal.Stop(sigCh)
-	go func() {
-		<-sigCh
-		cancel()
-	}()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	opts := trace.MTRRawOptions{
 		HopInterval: time.Duration(hopIntervalMs) * time.Millisecond,

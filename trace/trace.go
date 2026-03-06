@@ -30,6 +30,7 @@ var (
 )
 
 type Config struct {
+	Context          context.Context
 	OSType           int
 	ICMPMode         int
 	SrcAddr          string
@@ -102,6 +103,9 @@ func Traceroute(method Method, config Config) (*Result, error) {
 
 	if config.MaxHops == 0 {
 		config.MaxHops = 30
+	}
+	if config.PktSize < 0 {
+		config.PktSize = 0
 	}
 
 	if config.NumMeasurements == 0 {
@@ -187,12 +191,23 @@ func Traceroute(method Method, config Config) (*Result, error) {
 	return result, err
 }
 
+func TracerouteWithContext(ctx context.Context, method Method, config Config) (*Result, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	config.Context = ctx
+	return Traceroute(method, config)
+}
+
 func normalizeRuntimeConfig(config *Config) {
 	if config == nil {
 		return
 	}
 	if config.SourceDevice == "" && util.SrcDev != "" {
 		config.SourceDevice = util.SrcDev
+	}
+	if config.PktSize < 0 {
+		config.PktSize = 0
 	}
 }
 

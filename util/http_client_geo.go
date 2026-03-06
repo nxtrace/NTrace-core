@@ -2,7 +2,6 @@ package util
 
 import (
 	"context"
-	"crypto/tls"
 	"net"
 	"net/http"
 	"time"
@@ -18,33 +17,34 @@ func NewGeoHTTPClient(timeout time.Duration) *http.Client {
 		KeepAlive: 30 * time.Second,
 	}
 
-	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{},
-		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			host, port, err := net.SplitHostPort(addr)
-			if err != nil {
-				// addr 可能不含端口号；原样拨号
-				return dialer.DialContext(ctx, network, addr)
-			}
+	transport := &http.Transport{}
+	if base, ok := http.DefaultTransport.(*http.Transport); ok && base != nil {
+		transport = base.Clone()
+	}
+	transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		host, port, err := net.SplitHostPort(addr)
+		if err != nil {
+			// addr 可能不含端口号；原样拨号
+			return dialer.DialContext(ctx, network, addr)
+		}
 
-			// 用 Geo DNS 策略解析 host
-			ips, err := LookupHostForGeo(ctx, host)
-			if err != nil {
-				return nil, err
-			}
+		// 用 Geo DNS 策略解析 host
+		ips, err := LookupHostForGeo(ctx, host)
+		if err != nil {
+			return nil, err
+		}
 
-			// 依次尝试解析到的 IP，优先使用地址族匹配的
-			var lastErr error
-			for _, ip := range ips {
-				target := net.JoinHostPort(ip.String(), port)
-				conn, dialErr := dialer.DialContext(ctx, network, target)
-				if dialErr == nil {
-					return conn, nil
-				}
-				lastErr = dialErr
+		// 依次尝试解析到的 IP，优先使用地址族匹配的
+		var lastErr error
+		for _, ip := range ips {
+			target := net.JoinHostPort(ip.String(), port)
+			conn, dialErr := dialer.DialContext(ctx, network, target)
+			if dialErr == nil {
+				return conn, nil
 			}
-			return nil, lastErr
-		},
+			lastErr = dialErr
+		}
+		return nil, lastErr
 	}
 
 	return &http.Client{

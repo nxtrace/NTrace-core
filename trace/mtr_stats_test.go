@@ -225,6 +225,16 @@ func TestAllTimeout(t *testing.T) {
 	}
 }
 
+func TestUpdate_NilResult(t *testing.T) {
+	agg := NewMTRAggregator()
+	if got := agg.Update(nil, 1); got != nil {
+		t.Fatalf("Update(nil, 1) = %v, want nil", got)
+	}
+	if got := agg.Update(&Result{}, 1); got != nil {
+		t.Fatalf("Update(empty result, 1) = %v, want nil", got)
+	}
+}
+
 func TestHostnamePropagation(t *testing.T) {
 	agg := NewMTRAggregator()
 	hop := mkHop(1, "1.1.1.1", 10*time.Millisecond)

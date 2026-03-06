@@ -68,7 +68,7 @@ func (c *IPDBOneTokenCache) SetToken(token string, expiresIn time.Duration) {
 type IPDBOneClient struct {
 	config     *IPDBOneConfig
 	tokenCache *IPDBOneTokenCache
-	tokenInit  sync.Once
+	tokenInit  *sync.Once
 	httpClient *http.Client
 }
 
@@ -77,7 +77,20 @@ func NewIPDBOneClient() *IPDBOneClient {
 	return &IPDBOneClient{
 		config:     GetDefaultConfig(),
 		tokenCache: &IPDBOneTokenCache{},
+		tokenInit:  &sync.Once{},
 		httpClient: util.NewGeoHTTPClient(3 * time.Second),
+	}
+}
+
+func (c *IPDBOneClient) cloneWithTimeout(timeout time.Duration) *IPDBOneClient {
+	if c == nil || timeout <= 0 {
+		return c
+	}
+	return &IPDBOneClient{
+		config:     c.config,
+		tokenCache: c.tokenCache,
+		tokenInit:  c.tokenInit,
+		httpClient: util.NewGeoHTTPClient(timeout),
 	}
 }
 
@@ -255,10 +268,9 @@ var defaultClient = NewIPDBOneClient()
 
 // IPDBOne looks up IP information from IPDB.One (maintains backward compatibility)
 func IPDBOne(ip string, timeout time.Duration, lang string, _ bool) (*IPGeoData, error) {
-	// Override timeout if specified
+	client := defaultClient
 	if timeout > 0 {
-		defaultClient.httpClient.Timeout = timeout
+		client = defaultClient.cloneWithTimeout(timeout)
 	}
-
-	return defaultClient.LookupIP(ip, lang)
+	return client.LookupIP(ip, lang)
 }

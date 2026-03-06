@@ -33,6 +33,18 @@ var (
 	geoResolverOverride *net.Resolver
 )
 
+func setGeoResolverOverride(resolver *net.Resolver) {
+	geoMu.Lock()
+	defer geoMu.Unlock()
+	geoResolverOverride = resolver
+}
+
+func getGeoResolverOverride() *net.Resolver {
+	geoMu.RLock()
+	defer geoMu.RUnlock()
+	return geoResolverOverride
+}
+
 // SetGeoDNSResolver 设置 Geo 解析使用的 DoT 服务器名称。
 // 空字符串表示仅使用系统 DNS。
 func SetGeoDNSResolver(dotServer string) {
@@ -148,8 +160,8 @@ func LookupHostForGeo(ctx context.Context, host string) ([]net.IP, error) {
 
 	// ── 2. DoT 解析 ──
 	r := ResolverForDot(dotServer)
-	if geoResolverOverride != nil {
-		r = geoResolverOverride
+	if override := getGeoResolverOverride(); override != nil {
+		r = override
 	}
 	if r != nil {
 		ips, err := resolveHost(ctx, r, host)

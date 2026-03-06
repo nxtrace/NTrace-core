@@ -80,10 +80,12 @@
   - `runMTRTUI(...)` / `runMTRReport(...)` / `runMTRRaw(...)`
   - `normalizeMTRTraceConfig(conf)` / `normalizeMTRReportConfig(conf, wide)`
   - `buildAPIInfo(...)` / `buildRawAPIInfoLine(...)`
+  - MTR CLI 现在统一使用 `signal.NotifyContext(...)` 管理 Ctrl-C / SIGTERM；不再保留额外的 `sigCh` + goroutine 等待器。
 - 交互控制：`cmd/mtr_ui.go`
   - alternate screen + raw mode
   - 输入状态机 `mtrInputParser`（字节流，吞掉 CSI/SS3/OSC/鼠标/焦点等序列）
   - Enter/Leave 显式关闭输入扩展模式：1000/1002/1003/1006/1015/1004/2004
+  - Quit 路径会先判空 `cancel`，因此 `newMTRUI(nil, ...)` / 测试注入 nil 不会 panic。
 - 核心探测循环：`trace/mtr_runner.go`
   - `RunMTR` / `mtrLoop` / `RunMTRRaw`
   - 支持暂停、重置、流式预览（`ProgressThrottle` 默认 200ms）
@@ -199,6 +201,7 @@
   - `trace/runMTRRawRoundBased()` 也会先做 `normalizeRuntimeConfig(&cfg)`，因此 legacy raw 路径同样能继承 `SourceDevice`；`DisableMPLS` 不再从全局反向覆盖会话配置。
 - `traceRequest` 新增 `HopIntervalMs` 字段（`json:"hop_interval_ms"`），与 `IntervalMs` 解耦。
 - 前端 MTR 请求现在发送 `hop_interval_ms=1000`，不再把旧的 `interval_ms=2000` 当默认值。
+- 前端 raw 聚合键现在按 TTL 折叠，避免同一 hop 的 timeout / success 被拆成两行。
 
 ### 前端渲染节流（`server/web/assets/app.js`）
 
@@ -220,16 +223,18 @@
 - 关键文件：`util/dns_resolver.go`
   - `SetGeoDNSResolver(dotServer)`
   - `WithGeoDNSResolver(dotServer, fn)`：为 Web/API 请求提供作用域化的 resolver 切换；不同 resolver 串行切换，相同 resolver 允许安全嵌套，避免 `GetSourceWithGeoDNS` + 外层作用域组合时死锁。
+  - `geoResolverOverride` 的读写现在也走 `geoMu`，避免测试覆盖 resolver 时的数据竞争。
   - `LookupHostForGeo(ctx, host)`：IP 字面量短路 -> DoT -> 失败时按配置 fallback 系统 DNS
 - `cmd/cmd.go` 在早期阶段（fast-trace / ws 初始化之前）注入 DoT 解析策略，避免早期分支绕过。
 - `server/trace_handler.go` 通过 `ipgeo.GetSourceWithGeoDNS(...)` + `WithGeoDNSResolver(...)` 让 Web/API 请求也遵守 `dot_server`，包括 LeoMoe/FastIP 初始化阶段。
-- Geo HTTP 请求统一走 `util.NewGeoHTTPClient(...)`（`util/http_client_geo.go`）。
+- Geo HTTP 请求统一走 `util.NewGeoHTTPClient(...)`（`util/http_client_geo.go`），其 Transport 现在从默认 Transport `Clone()` 而来，保留代理/HTTP2/连接池等标准行为。
 
 ## LeoMoe FastIP 与 MTR 首行
 
 - `util/latency.go`：
   - `FastIPMetaCache` 缓存节点元数据（IP/Latency/NodeName）
   - `SuppressFastIPOutput` 可抑制彩色横幅
+- `GetFastIP(...)` 的 DNS 阶段现在显式受 `timeout` 限制；`FastIPMetaCache` 也改为在 fallback/default IP 决定后再写入，避免缓存空 IP。
 - MTR 模式在进入 TUI 前会设 `SuppressFastIPOutput=true`，避免污染主终端历史。
 - MTR TUI/report 首行 `APIInfo` 由 `cmd/mtr_mode.go` 的 `buildAPIInfo(...)` 生成（仅 LeoMoeAPI 且有元数据时显示）。
 - MTR raw 首行由 `buildRawAPIInfoLine(...)` 生成（格式略不同，包含延迟信息）。
@@ -238,6 +243,7 @@
 
 - `--dev` 在 `cmd/cmd.go` 先解析网卡并推导 `srcAddr`（已处理非 `*net.IPNet` 地址类型，避免 panic）。
 - `trace.Config` 现在显式携带 `SourceDevice` / `DisableMPLS`，Darwin TCP/UDP 抓包与 MPLS 解析优先走会话级配置，不再依赖 Web 侧临时改写全局变量。
+- `trace.Config` 也显式携带 `Context`；`TracerouteWithContext(...)` 通过把上游 ctx 传入各 tracer 的 `signal.NotifyContext(...)` 基底，让 TCP/UDP fallback MTR 可以响应取消。
 - Windows TCP 目前仍无法把 `SourceDevice` 映射到 WinDivert 接口选择；当前策略是显式报错拒绝，而不是静默忽略该字段。
 - MTR 标题显示源信息来自：
   - `--source`（最高优先）
@@ -254,6 +260,7 @@
   - test workflow 中 `GOTOOLCHAIN=go1.26.0+auto`
   - build matrix 已移除 `windows/arm`
 - `.cross_compile.sh` 与 workflow 里的 `go build` 现在都用数组构造 `-tags` 参数，避免 shell word-splitting；脚本也会把当前 `GOARM` 传给 `compress_with_upx`，使 linux/armv7 目标能命中对应压缩分支。
+- `ipgeo/ipdbone.go` 不再原地修改全局 `defaultClient.httpClient.Timeout`；超时覆盖会通过克隆 client（复用 token cache / token init，同步替换整个 HTTP client）实现，避免 dial timeout 与 client timeout 脱节。
 
 ## 关键文件导航
 

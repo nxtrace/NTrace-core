@@ -284,7 +284,11 @@ func (t *ICMPTracer) Execute() (res *Result, err error) {
 	s.InitICMP()
 	defer s.Close()
 
-	sigCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	baseCtx := t.Context
+	if baseCtx == nil {
+		baseCtx = context.Background()
+	}
+	sigCtx, stop := signal.NotifyContext(baseCtx, os.Interrupt, syscall.SIGTERM)
 	ctx, cancel := context.WithCancelCause(sigCtx)
 	t.final.Store(-1)
 

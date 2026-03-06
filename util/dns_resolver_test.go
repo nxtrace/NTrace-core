@@ -109,9 +109,9 @@ func TestLookupHostForGeo_DoTFailFallback(t *testing.T) {
 	}
 	SetGeoDNSResolver("cloudflare") // 需要非空，ResolverForDot 会被 override 覆盖
 	SetGeoDNSFallback(true)
-	geoResolverOverride = badResolver
+	setGeoResolverOverride(badResolver)
 	defer func() {
-		geoResolverOverride = nil
+		setGeoResolverOverride(nil)
 		SetGeoDNSResolver("")
 		SetGeoDNSFallback(true)
 	}()
@@ -139,9 +139,9 @@ func TestLookupHostForGeo_DoTFailNoFallback(t *testing.T) {
 	}
 	SetGeoDNSResolver("cloudflare")
 	SetGeoDNSFallback(false)
-	geoResolverOverride = badResolver
+	setGeoResolverOverride(badResolver)
 	defer func() {
-		geoResolverOverride = nil
+		setGeoResolverOverride(nil)
 		SetGeoDNSResolver("")
 		SetGeoDNSFallback(true)
 	}()

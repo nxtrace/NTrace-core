@@ -375,7 +375,7 @@ func runMTRScheduler(
 				return false
 			}
 		}
-		return true
+		return inFlight == 0
 	}
 
 	handleReset := func() {

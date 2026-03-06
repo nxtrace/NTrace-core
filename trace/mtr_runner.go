@@ -121,6 +121,7 @@ func runMTRPerHop(ctx context.Context, method Method, baseConfig Config, opts MT
 		}
 		defer engine.close()
 		if err := engine.start(ctx); err != nil {
+			engine.close()
 			return fmt.Errorf("mtr: %w", err)
 		}
 		prober = engine
@@ -180,6 +181,7 @@ func runMTRRoundBased(ctx context.Context, method Method, baseConfig Config, opt
 		}
 		defer engine.close()
 		if err := engine.start(ctx); err != nil {
+			engine.close()
 			return fmt.Errorf("mtr: %w", err)
 		}
 		return mtrLoop(ctx, engine, baseConfig, opts, agg, onSnapshot, true, nil)
@@ -474,8 +476,10 @@ func (e *mtrICMPEngine) start(ctx context.Context) error {
 	select {
 	case <-ready:
 	case <-ctx.Done():
+		e.close()
 		return ctx.Err()
 	case <-time.After(5 * time.Second):
+		e.close()
 		return fmt.Errorf("ICMP listener startup timeout")
 	}
 	time.Sleep(100 * time.Millisecond)
@@ -580,8 +584,10 @@ func (e *mtrICMPEngine) rotateEngine(ctx context.Context) error {
 	select {
 	case <-ready:
 	case <-ctx.Done():
+		e.close()
 		return ctx.Err()
 	case <-time.After(5 * time.Second):
+		e.close()
 		return fmt.Errorf("ICMP listener restart timeout on echoID rotation")
 	}
 	return nil
@@ -867,8 +873,8 @@ type mtrFallbackProber struct {
 	config Config
 }
 
-func (p *mtrFallbackProber) probeRound(_ context.Context) (*Result, error) {
-	return Traceroute(p.method, p.config)
+func (p *mtrFallbackProber) probeRound(ctx context.Context) (*Result, error) {
+	return TracerouteWithContext(ctx, p.method, p.config)
 }
 
 func (p *mtrFallbackProber) close() {}
@@ -987,7 +993,7 @@ type mtrFallbackTTLProber struct {
 	config Config
 }
 
-func (p *mtrFallbackTTLProber) ProbeTTL(_ context.Context, ttl int) (mtrProbeResult, error) {
+func (p *mtrFallbackTTLProber) ProbeTTL(ctx context.Context, ttl int) (mtrProbeResult, error) {
 	cfg := p.config
 	cfg.BeginHop = ttl
 	cfg.MaxHops = ttl
@@ -997,7 +1003,7 @@ func (p *mtrFallbackTTLProber) ProbeTTL(_ context.Context, ttl int) (mtrProbeRes
 	cfg.RealtimePrinter = nil
 	cfg.AsyncPrinter = nil
 
-	res, err := Traceroute(p.method, cfg)
+	res, err := TracerouteWithContext(ctx, p.method, cfg)
 	if err != nil {
 		return mtrProbeResult{TTL: ttl}, err
 	}

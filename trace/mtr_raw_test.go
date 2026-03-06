@@ -92,7 +92,8 @@ func TestRunMTRRaw_RespectsMaxRoundsAndInterval(t *testing.T) {
 	if calls != 3 {
 		t.Fatalf("traceroute call count = %d, want 3", calls)
 	}
-	if time.Since(start) < 35*time.Millisecond {
+	// Three rounds wait twice at 20ms each; allow a small scheduler tolerance below 40ms.
+	if time.Since(start) < 38*time.Millisecond {
 		t.Fatalf("interval appears not applied, elapsed=%v", time.Since(start))
 	}
 }

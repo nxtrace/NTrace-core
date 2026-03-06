@@ -96,6 +96,7 @@ func runMTRRawPerHop(ctx context.Context, method Method, cfg Config, opts MTRRaw
 		}
 		defer engine.close()
 		if err := engine.start(ctx); err != nil {
+			engine.close()
 			return fmt.Errorf("mtr raw: %w", err)
 		}
 		prober = engine

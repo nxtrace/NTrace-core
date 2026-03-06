@@ -352,7 +352,9 @@ func (u *mtrUI) ReadKeysLoop(ctx context.Context) {
 			action := parser.Feed(buf[i])
 			switch action {
 			case mtrActionQuit:
-				u.cancel()
+				if u.cancel != nil {
+					u.cancel()
+				}
 				return
 			case mtrActionPause:
 				atomic.StoreInt32(&u.paused, 1)
