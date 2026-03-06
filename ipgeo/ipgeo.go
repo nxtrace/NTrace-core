@@ -52,6 +52,8 @@ func GetSource(s string) Source {
 		return disableGeoIP
 	case "IPDB.ONE":
 		return IPDBOne
+	case "MAXMIND-LOCAL":
+		return MaxMindLocal
 	default:
 		return LeoIP
 	}
