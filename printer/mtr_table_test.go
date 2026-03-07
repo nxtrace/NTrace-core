@@ -510,6 +510,28 @@ func TestTUI_HostExpandsOnWideTerminal(t *testing.T) {
 	}
 }
 
+// TestTUI_ComputeLayout_NonZeroSntHint 验证 sntWidthForMax 返回非零值后
+// computeLayout 使用更宽的 Snt 列（maxSnt>=1000 → sntWidth>=4）。
+func TestTUI_ComputeLayout_NonZeroSntHint(t *testing.T) {
+	maxSnt := 1500
+	sntHint := sntWidthForMax(maxSnt)
+	if sntHint <= tuiSntDefault {
+		t.Fatalf("sntWidthForMax(%d)=%d, want > %d", maxSnt, sntHint, tuiSntDefault)
+	}
+
+	lo := computeLayout(200, tuiPrefixW, sntHint)
+	if lo.sntW != sntHint {
+		t.Errorf("computeLayout sntW=%d, want %d (from sntWidthForMax(%d))", lo.sntW, sntHint, maxSnt)
+	}
+
+	// 同终端宽度下，更宽的 Snt 列应压缩 Host 列
+	lo0 := computeLayout(200, tuiPrefixW, 0)
+	if lo.hostW >= lo0.hostW {
+		t.Errorf("wider snt column should reduce host width: hostW(snt=%d)=%d, hostW(snt=0)=%d",
+			sntHint, lo.hostW, lo0.hostW)
+	}
+}
+
 // TestTUI_HostShrinksWhenWidthReduced 窄终端(80列)时 Host 列宽应被压缩。
 func TestTUI_HostShrinksWhenWidthReduced(t *testing.T) {
 	lo := computeLayout(80, tuiPrefixW, 0)

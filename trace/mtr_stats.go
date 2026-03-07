@@ -74,12 +74,12 @@ func NewMTRAggregator() *MTRAggregator {
 
 // Update 接收一轮 traceroute 的 Result 并更新统计，返回当前快照。
 func (agg *MTRAggregator) Update(res *Result, queries int) []MTRHopStat {
-	if res == nil || len(res.Hops) == 0 {
-		return nil
-	}
-
 	agg.mu.Lock()
 	defer agg.mu.Unlock()
+
+	if res == nil || len(res.Hops) == 0 {
+		return agg.snapshotLocked()
+	}
 
 	if queries <= 0 {
 		queries = 1

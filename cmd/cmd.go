@@ -266,11 +266,11 @@ func Execute() {
 	tcp := parser.Flag("T", "tcp", &argparse.Options{Help: "Use TCP SYN for tracerouting (default dest-port is 80)"})
 	udp := parser.Flag("U", "udp", &argparse.Options{Help: "Use UDP SYN for tracerouting (default dest-port is 33494)"})
 	// ── Fast-trace: hidden in ntr (always conflicts with default MTR mode) ──
-	var fast_trace *bool
+	var fastTraceFlag *bool
 	if !defaultMTR {
-		fast_trace = parser.Flag("F", "fast-trace", &argparse.Options{Help: "One-Key Fast Trace to China ISPs"})
+		fastTraceFlag = parser.Flag("F", "fast-trace", &argparse.Options{Help: "One-Key Fast Trace to China ISPs"})
 	} else {
-		fast_trace = ptrBool(false)
+		fastTraceFlag = ptrBool(false)
 	}
 	port := parser.Int("p", "port", &argparse.Options{Help: "Set the destination port to use. With default of 80 for \"tcp\", 33494 for \"udp\""})
 	var icmpMode *int
@@ -420,7 +420,8 @@ func Execute() {
 	}
 
 	// ── 统一 MTR 有效开关 ──
-	effectiveMTR := *mtrMode || *reportMode || *wideMode || defaultMTR
+	// defaultMTR 不需要出现在这里——当 defaultMTR==true 时 mtrMode 已被设为 ptrBool(true)。
+	effectiveMTR := *mtrMode || *reportMode || *wideMode
 	effectiveReport := *reportMode || *wideMode
 	effectiveWide := *wideMode
 	effectiveMTRRaw := effectiveMTR && *rawPrint
@@ -434,7 +435,7 @@ func Execute() {
 			"output":    *output,
 			"routePath": *routePath,
 			"from":      *from != "",
-			"fastTrace": *fast_trace,
+			"fastTrace": *fastTraceFlag,
 			"file":      *file != "",
 			"deploy":    *deploy,
 		}
@@ -569,7 +570,7 @@ func Execute() {
 		m = trace.ICMPTrace
 	}
 
-	if *from == "" && (*fast_trace || *file != "") {
+	if *from == "" && (*fastTraceFlag || *file != "") {
 		var paramsFastTrace = fastTrace.ParamsFastTrace{
 			OSType:         OSType,
 			ICMPMode:       *icmpMode,

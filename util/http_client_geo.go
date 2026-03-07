@@ -2,6 +2,7 @@ package util
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/http"
 	"time"
@@ -43,6 +44,9 @@ func NewGeoHTTPClient(timeout time.Duration) *http.Client {
 				return conn, nil
 			}
 			lastErr = dialErr
+		}
+		if lastErr == nil {
+			return nil, fmt.Errorf("geo DNS returned no IPs for host %q", host)
 		}
 		return nil, lastErr
 	}
