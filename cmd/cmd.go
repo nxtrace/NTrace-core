@@ -255,7 +255,12 @@ func Execute() {
 		return sanitizeUsagePositionalArgs(c.Usage(msg))
 	}
 	// Create string flag
-	init := parser.Flag("", "init", &argparse.Options{Help: "Windows ONLY: Extract WinDivert runtime to current directory"})
+	var init *bool
+	if runtime.GOOS == "windows" {
+		init = parser.Flag("", "init", &argparse.Options{Help: "Extract WinDivert runtime to current directory"})
+	} else {
+		init = ptrBool(false)
+	}
 	ipv4Only := parser.Flag("4", "ipv4", &argparse.Options{Help: "Use IPv4 only"})
 	ipv6Only := parser.Flag("6", "ipv6", &argparse.Options{Help: "Use IPv6 only"})
 	tcp := parser.Flag("T", "tcp", &argparse.Options{Help: "Use TCP SYN for tracerouting (default dest-port is 80)"})
@@ -268,7 +273,12 @@ func Execute() {
 		fast_trace = ptrBool(false)
 	}
 	port := parser.Int("p", "port", &argparse.Options{Help: "Set the destination port to use. With default of 80 for \"tcp\", 33494 for \"udp\""})
-	icmpMode := parser.Int("", "icmp-mode", &argparse.Options{Help: "Windows ONLY: Choose the method to listen for ICMP packets (1=Socket, 2=WinDivert; 0=Auto)"})
+	var icmpMode *int
+	if runtime.GOOS == "windows" {
+		icmpMode = parser.Int("", "icmp-mode", &argparse.Options{Help: "Choose the method to listen for ICMP packets (1=Socket, 2=WinDivert; 0=Auto)"})
+	} else {
+		icmpMode = ptrInt(0)
+	}
 	queriesHelp := "Set the number of latency samples to display for each hop"
 	if defaultMTR {
 		queriesHelp = "Set the max number of probes per hop in MTR mode (0 = unlimited for TUI; default 10 for --report)"

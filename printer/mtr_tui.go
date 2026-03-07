@@ -117,19 +117,33 @@ func tuiPrefixWidthForMaxTTL(maxTTL int) int {
 //
 // 绝对下限 totalWidth = prefixW+prefixGap(0)+host(1)+hostGap(2)+7×1+6×1。
 // 当 termWidth 低于下限时接受溢出——该宽度下终端本身已不可用。
-func computeLayout(termWidth, prefixW int) mtrTUILayout {
+// sntWidthForMax returns the display width needed for the given max Snt value.
+// Minimum is tuiSntDefault (3).
+func sntWidthForMax(maxSnt int) int {
+	w := tuiSntDefault
+	for v := 1000; maxSnt >= v; v *= 10 {
+		w++
+	}
+	return w
+}
+
+func computeLayout(termWidth, prefixW, sntHint int) mtrTUILayout {
 	if termWidth <= 0 {
 		termWidth = tuiDefaultTerm
 	}
 	if prefixW <= 0 {
 		prefixW = tuiPrefixW
 	}
+	sntW := tuiSntDefault
+	if sntHint > sntW {
+		sntW = sntHint
+	}
 
 	lo := mtrTUILayout{
 		termWidth: termWidth,
 		prefixW:   prefixW,
 		lossW:     tuiLossDefault,
-		sntW:      tuiSntDefault,
+		sntW:      sntW,
 		lastW:     tuiRTTDefault,
 		avgW:      tuiRTTDefault,
 		bestW:     tuiRTTDefault,
@@ -152,7 +166,7 @@ func computeLayout(termWidth, prefixW int) mtrTUILayout {
 	lo.hostW = tuiHostMin
 	metricsAvail := termWidth - leftFixed - lo.hostW - tuiHostGap
 	lo.lossW, lo.sntW, lo.lastW, lo.avgW, lo.bestW, lo.wrstW, lo.stdevW =
-		shrinkMetrics(metricsAvail)
+		shrinkMetrics(metricsAvail, sntW)
 
 	// --- Phase 3: 极窄——循环缩减 Host 直到不超宽（最低 1） ---
 	for lo.totalWidth() > termWidth && lo.hostW > 1 {
@@ -169,17 +183,21 @@ func computeLayout(termWidth, prefixW int) mtrTUILayout {
 }
 
 // shrinkMetrics 在 available 宽度内缩小 7 列指标 + 6 间距。
+// sntDefault 为当前 Snt 列目标宽度（可能因动态计算大于 tuiSntDefault）。
 //
 // 当 available 极小时，列宽可降至绝对下限 1，确保 computeLayout
 // 的 phase-3 循环能把 totalWidth 压到 termWidth 以内。
-func shrinkMetrics(available int) (lossW, sntW, lastW, avgW, bestW, wrstW, stdevW int) {
+func shrinkMetrics(available, sntDefault int) (lossW, sntW, lastW, avgW, bestW, wrstW, stdevW int) {
+	if sntDefault < tuiSntDefault {
+		sntDefault = tuiSntDefault
+	}
 	avail := available - 6*tuiMetricGap
 	if avail < 7 {
 		// 绝对下限：每列 1
 		return 1, 1, 1, 1, 1, 1, 1
 	}
 
-	defaults := [7]int{tuiLossDefault, tuiSntDefault, tuiRTTDefault, tuiRTTDefault, tuiRTTDefault, tuiRTTDefault, tuiRTTDefault}
+	defaults := [7]int{tuiLossDefault, sntDefault, tuiRTTDefault, tuiRTTDefault, tuiRTTDefault, tuiRTTDefault, tuiRTTDefault}
 	total := 0
 	for _, c := range defaults {
 		total += c
@@ -349,15 +367,19 @@ func MTRTUIRender(w io.Writer, header MTRTUIHeader, stats []trace.MTRHopStat) {
 
 // mtrTUIRenderWithWidth 是带可控宽度的内部渲染入口（测试用）。
 func mtrTUIRenderWithWidth(w io.Writer, header MTRTUIHeader, stats []trace.MTRHopStat, termWidth int) {
-	// 根据最大 TTL 动态计算前缀宽度
+	// 根据最大 TTL / 最大 Snt 动态计算前缀宽度和 Snt 列宽
 	maxTTL := 0
+	maxSnt := 0
 	for _, s := range stats {
 		if s.TTL > maxTTL {
 			maxTTL = s.TTL
 		}
+		if s.Snt > maxSnt {
+			maxSnt = s.Snt
+		}
 	}
 	prefixW := tuiPrefixWidthForMaxTTL(maxTTL)
-	lo := computeLayout(termWidth, prefixW)
+	lo := computeLayout(termWidth, prefixW, sntWidthForMax(maxSnt))
 	var b strings.Builder
 
 	// 清屏（cursor home + erase）
