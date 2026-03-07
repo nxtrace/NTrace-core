@@ -15,14 +15,14 @@
 <h6 align="center">HomePage: www.nxtrace.org</h6>
 
 <p align="center">
-  <a href="https://github.com/nxtrace/NTrace-V1/actions">
-    <img src="https://img.shields.io/github/actions/workflow/status/nxtrace/NTrace-V1/build.yml?branch=main&style=flat-square" alt="Github Actions">
+  <a href="https://github.com/nxtrace/NTrace-dev/actions">
+    <img src="https://img.shields.io/github/actions/workflow/status/nxtrace/NTrace-dev/build.yml?branch=main&style=flat-square" alt="Github Actions">
   </a>
-  <a href="https://goreportcard.com/report/github.com/nxtrace/NTrace-V1">
-    <img src="https://goreportcard.com/badge/github.com/nxtrace/NTrace-V1?style=flat-square">
+  <a href="https://goreportcard.com/report/github.com/nxtrace/NTrace-dev">
+    <img src="https://goreportcard.com/badge/github.com/nxtrace/NTrace-dev?style=flat-square">
   </a>
-  <a href="https://github.com/nxtrace/NTrace-V1/releases">
-    <img src="https://img.shields.io/github/release/nxtrace/NTrace-V1/all.svg?style=flat-square">
+  <a href="https://github.com/nxtrace/NTrace-dev/releases">
+    <img src="https://img.shields.io/github/release/nxtrace/NTrace-dev/all.svg?style=flat-square">
   </a>
 </p>
 
@@ -48,10 +48,10 @@ We are extremely grateful to [DMIT](https://dmit.io), [Misaka](https://misaka.io
 
 Document Language: English | [简体中文](README_zh_CN.md)
 
-⚠️ Please note: We welcome PR submissions from the community, but please submit your PRs to the [NTrace-V1](https://github.com/nxtrace/NTrace-V1) repository instead of [NTrace-core](https://github.com/nxtrace/NTrace-core) repository.<br>
-Regarding the NTrace-V1 and NTrace-core repositories:<br>
-Both will largely remain consistent with each other. All development work is done within the NTrace-V1 repository. The NTrace-V1 repository releases new versions first. After running stably for an undetermined period, we will synchronize that version to NTrace-core. This means that the NTrace-V1 repository serves as a "beta" or "testing" version.<br>
-Please note, there are exceptions to this synchronization. If a version of NTrace-V1 encounters a serious bug, NTrace-core will skip that flawed version and synchronize directly to the next version that resolves the issue.
+⚠️ Please note: We welcome PR submissions from the community, but please submit your PRs to the [NTrace-dev](https://github.com/nxtrace/NTrace-dev) repository instead of [NTrace-core](https://github.com/nxtrace/NTrace-core) repository.<br>
+Regarding the NTrace-dev and NTrace-core repositories:<br>
+Both will largely remain consistent with each other. All development work is done within the NTrace-dev repository. The NTrace-dev repository releases new versions first. After running stably for an undetermined period, we will synchronize that version to NTrace-core. This means that the NTrace-dev repository serves as a "beta" or "testing" version.<br>
+Please note, there are exceptions to this synchronization. If a version of NTrace-dev encounters a serious bug, NTrace-core will skip that flawed version and synchronize directly to the next version that resolves the issue.
 
 ### Automated Install
 
@@ -780,7 +780,7 @@ This Project uses [JetBrain Open-Source Project License](https://jb.gg/OpenSourc
 
 - How to obtain the freshly baked binary executable of the latest commit?
 
-  > Please go to the most recent [Build & Release](https://github.com/nxtrace/NTrace-V1/actions/workflows/build.yml) workflow in GitHub Actions.
+  > Please go to the most recent [Build & Release](https://github.com/nxtrace/NTrace-dev/actions/workflows/build.yml) workflow in GitHub Actions.
 
 - Common questions
   - On Windows, ICMP mode requires manual firewall allowance for ICMP/ICMPv6

@@ -15,14 +15,14 @@
 <h6 align="center">主页：www.nxtrace.org</h6>
 
 <p align="center">
-  <a href="https://github.com/nxtrace/NTrace-V1/actions">
-    <img src="https://img.shields.io/github/actions/workflow/status/nxtrace/NTrace-V1/build.yml?branch=main&style=flat-square" alt="Github Actions">
+  <a href="https://github.com/nxtrace/NTrace-dev/actions">
+    <img src="https://img.shields.io/github/actions/workflow/status/nxtrace/NTrace-dev/build.yml?branch=main&style=flat-square" alt="Github Actions">
   </a>
-  <a href="https://goreportcard.com/report/github.com/nxtrace/NTrace-V1">
-    <img src="https://goreportcard.com/badge/github.com/nxtrace/NTrace-V1?style=flat-square">
+  <a href="https://goreportcard.com/report/github.com/nxtrace/NTrace-dev">
+    <img src="https://goreportcard.com/badge/github.com/nxtrace/NTrace-dev?style=flat-square">
   </a>
-  <a href="https://github.com/nxtrace/NTrace-V1/releases">
-    <img src="https://img.shields.io/github/release/nxtrace/NTrace-V1/all.svg?style=flat-square">
+  <a href="https://github.com/nxtrace/NTrace-dev/releases">
+    <img src="https://img.shields.io/github/release/nxtrace/NTrace-dev/all.svg?style=flat-square">
   </a>
 </p>
 
@@ -48,10 +48,10 @@
 
 Document Language: [English](README.md) | 简体中文
 
-⚠️ 请注意：我们欢迎来自社区的PR提交，但是请将您的PR提交至 [NTrace-V1](https://github.com/nxtrace/NTrace-V1) 仓库，而不是 [NTrace-core](https://github.com/nxtrace/NTrace-core) 仓库。<br>
-关于NTrace-V1和NTrace-core两个仓库的说明：<br>
-二者将大体上保持一致。所有的开发工作均在NTrace-V1仓库中进行。NTrace-V1仓库首先发布新版本，在稳定运行一段时间后（时长不定），我们会把版本同步至NTrace-core。这意味着NTrace-V1仓库充当了一个“测试版”的角色。<br>
-请注意，版本同步也存在例外。如果NTrace-V1的某个版本出现了严重的bug，NTrace-core会跳过这一有缺陷的版本，直接同步到下一个修复了该问题的版本。
+⚠️ 请注意：我们欢迎来自社区的PR提交，但是请将您的PR提交至 [NTrace-dev](https://github.com/nxtrace/NTrace-dev) 仓库，而不是 [NTrace-core](https://github.com/nxtrace/NTrace-core) 仓库。<br>
+关于NTrace-dev和NTrace-core两个仓库的说明：<br>
+二者将大体上保持一致。所有的开发工作均在NTrace-dev仓库中进行。NTrace-dev仓库首先发布新版本，在稳定运行一段时间后（时长不定），我们会把版本同步至NTrace-core。这意味着NTrace-dev仓库充当了一个“测试版”的角色。<br>
+请注意，版本同步也存在例外。如果NTrace-dev的某个版本出现了严重的bug，NTrace-core会跳过这一有缺陷的版本，直接同步到下一个修复了该问题的版本。
 
 ### Before Using
 
@@ -148,7 +148,7 @@ Document Language: [English](README.md) | 简体中文
 
 - 下载预编译的可执行程序
 
-  对于以上方法没有涵盖的用户，请直接前往 [Release](https://www.nxtrace.org/downloads) 下载编译后的二进制可执行文件。
+  对于以上方法没有涵盖的用户，请直接前往 [Release](https://www.nxtrace.org/downloads) 下载编译好的二进制可执行文件。
   - `Release`里面为很多系统以及不同架构提供了编译好的二进制可执行文件，如果没有可以自行编译。
   - 一些本项目的必要依赖在`Windows`上`Golang`底层实现不完全，所以目前`NextTrace`在`Windows`平台出于实验性支持阶段。
 
@@ -763,7 +763,7 @@ nexttrace --pow-provider sakura
 
 - 如何获取最新commit的新鲜出炉的二进制可执行文件？
 
-  > 请前往GitHub Actions中最新一次 [Build & Release](https://github.com/nxtrace/NTrace-V1/actions/workflows/build.yml) workflow.
+  > 请前往GitHub Actions中最新一次 [Build & Release](https://github.com/nxtrace/NTrace-dev/actions/workflows/build.yml) workflow.
 
 - 常见疑问
   - Windows 平台下，ICMP 模式须手动放行ICMP/ICMPv6防火墙
