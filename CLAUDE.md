@@ -299,10 +299,22 @@
   - Darwin `trace/internal/icmp_darwin.go:ListenPacket` 已拆成 socket spec、接口绑定、bind sockaddr、finalize packet conn 四段；`trace/internal/tcp_darwin.go:ListenTCP` 也改成设备选择 + BPF + 共享 TCP reply 解码 helper。
   - 新增 `trace/internal/tcp_probe_decode.go` 与 `trace/internal/tcp_probe_decode_test.go`，集中处理 TCP probe reply 的 seq 还原、peer IP 提取与 IPv4/IPv6 解析，供 Darwin/Windows TCP sniff 共用。
 - 当前已知剩余高复杂度主要集中在：
-  - `trace/mtr_*` 调度/聚合
   - `printer/mtr_*` 渲染层
   - `cmd/mtr_ui.go` 输入状态机
   - `trace/globalping.go` 的主流程函数
+  - `trace/mtr_runner.go` 中仍未拆薄的 ICMP round handler（`probeRound` / `onICMP`）
+  - 少量收尾函数：`fast_trace ipv6.go`、`reporter/reporter.go`、`trace/mtr_raw.go`
+
+## 2026-03 Gocyclo 重构快照（追加）
+
+- MTR 核心热点已完成一轮收敛：
+  - `trace/mtr_scheduler.go:runMTRScheduler` 已改成薄入口，核心状态与分支移动到 `trace/mtr_scheduler_runtime.go`。
+  - `trace/mtr_stats.go:Update` / `MigrateStats` 已拆成按 hop 分组、累加器合并、裁剪 helper；新增 `trace/mtr_stats_helpers.go`。
+  - `trace/mtr_runner.go:mtrLoop` 已改成薄入口，取消/重置/暂停/预览/backoff 分支移动到 `trace/mtr_loop_runtime.go`。
+- 当前复杂度热点前列已变成：
+  - `printer/mtr_tui.go:mtrTUIRenderWithWidth`
+  - `cmd/mtr_ui.go:(*mtrInputParser).Feed`
+  - `trace/globalping.go:GlobalpingTraceroute`
 
 ## 仍需记住的残余风险（非阻断）
 
