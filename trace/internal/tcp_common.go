@@ -7,10 +7,6 @@ import (
 	"net"
 	"time"
 
-	"golang.org/x/net/icmp"
-	"golang.org/x/net/ipv4"
-	"golang.org/x/net/ipv6"
-
 	"github.com/nxtrace/NTrace-core/util"
 )
 
@@ -47,75 +43,25 @@ func (s *TCPSpec) listenICMPSock(ctx context.Context, ready chan struct{}, onICM
 			if !ok {
 				return
 			}
-
-			if msg.Err != nil {
-				continue
+			finish, data, ok := s.decodeICMPSocketMessage(msg)
+			if ok {
+				onICMP(msg, finish, data)
 			}
-			finish := time.Now()
-
-			var data []byte // 提取 ICMP 的负载
-			if s.IPVersion == 4 {
-				rm, err := icmp.ParseMessage(1, msg.Msg)
-				if err != nil {
-					continue
-				}
-
-				switch rm.Type {
-				case ipv4.ICMPTypeTimeExceeded:
-					if body, ok := rm.Body.(*icmp.TimeExceeded); ok && body != nil {
-						data = body.Data
-					}
-				case ipv4.ICMPTypeDestinationUnreachable:
-					if body, ok := rm.Body.(*icmp.DstUnreach); ok && body != nil {
-						data = body.Data
-					}
-				default:
-					//log.Println("received icmp message of unknown type", rm.Type)
-					continue
-				}
-
-				if len(data) < 20 || data[0]>>4 != 4 {
-					continue
-				}
-
-				dstIP := net.IP(data[16:20])
-				if !dstIP.Equal(s.DstIP) {
-					continue
-				}
-			} else {
-				rm, err := icmp.ParseMessage(58, msg.Msg)
-				if err != nil {
-					continue
-				}
-
-				switch rm.Type {
-				case ipv6.ICMPTypeTimeExceeded:
-					if body, ok := rm.Body.(*icmp.TimeExceeded); ok && body != nil {
-						data = body.Data
-					}
-				case ipv6.ICMPTypePacketTooBig:
-					if body, ok := rm.Body.(*icmp.PacketTooBig); ok && body != nil {
-						data = body.Data
-					}
-				case ipv6.ICMPTypeDestinationUnreachable:
-					if body, ok := rm.Body.(*icmp.DstUnreach); ok && body != nil {
-						data = body.Data
-					}
-				default:
-					//log.Println("received icmp message of unknown type", rm.Type)
-					continue
-				}
-
-				if len(data) < 40 || data[0]>>4 != 6 {
-					continue
-				}
-
-				dstIP := net.IP(data[24:40])
-				if !dstIP.Equal(s.DstIP) {
-					continue
-				}
-			}
-			onICMP(msg, finish, data)
 		}
 	}
+}
+
+func (s *TCPSpec) decodeICMPSocketMessage(msg ReceivedMessage) (time.Time, []byte, bool) {
+	if msg.Err != nil {
+		return time.Time{}, nil, false
+	}
+
+	finish := time.Now()
+	rm, ok := parseSocketICMPMessage(s.IPVersion, msg.Msg)
+	if !ok {
+		return finish, nil, false
+	}
+
+	data, ok := extractSocketICMPPayload(s.IPVersion, rm, s.DstIP)
+	return finish, data, ok
 }

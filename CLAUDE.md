@@ -290,8 +290,13 @@
   - `fast_trace.FastTest` / `testFile` 已拆成交互选择、源地址推导、文件目标解析、单目标执行。
   - `server.mtrAggregator.Update`、`wshandle.messageSendHandler` 已改成薄入口。
   - `printer.RealtimePrinter`、`RealtimePrinterWithRouter`、`tracelog.RealtimePrinter` 现在共用 `internal/hoprender` 的 hop attempt 分组逻辑。
+- 第三波协议层已开始落地：
+  - `trace/internal/icmp_common.go`、`tcp_common.go`、`udp_common.go` 已改成“读包循环 + 共享解码 helper + 回调派发”结构。
+  - 新增 `trace/internal/icmp_decode.go`，集中处理 ICMPv4/v6 解析、echo reply 匹配、内嵌目标 IP 校验、内嵌 ICMP seq 提取。
+  - 新增 `trace/internal/icmp_decode_test.go`，覆盖 IPv4/IPv6 echo reply、error payload、目标 IP 校验、内嵌 seq 提取。
+  - `trace/internal/udp_unix.go` 的 `SendUDP` 已拆成 IPv4/IPv6 独立发送 helper；`trace/udp_ipv4.go` 的 `send()` 也已拆成配额检查、构包、超时守护、发送记账四段。
 - 当前已知剩余高复杂度主要集中在：
-  - `trace/internal/*` 各平台 ICMP/TCP/UDP 监听循环
+  - `trace/internal/*` 中尚未重构的 Windows sniff 路径与 darwin TCP/ICMP 包装层
   - `trace/mtr_*` 调度/聚合
   - `printer/mtr_*` 渲染层
   - `trace/globalping.go` 的主流程函数
