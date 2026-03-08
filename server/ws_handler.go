@@ -23,7 +23,7 @@ var traceUpgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin: func(r *http.Request) bool {
-		return true
+		return browserOriginAllowed(r)
 	},
 }
 
@@ -179,6 +179,7 @@ func traceWebsocketHandler(c *gin.Context) {
 
 	// 设置首次读取超时，防止恶意客户端无限阻塞
 	conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+	conn.SetReadLimit(maxWSInitMessageBytes)
 	_, message, err := conn.ReadMessage()
 	if err != nil {
 		log.Printf("[deploy] websocket read failed: %v", err)

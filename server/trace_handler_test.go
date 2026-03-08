@@ -3,8 +3,13 @@ package server
 import (
 	"context"
 	"net"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/gin-gonic/gin"
 
 	"github.com/nxtrace/NTrace-core/trace"
 	"github.com/nxtrace/NTrace-core/util"
@@ -53,6 +58,37 @@ func TestBuildTraceConfig_PropagatesSessionScopedFields(t *testing.T) {
 	}
 	if cfg.IPGeoSource == nil {
 		t.Fatal("buildTraceConfig IPGeoSource = nil, want wrapped source")
+	}
+}
+
+func TestPrepareTrace_RejectsUnknownSourceDevice(t *testing.T) {
+	_, statusCode, err := prepareTrace(traceRequest{
+		Target:       "1.1.1.1",
+		DataProvider: "disable-geoip",
+		SourceDevice: "codex-nonexistent-dev0",
+	})
+	if err == nil {
+		t.Fatal("prepareTrace should reject unknown source_device")
+	}
+	if statusCode != http.StatusBadRequest {
+		t.Fatalf("statusCode = %d, want %d", statusCode, http.StatusBadRequest)
+	}
+}
+
+func TestTraceHandler_RejectsOversizedJSONBody(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	body := `{"target":"` + strings.Repeat("a", maxTraceRequestBodyBytes) + `"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/trace", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = req
+
+	traceHandler(c)
+
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusRequestEntityTooLarge)
 	}
 }
 

@@ -542,6 +542,55 @@ NextTrace `LeoMoeAPI` now utilizes the Proof of Work (POW) mechanism to prevent 
 
 All NextTrace IP geolocation `API DEMO` can refer to [here](https://github.com/nxtrace/NTrace-core/blob/main/ipgeo/)
 
+### Environment Variables
+
+NextTrace currently reads the following environment variables. For boolean switches, only `1` and `0` are recognized; other values fall back to the built-in default. For consistency, restart NextTrace after changing them.
+
+#### Core Runtime / Network
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `NEXTTRACE_DEVMODE` | `0` | Turn fatal errors into panics with stack traces for debugging. |
+| `NEXTTRACE_DEBUG` | unset | Print detected environment values while `GetEnv*` helpers parse them. |
+| `NEXTTRACE_DISABLEMPLS` | `0` | Disable MPLS display globally, similar to `--disable-mpls`. |
+| `NEXTTRACE_ENABLEHIDDENDSTIP` | `0` | Mask the destination IP and omit its hostname in output. |
+| `NEXTTRACE_RANDOMPORT` | `0` | Use a different random source port for each TCP/UDP probe. |
+| `NEXTTRACE_MAXATTEMPTS` | auto | Provide a default `--max-attempts` value when the CLI flag is not set. |
+| `NEXTTRACE_ICMPMODE` | `0` | Provide a default `--icmp-mode` value (`0=auto`, `1=socket`, `2=WinDivert` on Windows). |
+| `NEXTTRACE_UNINTERRUPTED` | `0` | When used together with `--raw`, rerun traceroute continuously instead of stopping after one round. |
+| `NEXTTRACE_PROXY` | unset | Outbound proxy URL for HTTP / WebSocket requests used by PoW, Geo APIs, tracemap, etc. |
+| `NEXTTRACE_DATAPROVIDER` | unset | Override the default IP geolocation provider (for example `ipinfo`). |
+
+#### Service / Web / Backend
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `NEXTTRACE_HOSTPORT` | `api.nxtrace.org` | Override the backend host or `host:port` used by LeoMoeAPI, tracemap, and FastIP flows. |
+| `NEXTTRACE_TOKEN` | unset | Pre-supplied LeoMoeAPI bearer token; when present, token fetching via PoW is skipped. |
+| `NEXTTRACE_POWPROVIDER` | `api.nxtrace.org` | Select the PoW provider. The built-in non-default alias is `sakura`. |
+| `NEXTTRACE_DEPLOY_ADDR` | unset | Default listen address for `--deploy` when `--listen` is not provided. |
+| `NEXTTRACE_ALLOW_CROSS_ORIGIN` | `0` | Only for `--deploy`: allow cross-origin browser access to the Web UI / API. Disabled by default for safety. |
+
+#### IP Database / Third-Party Providers
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `NEXTTRACE_IPINFOLOCALPATH` | auto search | Full path to `ipinfoLocal.mmdb` for the `IPInfoLocal` provider. |
+| `NEXTTRACE_CHUNZHENURL` | `http://127.0.0.1:2060` | Base URL of the Chunzhen lookup service. |
+| `NEXTTRACE_IPINFO_TOKEN` | unset | Token for the `IPInfo` provider. |
+| `NEXTTRACE_IPINSIGHT_TOKEN` | unset | Token for the `IPInsight` provider. |
+| `NEXTTRACE_IPAPI_BASE` | provider built-in URL | Override the base URL used by compatible IP API clients in the current implementation (`IPInfo`, `IPInsight`, `ip-api.com`). |
+| `IPDBONE_BASE_URL` | `https://api.ipdb.one` | Override the IPDB.One API base URL. |
+| `IPDBONE_API_ID` | unset | IPDB.One API ID. |
+| `IPDBONE_API_KEY` | unset | IPDB.One API key. |
+| `GLOBALPING_TOKEN` | unset | Authentication token for Globalping; raises the anonymous hourly limit when provided. |
+
+#### Config Discovery
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `XDG_CONFIG_HOME` | OS / shell default | If set, NextTrace also searches `$XDG_CONFIG_HOME/nexttrace` for `nt_config.yaml`. |
+
 ### For full usage list, please refer to the usage menu
 
 ```shell

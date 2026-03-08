@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"net/url"
 	"runtime"
 	"strings"
@@ -121,6 +122,9 @@ func prepareTrace(req traceRequest) (*traceExecution, int, error) {
 	if exec.Req.IPv4Only && exec.Req.IPv6Only {
 		return nil, 400, errors.New("ipv4_only and ipv6_only cannot be true at the same time")
 	}
+	if err := validateSourceDevice(exec.Req.SourceDevice); err != nil {
+		return nil, 400, err
+	}
 
 	if exec.Req.IntervalMs <= 0 {
 		exec.Req.IntervalMs = 0
@@ -203,7 +207,13 @@ func prepareTrace(req traceRequest) (*traceExecution, int, error) {
 
 func traceHandler(c *gin.Context) {
 	var req traceRequest
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxTraceRequestBodyBytes)
 	if err := c.ShouldBindJSON(&req); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "request payload too large"})
+			return
+		}
 		c.JSON(400, gin.H{"error": "invalid request payload", "details": err.Error()})
 		return
 	}
@@ -544,6 +554,25 @@ func shouldGenerateMap(provider string) bool {
 		}
 	}
 	return false
+}
+
+func validateSourceDevice(device string) error {
+	device = strings.TrimSpace(device)
+	if device == "" {
+		return nil
+	}
+
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return fmt.Errorf("list network interfaces: %w", err)
+	}
+	for _, iface := range ifaces {
+		if iface.Name == device {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("unknown source_device %q", device)
 }
 
 func ensureLeoMoeConnection() {

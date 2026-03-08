@@ -522,6 +522,55 @@ nexttrace google.com --from comcast+california
 export GLOBALPING_TOKEN=your_token_here
 ```
 
+### 环境变量总览
+
+NextTrace 当前会读取下列环境变量。对于布尔开关，只识别 `1` 和 `0`，其他值会回退到内置默认值。为了避免混淆，修改后建议重启 NextTrace。
+
+#### 核心运行 / 网络
+
+| 变量名 | 默认值 | 说明 |
+| --- | --- | --- |
+| `NEXTTRACE_DEVMODE` | `0` | 开发调试模式：致命错误改为 panic，并打印堆栈。 |
+| `NEXTTRACE_DEBUG` | 未设置 | 在 `GetEnv*` 解析环境变量时打印检测到的值。 |
+| `NEXTTRACE_DISABLEMPLS` | `0` | 全局禁用 MPLS 显示，效果类似 `--disable-mpls`。 |
+| `NEXTTRACE_ENABLEHIDDENDSTIP` | `0` | 隐匿目的 IP，并省略其主机名显示。 |
+| `NEXTTRACE_RANDOMPORT` | `0` | TCP/UDP 每个探测包使用不同的随机源端口。 |
+| `NEXTTRACE_MAXATTEMPTS` | 自动计算 | 当未显式传入 `--max-attempts` 时，提供默认最大重试次数。 |
+| `NEXTTRACE_ICMPMODE` | `0` | 当未显式传入 `--icmp-mode` 时提供默认值（`0=自动`、`1=Socket`、`2=WinDivert`）。 |
+| `NEXTTRACE_UNINTERRUPTED` | `0` | 与 `--raw` 一起使用时，会在一次探测结束后继续循环执行，而不是退出。 |
+| `NEXTTRACE_PROXY` | 未设置 | 为 PoW、Geo API、tracemap 等出站 HTTP / WebSocket 请求设置代理 URL。 |
+| `NEXTTRACE_DATAPROVIDER` | 未设置 | 覆盖默认 IP 地理信息源，例如 `ipinfo`。 |
+
+#### 服务 / Web / 后端
+
+| 变量名 | 默认值 | 说明 |
+| --- | --- | --- |
+| `NEXTTRACE_HOSTPORT` | `api.nxtrace.org` | 覆盖 LeoMoeAPI、tracemap、FastIP 等使用的后端地址，支持 `host` 或 `host:port`。 |
+| `NEXTTRACE_TOKEN` | 未设置 | 预置 LeoMoeAPI Bearer Token；设置后将跳过 PoW 取 token 流程。 |
+| `NEXTTRACE_POWPROVIDER` | `api.nxtrace.org` | 指定 PoW 服务提供方；当前内置的非默认别名为 `sakura`。 |
+| `NEXTTRACE_DEPLOY_ADDR` | 未设置 | `--deploy` 模式下，当未传 `--listen` 时使用的默认监听地址。 |
+| `NEXTTRACE_ALLOW_CROSS_ORIGIN` | `0` | 仅对 `--deploy` 生效：是否允许跨站浏览器访问 Web UI / API。默认关闭以保证安全。 |
+
+#### IP 数据库 / 第三方服务
+
+| 变量名 | 默认值 | 说明 |
+| --- | --- | --- |
+| `NEXTTRACE_IPINFOLOCALPATH` | 自动搜索 | `IPInfoLocal` 离线库 `ipinfoLocal.mmdb` 的完整路径。 |
+| `NEXTTRACE_CHUNZHENURL` | `http://127.0.0.1:2060` | 纯真 IP 查询服务的基础 URL。 |
+| `NEXTTRACE_IPINFO_TOKEN` | 未设置 | `IPInfo` 数据源使用的 token。 |
+| `NEXTTRACE_IPINSIGHT_TOKEN` | 未设置 | `IPInsight` 数据源使用的 token。 |
+| `NEXTTRACE_IPAPI_BASE` | 各 provider 内置地址 | 覆盖当前实现里兼容 HTTP 接口的数据源基础地址（`IPInfo`、`IPInsight`、`ip-api.com`）。 |
+| `IPDBONE_BASE_URL` | `https://api.ipdb.one` | 覆盖 IPDB.One API 基础地址。 |
+| `IPDBONE_API_ID` | 未设置 | IPDB.One API ID。 |
+| `IPDBONE_API_KEY` | 未设置 | IPDB.One API Key。 |
+| `GLOBALPING_TOKEN` | 未设置 | Globalping 鉴权 token；设置后可提升匿名用户的每小时测试额度。 |
+
+#### 配置文件搜索
+
+| 变量名 | 默认值 | 说明 |
+| --- | --- | --- |
+| `XDG_CONFIG_HOME` | 取决于系统 / Shell | 如果设置了该变量，NextTrace 也会从 `$XDG_CONFIG_HOME/nexttrace` 搜索 `nt_config.yaml`。 |
+
 ### 全部用法详见 Usage 菜单
 
 ```shell
