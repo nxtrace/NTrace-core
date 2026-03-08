@@ -311,10 +311,15 @@
   - `trace/mtr_scheduler.go:runMTRScheduler` 已改成薄入口，核心状态与分支移动到 `trace/mtr_scheduler_runtime.go`。
   - `trace/mtr_stats.go:Update` / `MigrateStats` 已拆成按 hop 分组、累加器合并、裁剪 helper；新增 `trace/mtr_stats_helpers.go`。
   - `trace/mtr_runner.go:mtrLoop` 已改成薄入口，取消/重置/暂停/预览/backoff 分支移动到 `trace/mtr_loop_runtime.go`。
+- MTR 输出层与输入层热点也已收敛：
+  - `printer/mtr_tui.go:mtrTUIRenderWithWidth` 已拆成布局扫描、三行头部构建、host part 预构建、MPLS 续行渲染四段。
+  - `printer/mtr_table.go` 的 host 组装和 `MTRReportPrint` 已改成共享 host-part 拼接 helper + report header/row helper。
+  - `cmd/mtr_ui.go:(*mtrInputParser).Feed` 已拆成按状态分发的 parser helper。
 - 当前复杂度热点前列已变成：
-  - `printer/mtr_tui.go:mtrTUIRenderWithWidth`
-  - `cmd/mtr_ui.go:(*mtrInputParser).Feed`
   - `trace/globalping.go:GlobalpingTraceroute`
+  - `trace/mtr_runner.go:(*mtrICMPEngine).probeRound`
+  - `trace/mtr_runner.go:(*mtrICMPEngine).onICMP`
+  - 以及少量尾项：`fast_trace ipv6.go`、`reporter/reporter.go`、`trace/mtr_raw.go`
 
 ## 仍需记住的残余风险（非阻断）
 

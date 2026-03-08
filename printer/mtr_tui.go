@@ -367,7 +367,23 @@ func MTRTUIRender(w io.Writer, header MTRTUIHeader, stats []trace.MTRHopStat) {
 
 // mtrTUIRenderWithWidth 是带可控宽度的内部渲染入口（测试用）。
 func mtrTUIRenderWithWidth(w io.Writer, header MTRTUIHeader, stats []trace.MTRHopStat, termWidth int) {
-	// 根据最大 TTL / 最大 Snt 动态计算前缀宽度和 Snt 列宽
+	lo := buildMTRTUILayout(stats, termWidth)
+	var b strings.Builder
+
+	writeMTRTUIFramePrefix(&b)
+	renderMTRTUIHeader(&b, header, lo.termWidth)
+	renderDualHeader(&b, lo)
+	renderMTRTUIRows(&b, header, stats, lo)
+	fmt.Fprint(w, b.String())
+}
+
+func buildMTRTUILayout(stats []trace.MTRHopStat, termWidth int) mtrTUILayout {
+	maxTTL, maxSnt := scanMTRTUIStats(stats)
+	prefixW := tuiPrefixWidthForMaxTTL(maxTTL)
+	return computeLayout(termWidth, prefixW, sntWidthForMax(maxSnt))
+}
+
+func scanMTRTUIStats(stats []trace.MTRHopStat) (int, int) {
 	maxTTL := 0
 	maxSnt := 0
 	for _, s := range stats {
@@ -378,159 +394,192 @@ func mtrTUIRenderWithWidth(w io.Writer, header MTRTUIHeader, stats []trace.MTRHo
 			maxSnt = s.Snt
 		}
 	}
-	prefixW := tuiPrefixWidthForMaxTTL(maxTTL)
-	lo := computeLayout(termWidth, prefixW, sntWidthForMax(maxSnt))
-	var b strings.Builder
+	return maxTTL, maxSnt
+}
 
-	// 清屏（cursor home + erase）
+func writeMTRTUIFramePrefix(b *strings.Builder) {
 	b.WriteString("\033[H\033[2J")
+}
 
-	statusStr := "Running"
-	if header.Status == MTRTUIPaused {
-		statusStr = "Paused"
+func renderMTRTUIHeader(b *strings.Builder, header MTRTUIHeader, termWidth int) {
+	tuiLine(b, "%s", buildMTRTUITitleLine(header, termWidth))
+	tuiLine(b, "%s", buildMTRTUIRouteLine(header, termWidth, time.Now()))
+	tuiLine(b, "%s", buildMTRTUIControlsLine(header, termWidth))
+}
+
+func buildMTRTUITitleLine(header MTRTUIHeader, termWidth int) string {
+	titlePart, apiPart := resolveMTRTUITitleParts(header)
+	line := titlePart + apiPart
+	lineW := displayWidth(line)
+	if lineW > termWidth {
+		line = truncateByDisplayWidth(line, termWidth)
+		lineW = displayWidth(line)
+		titleW := displayWidth(titlePart)
+		if lineW <= titleW {
+			titlePart = line
+			apiPart = ""
+		} else {
+			apiPart = line[len(titlePart):]
+		}
 	}
+	pad := 0
+	if lineW < termWidth {
+		pad = (termWidth - lineW) / 2
+	}
+	return strings.Repeat(" ", pad) + mtrTUITitleColor(titlePart) + apiPart
+}
 
-	// ── 信息行 1：NextTrace [version]  preferred API info（居中，纯文本） ──
+func resolveMTRTUITitleParts(header MTRTUIHeader) (string, string) {
 	ver := header.Version
 	if ver == "" {
 		ver = "dev"
 	}
 	titlePart := fmt.Sprintf("NextTrace [%s]", ver)
-	apiPart := ""
-	if header.APIInfo != "" {
-		apiPart = "  " + header.APIInfo
+	if header.APIInfo == "" {
+		return titlePart, ""
 	}
-	line1 := titlePart + apiPart
-	line1W := displayWidth(line1)
-	if line1W > lo.termWidth {
-		line1 = truncateByDisplayWidth(line1, lo.termWidth)
-		line1W = displayWidth(line1)
-		// 重新确定截断后哪个部分存在
-		titleW := displayWidth(titlePart)
-		if line1W <= titleW {
-			titlePart = line1
-			apiPart = ""
-		} else {
-			// titlePart 是纯 ASCII，byte 长度 == 显示宽度，可以直接切片
-			apiPart = line1[len(titlePart):]
-		}
-	}
-	pad := 0
-	if line1W < lo.termWidth {
-		pad = (lo.termWidth - line1W) / 2
-	}
-	tuiLine(&b, "%s%s%s", strings.Repeat(" ", pad), mtrTUITitleColor(titlePart), apiPart)
+	return titlePart, "  " + header.APIInfo
+}
 
-	// ── 信息行 2：srcHost (srcIP) -> dstName (dstIP)     RFC3339-time ──
-	srcPart := header.SrcHost
-	if srcPart != "" && header.SrcIP != "" && srcPart != header.SrcIP {
-		srcPart = fmt.Sprintf("%s (%s)", srcPart, header.SrcIP)
-	} else if header.SrcIP != "" {
-		srcPart = header.SrcIP
-	}
-
-	dstPart := header.Target // 兜底
-	if header.Domain != "" && header.TargetIP != "" && header.Domain != header.TargetIP {
-		dstPart = fmt.Sprintf("%s (%s)", header.Domain, header.TargetIP)
-	} else if header.TargetIP != "" {
-		dstPart = header.TargetIP
-	}
-
-	var routeLine string
-	if srcPart != "" {
-		routeLine = fmt.Sprintf("%s -> %s", srcPart, dstPart)
-	} else {
-		routeLine = dstPart
-	}
-	timeStr := time.Now().Format("2006-01-02T15:04:05-0700")
+func buildMTRTUIRouteLine(header MTRTUIHeader, termWidth int, now time.Time) string {
+	routeLine := buildMTRTUIRouteText(header)
+	timeStr := now.Format("2006-01-02T15:04:05-0700")
 	timeW := displayWidth(timeStr)
-	routeW := displayWidth(routeLine)
-	gap := lo.termWidth - routeW - timeW
+	gap := termWidth - displayWidth(routeLine) - timeW
 	if gap < 2 {
-		// 窄屏：截断 route 文本保证时间贴右
-		maxRoute := lo.termWidth - timeW - 2
+		maxRoute := termWidth - timeW - 2
 		if maxRoute < 1 {
 			maxRoute = 1
 		}
 		routeLine = truncateByDisplayWidth(routeLine, maxRoute)
 		gap = 2
 	}
-	tuiLine(&b, "%s%s%s", mtrTUIRouteColor(routeLine), strings.Repeat(" ", gap), mtrTUITimeColor(timeStr))
+	return mtrTUIRouteColor(routeLine) + strings.Repeat(" ", gap) + mtrTUITimeColor(timeStr)
+}
 
-	// ── 信息行 3：按键提示 + 显示模式 + 状态 ──
-	modeNames := [5]string{"IP/PTR", "ASN", "City", "Owner", "Full"}
-	modeLabel := "IP/PTR"
-	if header.DisplayMode >= 0 && header.DisplayMode < 5 {
-		modeLabel = modeNames[header.DisplayMode]
+func buildMTRTUIRouteText(header MTRTUIHeader) string {
+	srcPart := resolveMTRTUISourceLabel(header)
+	dstPart := resolveMTRTUIDestinationLabel(header)
+	if srcPart == "" {
+		return dstPart
 	}
-	nameLabel := "ptr"
-	if header.ShowIPs {
-		nameLabel = "ptr+ip"
+	return fmt.Sprintf("%s -> %s", srcPart, dstPart)
+}
+
+func resolveMTRTUISourceLabel(header MTRTUIHeader) string {
+	switch {
+	case header.SrcHost != "" && header.SrcIP != "" && header.SrcHost != header.SrcIP:
+		return fmt.Sprintf("%s (%s)", header.SrcHost, header.SrcIP)
+	case header.SrcIP != "":
+		return header.SrcIP
+	default:
+		return header.SrcHost
 	}
-	if header.NameMode == 1 {
-		nameLabel = "ip"
+}
+
+func resolveMTRTUIDestinationLabel(header MTRTUIHeader) string {
+	switch {
+	case header.Domain != "" && header.TargetIP != "" && header.Domain != header.TargetIP:
+		return fmt.Sprintf("%s (%s)", header.Domain, header.TargetIP)
+	case header.TargetIP != "":
+		return header.TargetIP
+	case header.Target != "":
+		return header.Target
+	default:
+		return ""
 	}
-	mplsLabel := "show"
-	if !header.DisableMPLS {
-		mplsLabel = "hide"
+}
+
+func buildMTRTUIControlsLine(header MTRTUIHeader, termWidth int) string {
+	const keysPrefix = "Keys:  "
+	keyLine := strings.Join(buildMTRTUIKeyItems(header), "  ")
+	statusText := mtrTUIStatusText(header.Status)
+	statusTag := mtrTUIStatusColor("[" + statusText + "]")
+	pad := termWidth - displayWidth(keysPrefix) - displayWidth(keyLine) - len("["+statusText+"]")
+	if pad < 2 {
+		pad = 2
 	}
-	// 每项格式: 高亮首字母/按键 + 描述（终端默认色），项之间双空格
-	keyItems := []string{
+	return keysPrefix + keyLine + strings.Repeat(" ", pad) + statusTag
+}
+
+func buildMTRTUIKeyItems(header MTRTUIHeader) []string {
+	return []string{
 		mtrTUIKeyHiColor("Q") + "uit",
 		mtrTUIKeyHiColor("P") + "ause",
 		mtrTUIKeyHiColor("Space") + "-resume",
 		mtrTUIKeyHiColor("R") + "eset",
-		mtrTUIKeyHiColor("Y") + "-display(" + modeLabel + ")",
-		mtrTUIKeyHiColor("N") + "-host(" + nameLabel + ")",
-		mtrTUIKeyHiColor("E") + "-mpls(" + mplsLabel + ")",
+		mtrTUIKeyHiColor("Y") + "-display(" + mtrTUIDisplayModeLabel(header.DisplayMode) + ")",
+		mtrTUIKeyHiColor("N") + "-host(" + mtrTUINameModeLabel(header.NameMode, header.ShowIPs) + ")",
+		mtrTUIKeyHiColor("E") + "-mpls(" + mtrTUIMPLSLabel(header.DisableMPLS) + ")",
 	}
-	keyLine := strings.Join(keyItems, "  ")
-	// 用空格填充到状态标签位置
-	const keysPrefix = "Keys:  "
-	keyW := displayWidth(keysPrefix) + displayWidth(keyLine)
-	statusTag := mtrTUIStatusColor("[" + statusStr + "]")
-	statusTagW := len("[" + statusStr + "]") // 纯文本宽度
-	padNeeded := lo.termWidth - keyW - statusTagW
-	if padNeeded < 2 {
-		padNeeded = 2
-	}
-	tuiLine(&b, "%s%s%s%s", keysPrefix, keyLine, strings.Repeat(" ", padNeeded), statusTag)
+}
 
-	// ── 双层表头 ──
-	renderDualHeader(&b, lo)
+func mtrTUIStatusText(status MTRTUIStatus) string {
+	if status == MTRTUIPaused {
+		return "Paused"
+	}
+	return "Running"
+}
 
-	// ── hop 数据行 ──
-	lang := header.Lang
-	if lang == "" {
-		lang = "en"
+func mtrTUIDisplayModeLabel(mode int) string {
+	modeNames := [5]string{"IP/PTR", "ASN", "City", "Owner", "Full"}
+	if mode >= 0 && mode < len(modeNames) {
+		return modeNames[mode]
 	}
-	nameMode := header.NameMode
-	// 预构建所有 hop 的 host 部件，供 ASN 宽度计算和渲染共用
-	allParts := make([]mtrHostParts, len(stats))
-	for i, s := range stats {
-		allParts[i] = buildTUIHostParts(s, header.DisplayMode, nameMode, lang, header.ShowIPs)
+	return modeNames[0]
+}
+
+func mtrTUINameModeLabel(nameMode int, showIPs bool) string {
+	if nameMode == 1 {
+		return "ip"
 	}
+	if showIPs {
+		return "ptr+ip"
+	}
+	return "ptr"
+}
+
+func mtrTUIMPLSLabel(disabled bool) string {
+	if disabled {
+		return "show"
+	}
+	return "hide"
+}
+
+func renderMTRTUIRows(b *strings.Builder, header MTRTUIHeader, stats []trace.MTRHopStat, lo mtrTUILayout) {
+	allParts := buildTUIHostPartSet(stats, header)
 	asnW := computeTUIASNWidthFromParts(allParts)
 	prevTTL := 0
 	for i, s := range stats {
 		hopPrefix := formatTUIHopPrefix(s.TTL, prevTTL, lo.prefixW)
 		prevTTL = s.TTL
-
-		host := formatTUIHost(allParts[i], asnW)
-		renderDataRow(&b, lo, hopPrefix, host, s)
-
-		// MPLS 多行显示：每个标签独占一行，位于 host 列区域
-		if len(s.MPLS) > 0 && !header.DisableMPLS {
-			for _, mplsLabel := range s.MPLS {
-				var mRow strings.Builder
-				mRow.WriteString(strings.Repeat(" ", lo.prefixW+tuiPrefixGap))
-				mRow.WriteString(mtrTUIMPLSColor(fitLeft("  "+mplsLabel, lo.hostW)))
-				tuiLine(&b, "%s", mRow.String())
-			}
-		}
+		renderDataRow(b, lo, hopPrefix, formatTUIHost(allParts[i], asnW), s)
+		renderMTRTUIMPLSRows(b, lo, s.MPLS, header.DisableMPLS)
 	}
+}
 
-	fmt.Fprint(w, b.String())
+func buildTUIHostPartSet(stats []trace.MTRHopStat, header MTRTUIHeader) []mtrHostParts {
+	lang := header.Lang
+	if lang == "" {
+		lang = "en"
+	}
+	allParts := make([]mtrHostParts, len(stats))
+	for i, s := range stats {
+		allParts[i] = buildTUIHostParts(s, header.DisplayMode, header.NameMode, lang, header.ShowIPs)
+	}
+	return allParts
+}
+
+func renderMTRTUIMPLSRows(b *strings.Builder, lo mtrTUILayout, labels []string, disabled bool) {
+	if disabled || len(labels) == 0 {
+		return
+	}
+	for _, label := range labels {
+		var row strings.Builder
+		row.WriteString(strings.Repeat(" ", lo.prefixW+tuiPrefixGap))
+		row.WriteString(mtrTUIMPLSColor(fitLeft("  "+label, lo.hostW)))
+		tuiLine(b, "%s", row.String())
+	}
 }
 
 func computeTUIASNWidth(stats []trace.MTRHopStat, mode int, nameMode int, lang string, showIPs bool) int {
