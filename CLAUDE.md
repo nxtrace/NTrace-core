@@ -295,10 +295,13 @@
   - 新增 `trace/internal/icmp_decode.go`，集中处理 ICMPv4/v6 解析、echo reply 匹配、内嵌目标 IP 校验、内嵌 ICMP seq 提取。
   - 新增 `trace/internal/icmp_decode_test.go`，覆盖 IPv4/IPv6 echo reply、error payload、目标 IP 校验、内嵌 seq 提取。
   - `trace/internal/udp_unix.go` 的 `SendUDP` 已拆成 IPv4/IPv6 独立发送 helper；`trace/udp_ipv4.go` 的 `send()` 也已拆成配额检查、构包、超时守护、发送记账四段。
+  - Windows 协议层新增 `trace/internal/windivert_sniff_windows.go`，把 WinDivert sniff handle 打开、收包、ICMP/TCP 解码下沉为共享 helper；`icmp_windows.go` / `tcp_windows.go` / `udp_windows.go` 的 sniff 入口已变成薄协调器。
+  - Darwin `trace/internal/icmp_darwin.go:ListenPacket` 已拆成 socket spec、接口绑定、bind sockaddr、finalize packet conn 四段；`trace/internal/tcp_darwin.go:ListenTCP` 也改成设备选择 + BPF + 共享 TCP reply 解码 helper。
+  - 新增 `trace/internal/tcp_probe_decode.go` 与 `trace/internal/tcp_probe_decode_test.go`，集中处理 TCP probe reply 的 seq 还原、peer IP 提取与 IPv4/IPv6 解析，供 Darwin/Windows TCP sniff 共用。
 - 当前已知剩余高复杂度主要集中在：
-  - `trace/internal/*` 中尚未重构的 Windows sniff 路径与 darwin TCP/ICMP 包装层
   - `trace/mtr_*` 调度/聚合
   - `printer/mtr_*` 渲染层
+  - `cmd/mtr_ui.go` 输入状态机
   - `trace/globalping.go` 的主流程函数
 
 ## 仍需记住的残余风险（非阻断）

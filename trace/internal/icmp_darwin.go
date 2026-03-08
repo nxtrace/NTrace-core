@@ -249,111 +249,122 @@ var (
 	}
 )
 
-func ListenPacket(network string, laddr string) (net.PacketConn, error) {
+type darwinICMPSocketSpec struct {
+	af    int
+	proto int
+}
+
+func darwinICMPSocketSpecForNetwork(network string) (darwinICMPSocketSpec, error) {
 	nw, ok := networkMap[network]
 	if !ok {
-		return nil, errUnknownNetwork
+		return darwinICMPSocketSpec{}, errUnknownNetwork
 	}
-
-	af := syscall.AF_INET
-	proto := syscall.IPPROTO_ICMP
 	if nw == "udp6" {
-		af = syscall.AF_INET6
-		proto = syscall.IPPROTO_ICMPV6
+		return darwinICMPSocketSpec{af: syscall.AF_INET6, proto: syscall.IPPROTO_ICMPV6}, nil
 	}
+	return darwinICMPSocketSpec{af: syscall.AF_INET, proto: syscall.IPPROTO_ICMP}, nil
+}
 
-	// 创建 DGRAM ICMP socket（macOS 上非 root 也可使用）
-	fd, err := syscall.Socket(af, syscall.SOCK_DGRAM, proto)
+func mustOpenDarwinICMPSocket(spec darwinICMPSocketSpec) int {
+	fd, err := syscall.Socket(spec.af, syscall.SOCK_DGRAM, spec.proto)
 	if err != nil {
 		if util.EnvDevMode {
 			panic(fmt.Errorf("ListenPacket: socket: %w", err))
 		}
 		log.Fatalf("ListenPacket: socket: %v", err)
 	}
+	return fd
+}
 
-	// 绑定到指定网卡接口（IP_BOUND_IF / IPV6_BOUND_IF）
-	if laddr != "" {
-		la := net.ParseIP(laddr)
-		ifIndex := -1
-		if ifaces, err := net.Interfaces(); err == nil {
-			for _, iface := range ifaces {
-				addrs, err := iface.Addrs()
-				if err != nil {
-					continue
-				}
-				for _, addr := range addrs {
-					if ipnet, ok := addr.(*net.IPNet); ok {
-						if ipnet.IP.Equal(la) {
-							ifIndex = iface.Index
-							break
-						}
-					}
-				}
-			}
-			if ifIndex == -1 {
-				syscall.Close(fd)
-				return nil, errUnknownIface
-			}
-		} else {
-			syscall.Close(fd)
-			return nil, err
-		}
-
-		if proto == syscall.IPPROTO_ICMP {
-			if err := syscall.SetsockoptInt(fd, syscall.IPPROTO_IP, syscall.IP_BOUND_IF, ifIndex); err != nil {
-				syscall.Close(fd)
-				return nil, fmt.Errorf("setsockopt IP_BOUND_IF: %w", err)
-			}
-		} else {
-			if err := syscall.SetsockoptInt(fd, syscall.IPPROTO_IPV6, syscall.IPV6_BOUND_IF, ifIndex); err != nil {
-				syscall.Close(fd)
-				return nil, fmt.Errorf("setsockopt IPV6_BOUND_IF: %w", err)
-			}
+func interfaceHasIP(iface net.Interface, target net.IP) bool {
+	addrs, err := iface.Addrs()
+	if err != nil {
+		return false
+	}
+	for _, addr := range addrs {
+		ipnet, ok := addr.(*net.IPNet)
+		if ok && ipnet.IP.Equal(target) {
+			return true
 		}
 	}
+	return false
+}
 
-	// 绑定 socket（macOS ICMP DGRAM socket 需要 bind 才能接收响应；
-	// bind 到 0.0.0.0:0 / :::0 让内核分配 ICMP echo ID）
+func interfaceIndexByIP(ip net.IP) (int, error) {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return -1, err
+	}
+	for _, iface := range ifaces {
+		if interfaceHasIP(iface, ip) {
+			return iface.Index, nil
+		}
+	}
+	return -1, errUnknownIface
+}
+
+func setDarwinBoundInterface(fd, proto, ifIndex int) error {
+	if proto == syscall.IPPROTO_ICMP {
+		if err := syscall.SetsockoptInt(fd, syscall.IPPROTO_IP, syscall.IP_BOUND_IF, ifIndex); err != nil {
+			return fmt.Errorf("setsockopt IP_BOUND_IF: %w", err)
+		}
+		return nil
+	}
+	if err := syscall.SetsockoptInt(fd, syscall.IPPROTO_IPV6, syscall.IPV6_BOUND_IF, ifIndex); err != nil {
+		return fmt.Errorf("setsockopt IPV6_BOUND_IF: %w", err)
+	}
+	return nil
+}
+
+func bindDarwinICMPInterface(fd, proto int, laddr string) error {
+	if laddr == "" {
+		return nil
+	}
+	ifIndex, err := interfaceIndexByIP(net.ParseIP(laddr))
+	if err != nil {
+		return err
+	}
+	return setDarwinBoundInterface(fd, proto, ifIndex)
+}
+
+func darwinICMPBindSockaddr(af int, laddr string) syscall.Sockaddr {
 	if af == syscall.AF_INET {
 		bindAddr := &syscall.SockaddrInet4{}
-		if laddr != "" {
-			if ip4 := net.ParseIP(laddr).To4(); ip4 != nil {
-				copy(bindAddr.Addr[:], ip4)
-			}
+		if ip4 := net.ParseIP(laddr).To4(); ip4 != nil {
+			copy(bindAddr.Addr[:], ip4)
 		}
-		if err := syscall.Bind(fd, bindAddr); err != nil {
-			syscall.Close(fd)
-			return nil, fmt.Errorf("bind: %w", err)
-		}
-	} else {
-		bindAddr := &syscall.SockaddrInet6{}
-		if laddr != "" {
-			if ip6 := net.ParseIP(laddr).To16(); ip6 != nil {
-				copy(bindAddr.Addr[:], ip6)
-			}
-		}
-		if err := syscall.Bind(fd, bindAddr); err != nil {
-			syscall.Close(fd)
-			return nil, fmt.Errorf("bind: %w", err)
-		}
+		return bindAddr
 	}
 
-	// 设为 non-blocking，让 os.NewFile 将其注册到 Go 运行时 poller
+	bindAddr := &syscall.SockaddrInet6{}
+	if ip6 := net.ParseIP(laddr).To16(); ip6 != nil {
+		copy(bindAddr.Addr[:], ip6)
+	}
+	return bindAddr
+}
+
+func bindDarwinICMPSocket(fd, af int, laddr string) error {
+	if err := syscall.Bind(fd, darwinICMPBindSockaddr(af, laddr)); err != nil {
+		return fmt.Errorf("bind: %w", err)
+	}
+	return nil
+}
+
+func finalizeDarwinICMPSocket(fd, af int) (net.PacketConn, error) {
 	if err := syscall.SetNonblock(fd, true); err != nil {
-		syscall.Close(fd)
+		_ = syscall.Close(fd)
 		return nil, fmt.Errorf("setnonblock: %w", err)
 	}
 
-	// os.NewFile 接管 fd 所有权（不可再单独 syscall.Close）
 	f := os.NewFile(uintptr(fd), "icmp")
 	if f == nil {
-		syscall.Close(fd)
+		_ = syscall.Close(fd)
 		return nil, fmt.Errorf("os.NewFile returned nil")
 	}
 
 	rc, err := f.SyscallConn()
 	if err != nil {
-		f.Close()
+		_ = f.Close()
 		if util.EnvDevMode {
 			panic(fmt.Errorf("ListenPacket: SyscallConn: %w", err))
 		}
@@ -361,6 +372,25 @@ func ListenPacket(network string, laddr string) (net.PacketConn, error) {
 	}
 
 	return &icmpPacketConn{file: f, rc: rc, af: af}, nil
+}
+
+func ListenPacket(network string, laddr string) (net.PacketConn, error) {
+	spec, err := darwinICMPSocketSpecForNetwork(network)
+	if err != nil {
+		return nil, err
+	}
+
+	fd := mustOpenDarwinICMPSocket(spec)
+	if err := bindDarwinICMPInterface(fd, spec.proto, laddr); err != nil {
+		_ = syscall.Close(fd)
+		return nil, err
+	}
+	if err := bindDarwinICMPSocket(fd, spec.af, laddr); err != nil {
+		_ = syscall.Close(fd)
+		return nil, err
+	}
+
+	return finalizeDarwinICMPSocket(fd, spec.af)
 }
 
 func (s *ICMPSpec) Close() {
