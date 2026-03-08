@@ -315,11 +315,13 @@
   - `printer/mtr_tui.go:mtrTUIRenderWithWidth` 已拆成布局扫描、三行头部构建、host part 预构建、MPLS 续行渲染四段。
   - `printer/mtr_table.go` 的 host 组装和 `MTRReportPrint` 已改成共享 host-part 拼接 helper + report header/row helper。
   - `cmd/mtr_ui.go:(*mtrInputParser).Feed` 已拆成按状态分发的 parser helper。
-- 当前复杂度热点前列已变成：
-  - `trace/globalping.go:GlobalpingTraceroute`
-  - `trace/mtr_runner.go:(*mtrICMPEngine).probeRound`
-  - `trace/mtr_runner.go:(*mtrICMPEngine).onICMP`
-  - 以及少量尾项：`fast_trace ipv6.go`、`reporter/reporter.go`、`trace/mtr_raw.go`
+- 最后一批业务流程热点也已拆薄：
+  - `trace/globalping.go:GlobalpingTraceroute` 已拆成 client 构建、measurement 请求、结果解码、hop limit 推导、结果组装五段。
+  - `trace/mtr_runner.go:(*mtrICMPEngine).onICMP` / `probeRound` 已拆成 reply 校验、notify 清理、目的地 TTL 识别、round 准备、发包 sweep、等待回包、结果构建多个 helper。
+  - `fast_trace/fast_trace ipv6.go:FastTestv6`、`reporter/reporter.go:generateRouteReportNode`、`trace/mtr_raw.go:buildMTRRawRecordFromProbe` 也已分别拆成选择分发、route-node 属性构建、raw record metadata 填充 helper。
+- 当前本地复杂度扫描结果：
+  - `go run /tmp/checkcyclo.go .` 已无 `>15` 函数输出。
+  - `go test ./...` 通过。
 
 ## 仍需记住的残余风险（非阻断）
 
