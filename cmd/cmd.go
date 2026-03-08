@@ -44,31 +44,50 @@ const (
 	defaultTracerouteTTLIntervalMs = 300
 )
 
-func buildListenInfo(addr string) listenInfo {
+func normalizeListenAddr(addr string) string {
 	trimmed := strings.TrimSpace(addr)
-	effective := trimmed
-	if trimmed != "" && isDigitsOnly(trimmed) {
-		effective = ":" + trimmed
+	if trimmed == "" {
+		return ":1080"
 	}
-
-	if effective == "" {
-		effective = ":1080"
+	if isDigitsOnly(trimmed) {
+		return ":" + trimmed
 	}
+	return trimmed
+}
 
+func splitListenAddr(effective string) (host, port string, ok bool) {
 	host, port, err := net.SplitHostPort(effective)
-	if err != nil {
-		if strings.HasPrefix(effective, ":") {
-			host = ""
-			port = strings.TrimPrefix(effective, ":")
-		} else {
-			return listenInfo{
-				Binding: effective,
-			}
+	if err == nil {
+		if port == "" {
+			port = "1080"
 		}
+		return host, port, true
 	}
+	if strings.HasPrefix(effective, ":") {
+		return "", strings.TrimPrefix(effective, ":"), true
+	}
+	return "", "", false
+}
 
-	if port == "" {
-		port = "1080"
+func formatHTTPListenURL(host, port string) string {
+	if strings.Contains(host, ":") && !strings.HasPrefix(host, "[") {
+		host = "[" + host + "]"
+	}
+	return fmt.Sprintf("http://%s:%s", host, port)
+}
+
+func resolveListenAccessHost(host string) string {
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		return guessLocalIPv4()
+	}
+	return host
+}
+
+func buildListenInfo(addr string) listenInfo {
+	effective := normalizeListenAddr(addr)
+	host, port, ok := splitListenAddr(effective)
+	if !ok {
+		return listenInfo{Binding: effective}
 	}
 
 	rawHost := host
@@ -76,28 +95,13 @@ func buildListenInfo(addr string) listenInfo {
 		rawHost = "0.0.0.0"
 	}
 
-	bindingHost := rawHost
-	if strings.Contains(bindingHost, ":") && !strings.HasPrefix(bindingHost, "[") {
-		bindingHost = "[" + bindingHost + "]"
-	}
-
 	info := listenInfo{
-		Binding: fmt.Sprintf("http://%s:%s", bindingHost, port),
+		Binding: formatHTTPListenURL(rawHost, port),
 	}
 
-	wildcard := host == "" || host == "0.0.0.0" || host == "::"
-	var accessHost string
-	if wildcard {
-		accessHost = guessLocalIPv4()
-	} else {
-		accessHost = host
-	}
-
+	accessHost := resolveListenAccessHost(host)
 	if accessHost != "" {
-		if strings.Contains(accessHost, ":") && !strings.HasPrefix(accessHost, "[") {
-			accessHost = "[" + accessHost + "]"
-		}
-		info.Access = fmt.Sprintf("http://%s:%s", accessHost, port)
+		info.Access = formatHTTPListenURL(accessHost, port)
 	}
 
 	return info
@@ -248,42 +252,689 @@ func fixPositionalAlignment(usage string) string {
 	return usage[:afterName] + strings.Repeat(" ", needed) + usage[end:]
 }
 
+type effectiveMTRModes struct {
+	mtr    bool
+	report bool
+	wide   bool
+	raw    bool
+}
+
+type tracerouteOutputFlags struct {
+	routePath    *bool
+	output       *bool
+	tablePrint   *bool
+	jsonPrint    *bool
+	classicPrint *bool
+}
+
+type webUIFlags struct {
+	deployListen *string
+	deploy       *bool
+}
+
+type mtrCLIFlags struct {
+	mtrMode    *bool
+	reportMode *bool
+	wideMode   *bool
+	showIPs    *bool
+	ipInfoMode *int
+}
+
+func registerInitFlag(parser *argparse.Parser) *bool {
+	if runtime.GOOS == "windows" {
+		return parser.Flag("", "init", &argparse.Options{Help: "Extract WinDivert runtime to current directory"})
+	}
+	return ptrBool(false)
+}
+
+func registerFastTraceFlag(parser *argparse.Parser) *bool {
+	if !defaultMTR {
+		return parser.Flag("F", "fast-trace", &argparse.Options{Help: "One-Key Fast Trace to China ISPs"})
+	}
+	return ptrBool(false)
+}
+
+func registerICMPModeFlag(parser *argparse.Parser) *int {
+	if runtime.GOOS == "windows" {
+		return parser.Int("", "icmp-mode", &argparse.Options{Help: "Choose the method to listen for ICMP packets (1=Socket, 2=WinDivert; 0=Auto)"})
+	}
+	return ptrInt(0)
+}
+
+func buildQueriesHelp() string {
+	if defaultMTR {
+		return "Set the max number of probes per hop in MTR mode (0 = unlimited for TUI; default 10 for --report)"
+	}
+	return "Set the number of latency samples to display for each hop"
+}
+
+func registerTracerouteOutputFlags(parser *argparse.Parser) tracerouteOutputFlags {
+	if !defaultMTR {
+		return tracerouteOutputFlags{
+			routePath:    parser.Flag("P", "route-path", &argparse.Options{Help: "Print traceroute hop path by ASN and location"}),
+			output:       parser.Flag("o", "output", &argparse.Options{Help: "Write trace result to file (RealTimePrinter ONLY)"}),
+			tablePrint:   parser.Flag("", "table", &argparse.Options{Help: "Output trace results as a final summary table (traceroute report mode)"}),
+			jsonPrint:    parser.Flag("j", "json", &argparse.Options{Help: "Output trace results as JSON"}),
+			classicPrint: parser.Flag("c", "classic", &argparse.Options{Help: "Classic Output trace results like BestTrace"}),
+		}
+	}
+	return tracerouteOutputFlags{
+		routePath:    ptrBool(false),
+		output:       ptrBool(false),
+		tablePrint:   ptrBool(false),
+		jsonPrint:    ptrBool(false),
+		classicPrint: ptrBool(false),
+	}
+}
+
+func registerWebUIFlags(parser *argparse.Parser) webUIFlags {
+	if enableWebUI {
+		return webUIFlags{
+			deployListen: parser.String("", "listen", &argparse.Options{Help: "Set listen address for web console (e.g. 127.0.0.1:30080)"}),
+			deploy:       parser.Flag("", "deploy", &argparse.Options{Help: "Start the Gin powered web console"}),
+		}
+	}
+	return webUIFlags{
+		deployListen: ptrStr(""),
+		deploy:       ptrBool(false),
+	}
+}
+
+func registerPacketIntervalFlag(parser *argparse.Parser) *int {
+	if !defaultMTR {
+		sendTimeHelp := "Set how many [milliseconds] between sending each packet. Default: 50ms"
+		if enableMTR {
+			sendTimeHelp += ". Ignored in MTR mode"
+		}
+		return parser.Int("z", "send-time", &argparse.Options{Default: defaultPacketIntervalMs, Help: sendTimeHelp})
+	}
+	return ptrInt(defaultPacketIntervalMs)
+}
+
+func buildRawHelp() string {
+	rawHelp := "Machine-friendly output"
+	if enableMTR {
+		mtrFlags := "--mtr/-r/-w"
+		if defaultMTR {
+			mtrFlags = "-r/-w"
+		}
+		rawHelp += ". With MTR (" + mtrFlags + "), enables streaming raw event mode"
+	}
+	return rawHelp
+}
+
+func buildTTLIntervalHelp() string {
+	if !enableMTR {
+		return "Set the interval [ms] between TTL groups for traceroute (default: 300ms)"
+	}
+	if defaultMTR {
+		return "Set the per-hop probe interval [ms] in MTR mode (default: 1000ms when omitted)"
+	}
+	return "Interval [ms] between TTL groups in normal traceroute (default: 300ms). In MTR mode (--mtr/-r/-w, including --raw), sets per-hop probe interval: how long between successive probes to the same hop (default: 1000ms when omitted)"
+}
+
+func registerDisableMaptraceFlag(parser *argparse.Parser) *bool {
+	if !defaultMTR {
+		return parser.Flag("M", "map", &argparse.Options{Help: "Disable Print Trace Map"})
+	}
+	return ptrBool(true)
+}
+
+func registerGlobalpingFlag(parser *argparse.Parser) *string {
+	if enableGlobalping {
+		return parser.String("", "from", &argparse.Options{Help: "Run traceroute via Globalping (https://globalping.io/network) from a specified location. The location field accepts continents, countries, regions, cities, ASNs, ISPs, or cloud regions."})
+	}
+	return ptrStr("")
+}
+
+func registerMTRFlags(parser *argparse.Parser) mtrCLIFlags {
+	if enableMTR {
+		mtrMode := ptrBool(true)
+		if !defaultMTR {
+			mtrMode = parser.Flag("t", "mtr", &argparse.Options{Help: "Enable MTR (My Traceroute) continuous probing mode"})
+		}
+		return mtrCLIFlags{
+			mtrMode:    mtrMode,
+			reportMode: parser.Flag("r", "report", &argparse.Options{Help: "MTR report mode (non-interactive, implies --mtr); can trigger MTR without --mtr"}),
+			wideMode:   parser.Flag("w", "wide", &argparse.Options{Help: "MTR wide report mode (implies --mtr --report); alone equals --mtr --report --wide"}),
+			showIPs:    parser.Flag("", "show-ips", &argparse.Options{Help: "MTR only: display both PTR hostnames and numeric IPs (PTR first, IP in parentheses)"}),
+			ipInfoMode: parser.Int("y", "ipinfo", &argparse.Options{Default: 0, Help: "Set initial MTR TUI host info mode (0-4). TUI only; ignored in --report/--raw. 0:IP/PTR 1:ASN 2:City 3:Owner 4:Full"}),
+		}
+	}
+	return mtrCLIFlags{
+		mtrMode:    ptrBool(false),
+		reportMode: ptrBool(false),
+		wideMode:   ptrBool(false),
+		showIPs:    ptrBool(false),
+		ipInfoMode: ptrInt(0),
+	}
+}
+
+func registerFileFlag(parser *argparse.Parser) *string {
+	if !defaultMTR {
+		return parser.String("", "file", &argparse.Options{Help: "Read IP Address or domain name from file"})
+	}
+	return ptrStr("")
+}
+
+func deriveEffectiveMTRModes(mtrMode, reportMode, wideMode, rawPrint bool) effectiveMTRModes {
+	mtr := mtrMode || reportMode || wideMode
+	return effectiveMTRModes{
+		mtr:    mtr,
+		report: reportMode || wideMode,
+		wide:   wideMode,
+		raw:    mtr && rawPrint,
+	}
+}
+
+func detectExplicitProbeFlags(parser *argparse.Parser) (queriesExplicit, ttlTimeExplicit bool) {
+	for _, a := range parser.GetArgs() {
+		if !a.GetParsed() {
+			continue
+		}
+		switch a.GetLname() {
+		case "queries":
+			queriesExplicit = true
+		case "ttl-time":
+			ttlTimeExplicit = true
+		}
+	}
+	return queriesExplicit, ttlTimeExplicit
+}
+
+func applyColorMode(noColor bool) {
+	color.NoColor = noColor
+}
+
+func printStartupBanner(jsonPrint bool, effectiveMTR bool) {
+	if !jsonPrint && !effectiveMTR {
+		printer.Version()
+	}
+}
+
+func maybePrintVersion(ver bool) bool {
+	if !ver {
+		return false
+	}
+	printer.CopyRight()
+	os.Exit(0)
+	return true
+}
+
+func maybeRunDeployMode(deploy bool, deployListen string) bool {
+	if !deploy {
+		return false
+	}
+
+	capabilitiesCheck()
+	listenAddr := strings.TrimSpace(deployListen)
+	envAddr := strings.TrimSpace(util.EnvDeployAddr)
+	userProvided := listenAddr != "" || envAddr != ""
+	if listenAddr == "" {
+		listenAddr = envAddr
+	}
+	if listenAddr == "" {
+		listenAddr = defaultLocalListenAddr()
+	}
+
+	info := buildListenInfo(listenAddr)
+	fmt.Printf("启动 NextTrace Web 控制台，监听地址: %s\n", info.Binding)
+	if !userProvided {
+		fmt.Println("远程访问请显式设置 --listen（例如 --listen 0.0.0.0:1080）。")
+	}
+	if info.Access != "" && info.Access != info.Binding {
+		fmt.Printf("如需远程访问，请尝试: %s\n", info.Access)
+	}
+	fmt.Println("注意：Web 控制台的安全性有限，请在确保安全的前提下使用，如有必要请使用ACL等方式加强安全性")
+	if err := runDeploy(listenAddr); err != nil {
+		if util.EnvDevMode {
+			panic(err)
+		}
+		log.Fatal(err)
+	}
+	return true
+}
+
+func handleStartupModes(noColor, jsonPrint bool, modes effectiveMTRModes, ver, deploy bool, deployListen string, init bool, osType int) bool {
+	applyColorMode(noColor)
+	printStartupBanner(jsonPrint, modes.mtr)
+	if maybePrintVersion(ver) {
+		return true
+	}
+	if maybeRunDeployMode(deploy, deployListen) {
+		return true
+	}
+	return maybePrepareWinDivert(init, osType)
+}
+
+func resolveOSType() int {
+	switch runtime.GOOS {
+	case "darwin":
+		return 1
+	case "windows":
+		return 2
+	default:
+		return 3
+	}
+}
+
+func maybePrepareWinDivert(init bool, osType int) bool {
+	if !init || osType != 2 {
+		return false
+	}
+	if err := windivert.PrepareWinDivertRuntime(); err != nil {
+		if util.EnvDevMode {
+			panic(err)
+		}
+		log.Fatal(err)
+	}
+	fmt.Println("WinDivert runtime is ready.")
+	return true
+}
+
+func applyDefaultPort(port *int, udp bool) {
+	if *port != 0 {
+		return
+	}
+	if udp {
+		*port = 33494
+		return
+	}
+	*port = 80
+}
+
+func clampProbeSettings(tcp bool, numMeasurements, maxAttempts *int) {
+	if tcp {
+		return
+	}
+	if *numMeasurements > 255 {
+		fmt.Println("Query 最大值为 255，已自动调整为 255")
+		*numMeasurements = 255
+	}
+	if *maxAttempts > 255 {
+		fmt.Println("MaxAttempt 最大值为 255，已自动调整为 255")
+		*maxAttempts = 255
+	}
+}
+
+func resolveTraceMethod(tcp, udp bool) trace.Method {
+	switch {
+	case tcp:
+		return trace.TCPTrace
+	case udp:
+		return trace.UDPTrace
+	default:
+		return trace.ICMPTrace
+	}
+}
+
+func maybeRunFastTraceMode(from string, fastTraceFlag bool, file string, params fastTrace.ParamsFastTrace, method trace.Method, output bool) bool {
+	if from != "" || (!fastTraceFlag && file == "") {
+		return false
+	}
+	fastTrace.FastTest(method, output, params)
+	if output {
+		fmt.Println("您的追踪日志已经存放在 /tmp/trace.log 中")
+	}
+	os.Exit(0)
+	return true
+}
+
+func configureGeoDNS(dot string) {
+	if dot != "" {
+		util.SetGeoDNSResolver(dot)
+	}
+}
+
+func normalizeCLITarget(raw string) string {
+	domain := raw
+	if strings.Contains(domain, "/") {
+		domain = "n" + domain
+		parts := strings.Split(domain, "/")
+		if len(parts) < 3 {
+			return ""
+		}
+		domain = parts[2]
+	}
+	if strings.Contains(domain, "]") && strings.Contains(domain, "[") {
+		inner := strings.SplitN(domain, "]", 2)[0]
+		parts := strings.SplitN(inner, "[", 2)
+		if len(parts) >= 2 {
+			return parts[1]
+		}
+		return domain
+	}
+	if strings.Contains(domain, ":") && strings.Count(domain, ":") == 1 {
+		return strings.Split(domain, ":")[0]
+	}
+	return domain
+}
+
+func resolveCLITargetOrExit(raw string, usage string) string {
+	if raw == "" {
+		fmt.Print(usage)
+		return ""
+	}
+	domain := normalizeCLITarget(raw)
+	if domain == "" {
+		if strings.Contains(raw, "/") {
+			fmt.Println("Invalid input")
+		} else {
+			fmt.Print(usage)
+		}
+	}
+	return domain
+}
+
+func applyDN42Mode(enabled bool, dataOrigin *string, disableMaptrace *bool) {
+	if !enabled {
+		return
+	}
+	config.InitConfig()
+	*dataOrigin = "DN42"
+	*disableMaptrace = true
+}
+
+func prepareRuntimeEnvironment(modes effectiveMTRModes, dn42 bool, dataOrigin *string, disableMaptrace *bool, powProvider *string) *wshandle.WsConn {
+	capabilitiesCheck()
+	applyDN42Mode(dn42, dataOrigin, disableMaptrace)
+	if modes.mtr {
+		util.SuppressFastIPOutput = true
+	}
+	return initLeoWebsocket(dataOrigin, powProvider)
+}
+
+func initLeoWebsocket(dataOrigin, powProvider *string) *wshandle.WsConn {
+	if !strings.EqualFold(*dataOrigin, "LEOMOEAPI") {
+		return nil
+	}
+	if !strings.EqualFold(*powProvider, "api.nxtrace.org") {
+		util.PowProviderParam = *powProvider
+	}
+	if util.EnvDataProvider != "" {
+		*dataOrigin = util.EnvDataProvider
+	}
+	if !strings.EqualFold(*dataOrigin, "LEOMOEAPI") {
+		return nil
+	}
+
+	leoWs := wshandle.New()
+	if leoWs != nil {
+		leoWs.Interrupt = make(chan os.Signal, 1)
+		signal.Notify(leoWs.Interrupt, os.Interrupt)
+	}
+	return leoWs
+}
+
+func closeLeoWebsocket(leoWs *wshandle.WsConn) {
+	if leoWs != nil && leoWs.Conn != nil {
+		_ = leoWs.Conn.Close()
+	}
+}
+
+func maybeHandleGlobalping(from string, opts *trace.GlobalpingOptions, conf *trace.Config) bool {
+	if from == "" {
+		return false
+	}
+	handleGlobalpingTrace(opts, conf)
+	return true
+}
+
+func lookupTargetIP(domain string, ipv4Only, ipv6Only bool, dot string, jsonPrint bool) (net.IP, error) {
+	switch {
+	case ipv6Only:
+		return util.DomainLookUp(domain, "6", dot, jsonPrint)
+	case ipv4Only:
+		return util.DomainLookUp(domain, "4", dot, jsonPrint)
+	default:
+		return util.DomainLookUp(domain, "all", dot, jsonPrint)
+	}
+}
+
+func lookupTargetIPOrExit(domain string, ipv4Only, ipv6Only bool, dot string, jsonPrint bool) net.IP {
+	ip, err := lookupTargetIP(domain, ipv4Only, ipv6Only, dot, jsonPrint)
+	if err != nil {
+		if util.EnvDevMode {
+			panic(err)
+		}
+		log.Fatal(err)
+	}
+	return ip
+}
+
+func applySourceDevice(srcDev string, dstIP net.IP, srcAddr *string) {
+	if srcDev == "" {
+		return
+	}
+	dev, devErr := net.InterfaceByName(srcDev)
+	if devErr != nil || dev == nil {
+		fmt.Printf("无法找到网卡 %q: %v\n", srcDev, devErr)
+		os.Exit(1)
+	}
+	util.SrcDev = dev.Name
+	addrs, err := dev.Addrs()
+	if err != nil {
+		return
+	}
+	for _, addr := range addrs {
+		ipNet, ok := addr.(*net.IPNet)
+		if !ok {
+			continue
+		}
+		if (ipNet.IP.To4() == nil) != (dstIP.To4() == nil) {
+			continue
+		}
+		*srcAddr = ipNet.IP.String()
+		parsed := net.ParseIP(*srcAddr)
+		if parsed != nil && !(parsed.IsPrivate() ||
+			parsed.IsLoopback() ||
+			parsed.IsLinkLocalUnicast() ||
+			parsed.IsLinkLocalMulticast()) {
+			break
+		}
+	}
+}
+
+func normalizeUDPPacketSize(udp bool, ip net.IP, packetSize *int) {
+	if !udp || !util.IsIPv6(ip) || *packetSize >= 2 {
+		return
+	}
+	fmt.Println("UDPv6 模式下，数据包长度不能小于 2，已自动调整为 2")
+	*packetSize = 2
+}
+
+func printTraceNav(jsonPrint bool, effectiveMTR bool, ip net.IP, domain, dataOrigin string, maxHops, packetSize int, srcAddr string, method trace.Method) {
+	if !jsonPrint && !effectiveMTR {
+		printer.PrintTraceRouteNav(ip, domain, dataOrigin, maxHops, packetSize, srcAddr, string(method))
+	}
+}
+
+func buildTraceConfig(
+	osType, icmpMode int,
+	dn42 bool,
+	srcAddr string,
+	srcPort int,
+	beginHop int,
+	ip net.IP,
+	port int,
+	maxHops int,
+	packetInterval int,
+	ttlInterval int,
+	numMeasurements int,
+	maxAttempts int,
+	parallelRequests int,
+	lang string,
+	noRDNS bool,
+	alwaysRDNS bool,
+	dataOrigin string,
+	timeout int,
+	packetSize int,
+	disableMPLS bool,
+) trace.Config {
+	return trace.Config{
+		OSType:           osType,
+		ICMPMode:         icmpMode,
+		DN42:             dn42,
+		SrcAddr:          srcAddr,
+		SrcPort:          srcPort,
+		SourceDevice:     util.SrcDev,
+		BeginHop:         beginHop,
+		DstIP:            ip,
+		DstPort:          port,
+		MaxHops:          maxHops,
+		PacketInterval:   packetInterval,
+		TTLInterval:      ttlInterval,
+		NumMeasurements:  numMeasurements,
+		MaxAttempts:      maxAttempts,
+		ParallelRequests: parallelRequests,
+		Lang:             lang,
+		RDNS:             !noRDNS,
+		AlwaysWaitRDNS:   alwaysRDNS,
+		IPGeoSource:      ipgeo.GetSource(dataOrigin),
+		Timeout:          time.Duration(timeout) * time.Millisecond,
+		PktSize:          packetSize,
+		DisableMPLS:      disableMPLS,
+	}
+}
+
+func maybeRunMTRMode(
+	modes effectiveMTRModes,
+	method trace.Method,
+	conf trace.Config,
+	queriesExplicit bool,
+	numMeasurements int,
+	ttlTimeExplicit bool,
+	ttlInterval int,
+	domain string,
+	dataOrigin string,
+	showIPs bool,
+	ipInfoMode int,
+) bool {
+	if !modes.mtr {
+		return false
+	}
+	mtrMaxPerHop, mtrHopIntervalMs := deriveMTRProbeParams(
+		modes.report,
+		queriesExplicit,
+		numMeasurements,
+		ttlTimeExplicit,
+		ttlInterval,
+	)
+
+	switch chooseMTRRunMode(modes.raw, modes.report) {
+	case mtrRunRaw:
+		runMTRRaw(method, conf, mtrHopIntervalMs, mtrMaxPerHop, dataOrigin)
+	case mtrRunReport:
+		runMTRReport(method, conf, mtrHopIntervalMs, mtrMaxPerHop, domain, dataOrigin, modes.wide, showIPs)
+	default:
+		if ipInfoMode < 0 || ipInfoMode > 4 {
+			fmt.Fprintf(os.Stderr, "--ipinfo/-y 必须在 0-4 范围内，当前值: %d\n", ipInfoMode)
+			os.Exit(1)
+		}
+		runMTRTUI(method, conf, mtrHopIntervalMs, mtrMaxPerHop, domain, dataOrigin, showIPs, ipInfoMode)
+	}
+	return true
+}
+
+func configureTracePrinters(conf *trace.Config, tablePrint, classicPrint, rawPrint, output bool) {
+	if tablePrint {
+		return
+	}
+	router := false
+	switch {
+	case classicPrint:
+		conf.RealtimePrinter = printer.ClassicPrinter
+	case rawPrint:
+		conf.RealtimePrinter = printer.EasyPrinter
+	case output:
+		conf.RealtimePrinter = tracelog.RealtimePrinter
+	case router:
+		conf.RealtimePrinter = printer.RealtimePrinterWithRouter
+		fmt.Println("路由表数据源由 BGP.Tools 提供，在此特表感谢")
+	default:
+		conf.RealtimePrinter = printer.RealtimePrinter
+	}
+}
+
+func applyJSONOutputMode(conf *trace.Config, jsonPrint bool) {
+	if jsonPrint {
+		conf.RealtimePrinter = nil
+		conf.AsyncPrinter = nil
+	}
+}
+
+func maybeRunUninterruptedRaw(rawPrint bool, method trace.Method, conf trace.Config) {
+	if !(util.Uninterrupted && rawPrint) {
+		return
+	}
+	for {
+		if _, err := trace.Traceroute(method, conf); err != nil {
+			fmt.Println(err)
+		}
+	}
+}
+
+func runTraceOnce(method trace.Method, conf trace.Config) (*trace.Result, bool) {
+	res, err := trace.Traceroute(method, conf)
+	if err != nil {
+		if !errors.Is(err, context.Canceled) {
+			fmt.Println(err)
+		}
+		return nil, false
+	}
+	return res, true
+}
+
+func finalizeTraceResult(res *trace.Result, tablePrint, routePath bool, dstIP net.IP, disableMaptrace, jsonPrint bool, dataOrigin string) {
+	if tablePrint {
+		printer.TracerouteTablePrinter(res)
+	}
+	if routePath {
+		reporter.New(res, dstIP.String()).Print()
+	}
+
+	r, err := json.Marshal(res)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	if !disableMaptrace &&
+		(util.StringInSlice(strings.ToUpper(dataOrigin), []string{"LEOMOEAPI", "IPINFO", "IP-API.COM", "IPAPI.COM"})) {
+		url, err := tracemap.GetMapUrl(string(r))
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		res.TraceMapUrl = url
+		if !jsonPrint {
+			tracemap.PrintMapUrl(url)
+		}
+	}
+	r, err = json.Marshal(res)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	if jsonPrint {
+		fmt.Println(string(r))
+	}
+}
+
 func Execute() {
 	parser := argparse.NewParser(appBinName, "An open source visual route tracking CLI tool")
 	// Override HelpFunc so positional arg names are sanitized in --help output
 	parser.HelpFunc = func(c *argparse.Command, msg interface{}) string {
 		return sanitizeUsagePositionalArgs(c.Usage(msg))
 	}
-	// Create string flag
-	var init *bool
-	if runtime.GOOS == "windows" {
-		init = parser.Flag("", "init", &argparse.Options{Help: "Extract WinDivert runtime to current directory"})
-	} else {
-		init = ptrBool(false)
-	}
+	init := registerInitFlag(parser)
 	ipv4Only := parser.Flag("4", "ipv4", &argparse.Options{Help: "Use IPv4 only"})
 	ipv6Only := parser.Flag("6", "ipv6", &argparse.Options{Help: "Use IPv6 only"})
 	tcp := parser.Flag("T", "tcp", &argparse.Options{Help: "Use TCP SYN for tracerouting (default dest-port is 80)"})
 	udp := parser.Flag("U", "udp", &argparse.Options{Help: "Use UDP SYN for tracerouting (default dest-port is 33494)"})
-	// ── Fast-trace: hidden in ntr (always conflicts with default MTR mode) ──
-	var fastTraceFlag *bool
-	if !defaultMTR {
-		fastTraceFlag = parser.Flag("F", "fast-trace", &argparse.Options{Help: "One-Key Fast Trace to China ISPs"})
-	} else {
-		fastTraceFlag = ptrBool(false)
-	}
+	fastTraceFlag := registerFastTraceFlag(parser)
 	port := parser.Int("p", "port", &argparse.Options{Help: "Set the destination port to use. With default of 80 for \"tcp\", 33494 for \"udp\""})
-	var icmpMode *int
-	if runtime.GOOS == "windows" {
-		icmpMode = parser.Int("", "icmp-mode", &argparse.Options{Help: "Choose the method to listen for ICMP packets (1=Socket, 2=WinDivert; 0=Auto)"})
-	} else {
-		icmpMode = ptrInt(0)
-	}
-	queriesHelp := "Set the number of latency samples to display for each hop"
-	if defaultMTR {
-		queriesHelp = "Set the max number of probes per hop in MTR mode (0 = unlimited for TUI; default 10 for --report)"
-	}
-	numMeasurements := parser.Int("q", "queries", &argparse.Options{Default: 3, Help: queriesHelp})
+	icmpMode := registerICMPModeFlag(parser)
+	numMeasurements := parser.Int("q", "queries", &argparse.Options{Default: 3, Help: buildQueriesHelp()})
 	maxAttempts := parser.Int("", "max-attempts", &argparse.Options{Help: "Set the maximum number of probe packets per hop (instead of a fixed auto value)"})
 	parallelRequests := parser.Int("", "parallel-requests", &argparse.Options{Default: 18, Help: "Set ParallelRequests number. It should be 1 when there is a multi-routing"})
 	maxHops := parser.Int("m", "max-hops", &argparse.Options{Default: 30, Help: "Set the max number of hops (max TTL to be reached)"})
@@ -293,77 +944,30 @@ func Execute() {
 		Help: "Choose PoW Provider [api.nxtrace.org, sakura] For China mainland users, please use sakura"})
 	norDNS := parser.Flag("n", "no-rdns", &argparse.Options{Help: "Do not resolve IP addresses to their domain names"})
 	alwaysrDNS := parser.Flag("a", "always-rdns", &argparse.Options{Help: "Always resolve IP addresses to their domain names"})
-	// ── Traceroute-only output flags (hidden in ntr — always conflict with default MTR mode) ──
-	var routePath, output, tablePrint, jsonPrint, classicPrint *bool
-	if !defaultMTR {
-		routePath = parser.Flag("P", "route-path", &argparse.Options{Help: "Print traceroute hop path by ASN and location"})
-		output = parser.Flag("o", "output", &argparse.Options{Help: "Write trace result to file (RealTimePrinter ONLY)"})
-		tablePrint = parser.Flag("", "table", &argparse.Options{Help: "Output trace results as a final summary table (traceroute report mode)"})
-		jsonPrint = parser.Flag("j", "json", &argparse.Options{Help: "Output trace results as JSON"})
-		classicPrint = parser.Flag("c", "classic", &argparse.Options{Help: "Classic Output trace results like BestTrace"})
-	} else {
-		routePath = ptrBool(false)
-		output = ptrBool(false)
-		tablePrint = ptrBool(false)
-		jsonPrint = ptrBool(false)
-		classicPrint = ptrBool(false)
-	}
+	outputFlags := registerTracerouteOutputFlags(parser)
+	routePath := outputFlags.routePath
+	output := outputFlags.output
+	tablePrint := outputFlags.tablePrint
+	jsonPrint := outputFlags.jsonPrint
+	classicPrint := outputFlags.classicPrint
 	dn42 := parser.Flag("", "dn42", &argparse.Options{Help: "DN42 Mode"})
-	rawHelp := "Machine-friendly output"
-	if enableMTR {
-		mtrFlags := "--mtr/-r/-w"
-		if defaultMTR {
-			mtrFlags = "-r/-w"
-		}
-		rawHelp += ". With MTR (" + mtrFlags + "), enables streaming raw event mode"
-	}
-	rawPrint := parser.Flag("", "raw", &argparse.Options{Help: rawHelp})
+	rawPrint := parser.Flag("", "raw", &argparse.Options{Help: buildRawHelp()})
 	beginHop := parser.Int("f", "first", &argparse.Options{Default: 1, Help: "Start from the first_ttl hop (instead of 1)"})
-	// ── Map: hidden in ntr (MTR mode never prints a trace map) ──
-	var disableMaptrace *bool
-	if !defaultMTR {
-		disableMaptrace = parser.Flag("M", "map", &argparse.Options{Help: "Disable Print Trace Map"})
-	} else {
-		disableMaptrace = ptrBool(true) // map is always suppressed in ntr
-	}
+	disableMaptrace := registerDisableMaptraceFlag(parser)
 	disableMPLS := parser.Flag("e", "disable-mpls", &argparse.Options{Help: "Disable MPLS"})
 	ver := parser.Flag("V", "version", &argparse.Options{Help: "Print version info and exit"})
 	srcAddr := parser.String("s", "source", &argparse.Options{Help: "Use source address src_addr for outgoing packets"})
 	srcPort := parser.Int("", "source-port", &argparse.Options{Help: "Use source port src_port for outgoing packets"})
 	srcDev := parser.String("D", "dev", &argparse.Options{Help: "Use the following Network Devices as the source address in outgoing packets"})
 
-	// ── WebUI flags (full only) ──
-	var deployListen *string
-	var deploy *bool
-	if enableWebUI {
-		deployListen = parser.String("", "listen", &argparse.Options{Help: "Set listen address for web console (e.g. 127.0.0.1:30080)"})
-		deploy = parser.Flag("", "deploy", &argparse.Options{Help: "Start the Gin powered web console"})
-	} else {
-		deployListen = ptrStr("")
-		deploy = ptrBool(false)
-	}
+	webFlags := registerWebUIFlags(parser)
+	deployListen := webFlags.deployListen
+	deploy := webFlags.deploy
 
 	//router := parser.Flag("R", "route", &argparse.Options{Help: "Show Routing Table [Provided By BGP.Tools]"})
 	// ── Send-time: hidden in ntr (always ignored in MTR mode) ──
-	var packetInterval *int
-	if !defaultMTR {
-		sendTimeHelp := "Set how many [milliseconds] between sending each packet. Default: 50ms"
-		if enableMTR {
-			sendTimeHelp += ". Ignored in MTR mode"
-		}
-		packetInterval = parser.Int("z", "send-time", &argparse.Options{Default: defaultPacketIntervalMs, Help: sendTimeHelp})
-	} else {
-		packetInterval = ptrInt(defaultPacketIntervalMs)
-	}
-	var ttlIntervalHelp string
-	if !enableMTR {
-		ttlIntervalHelp = "Set the interval [ms] between TTL groups for traceroute (default: 300ms)"
-	} else if defaultMTR {
-		ttlIntervalHelp = "Set the per-hop probe interval [ms] in MTR mode (default: 1000ms when omitted)"
-	} else {
-		ttlIntervalHelp = "Interval [ms] between TTL groups in normal traceroute (default: 300ms). In MTR mode (--mtr/-r/-w, including --raw), sets per-hop probe interval: how long between successive probes to the same hop (default: 1000ms when omitted)"
-	}
-	ttlInterval := parser.Int("i", "ttl-time", &argparse.Options{Default: defaultTracerouteTTLIntervalMs, Help: ttlIntervalHelp})
+	packetInterval := registerPacketIntervalFlag(parser)
+	ttlInterval := parser.Int("i", "ttl-time", &argparse.Options{Default: defaultTracerouteTTLIntervalMs, Help: buildTTLIntervalHelp()})
 	timeout := parser.Int("", "timeout", &argparse.Options{Default: 1000, Help: "The number of [milliseconds] to keep probe sockets open before giving up on the connection"})
 	packetSize := parser.Int("", "psize", &argparse.Options{Default: 52, Help: "Set the payload size"})
 	dot := parser.Selector("", "dot-server", []string{"dnssb", "aliyun", "dnspod", "google", "cloudflare"}, &argparse.Options{
@@ -373,42 +977,18 @@ func Execute() {
 	noColor := parser.Flag("C", "no-color", &argparse.Options{Help: "Disable Colorful Output"})
 
 	// ── Globalping flag (full only) ──
-	var from *string
-	if enableGlobalping {
-		from = parser.String("", "from", &argparse.Options{Help: "Run traceroute via Globalping (https://globalping.io/network) from a specified location. The location field accepts continents, countries, regions, cities, ASNs, ISPs, or cloud regions."})
-	} else {
-		from = ptrStr("")
-	}
+	from := registerGlobalpingFlag(parser)
 
 	// ── MTR flags (full & ntr only) ──
-	var mtrMode, reportMode, wideMode, showIPs *bool
-	var ipInfoMode *int
-	if enableMTR {
-		// ── -t/--mtr: hidden in ntr (always active by default) ──
-		if !defaultMTR {
-			mtrMode = parser.Flag("t", "mtr", &argparse.Options{Help: "Enable MTR (My Traceroute) continuous probing mode"})
-		} else {
-			mtrMode = ptrBool(true)
-		}
-		reportMode = parser.Flag("r", "report", &argparse.Options{Help: "MTR report mode (non-interactive, implies --mtr); can trigger MTR without --mtr"})
-		wideMode = parser.Flag("w", "wide", &argparse.Options{Help: "MTR wide report mode (implies --mtr --report); alone equals --mtr --report --wide"})
-		showIPs = parser.Flag("", "show-ips", &argparse.Options{Help: "MTR only: display both PTR hostnames and numeric IPs (PTR first, IP in parentheses)"})
-		ipInfoMode = parser.Int("y", "ipinfo", &argparse.Options{Default: 0, Help: "Set initial MTR TUI host info mode (0-4). TUI only; ignored in --report/--raw. 0:IP/PTR 1:ASN 2:City 3:Owner 4:Full"})
-	} else {
-		mtrMode = ptrBool(false)
-		reportMode = ptrBool(false)
-		wideMode = ptrBool(false)
-		showIPs = ptrBool(false)
-		ipInfoMode = ptrInt(0)
-	}
+	mtrFlags := registerMTRFlags(parser)
+	mtrMode := mtrFlags.mtrMode
+	reportMode := mtrFlags.reportMode
+	wideMode := mtrFlags.wideMode
+	showIPs := mtrFlags.showIPs
+	ipInfoMode := mtrFlags.ipInfoMode
 
 	// ── File: hidden in ntr (conflicts with default MTR mode) ──
-	var file *string
-	if !defaultMTR {
-		file = parser.String("", "file", &argparse.Options{Help: "Read IP Address or domain name from file"})
-	} else {
-		file = ptrStr("")
-	}
+	file := registerFileFlag(parser)
 	str := parser.StringPositional(&argparse.Options{Help: "Trace target: IPv4 address (e.g. 8.8.8.8), IPv6 address (e.g. 2001:db8::1), domain name (e.g. example.com), or URL (e.g. https://example.com)"})
 
 	err := parser.Parse(os.Args)
@@ -419,15 +999,8 @@ func Execute() {
 		return
 	}
 
-	// ── 统一 MTR 有效开关 ──
-	// defaultMTR 不需要出现在这里——当 defaultMTR==true 时 mtrMode 已被设为 ptrBool(true)。
-	effectiveMTR := *mtrMode || *reportMode || *wideMode
-	effectiveReport := *reportMode || *wideMode
-	effectiveWide := *wideMode
-	effectiveMTRRaw := effectiveMTR && *rawPrint
-
-	// MTR 冲突检查必须在所有可能 early-return 的分支之前执行
-	if effectiveMTR {
+	mtrModes := deriveEffectiveMTRModes(*mtrMode, *reportMode, *wideMode, *rawPrint)
+	if mtrModes.mtr {
 		conflictFlags := map[string]bool{
 			"table":     *tablePrint,
 			"classic":   *classicPrint,
@@ -445,460 +1018,127 @@ func Execute() {
 		}
 	}
 
-	// 判定 -q / -i 是否显式传入（用于 MTR 下参数迁移）
-	queriesExplicit := false
-	ttlTimeExplicit := false
-	for _, a := range parser.GetArgs() {
-		if !a.GetParsed() {
-			continue
-		}
-		switch a.GetLname() {
-		case "queries":
-			queriesExplicit = true
-		case "ttl-time":
-			ttlTimeExplicit = true
-		}
-	}
-
-	if *noColor {
-		color.NoColor = true
-	} else {
-		color.NoColor = false
-	}
-
-	if !*jsonPrint && !effectiveMTR {
-		printer.Version()
-	}
-
-	if *ver {
-		printer.CopyRight()
-		os.Exit(0)
-	}
-
-	if *deploy {
-		capabilitiesCheck()
-		// 优先使用 CLI 参数，其次使用环境变量
-		listenAddr := strings.TrimSpace(*deployListen)
-		envAddr := strings.TrimSpace(util.EnvDeployAddr)
-		userProvided := listenAddr != "" || envAddr != ""
-		if listenAddr == "" {
-			listenAddr = envAddr
-		}
-		if listenAddr == "" {
-			listenAddr = defaultLocalListenAddr()
-		}
-
-		info := buildListenInfo(listenAddr)
-		// 判断是否同时未通过 CLI 和环境变量指定地址
-		if !userProvided {
-			fmt.Printf("启动 NextTrace Web 控制台，监听地址: %s\n", info.Binding)
-			fmt.Println("远程访问请显式设置 --listen（例如 --listen 0.0.0.0:1080）。")
-			if info.Access != "" && info.Access != info.Binding {
-				fmt.Printf("如需远程访问，请尝试: %s\n", info.Access)
-			}
-		} else {
-			fmt.Printf("启动 NextTrace Web 控制台，监听地址: %s\n", info.Binding)
-			if info.Access != "" && info.Access != info.Binding {
-				fmt.Printf("如需远程访问，请尝试: %s\n", info.Access)
-			}
-		}
-		fmt.Println("注意：Web 控制台的安全性有限，请在确保安全的前提下使用，如有必要请使用ACL等方式加强安全性")
-		if err := runDeploy(listenAddr); err != nil {
-			if util.EnvDevMode {
-				panic(err)
-			}
-			log.Fatal(err)
-		}
+	queriesExplicit, ttlTimeExplicit := detectExplicitProbeFlags(parser)
+	osType := resolveOSType()
+	if handleStartupModes(*noColor, *jsonPrint, mtrModes, *ver, *deploy, *deployListen, *init, osType) {
 		return
 	}
 
-	OSType := 3
-	switch runtime.GOOS {
-	case "darwin":
-		OSType = 1
-	case "windows":
-		OSType = 2
-	}
+	applyDefaultPort(port, *udp)
+	clampProbeSettings(*tcp, numMeasurements, maxAttempts)
+	configureGeoDNS(*dot)
 
-	if *init && OSType == 2 {
-		if err := windivert.PrepareWinDivertRuntime(); err != nil {
-			if util.EnvDevMode {
-				panic(err)
-			}
-			log.Fatal(err)
-		}
-		fmt.Println("WinDivert runtime is ready.")
+	method := resolveTraceMethod(*tcp, *udp)
+	paramsFastTrace := fastTrace.ParamsFastTrace{
+		OSType:         osType,
+		ICMPMode:       *icmpMode,
+		SrcDev:         *srcDev,
+		SrcAddr:        *srcAddr,
+		DstPort:        *port,
+		BeginHop:       *beginHop,
+		MaxHops:        *maxHops,
+		MaxAttempts:    *maxAttempts,
+		RDNS:           !*norDNS,
+		AlwaysWaitRDNS: *alwaysrDNS,
+		Lang:           *lang,
+		PktSize:        *packetSize,
+		Timeout:        time.Duration(*timeout) * time.Millisecond,
+		File:           *file,
+		Dot:            *dot,
+	}
+	if maybeRunFastTraceMode(*from, *fastTraceFlag, *file, paramsFastTrace, method, *output) {
 		return
 	}
 
-	if *port == 0 {
-		if *udp {
-			*port = 33494
-		} else {
-			*port = 80
-		}
-	}
-
-	if !*tcp {
-		if *numMeasurements > 255 {
-			fmt.Println("Query 最大值为 255，已自动调整为 255")
-			*numMeasurements = 255
-		}
-
-		if *maxAttempts > 255 {
-			fmt.Println("MaxAttempt 最大值为 255，已自动调整为 255")
-			*maxAttempts = 255
-		}
-	}
-
-	domain := *str
-
-	// 将 --dot-server 配置注入 Geo DNS 解析策略层，
-	// 使 GeoIP API 域名解析（含 LeoMoe FastIP）也走 DoT。
-	// 必须在 fast-trace / wshandle.New() / GetFastIP 之前执行。
-	if *dot != "" {
-		util.SetGeoDNSResolver(*dot)
-	}
-
-	var m trace.Method
-	switch {
-	case *tcp:
-		m = trace.TCPTrace
-	case *udp:
-		m = trace.UDPTrace
-	default:
-		m = trace.ICMPTrace
-	}
-
-	if *from == "" && (*fastTraceFlag || *file != "") {
-		var paramsFastTrace = fastTrace.ParamsFastTrace{
-			OSType:         OSType,
-			ICMPMode:       *icmpMode,
-			SrcDev:         *srcDev,
-			SrcAddr:        *srcAddr,
-			DstPort:        *port,
-			BeginHop:       *beginHop,
-			MaxHops:        *maxHops,
-			MaxAttempts:    *maxAttempts,
-			RDNS:           !*norDNS,
-			AlwaysWaitRDNS: *alwaysrDNS,
-			Lang:           *lang,
-			PktSize:        *packetSize,
-			Timeout:        time.Duration(*timeout) * time.Millisecond,
-			File:           *file,
-			Dot:            *dot,
-		}
-
-		fastTrace.FastTest(m, *output, paramsFastTrace)
-		if *output {
-			fmt.Println("您的追踪日志已经存放在 /tmp/trace.log 中")
-		}
-
-		os.Exit(0)
-	}
-
-	// DOMAIN处理开始
+	domain := resolveCLITargetOrExit(*str, sanitizeUsagePositionalArgs(parser.Usage(err)))
 	if domain == "" {
-		fmt.Print(sanitizeUsagePositionalArgs(parser.Usage(err)))
 		return
 	}
 
-	if strings.Contains(domain, "/") {
-		domain = "n" + domain
-		parts := strings.Split(domain, "/")
-		if len(parts) < 3 {
-			fmt.Println("Invalid input")
-			return
-		}
-		domain = parts[2]
-	}
+	leoWs := prepareRuntimeEnvironment(mtrModes, *dn42, dataOrigin, disableMaptrace, powProvider)
+	defer closeLeoWebsocket(leoWs)
 
-	if strings.Contains(domain, "]") && strings.Contains(domain, "[") {
-		inner := strings.SplitN(domain, "]", 2)[0]
-		parts := strings.SplitN(inner, "[", 2)
-		if len(parts) >= 2 {
-			domain = parts[1]
-		}
-	} else if strings.Contains(domain, ":") {
-		if strings.Count(domain, ":") == 1 {
-			domain = strings.Split(domain, ":")[0]
-		}
-	}
-	// DOMAIN处理结束
+	if maybeHandleGlobalping(
+		*from,
+		&trace.GlobalpingOptions{
+			Target:  *str,
+			From:    *from,
+			IPv4:    *ipv4Only,
+			IPv6:    *ipv6Only,
+			TCP:     *tcp,
+			UDP:     *udp,
+			Port:    *port,
+			Packets: *numMeasurements,
+			MaxHops: *maxHops,
 
-	capabilitiesCheck()
-	// return
+			DisableMaptrace: *disableMaptrace,
+			DataOrigin:      *dataOrigin,
 
-	if *dn42 {
-		// 初始化配置
-		config.InitConfig()
-		*dataOrigin = "DN42"
-		*disableMaptrace = true
-	}
-
-	/**
-	 * 此处若使用goroutine同时运行ws的建立与nslookup，
-	 * 会导致第一跳的IP信息无法获取，原因不明。
-	 */
-	//var wg sync.WaitGroup
-	//wg.Add(2)
-	//
-	//go func() {
-	//	defer wg.Done()
-	//}()
-	// MTR 使用 TUI 备用屏，必须在 wshandle.New() / GetFastIP 之前
-	// 禁止彩色横幅输出，避免污染主终端历史。
-	if effectiveMTR {
-		util.SuppressFastIPOutput = true
-	}
-
-	var leoWs *wshandle.WsConn
-	needsLeoWS := strings.EqualFold(*dataOrigin, "LEOMOEAPI")
-	if needsLeoWS {
-		if !strings.EqualFold(*powProvider, "api.nxtrace.org") {
-			util.PowProviderParam = *powProvider
-		}
-		if util.EnvDataProvider != "" {
-			*dataOrigin = util.EnvDataProvider
-		}
-		needsLeoWS = strings.EqualFold(*dataOrigin, "LEOMOEAPI")
-		if needsLeoWS {
-			leoWs = wshandle.New()
-			if leoWs != nil {
-				leoWs.Interrupt = make(chan os.Signal, 1)
-				signal.Notify(leoWs.Interrupt, os.Interrupt)
-			}
-		}
-	}
-	if leoWs != nil {
-		defer func() {
-			if leoWs.Conn != nil {
-				_ = leoWs.Conn.Close()
-			}
-		}()
-	}
-
-	if *from != "" {
-		handleGlobalpingTrace(
-			&trace.GlobalpingOptions{
-				Target:  *str,
-				From:    *from,
-				IPv4:    *ipv4Only,
-				IPv6:    *ipv6Only,
-				TCP:     *tcp,
-				UDP:     *udp,
-				Port:    *port,
-				Packets: *numMeasurements,
-				MaxHops: *maxHops,
-
-				DisableMaptrace: *disableMaptrace,
-				DataOrigin:      *dataOrigin,
-
-				TablePrint:   *tablePrint,
-				ClassicPrint: *classicPrint,
-				RawPrint:     *rawPrint,
-				JSONPrint:    *jsonPrint,
-			},
-			&trace.Config{
-				OSType:          OSType,
-				DN42:            *dn42,
-				NumMeasurements: *numMeasurements,
-				Lang:            *lang,
-				RDNS:            !*norDNS,
-				AlwaysWaitRDNS:  *alwaysrDNS,
-				IPGeoSource:     ipgeo.GetSource(*dataOrigin),
-				Timeout:         time.Duration(*timeout) * time.Millisecond,
-			},
-		)
+			TablePrint:   *tablePrint,
+			ClassicPrint: *classicPrint,
+			RawPrint:     *rawPrint,
+			JSONPrint:    *jsonPrint,
+		},
+		&trace.Config{
+			OSType:          osType,
+			DN42:            *dn42,
+			NumMeasurements: *numMeasurements,
+			Lang:            *lang,
+			RDNS:            !*norDNS,
+			AlwaysWaitRDNS:  *alwaysrDNS,
+			IPGeoSource:     ipgeo.GetSource(*dataOrigin),
+			Timeout:         time.Duration(*timeout) * time.Millisecond,
+		},
+	) {
 		return
 	}
 
-	var ip net.IP
-	if *ipv6Only {
-		ip, err = util.DomainLookUp(domain, "6", *dot, *jsonPrint)
-	} else if *ipv4Only {
-		ip, err = util.DomainLookUp(domain, "4", *dot, *jsonPrint)
-	} else {
-		ip, err = util.DomainLookUp(domain, "all", *dot, *jsonPrint)
-	}
+	ip := lookupTargetIPOrExit(domain, *ipv4Only, *ipv6Only, *dot, *jsonPrint)
 
-	if err != nil {
-		if util.EnvDevMode {
-			panic(err)
-		}
-		log.Fatal(err)
-	}
-
-	if *srcDev != "" {
-		dev, devErr := net.InterfaceByName(*srcDev)
-		if devErr != nil || dev == nil {
-			fmt.Printf("无法找到网卡 %q: %v\n", *srcDev, devErr)
-			os.Exit(1)
-		}
-		util.SrcDev = dev.Name
-		if addrs, err := dev.Addrs(); err == nil {
-			for _, addr := range addrs {
-				ipNet, ok := addr.(*net.IPNet)
-				if !ok {
-					continue // 跳过非 *net.IPNet 类型（如 *net.IPAddr）
-				}
-				if (ipNet.IP.To4() == nil) == (ip.To4() == nil) {
-					*srcAddr = ipNet.IP.String()
-					// 检查是否是内网IP
-					parsed := net.ParseIP(*srcAddr)
-					if parsed != nil && !(parsed.IsPrivate() ||
-						parsed.IsLoopback() ||
-						parsed.IsLinkLocalUnicast() ||
-						parsed.IsLinkLocalMulticast()) {
-						// 若不是则跳出
-						break
-					}
-				}
-			}
-		}
-	}
-
-	// 仅在使用 UDPv6 探测时，确保 UDP 负载长度 ≥ 2
-	if *udp && util.IsIPv6(ip) && *packetSize < 2 {
-		fmt.Println("UDPv6 模式下，数据包长度不能小于 2，已自动调整为 2")
-		*packetSize = 2
-	}
-
-	if !*jsonPrint && !effectiveMTR {
-		printer.PrintTraceRouteNav(ip, domain, *dataOrigin, *maxHops, *packetSize, *srcAddr, string(m))
-	}
+	applySourceDevice(*srcDev, ip, srcAddr)
+	normalizeUDPPacketSize(*udp, ip, packetSize)
+	printTraceNav(*jsonPrint, mtrModes.mtr, ip, domain, *dataOrigin, *maxHops, *packetSize, *srcAddr, method)
 
 	util.SrcPort = *srcPort
 	util.DstIP = ip.String()
-	var conf = trace.Config{
-		OSType:           OSType,
-		ICMPMode:         *icmpMode,
-		DN42:             *dn42,
-		SrcAddr:          *srcAddr,
-		SrcPort:          *srcPort,
-		SourceDevice:     util.SrcDev,
-		BeginHop:         *beginHop,
-		DstIP:            ip,
-		DstPort:          *port,
-		MaxHops:          *maxHops,
-		PacketInterval:   *packetInterval,
-		TTLInterval:      *ttlInterval,
-		NumMeasurements:  *numMeasurements,
-		MaxAttempts:      *maxAttempts,
-		ParallelRequests: *parallelRequests,
-		Lang:             *lang,
-		RDNS:             !*norDNS,
-		AlwaysWaitRDNS:   *alwaysrDNS,
-		IPGeoSource:      ipgeo.GetSource(*dataOrigin),
-		Timeout:          time.Duration(*timeout) * time.Millisecond,
-		PktSize:          *packetSize,
-		DisableMPLS:      *disableMPLS,
-	}
+	conf := buildTraceConfig(
+		osType,
+		*icmpMode,
+		*dn42,
+		*srcAddr,
+		*srcPort,
+		*beginHop,
+		ip,
+		*port,
+		*maxHops,
+		*packetInterval,
+		*ttlInterval,
+		*numMeasurements,
+		*maxAttempts,
+		*parallelRequests,
+		*lang,
+		*norDNS,
+		*alwaysrDNS,
+		*dataOrigin,
+		*timeout,
+		*packetSize,
+		*disableMPLS,
+	)
 
-	// ── MTR 连续探测模式 ──
-	if effectiveMTR {
-		mtrMaxPerHop, mtrHopIntervalMs := deriveMTRProbeParams(
-			effectiveReport,
-			queriesExplicit,
-			*numMeasurements,
-			ttlTimeExplicit,
-			*ttlInterval,
-		)
-
-		switch chooseMTRRunMode(effectiveMTRRaw, effectiveReport) {
-		case mtrRunRaw:
-			runMTRRaw(m, conf, mtrHopIntervalMs, mtrMaxPerHop, *dataOrigin)
-		case mtrRunReport:
-			runMTRReport(m, conf, mtrHopIntervalMs, mtrMaxPerHop, domain, *dataOrigin, effectiveWide, *showIPs)
-		default:
-			// -y/--ipinfo 仅 TUI 使用，此处校验
-			if *ipInfoMode < 0 || *ipInfoMode > 4 {
-				fmt.Fprintf(os.Stderr, "--ipinfo/-y 必须在 0-4 范围内，当前值: %d\n", *ipInfoMode)
-				os.Exit(1)
-			}
-			runMTRTUI(m, conf, mtrHopIntervalMs, mtrMaxPerHop, domain, *dataOrigin, *showIPs, *ipInfoMode)
-		}
+	if maybeRunMTRMode(mtrModes, method, conf, queriesExplicit, *numMeasurements, ttlTimeExplicit, *ttlInterval, domain, *dataOrigin, *showIPs, *ipInfoMode) {
 		return
 	}
 
-	// 暂时弃用
-	router := new(bool)
-	*router = false
-	if !*tablePrint {
-		if *classicPrint {
-			conf.RealtimePrinter = printer.ClassicPrinter
-		} else if *rawPrint {
-			conf.RealtimePrinter = printer.EasyPrinter
-		} else {
-			if *output {
-				conf.RealtimePrinter = tracelog.RealtimePrinter
-			} else if *router {
-				conf.RealtimePrinter = printer.RealtimePrinterWithRouter
-				fmt.Println("路由表数据源由 BGP.Tools 提供，在此特表感谢")
-			} else {
-				conf.RealtimePrinter = printer.RealtimePrinter
-			}
-		}
-	}
+	configureTracePrinters(&conf, *tablePrint, *classicPrint, *rawPrint, *output)
+	applyJSONOutputMode(&conf, *jsonPrint)
+	maybeRunUninterruptedRaw(*rawPrint, method, conf)
 
-	if *jsonPrint {
-		conf.RealtimePrinter = nil
-		conf.AsyncPrinter = nil
-	}
-
-	if util.Uninterrupted && *rawPrint {
-		for {
-			_, err := trace.Traceroute(m, conf)
-			if err != nil {
-				fmt.Println(err)
-			}
-		}
-	}
-
-	res, err := trace.Traceroute(m, conf)
-	if err != nil {
-		if !errors.Is(err, context.Canceled) {
-			// 用户主动中断：跳过后续的正常收尾
-			// os.Exit(130)
-			fmt.Println(err)
-		}
+	res, ok := runTraceOnce(method, conf)
+	if !ok {
 		return
 	}
 
-	if *tablePrint {
-		printer.TracerouteTablePrinter(res)
-	}
-
-	if *routePath {
-		r := reporter.New(res, ip.String())
-		r.Print()
-	}
-
-	r, err := json.Marshal(res)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	if !*disableMaptrace &&
-		(util.StringInSlice(strings.ToUpper(*dataOrigin), []string{"LEOMOEAPI", "IPINFO", "IP-API.COM", "IPAPI.COM"})) {
-		url, err := tracemap.GetMapUrl(string(r))
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-		res.TraceMapUrl = url
-		if !*jsonPrint {
-			tracemap.PrintMapUrl(url)
-		}
-	}
-	r, err = json.Marshal(res)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	if *jsonPrint {
-		fmt.Println(string(r))
-	}
+	finalizeTraceResult(res, *tablePrint, *routePath, ip, *disableMaptrace, *jsonPrint, *dataOrigin)
 }
 
 type mtrRunMode int

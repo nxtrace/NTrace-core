@@ -278,6 +278,24 @@
 - Geo HTTP 客户端：`util/http_client_geo.go`
 - FastIP：`util/latency.go`
 
+## 2026-03 Gocyclo 重构快照
+
+- 第一波低风险重构已落地：
+  - `ipgeo.Filter` 改为 CIDR 规则表驱动。
+  - `util.DomainLookUp` 拆成 resolver / lookup / family filter / interactive select 四段。
+  - `server.prepareTrace`、`normalizeTarget`、`trace.Traceroute`、`trace.Hop.fetchIPData` 已改成薄协调器。
+  - `GetMTUByIPForDevice`、`GetICMPResponsePayload`、`parseIPDBOneResponse`、`GlobalpingFormatLocation` 已拆 helper。
+- 第二波主流程/输出层已部分落地：
+  - `cmd.Execute` 已拆成 parser 注册 helper、启动模式 helper、运行时调度 helper。
+  - `fast_trace.FastTest` / `testFile` 已拆成交互选择、源地址推导、文件目标解析、单目标执行。
+  - `server.mtrAggregator.Update`、`wshandle.messageSendHandler` 已改成薄入口。
+  - `printer.RealtimePrinter`、`RealtimePrinterWithRouter`、`tracelog.RealtimePrinter` 现在共用 `internal/hoprender` 的 hop attempt 分组逻辑。
+- 当前已知剩余高复杂度主要集中在：
+  - `trace/internal/*` 各平台 ICMP/TCP/UDP 监听循环
+  - `trace/mtr_*` 调度/聚合
+  - `printer/mtr_*` 渲染层
+  - `trace/globalping.go` 的主流程函数
+
 ## 仍需记住的残余风险（非阻断）
 
 - `closeWithCode` 中 `closed.Store(true)` 在 `closeOnce.Do` 外部，理论上有微小竞态窗口（实际无害，因 `sendMu` 保护；且无法简单移入 Once 内部，否则第二个调用者无法设置 closed）。

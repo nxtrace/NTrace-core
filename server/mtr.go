@@ -80,6 +80,156 @@ func newMTRAggregator() *mtrAggregator {
 	}
 }
 
+func buildAttemptGroups(attempts []trace.Hop) map[string]*groupMetrics {
+	groups := make(map[string]*groupMetrics)
+	for _, attempt := range attempts {
+		host := strings.TrimSpace(attempt.Hostname)
+		ip := ""
+		if attempt.Address != nil {
+			ip = strings.TrimSpace(attempt.Address.String())
+		}
+
+		key := hopKey(ip, host)
+		group := groups[key]
+		if group == nil {
+			group = &groupMetrics{
+				host: host,
+				ip:   ip,
+				best: math.MaxFloat64,
+			}
+			groups[key] = group
+		}
+		mergeAttemptIntoGroup(group, attempt)
+	}
+	return groups
+}
+
+func mergeAttemptIntoGroup(group *groupMetrics, attempt trace.Hop) {
+	group.count++
+	if group.geo == nil && attempt.Geo != nil {
+		group.geo = attempt.Geo
+	}
+	addGroupMPLS(group, attempt.MPLS)
+
+	if attempt.Success {
+		updateGroupRTT(group, attempt)
+		return
+	}
+
+	if group.errors == nil {
+		group.errors = make(map[string]int)
+	}
+	group.errors[attemptErrorKey(attempt)]++
+}
+
+func addGroupMPLS(group *groupMetrics, labels []string) {
+	if len(labels) == 0 {
+		return
+	}
+	if group.mpls == nil {
+		group.mpls = make(map[string]struct{})
+	}
+	for _, label := range labels {
+		val := strings.TrimSpace(label)
+		if val != "" {
+			group.mpls[val] = struct{}{}
+		}
+	}
+}
+
+func updateGroupRTT(group *groupMetrics, attempt trace.Hop) {
+	rttMs := float64(attempt.RTT) / float64(time.Millisecond)
+	group.sum += rttMs
+	group.received++
+	group.last = rttMs
+	if rttMs > group.worst {
+		group.worst = rttMs
+	}
+	if rttMs > 0 && rttMs < group.best {
+		group.best = rttMs
+	}
+}
+
+func attemptErrorKey(attempt trace.Hop) string {
+	if attempt.Error == nil {
+		return "timeout"
+	}
+	errKey := strings.TrimSpace(attempt.Error.Error())
+	if errKey == "" {
+		return "timeout"
+	}
+	return errKey
+}
+
+func (agg *mtrAggregator) ensureHopAccum(ttl int, accMap map[string]*hopAccum, key string) *hopAccum {
+	acc := accMap[key]
+	if acc != nil {
+		return acc
+	}
+
+	acc = &hopAccum{
+		TTL:     ttl,
+		Key:     key,
+		Best:    math.MaxFloat64,
+		order:   agg.nextOrder,
+		mplsSet: make(map[string]struct{}),
+	}
+	agg.nextOrder++
+	accMap[key] = acc
+	return acc
+}
+
+func mergeGroup(acc *hopAccum, group *groupMetrics) {
+	if group.ip != "" {
+		acc.IP = group.ip
+	}
+	if group.host != "" {
+		acc.Host = group.host
+	}
+	if group.geo != nil {
+		acc.Geo = group.geo
+	}
+
+	acc.Sent += group.count
+	if group.received > 0 {
+		acc.Sum += group.sum
+		acc.Received += group.received
+		acc.Last = group.last
+		if group.best > 0 && (acc.Best == math.MaxFloat64 || group.best < acc.Best) {
+			acc.Best = group.best
+		}
+		if group.worst > acc.Worst {
+			acc.Worst = group.worst
+		}
+	}
+	mergeErrorCounts(acc, group.errors)
+	mergeMPLSSet(acc, group.mpls)
+}
+
+func mergeErrorCounts(acc *hopAccum, errors map[string]int) {
+	if len(errors) == 0 {
+		return
+	}
+	if acc.Errors == nil {
+		acc.Errors = make(map[string]int)
+	}
+	for errKey, count := range errors {
+		acc.Errors[errKey] += count
+	}
+}
+
+func mergeMPLSSet(acc *hopAccum, mpls map[string]struct{}) {
+	if len(mpls) == 0 {
+		return
+	}
+	if acc.mplsSet == nil {
+		acc.mplsSet = make(map[string]struct{})
+	}
+	for label := range mpls {
+		acc.mplsSet[label] = struct{}{}
+	}
+}
+
 func (agg *mtrAggregator) Update(res *trace.Result, queries int) []mtrHopJSON {
 	agg.mu.Lock()
 	defer agg.mu.Unlock()
@@ -99,118 +249,9 @@ func (agg *mtrAggregator) Update(res *trace.Result, queries int) []mtrHopJSON {
 			agg.stats[ttl] = accMap
 		}
 
-		groups := make(map[string]*groupMetrics)
-		for _, attempt := range attempts {
-			host := strings.TrimSpace(attempt.Hostname)
-			var ip string
-			if attempt.Address != nil {
-				ip = strings.TrimSpace(attempt.Address.String())
-			}
-			key := hopKey(ip, host)
-			group := groups[key]
-			if group == nil {
-				group = &groupMetrics{
-					host: host,
-					ip:   ip,
-					best: math.MaxFloat64,
-				}
-				groups[key] = group
-			}
-			group.count++
-			if group.geo == nil && attempt.Geo != nil {
-				group.geo = attempt.Geo
-			}
-			if len(attempt.MPLS) > 0 {
-				if group.mpls == nil {
-					group.mpls = make(map[string]struct{})
-				}
-				for _, label := range attempt.MPLS {
-					val := strings.TrimSpace(label)
-					if val != "" {
-						group.mpls[val] = struct{}{}
-					}
-				}
-			}
-			if attempt.Success {
-				rttMs := float64(attempt.RTT) / float64(time.Millisecond)
-				group.sum += rttMs
-				group.received++
-				group.last = rttMs
-				if rttMs > group.worst {
-					group.worst = rttMs
-				}
-				if rttMs > 0 && rttMs < group.best {
-					group.best = rttMs
-				}
-			} else {
-				errKey := strings.TrimSpace("timeout")
-				if attempt.Error != nil {
-					errKey = strings.TrimSpace(attempt.Error.Error())
-				}
-				if errKey == "" {
-					errKey = "timeout"
-				}
-				if group.errors == nil {
-					group.errors = make(map[string]int)
-				}
-				group.errors[errKey]++
-			}
-		}
-
-		for key, group := range groups {
-			acc := accMap[key]
-			if acc == nil {
-				acc = &hopAccum{
-					TTL:     ttl,
-					Key:     key,
-					Best:    math.MaxFloat64,
-					order:   agg.nextOrder,
-					mplsSet: make(map[string]struct{}),
-				}
-				agg.nextOrder++
-				accMap[key] = acc
-			}
-
-			if group.ip != "" {
-				acc.IP = group.ip
-			}
-			if group.host != "" {
-				acc.Host = group.host
-			}
-			if group.geo != nil {
-				acc.Geo = group.geo
-			}
-
-			acc.Sent += group.count
-
-			if group.received > 0 {
-				acc.Sum += group.sum
-				acc.Received += group.received
-				acc.Last = group.last
-				if group.best > 0 && (acc.Best == math.MaxFloat64 || group.best < acc.Best) {
-					acc.Best = group.best
-				}
-				if group.worst > acc.Worst {
-					acc.Worst = group.worst
-				}
-			}
-
-			if len(group.errors) > 0 {
-				if acc.Errors == nil {
-					acc.Errors = make(map[string]int)
-				}
-				for errKey, count := range group.errors {
-					acc.Errors[errKey] += count
-				}
-			}
-			if len(group.mpls) > 0 {
-				if acc.mplsSet == nil {
-					acc.mplsSet = make(map[string]struct{})
-				}
-				for label := range group.mpls {
-					acc.mplsSet[label] = struct{}{}
-				}
-			}
+		for key, group := range buildAttemptGroups(attempts) {
+			acc := agg.ensureHopAccum(ttl, accMap, key)
+			mergeGroup(acc, group)
 		}
 	}
 

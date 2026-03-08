@@ -102,79 +102,44 @@ type traceResponse struct {
 	DurationMs   int64         `json:"duration_ms"`
 }
 
-func prepareTrace(req traceRequest) (*traceExecution, int, error) {
-	exec := &traceExecution{
-		Req: req,
+type traceProtocolSelection struct {
+	protocol string
+	method   trace.Method
+	dstPort  int
+}
+
+func normalizeTraceRequest(req *traceRequest) (int, error) {
+	if req == nil {
+		return http.StatusBadRequest, errors.New("request is required")
 	}
 
-	exec.Req.Mode = strings.ToLower(strings.TrimSpace(exec.Req.Mode))
+	req.Mode = strings.ToLower(strings.TrimSpace(req.Mode))
+	if req.Maptrace != nil {
+		req.DisableMaptrace = !*req.Maptrace
+	}
+	if req.IPv4Only && req.IPv6Only {
+		return http.StatusBadRequest, errors.New("ipv4_only and ipv6_only cannot be true at the same time")
+	}
+	if err := validateSourceDevice(req.SourceDevice); err != nil {
+		return http.StatusBadRequest, err
+	}
+	if req.IntervalMs <= 0 {
+		req.IntervalMs = 0
+	}
+	if req.MaxRounds < 0 {
+		req.MaxRounds = 0
+	}
+	return 0, nil
+}
 
-	if exec.Req.Maptrace != nil {
-		exec.Req.DisableMaptrace = !*exec.Req.Maptrace
-	}
-
-	target, err := normalizeTarget(exec.Req.Target)
-	if err != nil {
-		return nil, 400, err
-	}
-	exec.Target = target
-
-	if exec.Req.IPv4Only && exec.Req.IPv6Only {
-		return nil, 400, errors.New("ipv4_only and ipv6_only cannot be true at the same time")
-	}
-	if err := validateSourceDevice(exec.Req.SourceDevice); err != nil {
-		return nil, 400, err
-	}
-
-	if exec.Req.IntervalMs <= 0 {
-		exec.Req.IntervalMs = 0
-	}
-	if exec.Req.MaxRounds < 0 {
-		exec.Req.MaxRounds = 0
-	}
-
-	protocol := strings.ToLower(strings.TrimSpace(exec.Req.Protocol))
+func resolveTraceProtocol(req traceRequest) (traceProtocolSelection, int, error) {
+	protocol := strings.ToLower(strings.TrimSpace(req.Protocol))
 	if protocol == "" {
 		protocol = "icmp"
 	}
 	if !contains(supportedProtocols, protocol) {
-		return nil, 400, fmt.Errorf("unsupported protocol %q", protocol)
+		return traceProtocolSelection{}, http.StatusBadRequest, fmt.Errorf("unsupported protocol %q", protocol)
 	}
-	exec.Protocol = protocol
-
-	dataProvider := normalizeDataProvider(exec.Req.DataProvider, exec.Req.DataProviderAlias)
-	if dataProvider == "" {
-		dataProvider = defaults["data_provider"].(string)
-	}
-
-	if strings.EqualFold(dataProvider, "DN42") {
-		exec.Req.DN42 = true
-	}
-
-	needsLeoWS := strings.EqualFold(dataProvider, "LEOMOEAPI")
-	if needsLeoWS && util.EnvDataProvider != "" {
-		dataProvider = util.EnvDataProvider
-		needsLeoWS = strings.EqualFold(dataProvider, "LEOMOEAPI")
-	}
-
-	if exec.Req.DN42 {
-		config.InitConfig()
-		exec.Req.DisableMaptrace = true
-		dataProvider = "DN42"
-	}
-
-	ipVersion := "all"
-	if exec.Req.IPv4Only {
-		ipVersion = "4"
-	} else if exec.Req.IPv6Only {
-		ipVersion = "6"
-	}
-
-	ip, err := util.DomainLookUp(target, ipVersion, strings.ToLower(exec.Req.DotServer), true)
-	if err != nil {
-		return nil, 500, err
-	}
-	exec.IP = ip
 
 	method := trace.ICMPTrace
 	switch protocol {
@@ -183,24 +148,92 @@ func prepareTrace(req traceRequest) (*traceExecution, int, error) {
 	case "tcp":
 		method = trace.TCPTrace
 	}
-	exec.Method = method
 
-	dstPort := exec.Req.Port
+	dstPort := req.Port
 	if dstPort == 0 {
 		switch method {
 		case trace.UDPTrace:
 			dstPort = 33494
 		case trace.TCPTrace:
 			dstPort = 80
-		default:
-			dstPort = 0
 		}
 	}
+
+	return traceProtocolSelection{
+		protocol: protocol,
+		method:   method,
+		dstPort:  dstPort,
+	}, 0, nil
+}
+
+func resolveTraceDataProvider(req *traceRequest) (string, bool) {
+	dataProvider := normalizeDataProvider(req.DataProvider, req.DataProviderAlias)
+	if dataProvider == "" {
+		dataProvider = defaults["data_provider"].(string)
+	}
+
+	if strings.EqualFold(dataProvider, "DN42") {
+		req.DN42 = true
+	}
+	if req.DN42 {
+		config.InitConfig()
+		req.DisableMaptrace = true
+		dataProvider = "DN42"
+	}
+
+	needsLeoWS := strings.EqualFold(dataProvider, "LEOMOEAPI")
+	if needsLeoWS && util.EnvDataProvider != "" {
+		dataProvider = util.EnvDataProvider
+		needsLeoWS = strings.EqualFold(dataProvider, "LEOMOEAPI")
+	}
+
+	return dataProvider, needsLeoWS
+}
+
+func resolveTraceIPVersion(req traceRequest) string {
+	switch {
+	case req.IPv4Only:
+		return "4"
+	case req.IPv6Only:
+		return "6"
+	default:
+		return "all"
+	}
+}
+
+func prepareTrace(req traceRequest) (*traceExecution, int, error) {
+	exec := &traceExecution{
+		Req: req,
+	}
+
+	if statusCode, err := normalizeTraceRequest(&exec.Req); err != nil {
+		return nil, statusCode, err
+	}
+
+	target, err := normalizeTarget(exec.Req.Target)
+	if err != nil {
+		return nil, http.StatusBadRequest, err
+	}
+	exec.Target = target
+
+	protocol, statusCode, err := resolveTraceProtocol(exec.Req)
+	if err != nil {
+		return nil, statusCode, err
+	}
+	exec.Protocol = protocol.protocol
+	exec.Method = protocol.method
+
+	dataProvider, needsLeoWS := resolveTraceDataProvider(&exec.Req)
+	ip, err := util.DomainLookUp(target, resolveTraceIPVersion(exec.Req), strings.ToLower(exec.Req.DotServer), true)
+	if err != nil {
+		return nil, http.StatusInternalServerError, err
+	}
+	exec.IP = ip
 
 	exec.DataProvider = dataProvider
 	exec.PowProvider = strings.TrimSpace(exec.Req.PowProvider)
 	exec.NeedsLeoWS = needsLeoWS
-	exec.Config = buildTraceConfig(exec.Req, ip, dataProvider, dstPort)
+	exec.Config = buildTraceConfig(exec.Req, ip, dataProvider, protocol.dstPort)
 
 	return exec, 0, nil
 }
@@ -440,66 +473,84 @@ func buildHopResponse(attempts []trace.Hop, idx int, lang string) hopResponse {
 	return resp
 }
 
+func parseTargetURLHost(target string) (string, string, error) {
+	fallbackSource := target
+	if !strings.Contains(target, "://") {
+		return "", fallbackSource, nil
+	}
+
+	u, err := url.Parse(target)
+	if err != nil {
+		return "", "", fmt.Errorf("invalid target format: %w", err)
+	}
+	if u.Host != "" {
+		return u.Host, fallbackSource, nil
+	}
+	if u.Path != "" {
+		fallbackSource = strings.TrimPrefix(target, u.Scheme+"://")
+	}
+	return "", fallbackSource, nil
+}
+
+func extractTargetHost(target, fallbackSource string) (string, error) {
+	parseTarget := target
+	if strings.Contains(target, "/") {
+		if !strings.HasPrefix(parseTarget, "//") {
+			parseTarget = "//" + parseTarget
+		}
+		if u, err := url.Parse(parseTarget); err == nil && u.Host != "" {
+			return u.Host, nil
+		}
+	}
+
+	if !strings.Contains(fallbackSource, "/") {
+		return "", nil
+	}
+	idx := strings.Index(fallbackSource, "/")
+	if idx <= 0 {
+		return "", errors.New("invalid target format")
+	}
+	candidate := strings.TrimSpace(fallbackSource[:idx])
+	if candidate == "" {
+		return "", errors.New("invalid target format")
+	}
+	return candidate, nil
+}
+
+func stripTargetPort(target string) string {
+	if strings.Contains(target, "]") && strings.Contains(target, "[") {
+		return strings.Split(strings.Split(target, "]")[0], "[")[1]
+	}
+	if strings.Count(target, ":") == 1 {
+		if host, _, err := net.SplitHostPort(target); err == nil {
+			return host
+		}
+		return strings.Split(target, ":")[0]
+	}
+	return target
+}
+
 func normalizeTarget(input string) (string, error) {
 	target := strings.TrimSpace(input)
 	if target == "" {
 		return "", errors.New("target is required")
 	}
 
-	fallbackSource := target
-	host := ""
-
-	if strings.Contains(target, "://") {
-		u, err := url.Parse(target)
+	host, fallbackSource, err := parseTargetURLHost(target)
+	if err != nil {
+		return "", err
+	}
+	if host == "" {
+		host, err = extractTargetHost(target, fallbackSource)
 		if err != nil {
-			return "", fmt.Errorf("invalid target format: %w", err)
-		}
-		if u.Host != "" {
-			host = u.Host
-		} else if u.Path != "" {
-			fallbackSource = strings.TrimPrefix(target, u.Scheme+"://")
+			return "", err
 		}
 	}
-
-	if host == "" && strings.Contains(target, "/") {
-		parseTarget := target
-		if !strings.HasPrefix(parseTarget, "//") {
-			parseTarget = "//" + parseTarget
-		}
-		if u, err := url.Parse(parseTarget); err == nil && u.Host != "" {
-			host = u.Host
-		} else {
-			fallbackSource = target
-		}
-	}
-
-	if host == "" && strings.Contains(fallbackSource, "/") {
-		idx := strings.Index(fallbackSource, "/")
-		if idx <= 0 {
-			return "", errors.New("invalid target format")
-		}
-		candidate := strings.TrimSpace(fallbackSource[:idx])
-		if candidate == "" {
-			return "", errors.New("invalid target format")
-		}
-		host = candidate
-	}
-
 	if host != "" {
 		target = host
 	}
 
-	if strings.Contains(target, "]") && strings.Contains(target, "[") {
-		target = strings.Split(strings.Split(target, "]")[0], "[")[1]
-	} else if strings.Count(target, ":") == 1 {
-		if host, _, err := net.SplitHostPort(target); err == nil {
-			target = host
-		} else {
-			target = strings.Split(target, ":")[0]
-		}
-	}
-
-	return strings.TrimSpace(target), nil
+	return strings.TrimSpace(stripTargetPort(target)), nil
 }
 func normalizeDataProvider(provider string, alias string) string {
 	candidate := strings.TrimSpace(provider)

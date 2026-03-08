@@ -210,57 +210,58 @@ func (c *IPDBOneClient) LookupIP(ip string, lang string) (*IPGeoData, error) {
 // parseIPDBOneResponse converts the API response to an IPGeoData struct
 func parseIPDBOneResponse(ip string, responseBody []byte) (*IPGeoData, error) {
 	data := gjson.Get(string(responseBody), "data")
-	geoData := data.Get("geo")
-	routingData := data.Get("routing")
-
 	result := &IPGeoData{
 		IP: ip,
 	}
-
-	// Parse geo information if available
-	if geoData.Exists() {
-		coordinate := geoData.Get("coordinate")
-		if coordinate.Exists() && coordinate.Type != gjson.Null && coordinate.IsArray() && len(coordinate.Array()) >= 2 {
-			result.Lat = coordinate.Array()[0].Float()
-			result.Lng = coordinate.Array()[1].Float()
-		}
-
-		if geoData.Get("country").Exists() && geoData.Get("country").Type != gjson.Null {
-			result.Country = geoData.Get("country").String()
-		}
-
-		if geoData.Get("region").Exists() && geoData.Get("region").Type != gjson.Null {
-			result.Prov = geoData.Get("region").String()
-		}
-
-		if geoData.Get("city").Exists() && geoData.Get("city").Type != gjson.Null {
-			result.City = geoData.Get("city").String()
-		}
-	}
-
-	// Parse routing information if available
-	if routingData.Exists() {
-		asnData := routingData.Get("asn")
-		if asnData.Get("number").Exists() && asnData.Get("number").Type != gjson.Null {
-			result.Asnumber = strconv.FormatInt(asnData.Get("number").Int(), 10)
-		}
-
-		if routingData.Get("asn.name").Exists() && routingData.Get("asn.name").Type != gjson.Null {
-			result.Owner = routingData.Get("asn.name").String()
-		}
-
-		// Get domain, override owner
-		if routingData.Get("asn.domain").Exists() && routingData.Get("asn.domain").Type != gjson.Null {
-			result.Owner = routingData.Get("asn.domain").String()
-		}
-
-		// Get asname as Whois
-		if routingData.Get("asn.asname").Exists() && routingData.Get("asn.asname").Type != gjson.Null {
-			result.Whois = routingData.Get("asn.asname").String()
-		}
-	}
-
+	parseIPDBOneGeo(data.Get("geo"), result)
+	parseIPDBOneRouting(data.Get("routing"), result)
 	return result, nil
+}
+
+func hasJSONValue(result gjson.Result) bool {
+	return result.Exists() && result.Type != gjson.Null
+}
+
+func parseIPDBOneGeo(geoData gjson.Result, result *IPGeoData) {
+	if result == nil || !geoData.Exists() {
+		return
+	}
+
+	coordinate := geoData.Get("coordinate")
+	if hasJSONValue(coordinate) && coordinate.IsArray() && len(coordinate.Array()) >= 2 {
+		result.Lat = coordinate.Array()[0].Float()
+		result.Lng = coordinate.Array()[1].Float()
+	}
+
+	if country := geoData.Get("country"); hasJSONValue(country) {
+		result.Country = country.String()
+	}
+	if region := geoData.Get("region"); hasJSONValue(region) {
+		result.Prov = region.String()
+	}
+	if city := geoData.Get("city"); hasJSONValue(city) {
+		result.City = city.String()
+	}
+}
+
+func parseIPDBOneRouting(routingData gjson.Result, result *IPGeoData) {
+	if result == nil || !routingData.Exists() {
+		return
+	}
+
+	asnData := routingData.Get("asn")
+	if number := asnData.Get("number"); hasJSONValue(number) {
+		result.Asnumber = strconv.FormatInt(number.Int(), 10)
+	}
+	if asnName := routingData.Get("asn.name"); hasJSONValue(asnName) {
+		result.Owner = asnName.String()
+	}
+	if domain := routingData.Get("asn.domain"); hasJSONValue(domain) {
+		result.Owner = domain.String()
+	}
+	if asName := routingData.Get("asn.asname"); hasJSONValue(asName) {
+		result.Whois = asName.String()
+	}
 }
 
 // Global client instance for backward compatibility

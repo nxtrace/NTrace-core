@@ -75,6 +75,40 @@ func TestPrepareTrace_RejectsUnknownSourceDevice(t *testing.T) {
 	}
 }
 
+func TestNormalizeTarget(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  string
+		want   string
+		hasErr bool
+	}{
+		{name: "empty", input: " ", hasErr: true},
+		{name: "url host", input: "https://example.com/path", want: "example.com"},
+		{name: "host with port", input: "example.com:8443", want: "example.com"},
+		{name: "ipv6 with brackets", input: "[2001:db8::1]:443", want: "2001:db8::1"},
+		{name: "slash target", input: "example.com/path", want: "example.com"},
+		{name: "invalid slash target", input: "/only-path", hasErr: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := normalizeTarget(tc.input)
+			if tc.hasErr {
+				if err == nil {
+					t.Fatalf("normalizeTarget(%q) error = nil, want error", tc.input)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("normalizeTarget(%q) returned error: %v", tc.input, err)
+			}
+			if got != tc.want {
+				t.Fatalf("normalizeTarget(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestTraceHandler_RejectsOversizedJSONBody(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

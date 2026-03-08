@@ -221,76 +221,76 @@ func LocalIPPortv6(dstIP net.IP, srcIP net.IP, proto string) (net.IP, int) {
 	return nil, -1
 }
 
-func DomainLookUp(host string, ipVersion string, dotServer string, disableOutput bool) (net.IP, error) {
-	// ipVersion: 4, 6, all
-	var (
-		r   *net.Resolver
-		ips []net.IP
-	)
+type hostLookupResolver interface {
+	LookupHost(ctx context.Context, host string) ([]string, error)
+}
 
+type resolvedIPPrompt func([]net.IP) (int, error)
+
+func resolverFactory(dotServer string) hostLookupResolver {
 	switch dotServer {
 	case "dnssb":
-		r = DNSSB()
+		return DNSSB()
 	case "aliyun":
-		r = Aliyun()
+		return Aliyun()
 	case "dnspod":
-		r = Dnspod()
+		return Dnspod()
 	case "google":
-		r = Google()
+		return Google()
 	case "cloudflare":
-		r = Cloudflare()
+		return Cloudflare()
 	default:
-		r = newUDPResolver()
+		return newUDPResolver()
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	ipsStr, err := r.LookupHost(ctx, host)
+}
+
+func lookupIPs(ctx context.Context, resolver hostLookupResolver, host string) ([]net.IP, error) {
+	ipsStr, err := resolver.LookupHost(ctx, host)
 	if err != nil {
 		return nil, fmt.Errorf("DNS lookup failed: %w", err)
 	}
-	for _, v := range ipsStr {
-		if parsed := net.ParseIP(v); parsed != nil {
+
+	ips := make([]net.IP, 0, len(ipsStr))
+	for _, value := range ipsStr {
+		if parsed := net.ParseIP(value); parsed != nil {
 			ips = append(ips, parsed)
 		}
 	}
+	return ips, nil
+}
 
-	// Filter by IPv4/IPv6
-	if ipVersion != "all" {
-		var filteredIPs []net.IP
-		for _, ip := range ips {
-			if ip == nil {
-				continue
-			}
-			if ipVersion == "4" && ip.To4() != nil {
-				filteredIPs = []net.IP{ip}
-				break
-			} else if ipVersion == "6" && ip.To4() == nil {
-				filteredIPs = []net.IP{ip}
-				break
-			}
+func filterByFamily(ips []net.IP, ipVersion string) []net.IP {
+	if ipVersion == "all" {
+		return ips
+	}
+	for _, ip := range ips {
+		if ip == nil {
+			continue
 		}
-		ips = filteredIPs
-	}
-
-	if len(ips) == 0 {
-		var familyLabel string
-		switch ipVersion {
-		case "4":
-			familyLabel = "IPv4"
-		case "6":
-			familyLabel = "IPv6"
-		case "all", "":
-			familyLabel = "IPv4/IPv6"
-		default:
-			familyLabel = ipVersion
+		if ipVersion == "4" && ip.To4() != nil {
+			return []net.IP{ip}
 		}
-		return nil, fmt.Errorf("no %s DNS records found for %s", familyLabel, host)
+		if ipVersion == "6" && ip.To4() == nil {
+			return []net.IP{ip}
+		}
 	}
+	return nil
+}
 
-	if (len(ips) == 1) || (disableOutput) {
-		return ips[0], nil
+func resolveFamilyLabel(ipVersion string) string {
+	switch ipVersion {
+	case "4":
+		return "IPv4"
+	case "6":
+		return "IPv6"
+	case "all", "":
+		return "IPv4/IPv6"
+	default:
+		return ipVersion
 	}
+}
 
+func promptResolvedIPChoice(ips []net.IP) (int, error) {
 	fmt.Println("Please Choose the IP You Want To TraceRoute")
 	for i, ip := range ips {
 		_, _ = fmt.Fprintf(color.Output, "%s %s\n",
@@ -298,17 +298,57 @@ func DomainLookUp(host string, ipVersion string, dotServer string, disableOutput
 			color.New(color.FgWhite, color.Bold).Sprintf("%s", ip),
 		)
 	}
-	var index int
 	fmt.Printf("Your Option: ")
-	_, err = fmt.Scanln(&index)
+
+	var index int
+	_, err := fmt.Scanln(&index)
+	if err != nil {
+		return 0, err
+	}
+	return index, nil
+}
+
+func selectResolvedIP(ips []net.IP, disableOutput bool, prompt resolvedIPPrompt) (net.IP, error) {
+	if len(ips) == 0 {
+		return nil, errors.New("no IPs available")
+	}
+	if len(ips) == 1 || disableOutput {
+		return ips[0], nil
+	}
+	if prompt == nil {
+		prompt = promptResolvedIPChoice
+	}
+
+	index, err := prompt(ips)
 	if err != nil {
 		index = 0
 	}
-	if index >= len(ips) || index < 0 {
-		fmt.Println("Your Option is invalid")
+	if index < 0 || index >= len(ips) {
 		return nil, fmt.Errorf("invalid selection: %d", index)
 	}
 	return ips[index], nil
+}
+
+func DomainLookUp(host string, ipVersion string, dotServer string, disableOutput bool) (net.IP, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	ips, err := lookupIPs(ctx, resolverFactory(dotServer), host)
+	if err != nil {
+		return nil, err
+	}
+	ips = filterByFamily(ips, ipVersion)
+
+	if len(ips) == 0 {
+		return nil, fmt.Errorf("no %s DNS records found for %s", resolveFamilyLabel(ipVersion), host)
+	}
+
+	selected, err := selectResolvedIP(ips, disableOutput, promptResolvedIPChoice)
+	if err != nil {
+		fmt.Println("Your Option is invalid")
+		return nil, err
+	}
+	return selected, nil
 }
 
 func GetHostAndPort() (host string, port string) {

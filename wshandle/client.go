@@ -176,61 +176,73 @@ func (c *WsConn) messageReceiveHandler() {
 	}
 }
 
+func apiServerErrorMessage(ip string) string {
+	return `{"ip":"` + ip + `", "asnumber":"API Server Error"}`
+}
+
+func (c *WsConn) waitForNextDoneChan(doneCh chan struct{}) chan struct{} {
+	for {
+		newDone := c.getDoneChan()
+		if newDone != nil && newDone != doneCh {
+			return newDone
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+func (c *WsConn) sendQueuedMessage(msg string) {
+	if !c.IsConnected() {
+		c.MsgReceiveCh <- apiServerErrorMessage(msg)
+		return
+	}
+
+	conn := c.getConn()
+	if conn == nil {
+		c.MsgReceiveCh <- apiServerErrorMessage(msg)
+		return
+	}
+
+	if err := conn.WriteMessage(websocket.TextMessage, []byte(msg)); err != nil {
+		log.Println("write:", err)
+		c.setConnected(false)
+		c.MsgReceiveCh <- apiServerErrorMessage(msg)
+	}
+}
+
+func (c *WsConn) handleInterrupt(doneCh chan struct{}) {
+	conn := c.getConn()
+	if conn == nil {
+		return
+	}
+
+	err := conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+	if err != nil {
+		if util.EnvDevMode {
+			panic(err)
+		}
+		log.Printf("write close: %v", err)
+	}
+
+	select {
+	case <-doneCh:
+	case <-time.After(1 * time.Second):
+	}
+}
+
 func (c *WsConn) messageSendHandler() {
 	doneCh := c.getDoneChan()
 	for {
 		if current := c.getDoneChan(); current != nil && current != doneCh {
 			doneCh = current
 		}
-		// 循环监听发送
+
 		select {
 		case <-doneCh:
-			for {
-				newDone := c.getDoneChan()
-				if newDone != nil && newDone != doneCh {
-					doneCh = newDone
-					break
-				}
-				time.Sleep(50 * time.Millisecond)
-			}
-			continue
-		case t := <-c.MsgSendCh:
-			// log.Println(t)
-			if !c.IsConnected() {
-				c.MsgReceiveCh <- `{"ip":"` + t + `", "asnumber":"API Server Error"}`
-				continue
-			}
-			conn := c.getConn()
-			if conn == nil {
-				c.MsgReceiveCh <- `{"ip":"` + t + `", "asnumber":"API Server Error"}`
-				continue
-			}
-			if err := conn.WriteMessage(websocket.TextMessage, []byte(t)); err != nil {
-				log.Println("write:", err)
-				c.setConnected(false)
-				c.MsgReceiveCh <- `{"ip":"` + t + `", "asnumber":"API Server Error"}`
-				continue
-			}
-		// 来自终端的中断运行请求
+			doneCh = c.waitForNextDoneChan(doneCh)
+		case msg := <-c.MsgSendCh:
+			c.sendQueuedMessage(msg)
 		case <-c.Interrupt:
-			// 向 websocket 发起关闭连接任务
-			conn := c.getConn()
-			if conn == nil {
-				return
-			}
-			err := conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-			if err != nil {
-				if util.EnvDevMode {
-					panic(err)
-				}
-				log.Printf("write close: %v", err)
-			}
-			select {
-			// 等到了结果，直接退出
-			case <-doneCh:
-			// 如果等待 1s 还是拿不到结果，不再等待，超时退出
-			case <-time.After(1 * time.Second):
-			}
+			c.handleInterrupt(doneCh)
 			return
 		}
 	}

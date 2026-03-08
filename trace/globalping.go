@@ -161,48 +161,61 @@ func mapGlobalpingHop(ttl int, gpHop *globalping.MTRHop, timing *globalping.MTRT
 	return hop
 }
 
+func hasGlobalpingProbeLocation(probe globalping.ProbeDetails) bool {
+	return probe.City != "" ||
+		probe.State != "" ||
+		probe.Country != "" ||
+		probe.Continent != "" ||
+		probe.Network != "" ||
+		probe.ASN != 0
+}
+
+func formatGlobalpingCity(probe globalping.ProbeDetails) string {
+	if probe.City != "" && probe.State != "" {
+		return probe.City + " (" + probe.State + ")"
+	}
+	if probe.City != "" {
+		return probe.City
+	}
+	return probe.State
+}
+
+func formatGlobalpingNetwork(probe globalping.ProbeDetails) string {
+	network := strings.TrimSpace(probe.Network)
+	if network != "" && probe.ASN != 0 {
+		return network + " (AS" + fmt.Sprint(probe.ASN) + ")"
+	}
+	if network != "" {
+		return network
+	}
+	if probe.ASN != 0 {
+		return "(AS" + fmt.Sprint(probe.ASN) + ")"
+	}
+	return ""
+}
+
+func appendGlobalpingPart(parts []string, value string) []string {
+	if value == "" {
+		return parts
+	}
+	return append(parts, value)
+}
+
 func GlobalpingFormatLocation(m *globalping.ProbeMeasurement) string {
 	if m == nil {
 		return ""
 	}
 
 	probe := m.Probe
-	if probe.City == "" &&
-		probe.State == "" &&
-		probe.Country == "" &&
-		probe.Continent == "" &&
-		probe.Network == "" &&
-		probe.ASN == 0 {
+	if !hasGlobalpingProbeLocation(probe) {
 		return ""
 	}
 
 	var parts []string
-
-	city := probe.City
-	if city != "" && probe.State != "" {
-		city += " (" + probe.State + ")"
-	} else if city == "" && probe.State != "" {
-		city = probe.State
-	}
-	if city != "" {
-		parts = append(parts, city)
-	}
-	if probe.Country != "" {
-		parts = append(parts, probe.Country)
-	}
-	if probe.Continent != "" {
-		parts = append(parts, probe.Continent)
-	}
-
-	network := strings.TrimSpace(probe.Network)
-	if network != "" {
-		if probe.ASN != 0 {
-			network += " (AS" + fmt.Sprint(probe.ASN) + ")"
-		}
-		parts = append(parts, network)
-	} else if probe.ASN != 0 {
-		parts = append(parts, "(AS"+fmt.Sprint(probe.ASN)+")")
-	}
+	parts = appendGlobalpingPart(parts, formatGlobalpingCity(probe))
+	parts = appendGlobalpingPart(parts, probe.Country)
+	parts = appendGlobalpingPart(parts, probe.Continent)
+	parts = appendGlobalpingPart(parts, formatGlobalpingNetwork(probe))
 
 	return strings.Join(parts, ", ")
 }
