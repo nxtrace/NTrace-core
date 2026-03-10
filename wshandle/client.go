@@ -2,6 +2,7 @@ package wshandle
 
 import (
 	"crypto/tls"
+	"errors"
 	"log"
 	"net"
 	"net/http"
@@ -27,6 +28,16 @@ func formatHostPort(addr, port string) string {
 	return clean + ":" + port
 }
 
+type wsWriteJob struct {
+	msgType int
+	data    []byte
+}
+
+const (
+	wsClientWriteQueueSize = 1024
+	wsClientWriteTimeout   = 5 * time.Second
+)
+
 type WsConn struct {
 	Connecting   bool
 	Connected    bool            // 连接状态
@@ -38,6 +49,8 @@ type WsConn struct {
 	Conn         *websocket.Conn // 主连接
 	ConnMux      sync.Mutex      // 连接互斥锁
 	stateMu      sync.RWMutex
+	writeCh      chan wsWriteJob // serialized write queue
+	writeStop    chan struct{}   // signals writeLoop to exit
 }
 
 func (c *WsConn) getConn() *websocket.Conn {
@@ -63,6 +76,56 @@ func (c *WsConn) setDoneChan(done chan struct{}) {
 	c.Done = done
 	c.stateMu.Unlock()
 }
+
+// initWriteLoop creates the write channel and starts the single writer goroutine.
+// Must be called once when the WsConn is created.
+func (c *WsConn) initWriteLoop() {
+	c.writeCh = make(chan wsWriteJob, wsClientWriteQueueSize)
+	c.writeStop = make(chan struct{})
+	go c.writeLoop()
+}
+
+// writeLoop is the sole goroutine allowed to call conn.WriteMessage.
+func (c *WsConn) writeLoop() {
+	for {
+		select {
+		case <-c.writeStop:
+			return
+		case job, ok := <-c.writeCh:
+			if !ok {
+				return
+			}
+			conn := c.getConn()
+			if conn == nil {
+				c.setConnected(false)
+				continue
+			}
+			_ = conn.SetWriteDeadline(time.Now().Add(wsClientWriteTimeout))
+			if err := conn.WriteMessage(job.msgType, job.data); err != nil {
+				log.Printf("wshandle writeLoop: %v", err)
+				c.setConnected(false)
+			}
+		}
+	}
+}
+
+// enqueueWrite sends a write job to the writeLoop. Returns an error if the
+// queue is full or writeLoop has stopped.
+func (c *WsConn) enqueueWrite(job wsWriteJob) error {
+	select {
+	case c.writeCh <- job:
+		return nil
+	case <-c.writeStop:
+		return errWriteLoopStopped
+	default:
+		return errWriteQueueFull
+	}
+}
+
+var (
+	errWriteQueueFull   = errors.New("wshandle: write queue full")
+	errWriteLoopStopped = errors.New("wshandle: write loop stopped")
+)
 
 var wsconn *WsConn
 var host, port, fastIp string
@@ -117,13 +180,10 @@ func (c *WsConn) keepAlive() {
 		for {
 			<-time.After(time.Second * 54)
 			if c.IsConnected() {
-				conn := c.getConn()
-				if conn == nil {
-					c.setConnected(false)
-					continue
-				}
-				err := conn.WriteMessage(websocket.TextMessage, []byte("ping"))
-				if err != nil {
+				if err := c.enqueueWrite(wsWriteJob{
+					msgType: websocket.TextMessage,
+					data:    []byte("ping"),
+				}); err != nil {
 					log.Println(err)
 					c.setConnected(false)
 					return
@@ -196,13 +256,10 @@ func (c *WsConn) sendQueuedMessage(msg string) {
 		return
 	}
 
-	conn := c.getConn()
-	if conn == nil {
-		c.MsgReceiveCh <- apiServerErrorMessage(msg)
-		return
-	}
-
-	if err := conn.WriteMessage(websocket.TextMessage, []byte(msg)); err != nil {
+	if err := c.enqueueWrite(wsWriteJob{
+		msgType: websocket.TextMessage,
+		data:    []byte(msg),
+	}); err != nil {
 		log.Println("write:", err)
 		c.setConnected(false)
 		c.MsgReceiveCh <- apiServerErrorMessage(msg)
@@ -210,18 +267,10 @@ func (c *WsConn) sendQueuedMessage(msg string) {
 }
 
 func (c *WsConn) handleInterrupt(doneCh chan struct{}) {
-	conn := c.getConn()
-	if conn == nil {
-		return
-	}
-
-	err := conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-	if err != nil {
-		if util.EnvDevMode {
-			panic(err)
-		}
-		log.Printf("write close: %v", err)
-	}
+	_ = c.enqueueWrite(wsWriteJob{
+		msgType: websocket.CloseMessage,
+		data:    websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""),
+	})
 
 	select {
 	case <-doneCh:
@@ -350,6 +399,7 @@ func createWsConn() *WsConn {
 				Done:         make(chan struct{}),
 				Interrupt:    interrupt,
 			}
+			wsconn.initWriteLoop()
 			wsconn.setConnectionState(false, false)
 			go wsconn.keepAlive()
 			go wsconn.messageSendHandler()
@@ -383,6 +433,7 @@ func createWsConn() *WsConn {
 		MsgReceiveCh: make(chan string, 10),
 		Interrupt:    interrupt,
 	}
+	wsconn.initWriteLoop()
 	wsconn.setConnectionState(err == nil, false)
 
 	if err != nil {

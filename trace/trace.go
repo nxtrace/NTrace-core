@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -186,7 +187,11 @@ func waitForPendingGeoData(result *Result) {
 	select {
 	case <-done:
 	case <-time.After(30 * time.Second):
+		// Signal workers to skip updateHop, then mark pending as timed out.
+		result.geoCanceled.Store(true)
 		result.markAllPendingGeoTimeout()
+		// Wait for in-flight workers to finish so Result is stable on return.
+		result.geoWG.Wait()
 	}
 }
 
@@ -236,6 +241,7 @@ type Result struct {
 	TraceMapUrl string
 	geoWait     time.Duration
 	geoWG       sync.WaitGroup
+	geoCanceled atomic.Bool
 }
 
 const PendingGeoSource = "pending"
@@ -519,7 +525,9 @@ func (s *Result) addWithGeoAsync(hop Hop, attemptIdx, numMeasurements, maxAttemp
 	go func(ttl, idx int, h Hop) {
 		defer s.geoWG.Done()
 		_ = h.fetchIPData(cfg)
-		s.updateHop(ttl, idx, h)
+		if !s.geoCanceled.Load() {
+			s.updateHop(ttl, idx, h)
+		}
 	}(hop.TTL, idx, hop)
 }
 

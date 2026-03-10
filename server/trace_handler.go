@@ -518,14 +518,20 @@ func extractTargetHost(target, fallbackSource string) (string, error) {
 }
 
 func stripTargetPort(target string) string {
-	if strings.Contains(target, "]") && strings.Contains(target, "[") {
-		return strings.Split(strings.Split(target, "]")[0], "[")[1]
+	// Try standard SplitHostPort first — handles host:port and [IPv6]:port.
+	if host, _, err := net.SplitHostPort(target); err == nil {
+		return host
 	}
-	if strings.Count(target, ":") == 1 {
-		if host, _, err := net.SplitHostPort(target); err == nil {
-			return host
+	// Bare [IPv6] without port.
+	if open := strings.Index(target, "["); open >= 0 {
+		close := strings.Index(target[open:], "]")
+		if close > 1 {
+			return target[open+1 : open+close]
 		}
-		return strings.Split(target, ":")[0]
+	}
+	// host:port with exactly one colon (plain IPv4 / hostname).
+	if strings.Count(target, ":") == 1 {
+		return target[:strings.Index(target, ":")]
 	}
 	return target
 }

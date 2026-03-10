@@ -86,6 +86,10 @@ func TestNormalizeTarget(t *testing.T) {
 		{name: "url host", input: "https://example.com/path", want: "example.com"},
 		{name: "host with port", input: "example.com:8443", want: "example.com"},
 		{name: "ipv6 with brackets", input: "[2001:db8::1]:443", want: "2001:db8::1"},
+		{name: "bare ipv6 brackets", input: "[::1]", want: "::1"},
+		{name: "malformed reversed brackets", input: "foo]bar[", want: "foo]bar["},
+		{name: "malformed open only", input: "[abc", want: "[abc"},
+		{name: "malformed close only", input: "abc]", want: "abc]"},
 		{name: "slash target", input: "example.com/path", want: "example.com"},
 		{name: "invalid slash target", input: "/only-path", hasErr: true},
 	}

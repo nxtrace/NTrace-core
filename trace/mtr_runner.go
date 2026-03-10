@@ -718,16 +718,35 @@ func (e *mtrICMPEngine) sendProbeSweep(ctx context.Context, round mtrProbeRoundS
 
 func (e *mtrICMPEngine) sendProbeForTTL(ctx context.Context, ttl int, roundID uint32) (bool, error) {
 	seq := int(atomic.AddUint32(&e.seqCounter, 1) & 0xFFFF)
+
+	// Pre-register the seq so onICMP can match it even for very short RTT replies.
+	preStart := time.Now()
+	e.mu.Lock()
+	e.sentAt[seq] = mtrProbeMeta{ttl: ttl, start: preStart, roundID: roundID}
+	e.curTtlSeq[ttl] = seq
+	e.mu.Unlock()
+
 	start, err := e.sendProbe(ctx, ttl, seq)
 	if err != nil {
+		// Roll back the pre-registered state on send failure.
+		e.mu.Lock()
+		delete(e.sentAt, seq)
+		if e.curTtlSeq[ttl] == seq {
+			delete(e.curTtlSeq, ttl)
+		}
+		e.mu.Unlock()
 		if ctx.Err() != nil {
 			return false, ctx.Err()
 		}
 		return false, nil
 	}
+
+	// Update the start timestamp to the actual send time for accurate RTT.
 	e.mu.Lock()
-	e.sentAt[seq] = mtrProbeMeta{ttl: ttl, start: start, roundID: roundID}
-	e.curTtlSeq[ttl] = seq
+	if meta, ok := e.sentAt[seq]; ok {
+		meta.start = start
+		e.sentAt[seq] = meta
+	}
 	e.mu.Unlock()
 	return true, nil
 }
@@ -854,9 +873,22 @@ func (e *mtrICMPEngine) ProbeTTL(ctx context.Context, ttl int) (mtrProbeResult, 
 	e.sendMu.Unlock()
 
 	curRound := atomic.LoadUint32(&e.roundID)
+	done := make(chan struct{})
+
+	// Pre-register before sending so onICMP can match even very short RTT replies.
+	preStart := time.Now()
+	e.mu.Lock()
+	e.sentAt[seq] = mtrProbeMeta{ttl: ttl, start: preStart, roundID: curRound}
+	e.probeNotify[seq] = done
+	e.mu.Unlock()
 
 	sendStart, err := e.sendProbe(ctx, ttl, seq)
 	if err != nil {
+		// Roll back pre-registered state.
+		e.mu.Lock()
+		delete(e.sentAt, seq)
+		e.closeProbeNotifyLocked(seq)
+		e.mu.Unlock()
 		if ctx.Err() != nil {
 			return mtrProbeResult{TTL: ttl}, ctx.Err()
 		}
@@ -864,11 +896,12 @@ func (e *mtrICMPEngine) ProbeTTL(ctx context.Context, ttl int) (mtrProbeResult, 
 		return mtrProbeResult{TTL: ttl}, nil
 	}
 
-	done := make(chan struct{})
-
+	// Update to actual send timestamp for accurate RTT.
 	e.mu.Lock()
-	e.sentAt[seq] = mtrProbeMeta{ttl: ttl, start: sendStart, roundID: curRound}
-	e.probeNotify[seq] = done
+	if meta, ok := e.sentAt[seq]; ok {
+		meta.start = sendStart
+		e.sentAt[seq] = meta
+	}
 	e.mu.Unlock()
 
 	timeout := e.config.Timeout
