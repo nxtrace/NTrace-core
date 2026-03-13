@@ -196,3 +196,51 @@ func TestExecuteMTRRaw_PerHopDoesNotMutateSessionGlobals(t *testing.T) {
 		t.Fatalf("util.PowProviderParam = %q, want keep-pow", util.PowProviderParam)
 	}
 }
+
+func TestTraceMapURLForResult_UsesRequestScopedMapHelper(t *testing.T) {
+	oldMapFn := traceMapURLFn
+	oldScopeFn := withTraceMapScopeFn
+	defer func() {
+		traceMapURLFn = oldMapFn
+		withTraceMapScopeFn = oldScopeFn
+	}()
+
+	scopeCalled := false
+	traceMapCalled := false
+
+	withTraceMapScopeFn = func(setup *traceExecution, callback func() (string, error)) (string, error) {
+		scopeCalled = true
+		if setup == nil {
+			t.Fatal("setup should not be nil")
+		}
+		if strings.TrimSpace(setup.Req.DotServer) != "cloudflare" {
+			t.Fatalf("DotServer = %q, want cloudflare", setup.Req.DotServer)
+		}
+		return callback()
+	}
+	traceMapURLFn = func(payload string) (string, error) {
+		traceMapCalled = true
+		if payload == "" {
+			t.Fatal("payload should not be empty")
+		}
+		return "https://map.example.test", nil
+	}
+
+	got := traceMapURLForResult(&traceExecution{
+		Req:          traceRequest{DotServer: "cloudflare"},
+		DataProvider: "IPInfo",
+		Config:       trace.Config{Maptrace: true},
+	}, &trace.Result{
+		Hops: [][]trace.Hop{{{TTL: 1}}},
+	})
+
+	if got != "https://map.example.test" {
+		t.Fatalf("traceMapURLForResult() = %q, want https://map.example.test", got)
+	}
+	if !scopeCalled {
+		t.Fatal("expected request-scoped map helper to be used")
+	}
+	if !traceMapCalled {
+		t.Fatal("expected traceMapURLFn to be called")
+	}
+}

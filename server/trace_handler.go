@@ -25,6 +25,10 @@ import (
 
 var traceMu sync.Mutex
 var leoConnMu sync.Mutex
+var traceMapURLFn = tracemap.GetMapUrl
+var withTraceMapScopeFn = func(setup *traceExecution, callback func() (string, error)) (string, error) {
+	return withTraceGeoDNSScope(setup, callback)
+}
 
 type traceExecution struct {
 	Req          traceRequest
@@ -282,7 +286,9 @@ func traceHandler(c *gin.Context) {
 	log.Printf("[deploy] starting trace target=%s resolved=%s method=%s lang=%s queries=%d maxHops=%d", sanitizeLogParam(setup.Target), setup.IP.String(), string(setup.Method), sanitizeLogParam(configured.Lang), configured.NumMeasurements, configured.MaxHops)
 
 	start := time.Now()
-	res, err := trace.Traceroute(setup.Method, configured)
+	res, err := withTraceSetupContext(setup, func() (*trace.Result, error) {
+		return traceTracerouteFn(setup.Method, configured)
+	})
 	duration := time.Since(start)
 	if err != nil {
 		log.Printf("[deploy] trace failed target=%s error=%v", sanitizeLogParam(setup.Target), err)
@@ -290,14 +296,9 @@ func traceHandler(c *gin.Context) {
 		return
 	}
 
-	traceMapURL := ""
-	if configured.Maptrace && shouldGenerateMap(setup.DataProvider) {
-		if payload, err := json.Marshal(res); err == nil {
-			if mapUrl, err := tracemap.GetMapUrl(string(payload)); err == nil {
-				traceMapURL = mapUrl
-				log.Printf("[deploy] trace map generated target=%s mapUrl=%s", sanitizeLogParam(setup.Target), traceMapURL)
-			}
-		}
+	traceMapURL := traceMapURLForResult(setup, res)
+	if traceMapURL != "" {
+		log.Printf("[deploy] trace map generated target=%s mapUrl=%s", sanitizeLogParam(setup.Target), traceMapURL)
 	}
 
 	response := traceResponse{
@@ -419,11 +420,36 @@ func withTraceSetupContext[T any](setup *traceExecution, callback func() (T, err
 		util.PowProviderParam = prevPowProvider
 	}()
 
+	return withTraceGeoDNSScope(setup, callback)
+}
+
+func withTraceGeoDNSScope[T any](setup *traceExecution, callback func() (T, error)) (T, error) {
+	if callback == nil {
+		var zero T
+		return zero, nil
+	}
 	dotServer := ""
 	if setup != nil {
 		dotServer = strings.TrimSpace(strings.ToLower(setup.Req.DotServer))
 	}
 	return util.WithGeoDNSResolver(dotServer, callback)
+}
+
+func traceMapURLForResult(setup *traceExecution, res *trace.Result) string {
+	if setup == nil || res == nil || !setup.Config.Maptrace || !shouldGenerateMap(setup.DataProvider) {
+		return ""
+	}
+	payload, err := json.Marshal(res)
+	if err != nil {
+		return ""
+	}
+	url, err := withTraceMapScopeFn(setup, func() (string, error) {
+		return traceMapURLFn(string(payload))
+	})
+	if err != nil {
+		return ""
+	}
+	return url
 }
 
 func convertHops(res *trace.Result, lang string) []hopResponse {

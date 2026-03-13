@@ -328,15 +328,19 @@ func registerTracerouteOutputFlags(parser *argparse.Parser) tracerouteOutputFlag
 }
 
 func registerWebUIFlags(parser *argparse.Parser) webUIFlags {
-	if enableWebUI {
+	return registerWebUIFlagsWithAvailability(parser, enableWebUI)
+}
+
+func registerWebUIFlagsWithAvailability(parser *argparse.Parser, enabled bool) webUIFlags {
+	if enabled {
 		return webUIFlags{
 			deployListen: parser.String("", "listen", &argparse.Options{Help: "Set listen address for web console (e.g. 127.0.0.1:30080)"}),
 			deploy:       parser.Flag("", "deploy", &argparse.Options{Help: "Start the Gin powered web console"}),
 		}
 	}
 	return webUIFlags{
-		deployListen: ptrStr(""),
-		deploy:       ptrBool(false),
+		deployListen: parser.String("", "listen", &argparse.Options{Help: "Set listen address for web console (full build only; unavailable in this binary)"}),
+		deploy:       parser.Flag("", "deploy", &argparse.Options{Help: "Start the Gin powered web console (full build only; unavailable in this binary)"}),
 	}
 }
 
@@ -373,6 +377,25 @@ func buildTTLIntervalHelp() string {
 	return "Interval [ms] between TTL groups in normal traceroute (default: 300ms). In MTR mode (--mtr/-r/-w, including --raw), sets per-hop probe interval: how long between successive probes to the same hop (default: 1000ms when omitted)"
 }
 
+func registerTTLIntervalFlag(parser *argparse.Parser) *int {
+	return registerTTLIntervalFlagWithMTRSupport(parser, enableMTR)
+}
+
+func registerTTLIntervalFlagWithMTRSupport(parser *argparse.Parser, mtrEnabled bool) *int {
+	options := &argparse.Options{Help: buildTTLIntervalHelp()}
+	if !mtrEnabled {
+		options.Default = defaultTracerouteTTLIntervalMs
+	}
+	return parser.Int("i", "ttl-time", options)
+}
+
+func applyTTLIntervalDefault(ttlInterval *int, ttlTimeExplicit, effectiveMTR bool) {
+	if ttlInterval == nil || ttlTimeExplicit || effectiveMTR {
+		return
+	}
+	*ttlInterval = defaultTracerouteTTLIntervalMs
+}
+
 func registerDisableMaptraceFlag(parser *argparse.Parser) *bool {
 	if !defaultMTR {
 		return parser.Flag("M", "map", &argparse.Options{Help: "Disable Print Trace Map"})
@@ -381,10 +404,14 @@ func registerDisableMaptraceFlag(parser *argparse.Parser) *bool {
 }
 
 func registerGlobalpingFlag(parser *argparse.Parser) *string {
-	if enableGlobalping {
+	return registerGlobalpingFlagWithAvailability(parser, enableGlobalping)
+}
+
+func registerGlobalpingFlagWithAvailability(parser *argparse.Parser, enabled bool) *string {
+	if enabled {
 		return parser.String("", "from", &argparse.Options{Help: "Run traceroute via Globalping (https://globalping.io/network) from a specified location. The location field accepts continents, countries, regions, cities, ASNs, ISPs, or cloud regions."})
 	}
-	return ptrStr("")
+	return parser.String("", "from", &argparse.Options{Help: "Run traceroute via Globalping (full build only; unavailable in this binary)"})
 }
 
 func registerMTRFlags(parser *argparse.Parser) mtrCLIFlags {
@@ -464,6 +491,15 @@ func maybePrintVersion(ver bool) bool {
 func maybeRunDeployMode(deploy bool, deployListen string) bool {
 	if !deploy {
 		return false
+	}
+	if !enableWebUI {
+		if err := runDeploy(""); err != nil {
+			if util.EnvDevMode {
+				panic(err)
+			}
+			log.Fatal(err)
+		}
+		return true
 	}
 
 	capabilitiesCheck()
@@ -967,7 +1003,7 @@ func Execute() {
 	//router := parser.Flag("R", "route", &argparse.Options{Help: "Show Routing Table [Provided By BGP.Tools]"})
 	// ── Send-time: hidden in ntr (always ignored in MTR mode) ──
 	packetInterval := registerPacketIntervalFlag(parser)
-	ttlInterval := parser.Int("i", "ttl-time", &argparse.Options{Default: defaultTracerouteTTLIntervalMs, Help: buildTTLIntervalHelp()})
+	ttlInterval := registerTTLIntervalFlag(parser)
 	timeout := parser.Int("", "timeout", &argparse.Options{Default: 1000, Help: "The number of [milliseconds] to keep probe sockets open before giving up on the connection"})
 	packetSize := parser.Int("", "psize", &argparse.Options{Default: 52, Help: "Set the payload size"})
 	dot := parser.Selector("", "dot-server", []string{"dnssb", "aliyun", "dnspod", "google", "cloudflare"}, &argparse.Options{
@@ -1007,10 +1043,10 @@ func Execute() {
 			"json":      *jsonPrint,
 			"output":    *output,
 			"routePath": *routePath,
-			"from":      *from != "",
+			"from":      enableGlobalping && *from != "",
 			"fastTrace": *fastTraceFlag,
 			"file":      *file != "",
-			"deploy":    *deploy,
+			"deploy":    enableWebUI && *deploy,
 		}
 		if conflict, ok := checkMTRConflicts(conflictFlags); !ok {
 			fmt.Printf("--mtr 不能与 %s 同时使用\n", conflict)
@@ -1019,6 +1055,7 @@ func Execute() {
 	}
 
 	queriesExplicit, ttlTimeExplicit := detectExplicitProbeFlags(parser)
+	applyTTLIntervalDefault(ttlInterval, ttlTimeExplicit, mtrModes.mtr)
 	osType := resolveOSType()
 	if handleStartupModes(*noColor, *jsonPrint, mtrModes, *ver, *deploy, *deployListen, *init, osType) {
 		return

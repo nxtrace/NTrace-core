@@ -16,7 +16,6 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/nxtrace/NTrace-core/trace"
-	"github.com/nxtrace/NTrace-core/tracemap"
 )
 
 var traceUpgrader = websocket.Upgrader{
@@ -284,14 +283,9 @@ func runSingleTrace(session *wsTraceSession, setup *traceExecution) {
 		return
 	}
 
-	traceMapURL := ""
-	if setup.Config.Maptrace && shouldGenerateMap(setup.DataProvider) {
-		if payload, err := json.Marshal(res); err == nil {
-			if url, err := tracemap.GetMapUrl(string(payload)); err == nil {
-				traceMapURL = url
-				log.Printf("[deploy] (ws) trace map generated target=%s url=%s", sanitizeLogParam(setup.Target), traceMapURL)
-			}
-		}
+	traceMapURL := traceMapURLForResult(setup, res)
+	if traceMapURL != "" {
+		log.Printf("[deploy] (ws) trace map generated target=%s url=%s", sanitizeLogParam(setup.Target), traceMapURL)
 	}
 
 	final := traceResponse{
