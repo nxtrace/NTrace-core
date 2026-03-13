@@ -24,6 +24,8 @@ var (
 	GlobalpingToken = GetEnvDefault("GLOBALPING_TOKEN", "")
 )
 
+const EnvAllowCrossOriginKey = "NEXTTRACE_ALLOW_CROSS_ORIGIN"
+
 func GetEnvTrimmed(key string) (string, bool) {
 	v, ok := os.LookupEnv(key)
 	if !ok {
@@ -66,4 +68,8 @@ func GetEnvInt(key string, def int) int {
 		return num
 	}
 	return def
+}
+
+func AllowCrossOriginBrowserAccess() bool {
+	return GetEnvBool(EnvAllowCrossOriginKey, false)
 }

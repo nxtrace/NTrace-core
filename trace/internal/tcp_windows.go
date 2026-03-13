@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"sync"
 	"time"
 
 	"github.com/google/gopacket"
@@ -18,18 +17,33 @@ import (
 )
 
 type TCPSpec struct {
-	IPVersion int
-	ICMPMode  int
-	SrcIP     net.IP
-	DstIP     net.IP
-	DstPort   int
-	icmp      net.PacketConn
-	PktSize   int
-	addr      wd.Address
-	handle    wd.Handle
+	IPVersion    int
+	ICMPMode     int
+	SrcIP        net.IP
+	DstIP        net.IP
+	DstPort      int
+	icmp         net.PacketConn
+	PktSize      int
+	SourceDevice string
+	addr         wd.Address
+	handle       wd.Handle
+}
+
+func (s *TCPSpec) sourceDeviceUnsupportedErr() error {
+	if s.SourceDevice == "" {
+		return nil
+	}
+	return fmt.Errorf("source_device %q is not supported on Windows TCP traces", s.SourceDevice)
 }
 
 func (s *TCPSpec) InitTCP() {
+	if err := s.sourceDeviceUnsupportedErr(); err != nil {
+		if util.EnvDevMode {
+			panic(err)
+		}
+		log.Fatal(err)
+	}
+
 	handle, err := wd.Open("false", wd.LayerNetwork, 0, 0)
 	if err != nil {
 		if util.EnvDevMode {
@@ -83,179 +97,55 @@ func (s *TCPSpec) ListenICMP(ctx context.Context, ready chan struct{}, onICMP fu
 }
 
 func (s *TCPSpec) listenICMPWinDivert(ctx context.Context, ready chan struct{}, onICMP func(msg ReceivedMessage, finish time.Time, data []byte)) {
-	// 构造 WinDivert 过滤器：入站 ICMP/ICMPv6，目标为本机 s.SrcIP
-	var filter string
-	if s.IPVersion == 4 {
-		filter = fmt.Sprintf("inbound and icmp and ip.DstAddr == %s", s.SrcIP.String())
-	} else {
-		filter = fmt.Sprintf("inbound and icmpv6 and ipv6.DstAddr == %s", s.SrcIP.String())
-	}
-
-	// 以嗅探模式打开 WinDivert：只复制匹配的包，不拦截
-	sniffHandle, err := wd.Open(filter, wd.LayerNetwork, 0, wd.FlagSniff|wd.FlagRecvOnly)
-	if err != nil {
+	if err := s.sourceDeviceUnsupportedErr(); err != nil {
 		if util.EnvDevMode {
-			panic(fmt.Errorf("(ListenICMP) WinDivert open failed: %v (filter=%q)", err, filter))
+			panic(err)
 		}
-		log.Fatalf("(ListenICMP) WinDivert open failed: %v (filter=%q)", err, filter)
+		log.Fatal(err)
 	}
-	var closeOnceICMP sync.Once
-	closeHandleICMP := func() { closeOnceICMP.Do(func() { _ = sniffHandle.Close() }) }
+
+	sniffHandle, closeHandleICMP := openWinDivertSniffHandle(ctx, winDivertICMPFilter(s.IPVersion, s.SrcIP), "ListenICMP")
 	defer closeHandleICMP()
-
-	// context 取消时关闭 handle，使阻塞的 Recv() 立即返回错误
-	go func() {
-		<-ctx.Done()
-		closeHandleICMP()
-	}()
-
-	_ = sniffHandle.SetParam(wd.QueueLength, 8192)
-	_ = sniffHandle.SetParam(wd.QueueTime, 4000)
-
 	close(ready)
 
 	buf := make([]byte, 65535)
 	var addr wd.Address
 
 	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-
-		n, err := sniffHandle.Recv(buf, &addr)
-		if err != nil {
-			select {
-			case <-ctx.Done():
+		raw, finish, ok := receiveWinDivertPacket(ctx, sniffHandle, buf, &addr)
+		if !ok {
+			if ctx.Err() != nil {
 				return
-			default:
 			}
 			continue
 		}
 
-		finish := time.Now()
-		raw := make([]byte, n)
-		copy(raw, buf[:n])
-
-		var firstLayer gopacket.Decoder
-		if s.IPVersion == 4 {
-			firstLayer = layers.LayerTypeIPv4
-		} else {
-			firstLayer = layers.LayerTypeIPv6
+		packet, ok := decodeWinDivertICMPPacket(s.IPVersion, raw)
+		if !ok {
+			continue
 		}
-		pkt := gopacket.NewPacket(raw, firstLayer, gopacket.NoCopy)
-
-		outer := raw
-
-		var peerIP net.IP
-		var data []byte
-		if s.IPVersion == 4 {
-			ip4, ok := pkt.Layer(layers.LayerTypeIPv4).(*layers.IPv4)
-			if !ok || ip4 == nil {
-				continue
-			}
-			peerIP = ip4.SrcIP
-
-			ic4, ok := pkt.Layer(layers.LayerTypeICMPv4).(*layers.ICMPv4)
-			if !ok || ic4 == nil {
-				continue
-			}
-			data = ic4.Payload
-
-			switch ic4.TypeCode.Type() {
-			case layers.ICMPv4TypeTimeExceeded:
-			case layers.ICMPv4TypeDestinationUnreachable:
-			default:
-				continue
-			}
-
-			if len(data) < 20 || data[0]>>4 != 4 {
-				continue
-			}
-
-			dstIP := net.IP(data[16:20])
-			if !dstIP.Equal(s.DstIP) {
-				continue
-			}
-		} else {
-			ip6, ok := pkt.Layer(layers.LayerTypeIPv6).(*layers.IPv6)
-			if !ok || ip6 == nil {
-				continue
-			}
-			peerIP = ip6.SrcIP
-
-			ic6, ok := pkt.Layer(layers.LayerTypeICMPv6).(*layers.ICMPv6)
-			if !ok || ic6 == nil {
-				continue
-			}
-			if len(ic6.Payload) < 4 {
-				continue
-			}
-			data = ic6.Payload[4:]
-
-			switch ic6.TypeCode.Type() {
-			case layers.ICMPv6TypeTimeExceeded:
-			case layers.ICMPv6TypePacketTooBig:
-			case layers.ICMPv6TypeDestinationUnreachable:
-			default:
-				continue
-			}
-
-			if len(data) < 40 || data[0]>>4 != 6 {
-				continue
-			}
-
-			dstIP := net.IP(data[24:40])
-			if !dstIP.Equal(s.DstIP) {
-				continue
-			}
+		data, ok := packet.errorPayloadFor(s.DstIP)
+		if !ok {
+			continue
 		}
-		peer := &net.IPAddr{IP: peerIP}
-
-		msg := ReceivedMessage{
-			Peer: peer,
-			Msg:  outer,
-		}
-		onICMP(msg, finish, data)
+		onICMP(packet.message(), finish, data)
 	}
 }
 
 func (s *TCPSpec) ListenTCP(ctx context.Context, ready chan struct{}, onTCP func(srcPort, seq int, peer net.Addr, finish time.Time)) {
-	// 构造 WinDivert 过滤器：入站 TCP，来自目标 s.DstIP → 本机 s.SrcIP，且源端口为 s.DstPort
-	var filter string
-	if s.IPVersion == 4 {
-		filter = fmt.Sprintf(
-			"inbound and tcp and ip.SrcAddr == %s and ip.DstAddr == %s and tcp.SrcPort == %d",
-			s.DstIP.String(), s.SrcIP.String(), s.DstPort,
-		)
-	} else {
-		filter = fmt.Sprintf(
-			"inbound and tcp and ipv6.SrcAddr == %s and ipv6.DstAddr == %s and tcp.SrcPort == %d",
-			s.DstIP.String(), s.SrcIP.String(), s.DstPort,
-		)
-	}
-
-	// 以嗅探模式打开 WinDivert：只复制匹配的包，不拦截
-	sniffHandle, err := wd.Open(filter, wd.LayerNetwork, 0, wd.FlagSniff|wd.FlagRecvOnly)
-	if err != nil {
+	if err := s.sourceDeviceUnsupportedErr(); err != nil {
 		if util.EnvDevMode {
-			panic(fmt.Errorf("(ListenTCP) WinDivert open failed: %v (filter=%q)", err, filter))
+			panic(err)
 		}
-		log.Fatalf("(ListenTCP) WinDivert open failed: %v (filter=%q)", err, filter)
+		log.Fatal(err)
 	}
-	var closeOnceTCP sync.Once
-	closeHandleTCP := func() { closeOnceTCP.Do(func() { _ = sniffHandle.Close() }) }
+
+	sniffHandle, closeHandleTCP := openWinDivertSniffHandle(
+		ctx,
+		winDivertTCPFilter(s.IPVersion, s.DstIP, s.SrcIP, s.DstPort),
+		"ListenTCP",
+	)
 	defer closeHandleTCP()
-
-	// context 取消时关闭 handle，使阻塞的 Recv() 立即返回错误
-	go func() {
-		<-ctx.Done()
-		closeHandleTCP()
-	}()
-
-	_ = sniffHandle.SetParam(wd.QueueLength, 8192)
-	_ = sniffHandle.SetParam(wd.QueueTime, 4000)
 
 	close(ready)
 
@@ -263,75 +153,27 @@ func (s *TCPSpec) ListenTCP(ctx context.Context, ready chan struct{}, onTCP func
 	var addr wd.Address
 
 	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-
-		n, err := sniffHandle.Recv(buf, &addr)
-		if err != nil {
-			select {
-			case <-ctx.Done():
+		raw, finish, ok := receiveWinDivertPacket(ctx, sniffHandle, buf, &addr)
+		if !ok {
+			if ctx.Err() != nil {
 				return
-			default:
 			}
 			continue
 		}
 
-		finish := time.Now()
-		raw := make([]byte, n)
-		copy(raw, buf[:n])
-
-		var firstLayer gopacket.Decoder
-		if s.IPVersion == 4 {
-			firstLayer = layers.LayerTypeIPv4
-		} else {
-			firstLayer = layers.LayerTypeIPv6
-		}
-		pkt := gopacket.NewPacket(raw, firstLayer, gopacket.NoCopy)
-
-		// 从包中获取 TCP 层信息
-		tl, ok := pkt.Layer(layers.LayerTypeTCP).(*layers.TCP)
-		if !ok || tl == nil {
+		srcPort, seq, peer, ok := decodeWinDivertTCPPacket(s.IPVersion, raw, s.DstPort, s.PktSize)
+		if !ok {
 			continue
 		}
-
-		if int(tl.SrcPort) != s.DstPort {
-			continue
-		}
-
-		// 依据报文类型还原原始探测 seq：1=RST+ACK => ack-1-s.PktSize；2=SYN+ACK => ack-1
-		var seq int
-		if tl.ACK && tl.RST {
-			seq = int(tl.Ack) - 1 - s.PktSize
-		} else if tl.ACK && tl.SYN {
-			seq = int(tl.Ack) - 1
-		} else {
-			continue
-		}
-
-		var peerIP net.IP
-		if s.IPVersion == 4 {
-			ip4, ok := pkt.Layer(layers.LayerTypeIPv4).(*layers.IPv4)
-			if !ok || ip4 == nil {
-				continue
-			}
-			peerIP = ip4.SrcIP
-		} else {
-			ip6, ok := pkt.Layer(layers.LayerTypeIPv6).(*layers.IPv6)
-			if !ok || ip6 == nil {
-				continue
-			}
-			peerIP = ip6.SrcIP
-		}
-		peer := &net.IPAddr{IP: peerIP}
-		srcPort := int(tl.DstPort)
 		onTCP(srcPort, seq, peer, finish)
 	}
 }
 
 func (s *TCPSpec) SendTCP(ctx context.Context, ipHdr ipLayer, tcpHdr *layers.TCP, payload []byte) (time.Time, error) {
+	if err := s.sourceDeviceUnsupportedErr(); err != nil {
+		return time.Time{}, err
+	}
+
 	select {
 	case <-ctx.Done():
 		return time.Time{}, context.Canceled

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/google/gopacket"
-	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv4"
 	"golang.org/x/net/ipv6"
 
@@ -59,125 +58,34 @@ func (s *ICMPSpec) listenICMPSock(ctx context.Context, ready chan struct{}, onIC
 			if !ok {
 				return
 			}
-
-			if msg.Err != nil {
-				continue
+			finish, seq, ok := s.decodeICMPSocketMessage(msg)
+			if ok {
+				onICMP(msg, finish, seq)
 			}
-			finish := time.Now()
-
-			var data []byte // 提取 ICMP 的负载
-			if s.IPVersion == 4 {
-				rm, err := icmp.ParseMessage(1, msg.Msg)
-				if err != nil {
-					continue
-				}
-
-				switch rm.Type {
-				case ipv4.ICMPTypeEchoReply:
-					echo, ok := rm.Body.(*icmp.Echo)
-					if !ok || echo == nil {
-						continue
-					}
-
-					if ip := util.AddrIP(msg.Peer); ip == nil || !ip.Equal(s.DstIP) {
-						continue
-					}
-
-					id := echo.ID
-					if id != s.EchoID {
-						continue
-					}
-
-					seq := echo.Seq
-					onICMP(msg, finish, seq)
-					continue
-				case ipv4.ICMPTypeTimeExceeded:
-					if body, ok := rm.Body.(*icmp.TimeExceeded); ok && body != nil {
-						data = body.Data
-					}
-				case ipv4.ICMPTypeDestinationUnreachable:
-					if body, ok := rm.Body.(*icmp.DstUnreach); ok && body != nil {
-						data = body.Data
-					}
-				default:
-					//log.Println("received icmp message of unknown type", rm.Type)
-					continue
-				}
-
-				if len(data) < 20 || data[0]>>4 != 4 {
-					continue
-				}
-
-				dstIP := net.IP(data[16:20])
-				if !dstIP.Equal(s.DstIP) {
-					continue
-				}
-			} else {
-				rm, err := icmp.ParseMessage(58, msg.Msg)
-				if err != nil {
-					continue
-				}
-
-				switch rm.Type {
-				case ipv6.ICMPTypeEchoReply:
-					echo, ok := rm.Body.(*icmp.Echo)
-					if !ok || echo == nil {
-						continue
-					}
-
-					if ip := util.AddrIP(msg.Peer); ip == nil || !ip.Equal(s.DstIP) {
-						continue
-					}
-
-					id := echo.ID
-					if id != s.EchoID {
-						continue
-					}
-
-					seq := echo.Seq
-					onICMP(msg, finish, seq)
-					continue
-				case ipv6.ICMPTypeTimeExceeded:
-					if body, ok := rm.Body.(*icmp.TimeExceeded); ok && body != nil {
-						data = body.Data
-					}
-				case ipv6.ICMPTypePacketTooBig:
-					if body, ok := rm.Body.(*icmp.PacketTooBig); ok && body != nil {
-						data = body.Data
-					}
-				case ipv6.ICMPTypeDestinationUnreachable:
-					if body, ok := rm.Body.(*icmp.DstUnreach); ok && body != nil {
-						data = body.Data
-					}
-				default:
-					//log.Println("received icmp message of unknown type", rm.Type)
-					continue
-				}
-
-				if len(data) < 40 || data[0]>>4 != 6 {
-					continue
-				}
-
-				dstIP := net.IP(data[24:40])
-				if !dstIP.Equal(s.DstIP) {
-					continue
-				}
-			}
-			header, err := util.GetICMPResponsePayload(data)
-			if err != nil {
-				continue
-			}
-
-			id, err := util.GetICMPID(header)
-			if err != nil || id != s.EchoID {
-				continue
-			}
-
-			seq, err := util.GetICMPSeq(header)
-			if err != nil {
-				continue
-			}
-			onICMP(msg, finish, seq)
 		}
 	}
+}
+
+func (s *ICMPSpec) decodeICMPSocketMessage(msg ReceivedMessage) (time.Time, int, bool) {
+	if msg.Err != nil {
+		return time.Time{}, 0, false
+	}
+
+	finish := time.Now()
+	rm, ok := parseSocketICMPMessage(s.IPVersion, msg.Msg)
+	if !ok {
+		return finish, 0, false
+	}
+
+	if seq, ok := matchSocketICMPEchoReply(s.IPVersion, rm, util.AddrIP(msg.Peer), s.DstIP, s.EchoID); ok {
+		return finish, seq, true
+	}
+
+	data, ok := extractSocketICMPPayload(s.IPVersion, rm, s.DstIP)
+	if !ok {
+		return finish, 0, false
+	}
+
+	seq, ok := extractEmbeddedICMPSeq(data, s.EchoID)
+	return finish, seq, ok
 }

@@ -53,10 +53,12 @@ func GetFastIP(domain string, port string, enableOutput bool) string {
 
 	var ips []net.IP
 	var err error
+	lookupCtx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
 	if domain == "api.nxtrace.org" {
-		ips, err = LookupHostForGeo(context.Background(), "api.nxtrace.org")
+		ips, err = LookupHostForGeo(lookupCtx, "api.nxtrace.org")
 	} else {
-		ips, err = LookupHostForGeo(context.Background(), domain)
+		ips, err = LookupHostForGeo(lookupCtx, domain)
 	}
 
 	if err != nil {
@@ -77,6 +79,7 @@ func GetFastIP(domain string, port string, enableOutput bool) string {
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt)
+	defer signal.Stop(sigChan)
 
 	select {
 	case result = <-results:
@@ -88,8 +91,11 @@ func GetFastIP(domain string, port string, enableOutput bool) string {
 		os.Exit(0)
 	}
 
-	//if len(ips) > 0 {
-	// 填充结构化缓存
+	//有些时候真的啥都不通，还是挑一个顶上吧
+	if result.IP == "" {
+		result.IP = "45.88.195.154"
+	}
+
 	FastIPMetaCache = FastIPMeta{
 		IP:       result.IP,
 		Latency:  result.Latency,
@@ -103,12 +109,6 @@ func GetFastIP(domain string, port string, enableOutput bool) string {
 			color.New(color.FgCyan, color.Bold).Sprintf("%sms", result.Latency),
 			color.New(color.FgGreen, color.Bold).Sprintf("%s", result.Content),
 		)
-	}
-	//}
-
-	//有些时候真的啥都不通，还是挑一个顶上吧
-	if result.IP == "" {
-		result.IP = "45.88.195.154"
 	}
 
 	FastIpCache = result.IP

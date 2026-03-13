@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
+	"github.com/google/gopacket/pcap"
 	"golang.org/x/net/ipv4"
 	"golang.org/x/net/ipv6"
 
@@ -26,6 +27,7 @@ type TCPSpec struct {
 	DstIP        net.IP
 	DstPort      int
 	PktSize      int
+	SourceDevice string
 	icmp         net.PacketConn
 	tcp          net.PacketConn
 	tcp4         *ipv4.PacketConn
@@ -64,21 +66,24 @@ func (s *TCPSpec) ListenICMP(ctx context.Context, ready chan struct{}, onICMP fu
 	s.listenICMPSock(ctx, ready, onICMP)
 }
 
-func (s *TCPSpec) ListenTCP(ctx context.Context, ready chan struct{}, onTCP func(srcPort, seq int, peer net.Addr, finish time.Time)) {
-	// 选择捕获设备与本地接口
-	dev := "en0"
-	if util.SrcDev != "" {
-		dev = util.SrcDev
-	} else if d, err := util.PcapDeviceByIP(s.SrcIP); err == nil {
-		dev = d
+func (s *TCPSpec) captureDevice() string {
+	if s.SourceDevice != "" {
+		return s.SourceDevice
 	}
-
-	ipPrefix := "ip"
-	if s.IPVersion == 6 {
-		ipPrefix = "ip6"
+	if dev, err := util.PcapDeviceByIP(s.SrcIP); err == nil {
+		return dev
 	}
+	return "en0"
+}
 
-	// 以“立即模式”打开 pcap，降低首包丢失概率
+func (s *TCPSpec) tcpCaptureFilter() string {
+	return fmt.Sprintf(
+		"%s and tcp and src host %s and dst host %s and src port %d",
+		tcpIPVersionPrefix(s.IPVersion), s.DstIP.String(), s.SrcIP.String(), s.DstPort,
+	)
+}
+
+func mustOpenDarwinTCPSniffHandle(dev string) *pcap.Handle {
 	handle, err := util.OpenLiveImmediate(dev, 65535, true, 4<<20)
 	if err != nil {
 		if util.EnvDevMode {
@@ -86,21 +91,23 @@ func (s *TCPSpec) ListenTCP(ctx context.Context, ready chan struct{}, onTCP func
 		}
 		log.Fatalf("(ListenTCP) pcap open failed on %s: %v", dev, err)
 	}
-	defer handle.Close()
+	return handle
+}
 
-	// 过滤：只抓 {ip/ip6} + tcp，来自目标 s.DstIP → 本机 s.SrcIP，且源端口为 s.DstPort
-	filter := fmt.Sprintf(
-		"%s and tcp and src host %s and dst host %s and src port %d",
-		ipPrefix, s.DstIP.String(), s.SrcIP.String(), s.DstPort,
-	)
-
+func mustSetDarwinTCPFilter(handle *pcap.Handle, filter string) {
 	if err := handle.SetBPFFilter(filter); err != nil {
 		if util.EnvDevMode {
 			panic(fmt.Errorf("(ListenTCP) set BPF failed: %v (filter=%q)", err, filter))
 		}
 		log.Fatalf("(ListenTCP) set BPF failed: %v (filter=%q)", err, filter)
 	}
+}
 
+func (s *TCPSpec) ListenTCP(ctx context.Context, ready chan struct{}, onTCP func(srcPort, seq int, peer net.Addr, finish time.Time)) {
+	handle := mustOpenDarwinTCPSniffHandle(s.captureDevice())
+	defer handle.Close()
+
+	mustSetDarwinTCPFilter(handle, s.tcpCaptureFilter())
 	src := gopacket.NewPacketSource(handle, handle.LinkType())
 	pktCh := src.Packets()
 	close(ready)
@@ -113,52 +120,11 @@ func (s *TCPSpec) ListenTCP(ctx context.Context, ready chan struct{}, onTCP func
 			if !ok {
 				return
 			}
-
-			// 解包
-			packet := pkt.NetworkLayer()
-			if packet == nil {
-				continue
-			}
 			finish := pkt.Metadata().Timestamp
-
-			// 从包中获取 TCP 层信息
-			tl, ok := pkt.Layer(layers.LayerTypeTCP).(*layers.TCP)
-			if !ok || tl == nil {
+			srcPort, seq, peer, ok := decodeTCPProbePacket(s.IPVersion, s.DstPort, s.PktSize, pkt)
+			if !ok {
 				continue
 			}
-
-			if int(tl.SrcPort) != s.DstPort {
-				continue
-			}
-
-			// 依据报文类型还原原始探测 seq：1=RST+ACK => ack-1-s.PktSize；2=SYN+ACK => ack-1
-			var seq int
-			if tl.ACK && tl.RST {
-				seq = int(tl.Ack) - 1 - s.PktSize
-			} else if tl.ACK && tl.SYN {
-				seq = int(tl.Ack) - 1
-			} else {
-				continue
-			}
-
-			var peerIP net.IP // 提取对端 IP（按族别）
-			if s.IPVersion == 4 {
-				// 从包中获取 IPv4 层信息
-				ip4, ok := pkt.Layer(layers.LayerTypeIPv4).(*layers.IPv4)
-				if !ok || ip4 == nil {
-					continue
-				}
-				peerIP = ip4.SrcIP
-			} else {
-				// 从包中获取 IPv6 层信息
-				ip6, ok := pkt.Layer(layers.LayerTypeIPv6).(*layers.IPv6)
-				if !ok || ip6 == nil {
-					continue
-				}
-				peerIP = ip6.SrcIP
-			}
-			peer := &net.IPAddr{IP: peerIP}
-			srcPort := int(tl.DstPort)
 			onTCP(srcPort, seq, peer, finish)
 		}
 	}

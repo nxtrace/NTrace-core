@@ -134,3 +134,9 @@ func TestFilter_IPv6_GlobalUnicast_NotFiltered(t *testing.T) {
 	_, ok := Filter("2606:4700::1")
 	assert.False(t, ok)
 }
+
+func TestFilter_IPv6_InvalidScope(t *testing.T) {
+	geo, ok := Filter("100::1")
+	require.True(t, ok)
+	assert.Equal(t, "INVALID", geo.Whois)
+}

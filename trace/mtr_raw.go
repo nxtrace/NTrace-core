@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nxtrace/NTrace-core/ipgeo"
 	"github.com/nxtrace/NTrace-core/util"
 )
 
@@ -68,6 +69,7 @@ func RunMTRRaw(ctx context.Context, method Method, cfg Config, opts MTRRawOption
 
 // runMTRRawPerHop uses per-hop scheduling for raw streaming.
 func runMTRRawPerHop(ctx context.Context, method Method, cfg Config, opts MTRRawOptions, onRecord MTRRawOnRecord) error {
+	normalizeRuntimeConfig(&cfg)
 	roundCfg := cfg
 	roundCfg.NumMeasurements = 1
 	roundCfg.MaxAttempts = 1
@@ -95,6 +97,7 @@ func runMTRRawPerHop(ctx context.Context, method Method, cfg Config, opts MTRRaw
 		}
 		defer engine.close()
 		if err := engine.start(ctx); err != nil {
+			engine.close()
 			return fmt.Errorf("mtr raw: %w", err)
 		}
 		prober = engine
@@ -125,6 +128,7 @@ func runMTRRawPerHop(ctx context.Context, method Method, cfg Config, opts MTRRaw
 
 // runMTRRawRoundBased is the legacy round-based raw streaming path.
 func runMTRRawRoundBased(ctx context.Context, method Method, cfg Config, opts MTRRawOptions, onRecord MTRRawOnRecord) error {
+	normalizeRuntimeConfig(&cfg)
 	if opts.Interval <= 0 {
 		opts.Interval = time.Second
 	}
@@ -291,12 +295,20 @@ func geoTextByLang(lang, cn, en string) string {
 
 // buildMTRRawRecordFromProbe constructs an MTRRawRecord from a per-hop scheduler probe result.
 func buildMTRRawRecordFromProbe(iteration int, pr mtrProbeResult, cfg Config) MTRRawRecord {
+	rec := newMTRRawRecord(iteration, pr)
+	if pr.Addr == nil {
+		return rec
+	}
+	applyMTRRawProbeMetadata(&rec, pr, cfg)
+	return rec
+}
+
+func newMTRRawRecord(iteration int, pr mtrProbeResult) MTRRawRecord {
 	rec := MTRRawRecord{
 		Iteration: iteration,
 		TTL:       pr.TTL,
 		Success:   pr.Success && pr.Addr != nil,
 	}
-
 	if pr.Addr != nil {
 		rec.IP = addrToIPString(pr.Addr)
 	}
@@ -306,51 +318,43 @@ func buildMTRRawRecordFromProbe(iteration int, pr mtrProbeResult, cfg Config) MT
 	if len(pr.MPLS) > 0 {
 		rec.MPLS = append([]string(nil), pr.MPLS...)
 	}
-
-	if pr.Addr == nil {
-		return rec
-	}
-
-	// Use pre-resolved data from fallback prober when available;
-	// otherwise call fetchIPData (ICMP path, or when prober didn't fill).
-	if pr.Geo != nil || pr.Hostname != "" {
-		if pr.Geo != nil {
-			rec.ASN = strings.TrimSpace(pr.Geo.Asnumber)
-			rec.Country = geoTextByLang(cfg.Lang, pr.Geo.Country, pr.Geo.CountryEn)
-			rec.Prov = geoTextByLang(cfg.Lang, pr.Geo.Prov, pr.Geo.ProvEn)
-			rec.City = geoTextByLang(cfg.Lang, pr.Geo.City, pr.Geo.CityEn)
-			rec.District = strings.TrimSpace(pr.Geo.District)
-			rec.Owner = strings.TrimSpace(pr.Geo.Owner)
-			if rec.Owner == "" {
-				rec.Owner = strings.TrimSpace(pr.Geo.Isp)
-			}
-			rec.Lat = pr.Geo.Lat
-			rec.Lng = pr.Geo.Lng
-		}
-		if pr.Hostname != "" {
-			rec.Host = strings.TrimSpace(pr.Hostname)
-		}
-	} else if cfg.IPGeoSource != nil || cfg.RDNS {
-		// Fallback: fetch geo/PTR via fetchIPData (handles RDNS even when IPGeoSource is nil).
-		h := Hop{Address: pr.Addr, Lang: cfg.Lang}
-		_ = h.fetchIPData(cfg)
-		if h.Geo != nil {
-			rec.ASN = strings.TrimSpace(h.Geo.Asnumber)
-			rec.Country = geoTextByLang(cfg.Lang, h.Geo.Country, h.Geo.CountryEn)
-			rec.Prov = geoTextByLang(cfg.Lang, h.Geo.Prov, h.Geo.ProvEn)
-			rec.City = geoTextByLang(cfg.Lang, h.Geo.City, h.Geo.CityEn)
-			rec.District = strings.TrimSpace(h.Geo.District)
-			rec.Owner = strings.TrimSpace(h.Geo.Owner)
-			if rec.Owner == "" {
-				rec.Owner = strings.TrimSpace(h.Geo.Isp)
-			}
-			rec.Lat = h.Geo.Lat
-			rec.Lng = h.Geo.Lng
-		}
-		if h.Hostname != "" {
-			rec.Host = strings.TrimSpace(h.Hostname)
-		}
-	}
-
 	return rec
+}
+
+func applyMTRRawProbeMetadata(rec *MTRRawRecord, pr mtrProbeResult, cfg Config) {
+	if pr.Geo != nil || pr.Hostname != "" {
+		applyMTRRawGeo(rec, pr.Geo, cfg.Lang)
+		applyMTRRawHostname(rec, pr.Hostname)
+		return
+	}
+	if cfg.IPGeoSource == nil && !cfg.RDNS {
+		return
+	}
+	h := Hop{Address: pr.Addr, Lang: cfg.Lang}
+	_ = h.fetchIPData(cfg)
+	applyMTRRawGeo(rec, h.Geo, cfg.Lang)
+	applyMTRRawHostname(rec, h.Hostname)
+}
+
+func applyMTRRawGeo(rec *MTRRawRecord, geo *ipgeo.IPGeoData, lang string) {
+	if geo == nil {
+		return
+	}
+	rec.ASN = strings.TrimSpace(geo.Asnumber)
+	rec.Country = geoTextByLang(lang, geo.Country, geo.CountryEn)
+	rec.Prov = geoTextByLang(lang, geo.Prov, geo.ProvEn)
+	rec.City = geoTextByLang(lang, geo.City, geo.CityEn)
+	rec.District = strings.TrimSpace(geo.District)
+	rec.Owner = strings.TrimSpace(geo.Owner)
+	if rec.Owner == "" {
+		rec.Owner = strings.TrimSpace(geo.Isp)
+	}
+	rec.Lat = geo.Lat
+	rec.Lng = geo.Lng
+}
+
+func applyMTRRawHostname(rec *MTRRawRecord, hostname string) {
+	if hostname != "" {
+		rec.Host = strings.TrimSpace(hostname)
+	}
 }

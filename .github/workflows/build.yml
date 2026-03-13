@@ -106,19 +106,25 @@ jobs:
 
           ARM_SUFFIX=""
           if [ -n "${GOARM:-}" ]; then ARM_SUFFIX="v${GOARM}"; fi
-          NAME="nexttrace_${GOOS}_${GOARCH}${ARM_SUFFIX}"
-          if [ "${GOOS}" = "windows" ]; then NAME="${NAME}.exe"; fi
-          if [ "${GOMIPS:-}" = "softfloat" ]; then NAME="${NAME}_softfloat"; fi
+          PLATFORM="${GOOS}_${GOARCH}${ARM_SUFFIX}"
+          EXT=""
+          if [ "${GOOS}" = "windows" ]; then EXT=".exe"; fi
+          SOFT=""
+          if [ "${GOMIPS:-}" = "softfloat" ]; then SOFT="_softfloat"; fi
           if [ "$GOOS" = "android" ]; then
             ANDROID_API=21
             TOOLCHAIN_BIN="${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin"
             export CC="$TOOLCHAIN_BIN/aarch64-linux-android${ANDROID_API}-clang"
             echo "CC=${CC}" >> "$GITHUB_ENV"
           fi
+
           echo "BUILD_VERSION=${BUILD_VERSION}" >> "$GITHUB_ENV"
           echo "BUILD_DATE=${BUILD_DATE}"       >> "$GITHUB_ENV"
           echo "COMMIT_SHA1=${COMMIT_SHA1}"     >> "$GITHUB_ENV"
-          echo "ASSET_NAME=${NAME}"             >> "$GITHUB_ENV"
+          echo "ARM_SUFFIX=${ARM_SUFFIX}"       >> "$GITHUB_ENV"
+          echo "PLATFORM=${PLATFORM}"           >> "$GITHUB_ENV"
+          echo "EXT=${EXT}"                     >> "$GITHUB_ENV"
+          echo "SOFT=${SOFT}"                   >> "$GITHUB_ENV"
 
       - name: Get project dependencies
         run: go mod download
@@ -135,33 +141,47 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y upx
 
-      - name: Build
+      - name: Build all flavors
         run: |
           mkdir -p dist
-          go build -trimpath -o "dist/${ASSET_NAME}" \
-            -ldflags "-X github.com/nxtrace/NTrace-core/config.Version=${BUILD_VERSION} \
-                      -X github.com/nxtrace/NTrace-core/config.BuildDate=${BUILD_DATE} \
-                      -X github.com/nxtrace/NTrace-core/config.CommitID=${COMMIT_SHA1} \
-                      -w -s"
-          if command -v upx >/dev/null 2>&1; then
-            case "${GOOS}-${GOARCH}-${GOARM:-}" in
-              linux-amd64-*) upx -9 "dist/${ASSET_NAME}" ;;
-              linux-386-*)   upx -9 "dist/${ASSET_NAME}" ;;
-              linux-arm64-*) upx -9 "dist/${ASSET_NAME}" ;;
-              linux-arm-7)   upx -9 "dist/${ASSET_NAME}" ;;
-              *)
-                echo "skip upx for ${GOOS}/${GOARCH}${GOARM:+/v${GOARM}}"
-                ;;
-            esac
-          else
-            echo "upx not available; skipping compression for ${GOOS}/${GOARCH}${GOARM:+/v${GOARM}}"
-          fi
+          LD_BASE="-X github.com/nxtrace/NTrace-core/config.Version=${BUILD_VERSION} \
+                   -X github.com/nxtrace/NTrace-core/config.BuildDate=${BUILD_DATE} \
+                   -X github.com/nxtrace/NTrace-core/config.CommitID=${COMMIT_SHA1} \
+                   -w -s"
+          for SPEC in "nexttrace:" "nexttrace-tiny:flavor_tiny" "ntr:flavor_ntr"; do
+            BIN="${SPEC%%:*}"
+            TAGS="${SPEC#*:}"
+            NAME="${BIN}_${PLATFORM}${EXT}${SOFT}"
+            BUILD_ARGS=(-trimpath)
+            if [ -n "$TAGS" ]; then BUILD_ARGS+=( -tags "$TAGS" ); fi
+            BUILD_ARGS+=( -o "dist/${NAME}" -ldflags "$LD_BASE" )
+            echo "build => dist/${NAME}  (tags: ${TAGS:-none})"
+            go build "${BUILD_ARGS[@]}"
+            if command -v upx >/dev/null 2>&1; then
+              case "${GOOS}-${GOARCH}-${GOARM:-}" in
+                linux-amd64-*|linux-386-*|linux-arm64-*|linux-arm-7) upx -9 "dist/${NAME}" ;;
+                *) ;;
+              esac
+            fi
+          done
 
-      - name: Upload artifact
+      - name: Verify tiny/ntr decoupling
+        run: |
+          set -Eeuo pipefail
+          for BIN in "nexttrace-tiny" "ntr"; do
+            FNAME="${BIN}_${PLATFORM}${EXT}${SOFT}"
+            if go version -m "dist/${FNAME}" 2>/dev/null | grep -qE 'github\.com/gin-gonic/gin|github\.com/jsdelivr/globalping-cli'; then
+              echo "FAIL: ${FNAME} contains gin or globalping-cli dependency"
+              exit 1
+            fi
+          done
+          echo "Decoupling check passed"
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ env.ASSET_NAME }}
-          path: dist/${{ env.ASSET_NAME }}
+          name: build-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goarm && format('-v{0}', matrix.goarm) || '' }}${{ matrix.gomips && format('-{0}', matrix.gomips) || '' }}
+          path: dist/
           if-no-files-found: error
 
   build-darwin:
@@ -217,32 +237,51 @@ jobs:
           BUILD_VERSION="$(git describe --tags --always 2>/dev/null || echo dev)"
           BUILD_DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           COMMIT_SHA1="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
-          NAME="nexttrace_${GOOS}_${GOARCH}"
           echo "BUILD_VERSION=${BUILD_VERSION}" >> "$GITHUB_ENV"
           echo "BUILD_DATE=${BUILD_DATE}"       >> "$GITHUB_ENV"
           echo "COMMIT_SHA1=${COMMIT_SHA1}"     >> "$GITHUB_ENV"
-          echo "ASSET_NAME=${NAME}"             >> "$GITHUB_ENV"
 
       - name: Get project dependencies
         run: go mod download
 
-      - name: Build (Darwin, CGO+libpcap via SDK)
+      - name: Build all flavors (Darwin, CGO+libpcap via SDK)
         run: |
           mkdir -p dist
-          go build -trimpath -o "dist/${ASSET_NAME}" \
-            -ldflags "-X github.com/nxtrace/NTrace-core/config.Version=${BUILD_VERSION} \
-                      -X github.com/nxtrace/NTrace-core/config.BuildDate=${BUILD_DATE} \
-                      -X github.com/nxtrace/NTrace-core/config.CommitID=${COMMIT_SHA1} \
-                      -w -s"
+          LD_BASE="-X github.com/nxtrace/NTrace-core/config.Version=${BUILD_VERSION} \
+                   -X github.com/nxtrace/NTrace-core/config.BuildDate=${BUILD_DATE} \
+                   -X github.com/nxtrace/NTrace-core/config.CommitID=${COMMIT_SHA1} \
+                   -w -s"
+          for SPEC in "nexttrace:" "nexttrace-tiny:flavor_tiny" "ntr:flavor_ntr"; do
+            BIN="${SPEC%%:*}"
+            TAGS="${SPEC#*:}"
+            NAME="${BIN}_${GOOS}_${GOARCH}"
+            BUILD_ARGS=(-trimpath)
+            if [ -n "$TAGS" ]; then BUILD_ARGS+=( -tags "$TAGS" ); fi
+            BUILD_ARGS+=( -o "dist/${NAME}" -ldflags "$LD_BASE" )
+            echo "build => dist/${NAME}  (tags: ${TAGS:-none})"
+            go build "${BUILD_ARGS[@]}"
+          done
 
-      - name: Upload artifact
+      - name: Verify tiny/ntr decoupling
+        run: |
+          set -Eeuo pipefail
+          for BIN in "nexttrace-tiny" "ntr"; do
+            FNAME="${BIN}_${GOOS}_${GOARCH}"
+            if go version -m "dist/${FNAME}" 2>/dev/null | grep -qE 'github\.com/gin-gonic/gin|github\.com/jsdelivr/globalping-cli'; then
+              echo "FAIL: ${FNAME} contains gin or globalping-cli dependency"
+              exit 1
+            fi
+          done
+          echo "Decoupling check passed"
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ env.ASSET_NAME }}
-          path: dist/${{ env.ASSET_NAME }}
+          name: build-darwin-${{ matrix.goarch }}
+          path: dist/
           if-no-files-found: error
 
-  # NEW: 构建 Universal，并上传为 Artifact（不依赖 tag）
+  # Build Universal binaries for all flavors
   darwin-universal:
     runs-on: macos-latest
     needs: [ build-darwin ]
@@ -250,33 +289,38 @@ jobs:
       - name: Download darwin slices (flatten)
         uses: actions/download-artifact@v8
         with:
-          pattern: nexttrace_darwin_*
+          pattern: build-darwin-*
           merge-multiple: true
           path: dist
 
-      - name: Make macOS Universal (amd64+arm64)
+      - name: Make macOS Universal (amd64+arm64) for all flavors
         run: |
           set -Eeuo pipefail
-          AMD64="dist/nexttrace_darwin_amd64"
-          ARM64="dist/nexttrace_darwin_arm64"
-          if [ -f "$AMD64" ] && [ -f "$ARM64" ]; then
-            lipo -create -output dist/nexttrace_darwin_universal "$AMD64" "$ARM64"
-            file dist/nexttrace_darwin_universal || true
-            echo "✅ Built: dist/nexttrace_darwin_universal"
-          else
-            echo "❌ Missing darwin slices; cannot build universal." >&2
-            exit 1
-          fi
+          for BIN in nexttrace nexttrace-tiny ntr; do
+            AMD64="dist/${BIN}_darwin_amd64"
+            ARM64="dist/${BIN}_darwin_arm64"
+            if [ -f "$AMD64" ] && [ -f "$ARM64" ]; then
+              lipo -create -output "dist/${BIN}_darwin_universal" "$AMD64" "$ARM64"
+              file "dist/${BIN}_darwin_universal" || true
+              echo "Built: dist/${BIN}_darwin_universal"
+            else
+              echo "Missing darwin slices for ${BIN}; cannot build universal." >&2
+              exit 1
+            fi
+          done
           ls -l dist
 
-      - name: Upload universal as artifact
+      - name: Upload universal artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: nexttrace_darwin_universal
-          path: dist/nexttrace_darwin_universal
+          name: build-darwin-universal
+          path: |
+            dist/nexttrace_darwin_universal
+            dist/nexttrace-tiny_darwin_universal
+            dist/ntr_darwin_universal
           if-no-files-found: error
 
-  # 发布时仅下载所有 Artifact（包含 universal），直接发布
+  # Download all build artifacts and publish to a single release
   release:
     runs-on: ubuntu-latest
     needs: [ build, build-darwin, darwin-universal ]
@@ -285,7 +329,7 @@ jobs:
       - name: Download all artifacts (flatten)
         uses: actions/download-artifact@v8
         with:
-          pattern: nexttrace_*
+          pattern: build-*
           merge-multiple: true
           path: dist_release
 

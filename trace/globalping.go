@@ -1,3 +1,5 @@
+//go:build !flavor_tiny && !flavor_ntr
+
 package trace
 
 import (
@@ -13,129 +15,137 @@ import (
 	"github.com/nxtrace/NTrace-core/util"
 )
 
-type GlobalpingOptions struct {
-	Target  string
-	From    string
-	IPv4    bool
-	IPv6    bool
-	TCP     bool
-	UDP     bool
-	Port    int
-	Packets int
-	MaxHops int
-
-	DisableMaptrace bool
-	DataOrigin      string
-
-	TablePrint   bool
-	ClassicPrint bool
-	RawPrint     bool
-	JSONPrint    bool
+func GlobalpingTraceroute(opts *GlobalpingOptions, config *Config) (*Result, *globalping.Measurement, error) {
+	client := newGlobalpingClient()
+	measurement, err := createGlobalpingMeasurement(client, buildGlobalpingMeasurement(opts))
+	if err != nil {
+		return nil, nil, err
+	}
+	gpHops, err := decodeGlobalpingMeasurementHops(measurement)
+	if err != nil {
+		return nil, measurement, err
+	}
+	limit := resolveGlobalpingHopLimit(opts, config, len(gpHops))
+	return buildGlobalpingResult(gpHops, limit, config), measurement, nil
 }
 
-func GlobalpingTraceroute(opts *GlobalpingOptions, config *Config) (*Result, *globalping.Measurement, error) {
-	c := globalping.Config{
+func newGlobalpingClient() globalping.Client {
+	cfg := globalping.Config{
 		UserAgent: "NextTrace/" + _config.Version,
 	}
 	if util.GlobalpingToken != "" {
-		c.AuthToken = &globalping.Token{
+		cfg.AuthToken = &globalping.Token{
 			AccessToken: util.GlobalpingToken,
 			Expiry:      time.Now().Add(math.MaxInt64),
 		}
 	}
-	client := globalping.NewClient(c)
+	return globalping.NewClient(cfg)
+}
 
-	o := &globalping.MeasurementCreate{
+func buildGlobalpingMeasurement(opts *GlobalpingOptions) *globalping.MeasurementCreate {
+	req := &globalping.MeasurementCreate{
 		Type:   "mtr",
 		Target: opts.Target,
 		Limit:  1,
-		Locations: []globalping.Locations{
-			{
-				Magic: opts.From,
-			},
-		},
+		Locations: []globalping.Locations{{
+			Magic: opts.From,
+		}},
 		Options: &globalping.MeasurementOptions{
-			Port:    uint16(opts.Port),
-			Packets: opts.Packets,
+			Port:     uint16(opts.Port),
+			Packets:  opts.Packets,
+			Protocol: globalpingProtocol(opts),
 		},
 	}
+	assignGlobalpingIPVersion(req.Options, opts)
+	return req
+}
 
-	if opts.TCP {
-		o.Options.Protocol = "TCP"
-	} else if opts.UDP {
-		o.Options.Protocol = "UDP"
-	} else {
-		o.Options.Protocol = "ICMP"
+func globalpingProtocol(opts *GlobalpingOptions) string {
+	switch {
+	case opts.TCP:
+		return "TCP"
+	case opts.UDP:
+		return "UDP"
+	default:
+		return "ICMP"
 	}
+}
 
+func assignGlobalpingIPVersion(options *globalping.MeasurementOptions, opts *GlobalpingOptions) {
 	switch {
 	case opts.IPv4 && !opts.IPv6:
-		o.Options.IPVersion = globalping.IPVersion4
+		options.IPVersion = globalping.IPVersion4
 	case opts.IPv6 && !opts.IPv4:
-		o.Options.IPVersion = globalping.IPVersion6
-	default:
-		// 两者均未指定或同时为 true：不设 IPVersion，交由平台选路
+		options.IPVersion = globalping.IPVersion6
 	}
+}
 
-	res, err := client.CreateMeasurement(o)
+func createGlobalpingMeasurement(client globalping.Client, req *globalping.MeasurementCreate) (*globalping.Measurement, error) {
+	res, err := client.CreateMeasurement(req)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
+	return client.AwaitMeasurement(res.ID)
+}
 
-	measurement, err := client.AwaitMeasurement(res.ID)
-	if err != nil {
-		return nil, nil, err
-	}
-
+func decodeGlobalpingMeasurementHops(measurement *globalping.Measurement) ([]globalping.MTRHop, error) {
 	if measurement.Status != globalping.StatusFinished {
-		return nil, nil, fmt.Errorf("measurement did not complete successfully: %s", measurement.Status)
+		return nil, fmt.Errorf("measurement did not complete successfully: %s", measurement.Status)
 	}
-
 	if len(measurement.Results) == 0 {
-		return nil, measurement, fmt.Errorf("globalping measurement returned no probe results")
+		return nil, fmt.Errorf("globalping measurement returned no probe results")
 	}
-
 	firstResult := measurement.Results[0]
 	if len(firstResult.Result.HopsRaw) == 0 {
-		return nil, measurement, fmt.Errorf("globalping measurement results did not include hop data")
+		return nil, fmt.Errorf("globalping measurement results did not include hop data")
 	}
+	return globalping.DecodeMTRHops(firstResult.Result.HopsRaw)
+}
 
-	gpHops, err := globalping.DecodeMTRHops(firstResult.Result.HopsRaw)
-	if err != nil {
-		return nil, nil, err
-	}
-
+func resolveGlobalpingHopLimit(opts *GlobalpingOptions, config *Config, total int) int {
 	limit := opts.MaxHops
 	if limit <= 0 && config != nil && config.MaxHops > 0 {
 		limit = config.MaxHops
 	}
-	if limit <= 0 || limit > len(gpHops) {
-		limit = len(gpHops)
+	if limit <= 0 || limit > total {
+		return total
 	}
+	return limit
+}
 
+func buildGlobalpingResult(gpHops []globalping.MTRHop, limit int, config *Config) *Result {
 	result := &Result{}
 	geoMap := map[string]*ipgeo.IPGeoData{}
-	maxTimings := 1
+	maxTimings := maxGlobalpingTimings(gpHops, limit)
+	for i := 0; i < limit; i++ {
+		result.Hops = append(result.Hops, buildGlobalpingTTLHops(i+1, &gpHops[i], maxTimings, geoMap, config))
+	}
+	return result
+}
 
+func maxGlobalpingTimings(gpHops []globalping.MTRHop, limit int) int {
+	maxTimings := 1
 	for i := 0; i < limit; i++ {
 		if count := len(gpHops[i].Timings); count > maxTimings {
 			maxTimings = count
 		}
 	}
-	for i := 0; i < limit; i++ {
-		hops := make([]Hop, 0, maxTimings)
-		for j := 0; j < maxTimings; j++ {
-			var timing *globalping.MTRTiming
-			if j < len(gpHops[i].Timings) {
-				timing = &gpHops[i].Timings[j]
-			}
-			hop := mapGlobalpingHop(i+1, &gpHops[i], timing, geoMap, config)
-			hops = append(hops, hop)
-		}
-		result.Hops = append(result.Hops, hops)
-	}
+	return maxTimings
+}
 
-	return result, measurement, nil
+func buildGlobalpingTTLHops(ttl int, gpHop *globalping.MTRHop, maxTimings int, geoMap map[string]*ipgeo.IPGeoData, config *Config) []Hop {
+	hops := make([]Hop, 0, maxTimings)
+	for j := 0; j < maxTimings; j++ {
+		hops = append(hops, mapGlobalpingHop(ttl, gpHop, globalpingTimingAt(gpHop, j), geoMap, config))
+	}
+	return hops
+}
+
+func globalpingTimingAt(gpHop *globalping.MTRHop, index int) *globalping.MTRTiming {
+	if index >= len(gpHop.Timings) {
+		return nil
+	}
+	return &gpHop.Timings[index]
 }
 
 func mapGlobalpingHop(ttl int, gpHop *globalping.MTRHop, timing *globalping.MTRTiming, geoMap map[string]*ipgeo.IPGeoData, config *Config) Hop {
@@ -179,48 +189,61 @@ func mapGlobalpingHop(ttl int, gpHop *globalping.MTRHop, timing *globalping.MTRT
 	return hop
 }
 
+func hasGlobalpingProbeLocation(probe globalping.ProbeDetails) bool {
+	return probe.City != "" ||
+		probe.State != "" ||
+		probe.Country != "" ||
+		probe.Continent != "" ||
+		probe.Network != "" ||
+		probe.ASN != 0
+}
+
+func formatGlobalpingCity(probe globalping.ProbeDetails) string {
+	if probe.City != "" && probe.State != "" {
+		return probe.City + " (" + probe.State + ")"
+	}
+	if probe.City != "" {
+		return probe.City
+	}
+	return probe.State
+}
+
+func formatGlobalpingNetwork(probe globalping.ProbeDetails) string {
+	network := strings.TrimSpace(probe.Network)
+	if network != "" && probe.ASN != 0 {
+		return network + " (AS" + fmt.Sprint(probe.ASN) + ")"
+	}
+	if network != "" {
+		return network
+	}
+	if probe.ASN != 0 {
+		return "(AS" + fmt.Sprint(probe.ASN) + ")"
+	}
+	return ""
+}
+
+func appendGlobalpingPart(parts []string, value string) []string {
+	if value == "" {
+		return parts
+	}
+	return append(parts, value)
+}
+
 func GlobalpingFormatLocation(m *globalping.ProbeMeasurement) string {
 	if m == nil {
 		return ""
 	}
 
 	probe := m.Probe
-	if probe.City == "" &&
-		probe.State == "" &&
-		probe.Country == "" &&
-		probe.Continent == "" &&
-		probe.Network == "" &&
-		probe.ASN == 0 {
+	if !hasGlobalpingProbeLocation(probe) {
 		return ""
 	}
 
 	var parts []string
-
-	city := probe.City
-	if city != "" && probe.State != "" {
-		city += " (" + probe.State + ")"
-	} else if city == "" && probe.State != "" {
-		city = probe.State
-	}
-	if city != "" {
-		parts = append(parts, city)
-	}
-	if probe.Country != "" {
-		parts = append(parts, probe.Country)
-	}
-	if probe.Continent != "" {
-		parts = append(parts, probe.Continent)
-	}
-
-	network := strings.TrimSpace(probe.Network)
-	if network != "" {
-		if probe.ASN != 0 {
-			network += " (AS" + fmt.Sprint(probe.ASN) + ")"
-		}
-		parts = append(parts, network)
-	} else if probe.ASN != 0 {
-		parts = append(parts, "(AS"+fmt.Sprint(probe.ASN)+")")
-	}
+	parts = appendGlobalpingPart(parts, formatGlobalpingCity(probe))
+	parts = appendGlobalpingPart(parts, probe.Country)
+	parts = appendGlobalpingPart(parts, probe.Continent)
+	parts = appendGlobalpingPart(parts, formatGlobalpingNetwork(probe))
 
 	return strings.Join(parts, ", ")
 }

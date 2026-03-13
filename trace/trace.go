@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -30,10 +31,12 @@ var (
 )
 
 type Config struct {
+	Context          context.Context
 	OSType           int
 	ICMPMode         int
 	SrcAddr          string
 	SrcPort          int
+	SourceDevice     string
 	BeginHop         int
 	MaxHops          int
 	NumMeasurements  int
@@ -54,6 +57,7 @@ type Config struct {
 	AsyncPrinter     func(res *Result)
 	PktSize          int
 	Maptrace         bool
+	DisableMPLS      bool
 }
 
 type Method string
@@ -93,94 +97,141 @@ type Tracer interface {
 	Execute() (*Result, error)
 }
 
-func Traceroute(method Method, config Config) (*Result, error) {
-	var tracer Tracer
-
+func applyTracerouteDefaults(config *Config) {
+	if config == nil {
+		return
+	}
 	if config.MaxHops == 0 {
 		config.MaxHops = 30
 	}
-
+	if config.PktSize < 0 {
+		config.PktSize = 0
+	}
 	if config.NumMeasurements == 0 {
 		config.NumMeasurements = 3
 	}
-
 	if config.ParallelRequests == 0 {
 		config.ParallelRequests = config.NumMeasurements * 5
 	}
+}
 
-	// 若 CLI 未给或给了非正数，则尝试用环境变量
+func normalizeICMPMode(config *Config) {
+	if config == nil {
+		return
+	}
 	if config.ICMPMode <= 0 && util.EnvICMPMode > 0 {
 		config.ICMPMode = util.EnvICMPMode
 	}
-
 	switch config.ICMPMode {
 	case 0, 1, 2:
-		// 合法，保持不变
 	default:
-		// 非法输入一律回退到 Auto
 		config.ICMPMode = 0
 	}
+}
 
-	// 若 CLI 未给或给了非正数，则尝试用环境变量
+func deriveMaxAttempts(config *Config) {
+	if config == nil {
+		return
+	}
 	if config.MaxAttempts <= 0 && util.EnvMaxAttempts > 0 {
 		config.MaxAttempts = util.EnvMaxAttempts
 	}
-
-	if config.MaxAttempts <= 0 || config.MaxAttempts < config.NumMeasurements {
-		n := config.NumMeasurements
-		switch {
-		case n <= 2 || n >= 10:
-			config.MaxAttempts = n // 1–2 或 ≥10 → n
-		case n <= 6:
-			config.MaxAttempts = n + 3 // 3–6 → n+3
-		default:
-			config.MaxAttempts = 10 // 7–9 → 10
-		}
+	if config.MaxAttempts > 0 && config.MaxAttempts >= config.NumMeasurements {
+		return
 	}
 
+	n := config.NumMeasurements
+	switch {
+	case n <= 2 || n >= 10:
+		config.MaxAttempts = n
+	case n <= 6:
+		config.MaxAttempts = n + 3
+	default:
+		config.MaxAttempts = 10
+	}
+}
+
+func selectTracer(method Method, config Config) (Tracer, error) {
+	isIPv4 := config.DstIP.To4() != nil
 	switch method {
 	case ICMPTrace:
-		if config.DstIP.To4() != nil {
-			tracer = &ICMPTracer{Config: config}
-		} else {
-			tracer = &ICMPTracerv6{Config: config}
+		if isIPv4 {
+			return &ICMPTracer{Config: config}, nil
 		}
+		return &ICMPTracerv6{Config: config}, nil
 	case UDPTrace:
-		if config.DstIP.To4() != nil {
-			tracer = &UDPTracer{Config: config}
-		} else {
-			tracer = &UDPTracerIPv6{Config: config}
+		if isIPv4 {
+			return &UDPTracer{Config: config}, nil
 		}
+		return &UDPTracerIPv6{Config: config}, nil
 	case TCPTrace:
-		if config.DstIP.To4() != nil {
-			tracer = &TCPTracer{Config: config}
-		} else {
-			tracer = &TCPTracerIPv6{Config: config}
+		if isIPv4 {
+			return &TCPTracer{Config: config}, nil
 		}
+		return &TCPTracerIPv6{Config: config}, nil
 	default:
-		return &Result{}, errInvalidMethod
+		return nil, errInvalidMethod
+	}
+}
+
+func waitForPendingGeoData(result *Result) {
+	if result == nil {
+		return
+	}
+	done := make(chan struct{})
+	go func() {
+		result.geoWG.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+		// Signal workers to skip updateHop, then mark pending as timed out.
+		result.geoCanceled.Store(true)
+		result.markAllPendingGeoTimeout()
+		// Wait for in-flight workers to finish so Result is stable on return.
+		result.geoWG.Wait()
+	}
+}
+
+func Traceroute(method Method, config Config) (*Result, error) {
+	normalizeRuntimeConfig(&config)
+	applyTracerouteDefaults(&config)
+	normalizeICMPMode(&config)
+	deriveMaxAttempts(&config)
+
+	tracer, err := selectTracer(method, config)
+	if err != nil {
+		return &Result{}, err
 	}
 
 	result, err := tracer.Execute()
 	if err != nil && errors.Is(err, syscall.EPERM) {
 		err = fmt.Errorf("%w, please run as root", err)
 	}
-	if result != nil {
-		// 等待所有异步 Geo 查询完成，最多等 30 秒
-		done := make(chan struct{})
-		go func() {
-			result.geoWG.Wait()
-			close(done)
-		}()
-		select {
-		case <-done:
-			// 正常完成
-		case <-time.After(30 * time.Second):
-			// 超时，将所有剩余 pending geo 标记为 timeout
-			result.markAllPendingGeoTimeout()
-		}
-	}
+	waitForPendingGeoData(result)
 	return result, err
+}
+
+func TracerouteWithContext(ctx context.Context, method Method, config Config) (*Result, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	config.Context = ctx
+	return Traceroute(method, config)
+}
+
+func normalizeRuntimeConfig(config *Config) {
+	if config == nil {
+		return
+	}
+	if config.SourceDevice == "" && util.SrcDev != "" {
+		config.SourceDevice = util.SrcDev
+	}
+	if config.PktSize < 0 {
+		config.PktSize = 0
+	}
 }
 
 type Result struct {
@@ -190,6 +241,7 @@ type Result struct {
 	TraceMapUrl string
 	geoWait     time.Duration
 	geoWG       sync.WaitGroup
+	geoCanceled atomic.Bool
 }
 
 const PendingGeoSource = "pending"
@@ -473,177 +525,151 @@ func (s *Result) addWithGeoAsync(hop Hop, attemptIdx, numMeasurements, maxAttemp
 	go func(ttl, idx int, h Hop) {
 		defer s.geoWG.Done()
 		_ = h.fetchIPData(cfg)
-		s.updateHop(ttl, idx, h)
+		if !s.geoCanceled.Load() {
+			s.updateHop(ttl, idx, h)
+		}
 	}(hop.TTL, idx, hop)
 }
 
-func (h *Hop) fetchIPData(c Config) error {
-	ipStr := h.Address.String()
-	// DN42
-	if c.DN42 {
-		var combined string
-		if c.RDNS && h.Hostname == "" {
-			// singleflight 避免同一 IP 并发重复查询 PTR
-			v, _, _ := rDNSSF.Do(ipStr, func() (any, error) {
-				return util.LookupAddr(ipStr)
-			})
-			if ptrs, _ := v.([]string); len(ptrs) > 0 {
-				h.Hostname = CanonicalHostname(ptrs[0])
-				combined = ipStr + "," + h.Hostname
-			}
+func geoLookupMaxRetries(numMeasurements int) int {
+	maxRetries := numMeasurements - 1
+	if maxRetries < 0 {
+		return 0
+	}
+	if maxRetries > 5 {
+		return 5
+	}
+	return maxRetries
+}
+
+func geoTimeoutForAttempt(attempt int) time.Duration {
+	timeout := 2 + attempt
+	if timeout > 6 {
+		timeout = 6
+	}
+	return time.Duration(timeout) * time.Second
+}
+
+func lookupGeoWithRetry(c Config, cacheKey, query string, dn42 bool) (*ipgeo.IPGeoData, error) {
+	if cacheVal, ok := geoCache.Load(cacheKey); ok {
+		if g, ok := cacheVal.(*ipgeo.IPGeoData); ok && g != nil {
+			return g, nil
 		}
-		if combined == "" {
-			combined = ipStr
+	}
+
+	typeErr := "ipgeo: nil or bad type from singleflight"
+	lookupErr := "ipgeo: lookup failed without specific error"
+	if dn42 {
+		typeErr += " (DN42)"
+		lookupErr += " (DN42)"
+	}
+
+	var lastErr error
+	for attempt := 0; attempt <= geoLookupMaxRetries(c.NumMeasurements); attempt++ {
+		timeout := geoTimeoutForAttempt(attempt)
+		v, err, _ := ipGeoSF.Do(cacheKey, func() (any, error) {
+			return c.IPGeoSource(query, timeout, c.Lang, c.Maptrace)
+		})
+		if err != nil {
+			lastErr = err
+			continue
 		}
 
-		if c.IPGeoSource != nil {
-			// 如果缓存中已有结果，直接使用
-			if cacheVal, ok := geoCache.Load(combined); ok {
-				if g, ok := cacheVal.(*ipgeo.IPGeoData); ok && g != nil {
-					h.Geo = g
-					return nil
-				}
-			}
-			// singleflight 合并相同 key 的并发查询
-			maxRetries := c.NumMeasurements - 1
-			if maxRetries < 0 {
-				maxRetries = 0
-			}
-			if maxRetries > 5 {
-				maxRetries = 5
-			}
-
-			var lastErr error
-			for attempt := 0; attempt <= maxRetries; attempt++ {
-				// 超时：2s 起，每次 +1s，上限 6s
-				timeout := time.Duration(2+attempt) * time.Second
-				if timeout > 6*time.Second {
-					timeout = 6 * time.Second
-				}
-
-				v, err, _ := ipGeoSF.Do(combined, func() (any, error) {
-					return c.IPGeoSource(combined, timeout, c.Lang, c.Maptrace)
-				})
-				if err != nil {
-					lastErr = err
-					continue
-				}
-
-				geo, ok := v.(*ipgeo.IPGeoData)
-				if !ok || geo == nil {
-					lastErr = errors.New("ipgeo: nil or bad type from singleflight (DN42)")
-					continue
-				}
-
-				// 成功：写入结果与缓存，结束
-				h.Geo = geo
-				geoCache.Store(combined, h.Geo)
-				return nil
-			}
-			// 所有尝试均失败
-			if lastErr == nil {
-				lastErr = errors.New("ipgeo: lookup failed without specific error (DN42)")
-			}
-			h.Geo = timeoutGeo()
-			return lastErr
+		geo, ok := v.(*ipgeo.IPGeoData)
+		if !ok || geo == nil {
+			lastErr = errors.New(typeErr)
+			continue
 		}
+
+		geoCache.Store(cacheKey, geo)
+		return geo, nil
+	}
+
+	if lastErr == nil {
+		lastErr = errors.New(lookupErr)
+	}
+	return nil, lastErr
+}
+
+func lookupPTR(ipStr string) []string {
+	v, _, _ := rDNSSF.Do(ipStr, func() (any, error) {
+		return util.LookupAddr(ipStr)
+	})
+	if ptrs, _ := v.([]string); len(ptrs) > 0 {
+		return ptrs
+	}
+	return nil
+}
+
+func applyPTRResult(h *Hop, ptrs []string) {
+	if len(ptrs) > 0 {
+		h.Hostname = CanonicalHostname(ptrs[0])
+	}
+}
+
+func startPTRLookup(ipStr string) <-chan []string {
+	rDNSCh := make(chan []string, 1)
+	go func() {
+		select {
+		case rDNSCh <- lookupPTR(ipStr):
+		default:
+		}
+	}()
+	return rDNSCh
+}
+
+func (h *Hop) resolveDN42Metadata(c Config, ipStr string) error {
+	combined := ipStr
+	if c.RDNS && h.Hostname == "" {
+		applyPTRResult(h, lookupPTR(ipStr))
+		if h.Hostname != "" {
+			combined = ipStr + "," + h.Hostname
+		}
+	}
+	if c.IPGeoSource == nil {
 		return nil
 	}
-	// 地理信息查询：快速路径 -> 缓存 -> singleflight
+
+	geo, err := lookupGeoWithRetry(c, combined, combined, true)
+	if err != nil {
+		h.Geo = timeoutGeo()
+		return err
+	}
+	h.Geo = geo
+	return nil
+}
+
+func (h *Hop) startGeoLookup(c Config, ipStr string) <-chan error {
 	ipGeoCh := make(chan error, 1)
 	go func() {
 		if c.IPGeoSource == nil || (h.Geo != nil && !isPendingGeo(h.Geo)) {
 			ipGeoCh <- nil
 			return
 		}
+
 		h.Lang = c.Lang
-		// (1) 本地快速路径
 		if g, ok := ipgeo.Filter(ipStr); ok {
 			h.Geo = g
 			ipGeoCh <- nil
 			return
 		}
-		// (2) 如果缓存中已有结果，直接使用
-		if cacheVal, ok := geoCache.Load(ipStr); ok {
-			if g, ok := cacheVal.(*ipgeo.IPGeoData); ok && g != nil {
-				h.Geo = g
-				ipGeoCh <- nil
-				return
-			}
-		}
-		// (3) singleflight 去重
-		maxRetries := c.NumMeasurements - 1
-		if maxRetries < 0 {
-			maxRetries = 0
-		}
-		if maxRetries > 5 {
-			maxRetries = 5
-		}
 
-		var lastErr error
-		for attempt := 0; attempt <= maxRetries; attempt++ {
-			// 超时：2s 起，每次 +1s，上限 6s
-			timeout := time.Duration(2+attempt) * time.Second
-			if timeout > 6*time.Second {
-				timeout = 6 * time.Second
-			}
-
-			v, err, _ := ipGeoSF.Do(ipStr, func() (any, error) {
-				return c.IPGeoSource(ipStr, timeout, c.Lang, c.Maptrace)
-			})
-			if err != nil {
-				lastErr = err
-				continue
-			}
-
-			geo, ok := v.(*ipgeo.IPGeoData)
-			if !ok || geo == nil {
-				lastErr = errors.New("ipgeo: nil or bad type from singleflight")
-				continue
-			}
-
-			// 成功：写入结果与缓存，结束
+		geo, err := lookupGeoWithRetry(c, ipStr, ipStr, false)
+		if err == nil {
 			h.Geo = geo
-			geoCache.Store(ipStr, h.Geo)
-			ipGeoCh <- nil
-			return
 		}
-		// 所有尝试均失败
-		if lastErr == nil {
-			lastErr = errors.New("ipgeo: lookup failed without specific error")
-		}
-		ipGeoCh <- lastErr
+		ipGeoCh <- err
 	}()
+	return ipGeoCh
+}
 
-	rDNSStarted := c.RDNS && h.Hostname == ""
-	rDNSCh := make(chan []string, 1)
-	if rDNSStarted {
-		go func() {
-			v, _, _ := rDNSSF.Do(ipStr, func() (any, error) {
-				return util.LookupAddr(ipStr)
-			})
-			var ptrs []string
-			if p, _ := v.([]string); len(p) > 0 {
-				ptrs = p
-			}
-			// 非阻塞发送：没人收或通道已满就丢弃，保证不阻塞
-			select {
-			case rDNSCh <- ptrs:
-			default:
-			}
-		}()
-	}
-
+func (h *Hop) waitForGeoAndPTR(c Config, ipGeoCh <-chan error, rDNSStarted bool, rDNSCh <-chan []string) error {
 	if c.AlwaysWaitRDNS {
-		// 必须等 PTR（1s 超时），然后再确保 IPGeo 完成
 		if rDNSStarted {
 			select {
 			case ptrs := <-rDNSCh:
-				if len(ptrs) > 0 {
-					h.Hostname = CanonicalHostname(ptrs[0])
-				}
+				applyPTRResult(h, ptrs)
 			case <-time.After(1 * time.Second):
-				// 超时不阻塞
 			}
 		}
 		err := <-ipGeoCh
@@ -652,20 +678,16 @@ func (h *Hop) fetchIPData(c Config) error {
 		}
 		return err
 	}
-	// 非强制等待 PTR：依据率先完成者决定是否还等 PTR
+
 	if rDNSStarted {
 		select {
 		case err := <-ipGeoCh:
-			// 地理信息先完成：不再等待 PTR
 			if err != nil {
 				h.Geo = timeoutGeo()
 			}
 			return err
 		case ptrs := <-rDNSCh:
-			if len(ptrs) > 0 {
-				h.Hostname = CanonicalHostname(ptrs[0])
-			}
-			// 然后等待 IPGeo 完成
+			applyPTRResult(h, ptrs)
 			err := <-ipGeoCh
 			if err != nil {
 				h.Geo = timeoutGeo()
@@ -673,12 +695,27 @@ func (h *Hop) fetchIPData(c Config) error {
 			return err
 		}
 	}
-	// 未启动 rDNS，只需等待地理信息
+
 	err := <-ipGeoCh
 	if err != nil {
 		h.Geo = timeoutGeo()
 	}
 	return err
+}
+
+func (h *Hop) fetchIPData(c Config) error {
+	ipStr := h.Address.String()
+	if c.DN42 {
+		return h.resolveDN42Metadata(c, ipStr)
+	}
+
+	ipGeoCh := h.startGeoLookup(c, ipStr)
+	rDNSStarted := c.RDNS && h.Hostname == ""
+	var rDNSCh <-chan []string
+	if rDNSStarted {
+		rDNSCh = startPTRLookup(ipStr)
+	}
+	return h.waitForGeoAndPTR(c, ipGeoCh, rDNSStarted, rDNSCh)
 }
 
 // parse 安全解析十六进制子串 s 为无符号整数
@@ -725,8 +762,8 @@ func findValid(hexStr string) string {
 	return ""
 }
 
-func extractMPLS(msg internal.ReceivedMessage) []string {
-	if util.DisableMPLS {
+func extractMPLS(msg internal.ReceivedMessage, disableMPLS bool) []string {
+	if disableMPLS {
 		return nil
 	}
 

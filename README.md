@@ -15,14 +15,14 @@
 <h6 align="center">HomePage: www.nxtrace.org</h6>
 
 <p align="center">
-  <a href="https://github.com/nxtrace/NTrace-V1/actions">
-    <img src="https://img.shields.io/github/actions/workflow/status/nxtrace/NTrace-V1/build.yml?branch=main&style=flat-square" alt="Github Actions">
+  <a href="https://github.com/nxtrace/NTrace-dev/actions">
+    <img src="https://img.shields.io/github/actions/workflow/status/nxtrace/NTrace-dev/build.yml?branch=main&style=flat-square" alt="Github Actions">
   </a>
-  <a href="https://goreportcard.com/report/github.com/nxtrace/NTrace-V1">
-    <img src="https://goreportcard.com/badge/github.com/nxtrace/NTrace-V1?style=flat-square">
+  <a href="https://goreportcard.com/report/github.com/nxtrace/NTrace-dev">
+    <img src="https://goreportcard.com/badge/github.com/nxtrace/NTrace-dev?style=flat-square">
   </a>
-  <a href="https://github.com/nxtrace/NTrace-V1/releases">
-    <img src="https://img.shields.io/github/release/nxtrace/NTrace-V1/all.svg?style=flat-square">
+  <a href="https://github.com/nxtrace/NTrace-dev/releases">
+    <img src="https://img.shields.io/github/release/nxtrace/NTrace-dev/all.svg?style=flat-square">
   </a>
 </p>
 
@@ -48,10 +48,10 @@ We are extremely grateful to [DMIT](https://dmit.io), [Misaka](https://misaka.io
 
 Document Language: English | [简体中文](README_zh_CN.md)
 
-⚠️ Please note: We welcome PR submissions from the community, but please submit your PRs to the [NTrace-V1](https://github.com/nxtrace/NTrace-V1) repository instead of [NTrace-core](https://github.com/nxtrace/NTrace-core) repository.<br>
-Regarding the NTrace-V1 and NTrace-core repositories:<br>
-Both will largely remain consistent with each other. All development work is done within the NTrace-V1 repository. The NTrace-V1 repository releases new versions first. After running stably for an undetermined period, we will synchronize that version to NTrace-core. This means that the NTrace-V1 repository serves as a "beta" or "testing" version.<br>
-Please note, there are exceptions to this synchronization. If a version of NTrace-V1 encounters a serious bug, NTrace-core will skip that flawed version and synchronize directly to the next version that resolves the issue.
+⚠️ Please note: We welcome PR submissions from the community, but please submit your PRs to the [NTrace-dev](https://github.com/nxtrace/NTrace-dev) repository instead of [NTrace-core](https://github.com/nxtrace/NTrace-core) repository.<br>
+Regarding the NTrace-dev and NTrace-core repositories:<br>
+Both will largely remain consistent with each other. All development work is done within the NTrace-dev repository. The NTrace-dev repository releases new versions first. After running stably for an undetermined period, we will synchronize that version to NTrace-core. This means that the NTrace-dev repository serves as a "beta" or "testing" version.<br>
+Please note, there are exceptions to this synchronization. If a version of NTrace-dev encounters a serious bug, NTrace-core will skip that flawed version and synchronize directly to the next version that resolves the issue.
 
 ### Automated Install
 
@@ -146,6 +146,79 @@ Please note, the repositories for all of the above installation methods are main
   For users not covered by the above methods, please go directly to [Release](https://www.nxtrace.org/downloads) to download the compiled binary executable.
   - `Release` provides compiled binary executables for many systems and different architectures. If none are available, you can compile it yourself.
   - Some essential dependencies of this project are not fully implemented on `Windows` by `Golang`, so currently, `NextTrace` is in an experimental support phase on the `Windows` platform.
+
+### Build Variants
+
+Starting from this release, NextTrace is published in **three flavors** under the same tag. Choose the one that best fits your use case:
+
+| Feature               | `nexttrace` (Full) | `nexttrace-tiny` |    `ntr`     |
+| --------------------- | :----------------: | :--------------: | :----------: |
+| Normal traceroute     |         ✅         |        ✅        |      —       |
+| MTR TUI               |         ✅         |        —         | ✅ (default) |
+| MTR report (`-r`)     |         ✅         |        —         |      ✅      |
+| MTR wide (`-w`)       |         ✅         |        —         |      ✅      |
+| MTR raw (`--raw`)     |         ✅         |        —         |      ✅      |
+| Globalping (`--from`) |         ✅         |        —         |      —       |
+| WebUI (`--deploy`)    |         ✅         |        —         |      —       |
+| Fast Trace (`-F`)     |         ✅         |        ✅        |      —       |
+| Default mode          |     traceroute     |    traceroute    |   MTR TUI    |
+| Binary name           |    `nexttrace`     | `nexttrace-tiny` |    `ntr`     |
+
+> **Note:** Package managers (Homebrew, AUR, Scoop, etc.) currently install the **Full** (`nexttrace`) version only.
+
+### Feature Matrix
+
+- **`nexttrace`** — Full-featured build. Includes everything: traceroute, MTR, Globalping, and WebUI.
+- **`nexttrace-tiny`** — Lightweight build. Normal traceroute only, no MTR / Globalping / WebUI. Suitable for embedded or minimal environments.
+- **`ntr`** — MTR-focused build. Runs MTR TUI by default. No Globalping / WebUI; no normal traceroute mode.
+
+### Manual Build
+
+Build from source with Go 1.22+ installed:
+
+```bash
+# Full (all features)
+go build -trimpath -o dist/nexttrace -ldflags "-w -s" .
+
+# Tiny (no MTR, no Globalping, no WebUI)
+go build -tags flavor_tiny -trimpath -o dist/nexttrace-tiny -ldflags "-w -s" .
+
+# NTR (MTR-only)
+go build -tags flavor_ntr -trimpath -o dist/ntr -ldflags "-w -s" .
+```
+
+Cross-compile example:
+
+```bash
+# Linux arm64, Tiny flavor
+GOOS=linux GOARCH=arm64 CGO_ENABLED=0 \
+  go build -tags flavor_tiny -trimpath -o dist/nexttrace-tiny_linux_arm64 -ldflags "-w -s" .
+```
+
+The `tiny` and `ntr` flavors use **compile-time build tags** to exclude modules — this is not a runtime switch. You can verify with `go version -m <binary>` that `gin` and `globalping-cli` are absent from `nexttrace-tiny` and `ntr`.
+
+The `.cross_compile.sh` script supports building flavors:
+
+```bash
+./.cross_compile.sh all     # Build all three flavors for all platforms
+./.cross_compile.sh full    # Build only nexttrace (Full)
+./.cross_compile.sh tiny    # Build only nexttrace-tiny
+./.cross_compile.sh ntr     # Build only ntr
+```
+
+### Release Assets Naming
+
+Release binaries follow this naming convention:
+
+```
+{binary}_{os}_{arch}[v{arm}][.exe][_softfloat]
+```
+
+Examples:
+
+- `nexttrace_linux_amd64`, `nexttrace-tiny_linux_amd64`, `ntr_linux_amd64`
+- `nexttrace_darwin_universal`, `nexttrace-tiny_darwin_universal`, `ntr_darwin_universal`
+- `nexttrace_windows_amd64.exe`, `ntr_windows_amd64.exe`
 
 ### Get Started
 
@@ -469,6 +542,55 @@ NextTrace `LeoMoeAPI` now utilizes the Proof of Work (POW) mechanism to prevent 
 
 All NextTrace IP geolocation `API DEMO` can refer to [here](https://github.com/nxtrace/NTrace-core/blob/main/ipgeo/)
 
+### Environment Variables
+
+NextTrace currently reads the following environment variables. For boolean switches, only `1` and `0` are recognized; other values fall back to the built-in default. For consistency, restart NextTrace after changing them.
+
+#### Core Runtime / Network
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `NEXTTRACE_DEVMODE` | `0` | Turn fatal errors into panics with stack traces for debugging. |
+| `NEXTTRACE_DEBUG` | unset | Print detected environment values while `GetEnv*` helpers parse them. |
+| `NEXTTRACE_DISABLEMPLS` | `0` | Disable MPLS display globally, similar to `--disable-mpls`. |
+| `NEXTTRACE_ENABLEHIDDENDSTIP` | `0` | Mask the destination IP and omit its hostname in output. |
+| `NEXTTRACE_RANDOMPORT` | `0` | Use a different random source port for each TCP/UDP probe. |
+| `NEXTTRACE_MAXATTEMPTS` | auto | Provide a default `--max-attempts` value when the CLI flag is not set. |
+| `NEXTTRACE_ICMPMODE` | `0` | Provide a default `--icmp-mode` value (`0=auto`, `1=socket`, `2=WinDivert` on Windows). |
+| `NEXTTRACE_UNINTERRUPTED` | `0` | When used together with `--raw`, rerun traceroute continuously instead of stopping after one round. |
+| `NEXTTRACE_PROXY` | unset | Outbound proxy URL for HTTP / WebSocket requests used by PoW, Geo APIs, tracemap, etc. |
+| `NEXTTRACE_DATAPROVIDER` | unset | Override the default IP geolocation provider (for example `ipinfo`). |
+
+#### Service / Web / Backend
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `NEXTTRACE_HOSTPORT` | `api.nxtrace.org` | Override the backend host or `host:port` used by LeoMoeAPI, tracemap, and FastIP flows. |
+| `NEXTTRACE_TOKEN` | unset | Pre-supplied LeoMoeAPI bearer token; when present, token fetching via PoW is skipped. |
+| `NEXTTRACE_POWPROVIDER` | `api.nxtrace.org` | Select the PoW provider. The built-in non-default alias is `sakura`. |
+| `NEXTTRACE_DEPLOY_ADDR` | unset | Default listen address for `--deploy` when `--listen` is not provided. |
+| `NEXTTRACE_ALLOW_CROSS_ORIGIN` | `0` | Only for `--deploy`: allow cross-origin browser access to the Web UI / API. Disabled by default for safety. |
+
+#### IP Database / Third-Party Providers
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `NEXTTRACE_IPINFOLOCALPATH` | auto search | Full path to `ipinfoLocal.mmdb` for the `IPInfoLocal` provider. |
+| `NEXTTRACE_CHUNZHENURL` | `http://127.0.0.1:2060` | Base URL of the Chunzhen lookup service. |
+| `NEXTTRACE_IPINFO_TOKEN` | unset | Token for the `IPInfo` provider. |
+| `NEXTTRACE_IPINSIGHT_TOKEN` | unset | Token for the `IPInsight` provider. |
+| `NEXTTRACE_IPAPI_BASE` | provider built-in URL | Override the base URL used by compatible IP API clients in the current implementation (`IPInfo`, `IPInsight`, `ip-api.com`). |
+| `IPDBONE_BASE_URL` | `https://api.ipdb.one` | Override the IPDB.One API base URL. |
+| `IPDBONE_API_ID` | unset | IPDB.One API ID. |
+| `IPDBONE_API_KEY` | unset | IPDB.One API key. |
+| `GLOBALPING_TOKEN` | unset | Authentication token for Globalping; raises the anonymous hourly limit when provided. |
+
+#### Config Discovery
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `XDG_CONFIG_HOME` | OS / shell default | If set, NextTrace also searches `$XDG_CONFIG_HOME/nexttrace` for `nt_config.yaml`. |
+
 ### For full usage list, please refer to the usage menu
 
 ```shell
@@ -707,7 +829,7 @@ This Project uses [JetBrain Open-Source Project License](https://jb.gg/OpenSourc
 
 - How to obtain the freshly baked binary executable of the latest commit?
 
-  > Please go to the most recent [Build & Release](https://github.com/nxtrace/NTrace-V1/actions/workflows/build.yml) workflow in GitHub Actions.
+  > Please go to the most recent [Build & Release](https://github.com/nxtrace/NTrace-dev/actions/workflows/build.yml) workflow in GitHub Actions.
 
 - Common questions
   - On Windows, ICMP mode requires manual firewall allowance for ICMP/ICMPv6

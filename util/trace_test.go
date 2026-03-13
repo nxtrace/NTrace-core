@@ -192,6 +192,22 @@ func TestGetICMPResponsePayload_IPv6_NoExtHeaders(t *testing.T) {
 	assert.Equal(t, []byte{0x11, 0x22, 0x33, 0x44}, payload)
 }
 
+func TestGetICMPResponsePayload_IPv6_WithHopByHopHeader(t *testing.T) {
+	pkt := make([]byte, 52)
+	pkt[0] = 0x60
+	pkt[6] = 0   // Hop-by-Hop
+	pkt[40] = 58 // Next Header: ICMPv6
+	pkt[41] = 0  // 8-byte extension header
+	pkt[48] = 0xAB
+	pkt[49] = 0xCD
+	pkt[50] = 0xEF
+	pkt[51] = 0x01
+
+	payload, err := GetICMPResponsePayload(pkt)
+	require.NoError(t, err)
+	assert.Equal(t, []byte{0xAB, 0xCD, 0xEF, 0x01}, payload)
+}
+
 func TestGetICMPResponsePayload_Empty(t *testing.T) {
 	_, err := GetICMPResponsePayload(nil)
 	assert.Error(t, err)

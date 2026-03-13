@@ -1,6 +1,6 @@
 module github.com/nxtrace/NTrace-core
 
-go 1.26.0
+go 1.26.1
 
 require (
 	github.com/akamensky/argparse v1.4.0
@@ -9,7 +9,7 @@ require (
 	github.com/google/gopacket v1.1.19
 	github.com/gorilla/websocket v1.5.3
 	github.com/jsdelivr/globalping-cli v1.5.1
-	github.com/mattn/go-runewidth v0.0.20
+	github.com/mattn/go-runewidth v0.0.21
 	github.com/oschwald/maxminddb-golang v1.13.1
 	github.com/rodaine/table v1.3.0
 	github.com/spf13/viper v1.21.0
@@ -19,8 +19,8 @@ require (
 	github.com/tsosunchia/powclient v0.2.0
 	github.com/xjasonlyu/windivert-go v0.0.0-20201010013527-4239d0afa76f
 	golang.org/x/net v0.51.0
-	golang.org/x/sync v0.19.0
-	golang.org/x/sys v0.41.0
+	golang.org/x/sync v0.20.0
+	golang.org/x/sys v0.42.0
 	golang.org/x/term v0.40.0
 )
 

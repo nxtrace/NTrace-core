@@ -12,22 +12,51 @@ type IPv4Fragment struct {
 	Body []byte
 }
 
-// GetMTUByIP 根据给定 IPv4/IPv6 源地址返回所属网卡 MTU，找不到返回 0
-func GetMTUByIP(srcIP net.IP) int {
-	// 若已指定网卡名，直接取该网卡的 MTU
-	if SrcDev != "" {
-		if ifi, err := net.InterfaceByName(SrcDev); err == nil && ifi != nil {
-			return ifi.MTU
-		}
+func getNamedDeviceMTU(srcDev string) (int, bool) {
+	if srcDev == "" {
+		return 0, false
+	}
+	if ifi, err := net.InterfaceByName(srcDev); err == nil && ifi != nil {
+		return ifi.MTU, true
+	}
+	return 0, false
+}
+
+func addressIP(addr net.Addr) net.IP {
+	switch value := addr.(type) {
+	case *net.IPNet:
+		return value.IP
+	case *net.IPAddr:
+		return value.IP
+	default:
+		return nil
+	}
+}
+
+func matchInterfaceIP(candidate, target net.IP, isIPv6 bool) bool {
+	if candidate == nil {
+		return false
+	}
+	if isIPv6 {
+		normalized := candidate.To16()
+		return normalized != nil && IsIPv6(candidate) && normalized.Equal(target)
+	}
+	normalized := candidate.To4()
+	return normalized != nil && normalized.Equal(target)
+}
+
+// GetMTUByIPForDevice 根据给定 IPv4/IPv6 源地址返回所属网卡 MTU，优先使用指定网卡名。
+func GetMTUByIPForDevice(srcIP net.IP, srcDev string) int {
+	if mtu, ok := getNamedDeviceMTU(srcDev); ok {
+		return mtu
 	}
 
 	is6 := IsIPv6(srcIP)
-
-	var v4, v6 net.IP
+	var targetIP net.IP
 	if is6 {
-		v6 = srcIP.To16()
+		targetIP = srcIP.To16()
 	} else {
-		v4 = srcIP.To4()
+		targetIP = srcIP.To4()
 	}
 
 	ifaces, err := net.Interfaces()
@@ -37,30 +66,17 @@ func GetMTUByIP(srcIP net.IP) int {
 	for _, ifi := range ifaces {
 		addrs, _ := ifi.Addrs()
 		for _, a := range addrs {
-			var got net.IP
-			switch v := a.(type) {
-			case *net.IPNet:
-				got = v.IP
-			case *net.IPAddr:
-				got = v.IP
-			default:
-				continue
-			}
-			if got == nil {
-				continue
-			}
-			if is6 {
-				if g := got.To16(); g != nil && IsIPv6(got) && g.Equal(v6) {
-					return ifi.MTU
-				}
-			} else {
-				if g := got.To4(); g != nil && g.Equal(v4) {
-					return ifi.MTU
-				}
+			if matchInterfaceIP(addressIP(a), targetIP, is6) {
+				return ifi.MTU
 			}
 		}
 	}
 	return 0
+}
+
+// GetMTUByIP 保持旧调用点兼容，优先使用全局 SrcDev。
+func GetMTUByIP(srcIP net.IP) int {
+	return GetMTUByIPForDevice(srcIP, SrcDev)
 }
 
 // IPv4Fragmentize 将 base（IPv4 头）与 body（IPv4 负载：传输层头+数据）按 mtu 进行 IP 层分片

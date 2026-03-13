@@ -1,11 +1,9 @@
 package trace
 
 import (
-	"math"
 	"sort"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/nxtrace/NTrace-core/ipgeo"
 )
@@ -77,124 +75,21 @@ func (agg *MTRAggregator) Update(res *Result, queries int) []MTRHopStat {
 	agg.mu.Lock()
 	defer agg.mu.Unlock()
 
-	if queries <= 0 {
-		queries = 1
+	if res == nil || len(res.Hops) == 0 {
+		return agg.snapshotLocked()
 	}
+
+	_ = queries
 
 	for idx, attempts := range res.Hops {
 		if len(attempts) == 0 {
 			continue
 		}
 		ttl := idx + 1
-		accMap := agg.stats[ttl]
-		if accMap == nil {
-			accMap = make(map[string]*mtrHopAccum)
-			agg.stats[ttl] = accMap
+		accMap := agg.accMapForTTLLocked(ttl)
+		for key, group := range groupMTRHopAttempts(attempts) {
+			agg.mergeGroupedHopLocked(ttl, accMap, key, group)
 		}
-
-		// 按 IP/Host 分组
-		type groupData struct {
-			host     string
-			ip       string
-			geo      *ipgeo.IPGeoData
-			sum      float64
-			sumSq    float64
-			last     float64
-			best     float64
-			worst    float64
-			received int
-			count    int
-			mpls     map[string]struct{}
-		}
-		groups := make(map[string]*groupData)
-
-		for _, attempt := range attempts {
-			host := strings.TrimSpace(attempt.Hostname)
-			var ip string
-			if attempt.Address != nil {
-				ip = strings.TrimSpace(attempt.Address.String())
-			}
-			key := mtrHopKey(ip, host)
-			g := groups[key]
-			if g == nil {
-				g = &groupData{
-					host: host,
-					ip:   ip,
-					best: math.MaxFloat64,
-				}
-				groups[key] = g
-			}
-			g.count++
-			if g.geo == nil && attempt.Geo != nil {
-				g.geo = attempt.Geo
-			}
-			if len(attempt.MPLS) > 0 {
-				if g.mpls == nil {
-					g.mpls = make(map[string]struct{})
-				}
-				for _, label := range attempt.MPLS {
-					val := strings.TrimSpace(label)
-					if val != "" {
-						g.mpls[val] = struct{}{}
-					}
-				}
-			}
-			if attempt.Success {
-				rttMs := float64(attempt.RTT) / float64(time.Millisecond)
-				g.sum += rttMs
-				g.sumSq += rttMs * rttMs
-				g.received++
-				g.last = rttMs
-				if rttMs > g.worst {
-					g.worst = rttMs
-				}
-				if rttMs > 0 && rttMs < g.best {
-					g.best = rttMs
-				}
-			}
-		}
-
-		for key, g := range groups {
-			acc := accMap[key]
-			if acc == nil {
-				acc = &mtrHopAccum{
-					ttl:     ttl,
-					key:     key,
-					best:    math.MaxFloat64,
-					order:   agg.nextOrder,
-					mplsSet: make(map[string]struct{}),
-				}
-				agg.nextOrder++
-				accMap[key] = acc
-			}
-			if g.ip != "" {
-				acc.ip = g.ip
-			}
-			if g.host != "" {
-				acc.host = g.host
-			}
-			if g.geo != nil {
-				acc.geo = g.geo
-			}
-			acc.sent += g.count
-			if g.received > 0 {
-				acc.sum += g.sum
-				acc.sumSq += g.sumSq
-				acc.received += g.received
-				acc.last = g.last
-				if g.best > 0 && (acc.best == math.MaxFloat64 || g.best < acc.best) {
-					acc.best = g.best
-				}
-				if g.worst > acc.worst {
-					acc.worst = g.worst
-				}
-			}
-			for label := range g.mpls {
-				acc.mplsSet[label] = struct{}{}
-			}
-		}
-
-		// 单路径归并：将 unknown 统计合并到唯一已知路径
 		mergeUnknownIntoSingleKnown(accMap)
 	}
 
@@ -231,86 +126,20 @@ func (agg *MTRAggregator) MigrateStats(fromTTL, toTTL, maxPerHop int) {
 		return
 	}
 
-	toMap := agg.stats[toTTL]
-	if toMap == nil {
-		toMap = make(map[string]*mtrHopAccum)
-		agg.stats[toTTL] = toMap
-	}
+	toMap := agg.accMapForTTLLocked(toTTL)
 
 	for key, src := range fromMap {
 		dst := toMap[key]
 		if dst == nil {
-			// Move directly, update TTL.
 			src.ttl = toTTL
 			toMap[key] = src
-		} else {
-			// Merge src into dst.
-			dst.sent += src.sent
-			dst.received += src.received
-			if src.received > 0 {
-				dst.sum += src.sum
-				dst.sumSq += src.sumSq
-				dst.last = src.last
-				if src.best > 0 && src.best < dst.best {
-					dst.best = src.best
-				}
-				if src.worst > dst.worst {
-					dst.worst = src.worst
-				}
-			}
-			if dst.geo == nil && src.geo != nil {
-				dst.geo = src.geo
-			}
-			if dst.host == "" && src.host != "" {
-				dst.host = src.host
-			}
-			if dst.ip == "" && src.ip != "" {
-				dst.ip = src.ip
-			}
-			for label := range src.mplsSet {
-				dst.mplsSet[label] = struct{}{}
-			}
+			continue
 		}
+		mergeMTRHopAccum(dst, src)
 	}
 
-	// Cap sent/received per accumulator so Snt never exceeds MaxPerHop.
-	// When received is reduced, recompute sum/sumSq to preserve both Avg
-	// and sample StDev. best/worst/last are extremes and remain untouched.
-	if maxPerHop > 0 {
-		for _, acc := range toMap {
-			if acc.sent > maxPerHop {
-				acc.sent = maxPerHop
-			}
-			if acc.received > acc.sent {
-				nOrig := float64(acc.received)
-				nNew := float64(acc.sent)
-				ratio := nNew / nOrig
-
-				// Preserve Avg: sum_new = sum_orig * ratio
-				sumNew := acc.sum * ratio
-
-				// Preserve sample variance: rebuild sumSq so that
-				//   (sumSq_new - sumNew²/nNew) / (nNew-1) == original variance
-				// SS is the sum-of-squared-deviations from the original data.
-				ss := acc.sumSq - (acc.sum*acc.sum)/nOrig
-				if ss < 0 {
-					ss = 0 // guard floating-point rounding
-				}
-
-				var sumSqNew float64
-				if nOrig > 1 && nNew > 1 {
-					// Scale SS by (nNew-1)/(nOrig-1) to keep variance intact.
-					sumSqNew = ss*(nNew-1)/(nOrig-1) + (sumNew*sumNew)/nNew
-				} else {
-					// n<=1: no meaningful variance; just keep avg-consistent sumSq.
-					sumSqNew = (sumNew * sumNew) / nNew
-				}
-
-				acc.sum = sumNew
-				acc.sumSq = sumSqNew
-				acc.received = acc.sent
-			}
-		}
+	for _, acc := range toMap {
+		capMTRHopAccum(acc, maxPerHop)
 	}
 
 	delete(agg.stats, fromTTL)
@@ -379,56 +208,7 @@ func (agg *MTRAggregator) snapshotLocked() []MTRHopStat {
 		})
 
 		for _, acc := range accs {
-			lossCount := acc.sent - acc.received
-			lossPct := 0.0
-			if acc.sent > 0 {
-				lossPct = float64(lossCount) / float64(acc.sent) * 100
-			}
-
-			best := acc.best
-			if best == math.MaxFloat64 {
-				best = 0
-			}
-
-			avg := 0.0
-			if acc.received > 0 {
-				avg = acc.sum / float64(acc.received)
-			}
-
-			stdev := 0.0
-			if acc.received > 1 {
-				// 样本标准差: sqrt( (ΣX² - (ΣX)²/n) / (n-1) )
-				n := float64(acc.received)
-				variance := (acc.sumSq - (acc.sum*acc.sum)/n) / (n - 1)
-				if variance > 0 {
-					stdev = math.Sqrt(variance)
-				}
-			}
-
-			var mpls []string
-			if len(acc.mplsSet) > 0 {
-				mpls = make([]string, 0, len(acc.mplsSet))
-				for k := range acc.mplsSet {
-					mpls = append(mpls, k)
-				}
-				sort.Strings(mpls)
-			}
-
-			rows = append(rows, MTRHopStat{
-				TTL:      acc.ttl,
-				Host:     acc.host,
-				IP:       acc.ip,
-				Loss:     lossPct,
-				Snt:      acc.sent,
-				Last:     acc.last,
-				Avg:      avg,
-				Best:     best,
-				Wrst:     acc.worst,
-				StDev:    stdev,
-				Geo:      acc.geo,
-				MPLS:     mpls,
-				Received: acc.received,
-			})
+			rows = append(rows, buildMTRHopStat(acc))
 		}
 	}
 	return rows
@@ -477,29 +257,6 @@ func mergeUnknownIntoSingleKnown(accMap map[string]*mtrHopAccum) {
 		return
 	}
 
-	// 归并统计
-	known.sent += unk.sent
-	known.received += unk.received
-	if unk.received > 0 {
-		known.sum += unk.sum
-		known.sumSq += unk.sumSq
-		known.last = unk.last
-		if unk.best > 0 && unk.best < known.best {
-			known.best = unk.best
-		}
-		if unk.worst > known.worst {
-			known.worst = unk.worst
-		}
-	}
-	if known.geo == nil && unk.geo != nil {
-		known.geo = unk.geo
-	}
-	for label := range unk.mplsSet {
-		if known.mplsSet == nil {
-			known.mplsSet = make(map[string]struct{})
-		}
-		known.mplsSet[label] = struct{}{}
-	}
-
+	mergeMTRHopAccum(known, unk)
 	delete(accMap, mtrUnknownKey)
 }

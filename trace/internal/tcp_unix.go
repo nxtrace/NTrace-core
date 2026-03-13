@@ -26,6 +26,7 @@ type TCPSpec struct {
 	DstIP        net.IP
 	DstPort      int
 	PktSize      int
+	SourceDevice string
 	icmp         net.PacketConn
 	tcp          net.PacketConn
 	tcp4         *ipv4.PacketConn

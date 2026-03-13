@@ -284,7 +284,11 @@ func (t *ICMPTracerv6) Execute() (res *Result, err error) {
 	s.InitICMP()
 	defer s.Close()
 
-	sigCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	baseCtx := t.Context
+	if baseCtx == nil {
+		baseCtx = context.Background()
+	}
+	sigCtx, stop := signal.NotifyContext(baseCtx, os.Interrupt, syscall.SIGTERM)
 	ctx, cancel := context.WithCancelCause(sigCtx)
 	t.final.Store(-1)
 
@@ -348,7 +352,7 @@ func (t *ICMPTracerv6) Execute() (res *Result, err error) {
 }
 
 func (t *ICMPTracerv6) handleICMPMessage(msg internal.ReceivedMessage, finish time.Time, seq int) {
-	mpls := extractMPLS(msg)
+	mpls := extractMPLS(msg, t.DisableMPLS)
 
 	// 非阻塞投递；如果队列已满则直接丢弃该任务
 	select {

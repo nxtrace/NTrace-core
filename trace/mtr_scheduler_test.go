@@ -72,7 +72,7 @@ func TestScheduler_MaxPerHopCompletion(t *testing.T) {
 			return mtrProbeResult{
 				TTL:     ttl,
 				Success: true,
-				Addr:    &net.IPAddr{IP: net.ParseIP("10.0.0." + string(rune('0'+ttl)))},
+				Addr:    &net.IPAddr{IP: net.ParseIP(fmt.Sprintf("10.0.0.%d", ttl))},
 				RTT:     time.Duration(ttl) * time.Millisecond,
 			}, nil
 		},

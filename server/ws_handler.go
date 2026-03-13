@@ -16,15 +16,13 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/nxtrace/NTrace-core/trace"
-	"github.com/nxtrace/NTrace-core/tracemap"
-	"github.com/nxtrace/NTrace-core/util"
 )
 
 var traceUpgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin: func(r *http.Request) bool {
-		return true
+		return browserOriginAllowed(r)
 	},
 }
 
@@ -36,6 +34,8 @@ const (
 var (
 	errWSSlowConsumer  = errors.New("websocket client too slow for mtr stream")
 	errWSSessionClosed = errors.New("websocket session closed")
+	traceTracerouteFn  = trace.Traceroute
+	traceRunMTRRawFn   = trace.RunMTRRaw
 )
 
 // sanitizeLogParam 清理用户输入中的换行和控制字符，防止日志注入。
@@ -178,6 +178,7 @@ func traceWebsocketHandler(c *gin.Context) {
 
 	// 设置首次读取超时，防止恶意客户端无限阻塞
 	conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+	conn.SetReadLimit(maxWSInitMessageBytes)
 	_, message, err := conn.ReadMessage()
 	if err != nil {
 		log.Printf("[deploy] websocket read failed: %v", err)
@@ -282,14 +283,9 @@ func runSingleTrace(session *wsTraceSession, setup *traceExecution) {
 		return
 	}
 
-	traceMapURL := ""
-	if setup.Config.Maptrace && shouldGenerateMap(setup.DataProvider) {
-		if payload, err := json.Marshal(res); err == nil {
-			if url, err := tracemap.GetMapUrl(string(payload)); err == nil {
-				traceMapURL = url
-				log.Printf("[deploy] (ws) trace map generated target=%s url=%s", sanitizeLogParam(setup.Target), traceMapURL)
-			}
-		}
+	traceMapURL := traceMapURLForResult(setup, res)
+	if traceMapURL != "" {
+		log.Printf("[deploy] (ws) trace map generated target=%s url=%s", sanitizeLogParam(setup.Target), traceMapURL)
 	}
 
 	final := traceResponse{
@@ -310,14 +306,7 @@ func runSingleTrace(session *wsTraceSession, setup *traceExecution) {
 }
 
 func runMTRTrace(session *wsTraceSession, setup *traceExecution) {
-	// Prefer dedicated HopIntervalMs; fall back to legacy IntervalMs; default 1s.
-	hopInterval := time.Duration(setup.Req.HopIntervalMs) * time.Millisecond
-	if hopInterval <= 0 {
-		hopInterval = time.Duration(setup.Req.IntervalMs) * time.Millisecond
-	}
-	if hopInterval <= 0 {
-		hopInterval = 1000 * time.Millisecond
-	}
+	hopInterval := resolveWebMTRHopInterval(setup.Req)
 	maxPerHop := setup.Req.MaxRounds // 0 = unlimited
 
 	iteration := 0
@@ -371,18 +360,24 @@ func executeMTRRaw(ctx context.Context, session *wsTraceSession, setup *traceExe
 	}
 
 	if opts.HopInterval > 0 {
-		// Per-hop scheduling: briefly lock to set up globals (SrcDev, SrcPort, etc.)
-		// that the ICMP engine / fallback prober reads during initialization,
-		// then release so other requests are not blocked for the lifetime of
-		// the (potentially hours-long) MTR session.
+		// Per-hop scheduling only needs LeoMoe/FastIP setup now; the trace runtime
+		// itself no longer depends on per-session mutable globals.
 		log.Printf("[deploy] (ws) starting MTR per-hop trace target=%s resolved=%s method=%s lang=%s maxHops=%d hopInterval=%s maxPerHop=%d",
 			sanitizeLogParam(setup.Target), setup.IP.String(), string(setup.Method), sanitizeLogParam(config.Lang), config.MaxHops, opts.HopInterval, opts.MaxPerHop)
 
 		traceMu.Lock()
-		setupTraceGlobals(setup)
+		_, err := withTraceSetupContext(setup, func() (struct{}, error) {
+			if setup.NeedsLeoWS {
+				ensureLeoMoeConnection()
+			}
+			return struct{}{}, nil
+		})
 		traceMu.Unlock()
+		if err != nil {
+			return err
+		}
 
-		return trace.RunMTRRaw(ctx, setup.Method, config, opts, onRecord)
+		return traceRunMTRRawFn(ctx, setup.Method, config, opts, onRecord)
 	}
 
 	// Legacy round-based path: inject RunRound with per-round locking.
@@ -393,57 +388,20 @@ func executeMTRRaw(ctx context.Context, session *wsTraceSession, setup *traceExe
 		traceMu.Lock()
 		defer traceMu.Unlock()
 
-		setupTraceGlobals(setup)
-		defer restoreTraceGlobals(setup)
-
-		return trace.Traceroute(method, cfg)
+		return withTraceSetupContext(setup, func() (*trace.Result, error) {
+			if setup.NeedsLeoWS {
+				ensureLeoMoeConnection()
+			}
+			return traceTracerouteFn(method, cfg)
+		})
 	}
 
-	return trace.RunMTRRaw(ctx, setup.Method, config, opts, onRecord)
-}
-
-// setupTraceGlobals sets the global variables required by the trace engine.
-// Caller must hold traceMu.
-func setupTraceGlobals(setup *traceExecution) {
-	if setup.NeedsLeoWS {
-		if setup.PowProvider != "" {
-			log.Printf("[deploy] (ws) LeoMoeAPI using custom PoW provider=%s", sanitizeLogParam(setup.PowProvider))
-		} else {
-			log.Printf("[deploy] (ws) LeoMoeAPI using default PoW provider")
-		}
-		util.PowProviderParam = setup.PowProvider
-		ensureLeoMoeConnection()
-	} else if setup.PowProvider != "" {
-		log.Printf("[deploy] (ws) overriding PoW provider=%s", sanitizeLogParam(setup.PowProvider))
-		util.PowProviderParam = setup.PowProvider
-	} else {
-		util.PowProviderParam = ""
-	}
-
-	util.SrcPort = setup.Req.SourcePort
-	util.DstIP = setup.IP.String()
-	if setup.Req.SourceDevice != "" {
-		util.SrcDev = setup.Req.SourceDevice
-	} else {
-		util.SrcDev = ""
-	}
-	util.DisableMPLS = setup.Req.DisableMPLS
-}
-
-// restoreTraceGlobals is a no-op placeholder. In deploy mode the server owns
-// the global state exclusively, so restoring to "previous" values is not
-// meaningful. The function is kept for documentation and symmetry with
-// setupTraceGlobals.
-func restoreTraceGlobals(_ *traceExecution) {
-	// In a single-tenant deploy server globals are reset at next request.
-	// No restore needed.
+	return traceRunMTRRawFn(ctx, setup.Method, config, opts, onRecord)
 }
 
 func executeTrace(session *wsTraceSession, setup *traceExecution, configure func(*trace.Config)) (*trace.Result, time.Duration, error) {
 	traceMu.Lock()
 	defer traceMu.Unlock()
-
-	setupTraceGlobals(setup)
 
 	config := setup.Config
 	if configure != nil {
@@ -456,7 +414,22 @@ func executeTrace(session *wsTraceSession, setup *traceExecution, configure func
 
 	log.Printf("[deploy] (ws) starting trace target=%s resolved=%s method=%s lang=%s queries=%d maxHops=%d", sanitizeLogParam(setup.Target), setup.IP.String(), string(setup.Method), sanitizeLogParam(config.Lang), config.NumMeasurements, config.MaxHops)
 	start := time.Now()
-	res, err := trace.Traceroute(setup.Method, config)
+	res, err := withTraceSetupContext(setup, func() (*trace.Result, error) {
+		if setup.NeedsLeoWS {
+			ensureLeoMoeConnection()
+		}
+		return traceTracerouteFn(setup.Method, config)
+	})
 	duration := time.Since(start)
 	return res, duration, err
+}
+
+func resolveWebMTRHopInterval(req traceRequest) time.Duration {
+	if req.HopIntervalMs > 0 {
+		return time.Duration(req.HopIntervalMs) * time.Millisecond
+	}
+	if req.IntervalMs > 0 {
+		return time.Duration(req.IntervalMs) * time.Millisecond
+	}
+	return time.Second
 }

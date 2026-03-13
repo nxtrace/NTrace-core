@@ -4,6 +4,52 @@ import (
 	"net"
 )
 
+type cidrFilterRule struct {
+	cidr  string
+	whois string
+}
+
+var reservedCIDRRules = []cidrFilterRule{
+	{cidr: "0.0.0.0/8", whois: "RFC1122"},
+	{cidr: "100.64.0.0/10", whois: "RFC6598"},
+	{cidr: "127.0.0.0/8", whois: "RFC1122"},
+	{cidr: "169.254.0.0/16", whois: "RFC3927"},
+	{cidr: "192.0.0.0/24", whois: "RFC6890"},
+	{cidr: "192.0.2.0/24", whois: "RFC5737"},
+	{cidr: "192.88.99.0/24", whois: "RFC3068"},
+	{cidr: "198.18.0.0/15", whois: "RFC2544"},
+	{cidr: "198.51.100.0/24", whois: "RFC5737"},
+	{cidr: "203.0.113.0/24", whois: "RFC5737"},
+	{cidr: "224.0.0.0/4", whois: "RFC5771"},
+	{cidr: "255.255.255.255/32", whois: "RFC0919"},
+	{cidr: "240.0.0.0/4", whois: "RFC1112"},
+	{cidr: "fe80::/10", whois: "RFC4291"},
+	{cidr: "ff00::/8", whois: "RFC4291"},
+	{cidr: "fec0::/10", whois: "RFC3879"},
+	{cidr: "fe00::/9", whois: "RFC4291"},
+	{cidr: "64:ff9b::/96", whois: "RFC6052"},
+	{cidr: "0::/96", whois: "RFC4291"},
+	{cidr: "64:ff9b:1::/48", whois: "RFC6052"},
+	{cidr: "2001:db8::/32", whois: "RFC3849"},
+	{cidr: "2002::/16", whois: "RFC3056"},
+}
+
+var dodCIDRRules = []cidrFilterRule{
+	{cidr: "6.0.0.0/8", whois: "DOD"},
+	{cidr: "7.0.0.0/8", whois: "DOD"},
+	{cidr: "11.0.0.0/8", whois: "DOD"},
+	{cidr: "21.0.0.0/8", whois: "DOD"},
+	{cidr: "22.0.0.0/8", whois: "DOD"},
+	{cidr: "26.0.0.0/8", whois: "DOD"},
+	{cidr: "28.0.0.0/8", whois: "DOD"},
+	{cidr: "29.0.0.0/8", whois: "DOD"},
+	{cidr: "30.0.0.0/8", whois: "DOD"},
+	{cidr: "33.0.0.0/8", whois: "DOD"},
+	{cidr: "55.0.0.0/8", whois: "DOD"},
+	{cidr: "214.0.0.0/8", whois: "DOD"},
+	{cidr: "215.0.0.0/8", whois: "DOD"},
+}
+
 func cidrRangeContains(cidrRange string, checkIP string) bool {
 	_, ipNet, err := net.ParseCIDR(cidrRange)
 	if err != nil {
@@ -13,163 +59,48 @@ func cidrRangeContains(cidrRange string, checkIP string) bool {
 	return ipNet.Contains(secondIP)
 }
 
+func matchCIDRFilterRule(ip string, rules []cidrFilterRule) (string, bool) {
+	for _, rule := range rules {
+		if cidrRangeContains(rule.cidr, ip) {
+			return rule.whois, true
+		}
+	}
+	return "", false
+}
+
+func classifyPrivateIP(parsedIP net.IP, rawIP string) (string, bool) {
+	if parsedIP == nil || !parsedIP.IsPrivate() {
+		return "", false
+	}
+	if cidrRangeContains("fc00::/7", rawIP) {
+		return "RFC4193", true
+	}
+	return "RFC1918", true
+}
+
+func isInvalidScopedIPv6(parsedIP net.IP, rawIP string) bool {
+	return parsedIP != nil && parsedIP.To4() == nil && !cidrRangeContains("2000::/3", rawIP)
+}
+
 // Filter 被选到的返回 geodata, true  否则返回 nil, false
 func Filter(ip string) (*IPGeoData, bool) {
-	//geodata := &IPGeoData{}
-	asn := ""
-	whois := ""
-	isFiltered := false
-	switch {
-	case cidrRangeContains("0.0.0.0/8", ip):
-		asn = ""
-		whois = "RFC1122"
-		isFiltered = true
-	//IANA Reserved Address Space
-	case cidrRangeContains("100.64.0.0/10", ip):
-		asn = ""
-		whois = "RFC6598"
-		isFiltered = true
-	//127.0.0.0/8
-	case cidrRangeContains("127.0.0.0/8", ip):
-		asn = ""
-		whois = "RFC1122"
-		isFiltered = true
-	//169.254.0.0/16
-	case cidrRangeContains("169.254.0.0/16", ip):
-		asn = ""
-		whois = "RFC3927"
-		isFiltered = true
-	//192.0.0.0/24
-	case cidrRangeContains("192.0.0.0/24", ip):
-		asn = ""
-		whois = "RFC6890"
-		isFiltered = true
-	//192.0.2.0/24
-	case cidrRangeContains("192.0.2.0/24", ip):
-		asn = ""
-		whois = "RFC5737"
-		isFiltered = true
-	//192.88.99.0/24
-	case cidrRangeContains("192.88.99.0/24", ip):
-		asn = ""
-		whois = "RFC3068"
-		isFiltered = true
-	case cidrRangeContains("198.18.0.0/15", ip):
-		asn = ""
-		whois = "RFC2544"
-		isFiltered = true
-	case cidrRangeContains("198.51.100.0/24", ip):
-		fallthrough
-	case cidrRangeContains("203.0.113.0/24", ip):
-		asn = ""
-		whois = "RFC5737"
-		isFiltered = true
-	//224.0.0.0/4
-	case cidrRangeContains("224.0.0.0/4", ip):
-		asn = ""
-		whois = "RFC5771"
-		isFiltered = true
-	//255.255.255.255/32
-	case cidrRangeContains("255.255.255.255/32", ip):
-		asn = ""
-		whois = "RFC0919"
-		isFiltered = true
-	case cidrRangeContains("240.0.0.0/4", ip):
-		asn = ""
-		whois = "RFC1112"
-		isFiltered = true
-	case cidrRangeContains("fe80::/10", ip):
-		asn = ""
-		whois = "RFC4291"
-		isFiltered = true
-	case cidrRangeContains("ff00::/8", ip):
-		asn = ""
-		whois = "RFC4291"
-		isFiltered = true
-	case cidrRangeContains("fec0::/10", ip):
-		asn = ""
-		whois = "RFC3879"
-		isFiltered = true
-	case cidrRangeContains("fe00::/9", ip):
-		asn = ""
-		whois = "RFC4291"
-		isFiltered = true
-	case cidrRangeContains("64:ff9b::/96", ip):
-		asn = ""
-		whois = "RFC6052"
-		isFiltered = true
-	case cidrRangeContains("0::/96", ip):
-		asn = ""
-		whois = "RFC4291"
-		isFiltered = true
-	case cidrRangeContains("64:ff9b:1::/48", ip):
-		asn = ""
-		whois = "RFC6052"
-		isFiltered = true
-	case cidrRangeContains("2001:db8::/32", ip):
-		asn = ""
-		whois = "RFC3849"
-		isFiltered = true
-	case cidrRangeContains("2002::/16", ip):
-		asn = ""
-		whois = "RFC3056"
-		isFiltered = true
-	case net.ParseIP(ip).IsPrivate():
-		//rfc4193
-		if cidrRangeContains("fc00::/7", ip) {
-			asn = ""
-			whois = "RFC4193"
-			isFiltered = true
-			//rfc1918
-		} else {
-			asn = ""
-			whois = "RFC1918"
-			isFiltered = true
-		}
-	//Defense Information System Network
-	case cidrRangeContains("6.0.0.0/8", ip):
-		fallthrough
-	case cidrRangeContains("7.0.0.0/8", ip):
-		fallthrough
-	case cidrRangeContains("11.0.0.0/8", ip):
-		fallthrough
-	case cidrRangeContains("21.0.0.0/8", ip):
-		fallthrough
-	case cidrRangeContains("22.0.0.0/8", ip):
-		fallthrough
-	case cidrRangeContains("26.0.0.0/8", ip):
-		fallthrough
-	case cidrRangeContains("28.0.0.0/8", ip):
-		fallthrough
-	case cidrRangeContains("29.0.0.0/8", ip):
-		fallthrough
-	case cidrRangeContains("30.0.0.0/8", ip):
-		fallthrough
-	case cidrRangeContains("33.0.0.0/8", ip):
-		fallthrough
-	case cidrRangeContains("55.0.0.0/8", ip):
-		fallthrough
-	case cidrRangeContains("214.0.0.0/8", ip):
-		fallthrough
-	case cidrRangeContains("215.0.0.0/8", ip):
-		asn = ""
-		whois = "DOD"
-		isFiltered = true
-	default:
-	}
-	// 判断是否为v6 且不在2000::/3
 	parsedIP := net.ParseIP(ip)
-	if parsedIP != nil && parsedIP.To4() == nil && !cidrRangeContains("2000::/3", ip) && !isFiltered {
-		asn = ""
-		whois = "INVALID"
-		isFiltered = true
-	}
-	if !isFiltered {
+	if parsedIP == nil {
 		return nil, false
-	} else {
-		return &IPGeoData{
-			Asnumber: asn,
-			Whois:    whois,
-		}, true
 	}
+
+	if whois, ok := matchCIDRFilterRule(ip, reservedCIDRRules); ok {
+		return &IPGeoData{Whois: whois}, true
+	}
+	if whois, ok := classifyPrivateIP(parsedIP, ip); ok {
+		return &IPGeoData{Whois: whois}, true
+	}
+	if whois, ok := matchCIDRFilterRule(ip, dodCIDRRules); ok {
+		return &IPGeoData{Whois: whois}, true
+	}
+	if isInvalidScopedIPv6(parsedIP, ip) {
+		return &IPGeoData{Whois: "INVALID"}, true
+	}
+
+	return nil, false
 }

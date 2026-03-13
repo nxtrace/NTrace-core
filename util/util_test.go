@@ -1,6 +1,8 @@
 package util
 
 import (
+	"context"
+	"errors"
 	"net"
 	"testing"
 
@@ -153,6 +155,69 @@ func TestMakePayloadWithTargetChecksum_VersionMismatch(t *testing.T) {
 	err := MakePayloadWithTargetChecksum(payload, src, dst, 100, 200, 42)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "mismatch")
+}
+
+type fakeHostLookupResolver struct {
+	hosts []string
+	err   error
+}
+
+func (f fakeHostLookupResolver) LookupHost(context.Context, string) ([]string, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.hosts, nil
+}
+
+func TestLookupIPs_SkipsInvalidValues(t *testing.T) {
+	ips, err := lookupIPs(context.Background(), fakeHostLookupResolver{
+		hosts: []string{"1.1.1.1", "not-an-ip", "2606:4700::1"},
+	}, "example.com")
+	require.NoError(t, err)
+	require.Len(t, ips, 2)
+	assert.Equal(t, "1.1.1.1", ips[0].String())
+	assert.Equal(t, "2606:4700::1", ips[1].String())
+}
+
+func TestLookupIPs_ReturnsWrappedError(t *testing.T) {
+	_, err := lookupIPs(context.Background(), fakeHostLookupResolver{err: errors.New("boom")}, "example.com")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "DNS lookup failed")
+}
+
+func TestFilterByFamily_PicksFirstMatchingAddress(t *testing.T) {
+	ips := []net.IP{
+		net.ParseIP("2606:4700::1"),
+		net.ParseIP("1.1.1.1"),
+		net.ParseIP("8.8.8.8"),
+	}
+	filtered := filterByFamily(ips, "4")
+	require.Len(t, filtered, 1)
+	assert.Equal(t, "1.1.1.1", filtered[0].String())
+}
+
+func TestSelectResolvedIP_PromptErrorFallsBackToFirst(t *testing.T) {
+	ips := []net.IP{net.ParseIP("1.1.1.1"), net.ParseIP("8.8.8.8")}
+	selected, err := selectResolvedIP(ips, false, func([]net.IP) (int, error) {
+		return 0, errors.New("stdin closed")
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "1.1.1.1", selected.String())
+}
+
+func TestSelectResolvedIP_InvalidIndex(t *testing.T) {
+	ips := []net.IP{net.ParseIP("1.1.1.1"), net.ParseIP("8.8.8.8")}
+	_, err := selectResolvedIP(ips, false, func([]net.IP) (int, error) {
+		return 10, nil
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid selection")
+}
+
+func TestResolveFamilyLabel(t *testing.T) {
+	assert.Equal(t, "IPv4", resolveFamilyLabel("4"))
+	assert.Equal(t, "IPv6", resolveFamilyLabel("6"))
+	assert.Equal(t, "IPv4/IPv6", resolveFamilyLabel("all"))
 }
 
 // ──────── GetPowProvider ────────

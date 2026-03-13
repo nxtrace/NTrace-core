@@ -109,9 +109,9 @@ func TestLookupHostForGeo_DoTFailFallback(t *testing.T) {
 	}
 	SetGeoDNSResolver("cloudflare") // 需要非空，ResolverForDot 会被 override 覆盖
 	SetGeoDNSFallback(true)
-	geoResolverOverride = badResolver
+	setGeoResolverOverride(badResolver)
 	defer func() {
-		geoResolverOverride = nil
+		setGeoResolverOverride(nil)
 		SetGeoDNSResolver("")
 		SetGeoDNSFallback(true)
 	}()
@@ -139,9 +139,9 @@ func TestLookupHostForGeo_DoTFailNoFallback(t *testing.T) {
 	}
 	SetGeoDNSResolver("cloudflare")
 	SetGeoDNSFallback(false)
-	geoResolverOverride = badResolver
+	setGeoResolverOverride(badResolver)
 	defer func() {
-		geoResolverOverride = nil
+		setGeoResolverOverride(nil)
 		SetGeoDNSResolver("")
 		SetGeoDNSFallback(true)
 	}()
@@ -171,4 +171,91 @@ func TestGeoDNSConfig_ConcurrentAccess(t *testing.T) {
 	}
 	<-done
 	// 无 data race = 通过
+}
+
+func TestWithGeoDNSResolver_RestoresPreviousConfig(t *testing.T) {
+	SetGeoDNSResolver("google")
+	SetGeoDNSFallback(false)
+	defer func() {
+		SetGeoDNSResolver("")
+		SetGeoDNSFallback(true)
+	}()
+
+	seenDot := ""
+	seenFallback := true
+	got, err := WithGeoDNSResolver("cloudflare", func() (string, error) {
+		seenDot, seenFallback = getGeoDNSConfig()
+		return "ok", nil
+	})
+	if err != nil {
+		t.Fatalf("WithGeoDNSResolver returned error: %v", err)
+	}
+	if got != "ok" {
+		t.Fatalf("WithGeoDNSResolver result = %q, want ok", got)
+	}
+	if seenDot != "cloudflare" {
+		t.Fatalf("callback saw dot resolver %q, want cloudflare", seenDot)
+	}
+	if seenFallback {
+		t.Fatalf("callback saw fallback=true, want inherited false")
+	}
+
+	dot, fallback := getGeoDNSConfig()
+	if dot != "google" || fallback {
+		t.Fatalf("resolver restored to (%q, %t), want (%q, %t)", dot, fallback, "google", false)
+	}
+}
+
+func TestWithGeoDNSResolver_AllowsNestedSameResolver(t *testing.T) {
+	SetGeoDNSResolver("google")
+	SetGeoDNSFallback(false)
+	defer func() {
+		SetGeoDNSResolver("")
+		SetGeoDNSFallback(true)
+	}()
+
+	done := make(chan struct{})
+	var (
+		got            string
+		err            error
+		outerDot       string
+		outerFallback  bool
+		nestedDot      string
+		nestedFallback bool
+	)
+
+	go func() {
+		defer close(done)
+		got, err = WithGeoDNSResolver("cloudflare", func() (string, error) {
+			outerDot, outerFallback = getGeoDNSConfig()
+			return WithGeoDNSResolver("cloudflare", func() (string, error) {
+				nestedDot, nestedFallback = getGeoDNSConfig()
+				return "nested", nil
+			})
+		})
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("nested WithGeoDNSResolver call deadlocked")
+	}
+
+	if err != nil {
+		t.Fatalf("nested WithGeoDNSResolver returned error: %v", err)
+	}
+	if got != "nested" {
+		t.Fatalf("nested WithGeoDNSResolver result = %q, want nested", got)
+	}
+	if outerDot != "cloudflare" || outerFallback {
+		t.Fatalf("outer callback saw (%q, %t), want (%q, %t)", outerDot, outerFallback, "cloudflare", false)
+	}
+	if nestedDot != "cloudflare" || nestedFallback {
+		t.Fatalf("nested callback saw (%q, %t), want (%q, %t)", nestedDot, nestedFallback, "cloudflare", false)
+	}
+
+	dot, fallback := getGeoDNSConfig()
+	if dot != "google" || fallback {
+		t.Fatalf("resolver restored to (%q, %t), want (%q, %t)", dot, fallback, "google", false)
+	}
 }

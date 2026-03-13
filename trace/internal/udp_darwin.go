@@ -25,6 +25,7 @@ type UDPSpec struct {
 	SrcIP        net.IP
 	DstIP        net.IP
 	DstPort      int
+	SourceDevice string
 	icmp         net.PacketConn
 	udp          net.PacketConn
 	udp4         *ipv4.PacketConn
@@ -62,8 +63,8 @@ func (s *UDPSpec) Close() {
 func (s *UDPSpec) ListenOut(ctx context.Context, ready chan struct{}, onOut func(srcPort, seq, ttl int, start time.Time)) {
 	// 选择捕获设备与本地接口
 	dev := "en0"
-	if util.SrcDev != "" {
-		dev = util.SrcDev
+	if s.SourceDevice != "" {
+		dev = s.SourceDevice
 	} else if d, err := util.PcapDeviceByIP(s.SrcIP); err == nil {
 		dev = d
 	}
