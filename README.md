@@ -370,6 +370,31 @@ nexttrace --no-color 1.1.1.1
 export NO_COLOR=1
 ```
 
+#### Advanced tuning quick guide
+
+| Flag | What it controls | Default / starting point | When to change it |
+| --- | --- | --- | --- |
+| `--queries` | Samples per hop in normal traceroute; explicit probe count per hop in MTR | traceroute: `3`; MTR report: `10` when omitted; MTR TUI/raw: unlimited when omitted | Raise to `5-10` on unstable paths |
+| `--max-attempts` | Hard cap on probe packets per hop | auto-sized from `--queries` | Raise on lossy links when replies arrive slowly |
+| `--parallel-requests` | Total in-flight probes across TTLs | `18` | Use `1` on multipath/load-balanced paths; keep `6-18` on stable links |
+| `--send-time` | Gap between packets inside one TTL group | `50ms` | Raise to `100-200ms` on rate-limited devices; ignored in MTR |
+| `--ttl-time` | Gap between TTL groups in traceroute; per-hop interval in MTR | traceroute: `300ms`; MTR: `1000ms` when omitted | Lower to speed up; raise on remote/rate-limited paths |
+| `--timeout` | Per-probe timeout | `1000ms` | Raise to `2000-3000ms` for intercontinental or high-loss paths |
+| `--psize` | Payload size | `52` bytes | Raise only for MTU or large-packet testing |
+
+These probe knobs are CLI-only today; `nt_config.yaml` does not yet store them. If you want reusable profiles, keep them in shell aliases or small wrapper scripts.
+
+```bash
+# Conservative profile for multipath or ECMP networks
+nexttrace --parallel-requests 1 --send-time 100 --ttl-time 500 --timeout 2000 example.com
+
+# Faster profile for stable single-path networks
+nexttrace --parallel-requests 18 --send-time 20 --ttl-time 150 example.com
+
+# Lossy long-haul profile
+nexttrace --queries 5 --max-attempts 10 --timeout 2500 example.com
+```
+
 #### `NextTrace` supports MTR (My Traceroute) continuous probing mode
 
 ```bash
@@ -630,14 +655,17 @@ Arguments:
       --icmp-mode                    Windows ONLY: Choose the method to listen
                                      for ICMP packets (1=Socket, 2=WinDivert;
                                      0=Auto)
-  -q  --queries                      Set the number of latency samples to
-                                     display for each hop. Default: 3
-      --max-attempts                 Set the maximum number of probe packets
-
-                                     per hop (instead of a fixed auto value)
-      --parallel-requests            Set ParallelRequests number. It should be
-                                     1 when there is a multi-routing. Default:
-                                     18
+  -q  --queries                      Latency samples per hop. Increase to 5-10
+                                     on unstable paths for a steadier view.
+                                     Default: 3
+      --max-attempts                 Advanced: hard cap on probe packets per
+                                     hop. Leave unset for auto sizing; raise on
+                                     lossy links if --queries is not enough
+      --parallel-requests            Advanced: total concurrent in-flight
+                                     probes across TTLs. Use 1 on
+                                     multipath/load-balanced paths; 6-18 is a
+                                     good starting range on stable links.
+                                     Default: 18
   -m  --max-hops                     Set the max number of hops (max TTL to be
                                      reached). Default: 30
   -d  --data-provider                Choose IP Geograph Data Provider [IP.SB,
@@ -678,20 +706,21 @@ Arguments:
       --listen                       Set listen address for web console (e.g.
                                      127.0.0.1:30080)
       --deploy                       Start the Gin powered web console
-  -z  --send-time                    Set how many [milliseconds] between
-                                     sending each packet. Default: 50ms.
-                                     Ignored in MTR mode. Default: 50
-  -i  --ttl-time                     Interval [ms] between TTL groups in normal
-                                     traceroute (default: 300ms). In MTR mode
-                                     (--mtr/-r/-w, including --raw), sets
-                                     per-hop probe interval: how long between
-                                     successive probes to the same hop
-                                     (default: 1000ms when omitted). Default:
-                                     300
-      --timeout                      The number of [milliseconds] to keep probe
-                                     sockets open before giving up on the
-                                     connection. Default: 1000
-      --psize                        Set the payload size. Default: 52
+  -z  --send-time                    Advanced: per-packet gap [ms] inside the
+                                     same TTL group. Lower is faster; raise to
+                                     100-200ms on rate-limited links. Ignored
+                                     in MTR mode. Default: 50
+  -i  --ttl-time                     Advanced: TTL-group interval [ms] in
+                                     normal traceroute. In MTR mode
+                                     (--mtr/-r/-w, including --raw), this
+                                     becomes per-hop probe interval. 500-1000ms
+                                     is a good MTR starting range
+      --timeout                      Per-probe timeout [ms]. Raise to 2000-3000
+                                     on slow intercontinental or high-loss
+                                     paths. Default: 1000
+      --psize                        Payload size in bytes. Keep 52 for normal
+                                     routing checks; raise only for MTU or
+                                     large-packet testing. Default: 52
       --dot-server                   Use DoT Server for DNS Parse [dnssb,
                                      aliyun, dnspod, google, cloudflare]
   -g  --language                     Choose the language for displaying [en,

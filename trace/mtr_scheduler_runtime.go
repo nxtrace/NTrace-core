@@ -229,15 +229,25 @@ func (rt *mtrSchedulerRuntime) processProbeError(ttl int, err error) {
 }
 
 func (rt *mtrSchedulerRuntime) recordSyntheticTimeout(ttl int) {
-	rt.agg.Update(timeoutProbeResult(ttl, rt.maxHops), 1)
+	rt.agg.Update(rt.timeoutProbeResult(ttl), 1)
 	if rt.onProbe != nil {
 		rt.onProbe(mtrProbeResult{TTL: ttl}, rt.computeIteration())
 	}
 	rt.maybeSnapshot(false)
 }
 
-func timeoutProbeResult(ttl, maxHops int) *Result {
-	singleRes := &Result{Hops: make([][]Hop, maxHops)}
+func (rt *mtrSchedulerRuntime) resultHopCount() int {
+	if n := len(rt.states) - 1; n > 0 {
+		return n
+	}
+	if rt.maxHops > 0 {
+		return rt.maxHops
+	}
+	return 0
+}
+
+func (rt *mtrSchedulerRuntime) timeoutProbeResult(ttl int) *Result {
+	singleRes := &Result{Hops: make([][]Hop, rt.resultHopCount())}
 	idx := ttl - 1
 	if idx >= 0 && idx < len(singleRes.Hops) {
 		singleRes.Hops[idx] = []Hop{{TTL: ttl, Error: errHopLimitTimeout}}
@@ -306,7 +316,7 @@ func (rt *mtrSchedulerRuntime) markProbeCompleted(ttl int) {
 }
 
 func (rt *mtrSchedulerRuntime) singleProbeResult(ttl int, result mtrProbeResult) *Result {
-	singleRes := &Result{Hops: make([][]Hop, rt.maxHops)}
+	singleRes := &Result{Hops: make([][]Hop, rt.resultHopCount())}
 	hop := Hop{
 		Success:  result.Success,
 		Address:  result.Addr,

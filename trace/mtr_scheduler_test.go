@@ -55,6 +55,35 @@ func (m *mockTTLProber) getProbeCount() int {
 // Tests
 // ---------------------------------------------------------------------------
 
+func TestScheduler_ResultBuildersUseBoundedHopCount(t *testing.T) {
+	rt, err := newMTRSchedulerRuntime(
+		context.Background(),
+		&mockTTLProber{},
+		NewMTRAggregator(),
+		mtrSchedulerConfig{
+			BeginHop:         1,
+			MaxHops:          1 << 20,
+			HopInterval:      time.Millisecond,
+			ParallelRequests: 1,
+		},
+		nil,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("newMTRSchedulerRuntime returned error: %v", err)
+	}
+	if rt.maxHops != 255 {
+		t.Fatalf("rt.maxHops = %d, want 255", rt.maxHops)
+	}
+
+	if got := len(rt.timeoutProbeResult(1).Hops); got != 255 {
+		t.Fatalf("timeoutProbeResult hop len = %d, want 255", got)
+	}
+	if got := len(rt.singleProbeResult(1, mtrProbeResult{TTL: 1}).Hops); got != 255 {
+		t.Fatalf("singleProbeResult hop len = %d, want 255", got)
+	}
+}
+
 func TestScheduler_MaxPerHopCompletion(t *testing.T) {
 	dstIP := net.ParseIP("10.0.0.5")
 

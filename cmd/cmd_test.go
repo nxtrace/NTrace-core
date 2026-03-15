@@ -63,3 +63,24 @@ func TestApplyTTLIntervalDefault(t *testing.T) {
 		t.Fatalf("explicit ttlInterval = %d, want 0", ttlInterval)
 	}
 }
+
+func TestAdvancedHelpTextMentionsTuningGuidance(t *testing.T) {
+	parser := argparse.NewParser("ntr", "")
+	registerPacketIntervalFlag(parser)
+	parser.Int("", "max-attempts", &argparse.Options{Help: buildMaxAttemptsHelp()})
+	parser.Int("", "parallel-requests", &argparse.Options{Default: 18, Help: buildParallelRequestsHelp()})
+	parser.Int("", "timeout", &argparse.Options{Default: 1000, Help: buildTimeoutHelp()})
+	parser.Int("", "psize", &argparse.Options{Default: 52, Help: buildPayloadSizeHelp()})
+
+	usage := parser.Usage(nil)
+	for _, want := range []string{
+		"load-balanced paths",
+		"rate-limited links",
+		"intercontinental",
+		"MTU or large-packet",
+	} {
+		if !strings.Contains(usage, want) {
+			t.Fatalf("usage missing tuning guidance %q:\n%s", want, usage)
+		}
+	}
+}

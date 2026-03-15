@@ -117,10 +117,11 @@ func (t *UDPTracer) launchTTL(ctx context.Context, s *internal.UDPSpec, ttl int)
 				}
 			}(ttl, i)
 
-			select {
-			case <-ctx.Done():
+			if i+1 == t.MaxAttempts {
 				return
-			case <-time.After(time.Millisecond * time.Duration(t.PacketInterval)):
+			}
+			if !waitForTraceDelay(ctx, time.Millisecond*time.Duration(t.PacketInterval)) {
+				return
 			}
 		}
 	}(ttl)
@@ -375,10 +376,8 @@ func (t *UDPTracer) Execute() (res *Result, err error) {
 
 		for ttl := t.BeginHop + 1; ttl <= t.MaxHops; ttl++ {
 			// 之后按 TTLInterval 周期启动后续 TTL 组
-			select {
-			case <-ctx.Done():
+			if !waitForTraceDelay(ctx, time.Millisecond*time.Duration(t.TTLInterval)) {
 				return
-			case <-time.After(time.Millisecond * time.Duration(t.TTLInterval)):
 			}
 
 			// 如果到达最终跳，则退出
@@ -452,7 +451,7 @@ func (t *UDPTracer) acquireSendPermit(ctx context.Context, ttl int) (func(), boo
 	if t.ttlComp(ttl) {
 		return nil, true, nil
 	}
-	if err := t.sem.Acquire(ctx, 1); err != nil {
+	if err := acquireTraceSemaphore(ctx, t.sem); err != nil {
 		return nil, false, err
 	}
 	release := func() { t.sem.Release(1) }
@@ -495,35 +494,33 @@ func (t *UDPTracer) buildUDPPacket(ttl, i, srcPort int) (int, *layers.IPv4, *lay
 func (t *UDPTracer) startSendTimeout(ctx context.Context, ttl, i, seq int) {
 	t.markPending(ttl, i)
 	go func(seq, ttl, i int) {
-		select {
-		case <-ctx.Done():
+		if !waitForTraceDelay(ctx, t.Timeout) {
 			_ = t.clearPending(ttl, i)
 			return
-		case <-time.After(t.Timeout):
-			if !t.clearPending(ttl, i) {
-				return
-			}
-			if f := t.final.Load(); f != -1 && ttl > int(f) {
-				return
-			}
-			if t.ttlComp(ttl) {
-				return
-			}
-
-			h := Hop{
-				Success: false,
-				Address: nil,
-				TTL:     ttl,
-				RTT:     0,
-				Error:   errHopLimitTimeout,
-			}
-			_, _ = t.res.add(h, i, t.NumMeasurements, t.MaxAttempts)
-			if t.OSType != 1 {
-				t.dropSent(seq)
-				return
-			}
-			t.dropByAttempt(ttl, i)
 		}
+		if !t.clearPending(ttl, i) {
+			return
+		}
+		if f := t.final.Load(); f != -1 && ttl > int(f) {
+			return
+		}
+		if t.ttlComp(ttl) {
+			return
+		}
+
+		h := Hop{
+			Success: false,
+			Address: nil,
+			TTL:     ttl,
+			RTT:     0,
+			Error:   errHopLimitTimeout,
+		}
+		_, _ = t.res.add(h, i, t.NumMeasurements, t.MaxAttempts)
+		if t.OSType != 1 {
+			t.dropSent(seq)
+			return
+		}
+		t.dropByAttempt(ttl, i)
 	}(seq, ttl, i)
 }
 

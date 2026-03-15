@@ -112,10 +112,11 @@ func (t *UDPTracerIPv6) launchTTL(ctx context.Context, s *internal.UDPSpec, ttl 
 				}
 			}(ttl, i)
 
-			select {
-			case <-ctx.Done():
+			if i+1 == t.MaxAttempts {
 				return
-			case <-time.After(time.Millisecond * time.Duration(t.PacketInterval)):
+			}
+			if !waitForTraceDelay(ctx, time.Millisecond*time.Duration(t.PacketInterval)) {
+				return
 			}
 		}
 	}(ttl)
@@ -311,10 +312,8 @@ func (t *UDPTracerIPv6) Execute() (res *Result, err error) {
 
 		for ttl := t.BeginHop + 1; ttl <= t.MaxHops; ttl++ {
 			// 之后按 TTLInterval 周期启动后续 TTL 组
-			select {
-			case <-ctx.Done():
+			if !waitForTraceDelay(ctx, time.Millisecond*time.Duration(t.TTLInterval)) {
 				return
-			case <-time.After(time.Millisecond * time.Duration(t.TTLInterval)):
 			}
 
 			// 如果到达最终跳，则退出
@@ -383,7 +382,7 @@ func (t *UDPTracerIPv6) send(ctx context.Context, s *internal.UDPSpec, ttl, i in
 		return nil
 	}
 
-	if err := t.sem.Acquire(ctx, 1); err != nil {
+	if err := acquireTraceSemaphore(ctx, t.sem); err != nil {
 		return err
 	}
 	defer t.sem.Release(1)
@@ -437,35 +436,30 @@ func (t *UDPTracerIPv6) send(ctx context.Context, s *internal.UDPSpec, ttl, i in
 	// 登记 pending，并启动超时守护
 	t.markPending(seq)
 	go func(seq, ttl, i int) {
-		select {
-		case <-ctx.Done():
+		if !waitForTraceDelay(ctx, t.Timeout) {
 			_ = t.clearPending(seq)
 			return
-		case <-time.After(t.Timeout):
-			// 仍未完成且未超出 final/未达成 ttlComp 才补位
-			if !t.clearPending(seq) {
-				return
-			}
-
-			if f := t.final.Load(); f != -1 && ttl > int(f) {
-				return
-			}
-
-			if t.ttlComp(ttl) {
-				return
-			}
-
-			h := Hop{
-				Success: false,
-				Address: nil,
-				TTL:     ttl,
-				RTT:     0,
-				Error:   errHopLimitTimeout,
-			}
-
-			_, _ = t.res.add(h, i, t.NumMeasurements, t.MaxAttempts)
-			t.dropSent(seq)
 		}
+		if !t.clearPending(seq) {
+			return
+		}
+		if f := t.final.Load(); f != -1 && ttl > int(f) {
+			return
+		}
+		if t.ttlComp(ttl) {
+			return
+		}
+
+		h := Hop{
+			Success: false,
+			Address: nil,
+			TTL:     ttl,
+			RTT:     0,
+			Error:   errHopLimitTimeout,
+		}
+
+		_, _ = t.res.add(h, i, t.NumMeasurements, t.MaxAttempts)
+		t.dropSent(seq)
 	}(seq, ttl, i)
 
 	start, err := s.SendUDP(ctx, ipHeader, udpHeader, payload)

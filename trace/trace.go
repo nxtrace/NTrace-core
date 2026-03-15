@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"golang.org/x/net/idna"
+	"golang.org/x/sync/semaphore"
 	"golang.org/x/sync/singleflight"
 
 	"github.com/nxtrace/NTrace-core/ipgeo"
@@ -113,6 +114,52 @@ func applyTracerouteDefaults(config *Config) {
 	if config.ParallelRequests == 0 {
 		config.ParallelRequests = config.NumMeasurements * 5
 	}
+}
+
+func waitForTraceDelay(ctx context.Context, d time.Duration) bool {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if ctx != nil && ctx.Err() != nil {
+		return false
+	}
+	if d <= 0 {
+		return true
+	}
+	timer := time.NewTimer(d)
+	defer stopAndDrainTimer(timer)
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return ctx == nil || ctx.Err() == nil
+	}
+}
+
+func stopAndDrainTimer(timer *time.Timer) {
+	if timer == nil {
+		return
+	}
+	if timer.Stop() {
+		return
+	}
+	select {
+	case <-timer.C:
+	default:
+	}
+}
+
+func acquireTraceSemaphore(ctx context.Context, sem *semaphore.Weighted) error {
+	if sem == nil {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return sem.Acquire(ctx, 1)
 }
 
 func normalizeICMPMode(config *Config) {

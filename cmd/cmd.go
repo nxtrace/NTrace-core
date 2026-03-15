@@ -303,9 +303,33 @@ func registerICMPModeFlag(parser *argparse.Parser) *int {
 
 func buildQueriesHelp() string {
 	if defaultMTR {
-		return "Set the max number of probes per hop in MTR mode (0 = unlimited for TUI; default 10 for --report)"
+		return "MTR only: max probes per hop. 0 = unlimited in TUI/raw; --report defaults to 10 when omitted. Start with 10-20 on unstable paths"
 	}
-	return "Set the number of latency samples to display for each hop"
+	return "Latency samples per hop. Increase to 5-10 on unstable paths for a steadier view"
+}
+
+func buildMaxAttemptsHelp() string {
+	return "Advanced: hard cap on probe packets per hop. Leave unset for auto sizing; raise on lossy links if --queries is not enough"
+}
+
+func buildParallelRequestsHelp() string {
+	return "Advanced: total concurrent in-flight probes across TTLs. Use 1 on multipath/load-balanced paths; 6-18 is a good starting range on stable links"
+}
+
+func buildPacketIntervalHelp() string {
+	help := "Advanced: per-packet gap [ms] inside the same TTL group. Lower is faster; raise to 100-200ms on rate-limited links"
+	if enableMTR {
+		help += ". Ignored in MTR mode"
+	}
+	return help
+}
+
+func buildTimeoutHelp() string {
+	return "Per-probe timeout [ms]. Raise to 2000-3000 on slow intercontinental or high-loss paths"
+}
+
+func buildPayloadSizeHelp() string {
+	return "Payload size in bytes. Keep 52 for normal routing checks; raise only for MTU or large-packet testing"
 }
 
 func registerTracerouteOutputFlags(parser *argparse.Parser) tracerouteOutputFlags {
@@ -346,11 +370,7 @@ func registerWebUIFlagsWithAvailability(parser *argparse.Parser, enabled bool) w
 
 func registerPacketIntervalFlag(parser *argparse.Parser) *int {
 	if !defaultMTR {
-		sendTimeHelp := "Set how many [milliseconds] between sending each packet. Default: 50ms"
-		if enableMTR {
-			sendTimeHelp += ". Ignored in MTR mode"
-		}
-		return parser.Int("z", "send-time", &argparse.Options{Default: defaultPacketIntervalMs, Help: sendTimeHelp})
+		return parser.Int("z", "send-time", &argparse.Options{Default: defaultPacketIntervalMs, Help: buildPacketIntervalHelp()})
 	}
 	return ptrInt(defaultPacketIntervalMs)
 }
@@ -369,12 +389,12 @@ func buildRawHelp() string {
 
 func buildTTLIntervalHelp() string {
 	if !enableMTR {
-		return "Set the interval [ms] between TTL groups for traceroute (default: 300ms)"
+		return "Advanced: TTL-group interval [ms] in normal traceroute. 100-300ms is usually safe; lower is faster but may trigger rate limits"
 	}
 	if defaultMTR {
-		return "Set the per-hop probe interval [ms] in MTR mode (default: 1000ms when omitted)"
+		return "Advanced: per-hop probe interval [ms] in MTR mode. 500-1000ms is a good starting point; omitted defaults to 1000ms"
 	}
-	return "Interval [ms] between TTL groups in normal traceroute (default: 300ms). In MTR mode (--mtr/-r/-w, including --raw), sets per-hop probe interval: how long between successive probes to the same hop (default: 1000ms when omitted)"
+	return "Advanced: TTL-group interval [ms] in normal traceroute. In MTR mode (--mtr/-r/-w, including --raw), this becomes per-hop probe interval. 500-1000ms is a good MTR starting range"
 }
 
 func registerTTLIntervalFlag(parser *argparse.Parser) *int {
@@ -971,8 +991,8 @@ func Execute() {
 	port := parser.Int("p", "port", &argparse.Options{Help: "Set the destination port to use. With default of 80 for \"tcp\", 33494 for \"udp\""})
 	icmpMode := registerICMPModeFlag(parser)
 	numMeasurements := parser.Int("q", "queries", &argparse.Options{Default: 3, Help: buildQueriesHelp()})
-	maxAttempts := parser.Int("", "max-attempts", &argparse.Options{Help: "Set the maximum number of probe packets per hop (instead of a fixed auto value)"})
-	parallelRequests := parser.Int("", "parallel-requests", &argparse.Options{Default: 18, Help: "Set ParallelRequests number. It should be 1 when there is a multi-routing"})
+	maxAttempts := parser.Int("", "max-attempts", &argparse.Options{Help: buildMaxAttemptsHelp()})
+	parallelRequests := parser.Int("", "parallel-requests", &argparse.Options{Default: 18, Help: buildParallelRequestsHelp()})
 	maxHops := parser.Int("m", "max-hops", &argparse.Options{Default: 30, Help: "Set the max number of hops (max TTL to be reached)"})
 	dataOrigin := parser.Selector("d", "data-provider", []string{"IP.SB", "ip.sb", "IPInfo", "ipinfo", "IPInsight", "ipinsight", "IPAPI.com", "ip-api.com", "IPInfoLocal", "ipinfolocal", "chunzhen", "LeoMoeAPI", "leomoeapi", "ipdb.one", "disable-geoip"}, &argparse.Options{Default: "LeoMoeAPI",
 		Help: "Choose IP Geograph Data Provider [IP.SB, IPInfo, IPInsight, IP-API.com, IPInfoLocal, CHUNZHEN, disable-geoip]"})
@@ -1004,8 +1024,8 @@ func Execute() {
 	// ── Send-time: hidden in ntr (always ignored in MTR mode) ──
 	packetInterval := registerPacketIntervalFlag(parser)
 	ttlInterval := registerTTLIntervalFlag(parser)
-	timeout := parser.Int("", "timeout", &argparse.Options{Default: 1000, Help: "The number of [milliseconds] to keep probe sockets open before giving up on the connection"})
-	packetSize := parser.Int("", "psize", &argparse.Options{Default: 52, Help: "Set the payload size"})
+	timeout := parser.Int("", "timeout", &argparse.Options{Default: 1000, Help: buildTimeoutHelp()})
+	packetSize := parser.Int("", "psize", &argparse.Options{Default: 52, Help: buildPayloadSizeHelp()})
 	dot := parser.Selector("", "dot-server", []string{"dnssb", "aliyun", "dnspod", "google", "cloudflare"}, &argparse.Options{
 		Help: "Use DoT Server for DNS Parse [dnssb, aliyun, dnspod, google, cloudflare]"})
 	lang := parser.Selector("g", "language", []string{"en", "cn"}, &argparse.Options{Default: "cn",

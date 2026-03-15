@@ -366,6 +366,31 @@ nexttrace --no-color 1.1.1.1
 export NO_COLOR=1
 ```
 
+#### 高级参数调优速查
+
+| 参数 | 控制内容 | 默认值 / 起步建议 | 什么时候调 |
+| --- | --- | --- | --- |
+| `--queries` | 常规 traceroute 的每跳采样数；MTR 中显式指定每跳探测次数 | traceroute: `3`；MTR report: 未指定时 `10`；MTR TUI/raw: 未指定时无限 | 链路抖动大时可升到 `5-10` |
+| `--max-attempts` | 每跳最大发包上限 | 默认按 `--queries` 自动推导 | 丢包严重、回包慢时增大 |
+| `--parallel-requests` | 跨 TTL 的总并发 in-flight 探测数 | `18` | 多路径/负载均衡链路用 `1`；稳定链路一般 `6-18` |
+| `--send-time` | 同一 TTL 组内相邻探测包间隔 | `50ms` | 设备限速时升到 `100-200ms`；MTR 下忽略 |
+| `--ttl-time` | 常规 traceroute 的 TTL 组间隔；MTR 的每跳探测间隔 | traceroute: `300ms`；MTR: 未指定时 `1000ms` | 想加速就调低；远程/限速链路调高 |
+| `--timeout` | 单个探测包超时 | `1000ms` | 跨洲或高丢包链路升到 `2000-3000ms` |
+| `--psize` | 载荷大小 | `52` 字节 | 只在 MTU 或大包探测时增大 |
+
+这些探测参数目前仍是 CLI 级配置，`nt_config.yaml` 还不能直接保存它们。若要复用一组调优参数，建议写成 shell alias 或小脚本。
+
+```bash
+# 适合多路径 / ECMP 的保守配置
+nexttrace --parallel-requests 1 --send-time 100 --ttl-time 500 --timeout 2000 example.com
+
+# 适合稳定单路径链路的快速配置
+nexttrace --parallel-requests 18 --send-time 20 --ttl-time 150 example.com
+
+# 适合高丢包长途链路的配置
+nexttrace --queries 5 --max-attempts 10 --timeout 2500 example.com
+```
+
 #### `NextTrace` 支持 MTR（My Traceroute）连续探测模式
 
 ```bash
@@ -610,14 +635,17 @@ Arguments:
       --icmp-mode                    Windows ONLY: Choose the method to listen
                                      for ICMP packets (1=Socket, 2=WinDivert;
                                      0=Auto)
-  -q  --queries                      Set the number of latency samples to
-                                     display for each hop. Default: 3
-      --max-attempts                 Set the maximum number of probe packets
-
-                                     per hop (instead of a fixed auto value)
-      --parallel-requests            Set ParallelRequests number. It should be
-                                     1 when there is a multi-routing. Default:
-                                     18
+  -q  --queries                      Latency samples per hop. Increase to 5-10
+                                     on unstable paths for a steadier view.
+                                     Default: 3
+      --max-attempts                 Advanced: hard cap on probe packets per
+                                     hop. Leave unset for auto sizing; raise on
+                                     lossy links if --queries is not enough
+      --parallel-requests            Advanced: total concurrent in-flight
+                                     probes across TTLs. Use 1 on
+                                     multipath/load-balanced paths; 6-18 is a
+                                     good starting range on stable links.
+                                     Default: 18
   -m  --max-hops                     Set the max number of hops (max TTL to be
                                      reached). Default: 30
   -d  --data-provider                Choose IP Geograph Data Provider [IP.SB,
@@ -658,20 +686,21 @@ Arguments:
       --listen                       Set listen address for web console (e.g.
                                      127.0.0.1:30080)
       --deploy                       Start the Gin powered web console
-  -z  --send-time                    Set how many [milliseconds] between
-                                     sending each packet. Default: 50ms.
-                                     Ignored in MTR mode. Default: 50
-  -i  --ttl-time                     Interval [ms] between TTL groups in normal
-                                     traceroute (default: 300ms). In MTR mode
-                                     (--mtr/-r/-w, including --raw), sets
-                                     per-hop probe interval: how long between
-                                     successive probes to the same hop
-                                     (default: 1000ms when omitted). Default:
-                                     300
-      --timeout                      The number of [milliseconds] to keep probe
-                                     sockets open before giving up on the
-                                     connection. Default: 1000
-      --psize                        Set the payload size. Default: 52
+  -z  --send-time                    Advanced: per-packet gap [ms] inside the
+                                     same TTL group. Lower is faster; raise to
+                                     100-200ms on rate-limited links. Ignored
+                                     in MTR mode. Default: 50
+  -i  --ttl-time                     Advanced: TTL-group interval [ms] in
+                                     normal traceroute. In MTR mode
+                                     (--mtr/-r/-w, including --raw), this
+                                     becomes per-hop probe interval. 500-1000ms
+                                     is a good MTR starting range
+      --timeout                      Per-probe timeout [ms]. Raise to 2000-3000
+                                     on slow intercontinental or high-loss
+                                     paths. Default: 1000
+      --psize                        Payload size in bytes. Keep 52 for normal
+                                     routing checks; raise only for MTU or
+                                     large-packet testing. Default: 52
       --dot-server                   Use DoT Server for DNS Parse [dnssb,
                                      aliyun, dnspod, google, cloudflare]
   -g  --language                     Choose the language for displaying [en,
