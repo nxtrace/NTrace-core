@@ -632,7 +632,7 @@ function buildPayload() {
   }
 
   if (payload.mode === 'mtr') {
-    payload.interval_ms = 2000;
+    payload.hop_interval_ms = 1000;
     payload.max_rounds = 0;
   }
   const dstPort = readNumericValue(dstPortInput);
@@ -1071,15 +1071,7 @@ function stopTrace() {
 
 function mtrRawKey(rec) {
   const ttl = Number(rec && rec.ttl);
-  const ip = rec && rec.ip ? String(rec.ip).trim() : '';
-  const host = rec && rec.host ? String(rec.host).trim().toLowerCase() : '';
-  if (ip) {
-    return `${ttl}|ip:${ip}`;
-  }
-  if (host) {
-    return `${ttl}|host:${host}`;
-  }
-  return `${ttl}|unknown`;
+  return `${ttl}|ttl`;
 }
 
 function onlyTimeoutErrors(errors) {

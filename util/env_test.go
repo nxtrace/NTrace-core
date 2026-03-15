@@ -44,3 +44,11 @@ func TestGetEnvInt(t *testing.T) {
 
 	assert.Equal(t, 9, GetEnvInt("TEST_INT_MISSING", 9))
 }
+
+func TestAllowCrossOriginBrowserAccess(t *testing.T) {
+	t.Setenv(EnvAllowCrossOriginKey, "1")
+	assert.True(t, AllowCrossOriginBrowserAccess())
+
+	t.Setenv(EnvAllowCrossOriginKey, "0")
+	assert.False(t, AllowCrossOriginBrowserAccess())
+}

@@ -235,80 +235,7 @@ func geoField(cn, en, lang string) string {
 //	"AS13335 one.one.one.one"    （模式 1）
 //	"AS13335 one.one.one.one US" （模式 2）
 func formatMTRHostByMode(s trace.MTRHopStat, mode int, nameMode int, lang string, showIPs bool) string {
-	base := formatMTRHostBase(s, nameMode, showIPs)
-
-	// HostModeBase: only IP/PTR, no ASN, no geo
-	if mode == HostModeBase {
-		return base
-	}
-
-	if s.Geo == nil {
-		return base
-	}
-
-	// ASN 作为前缀
-	asnPrefix := ""
-	if s.Geo.Asnumber != "" {
-		asnPrefix = "AS" + s.Geo.Asnumber
-	}
-
-	var segs []string
-
-	switch mode {
-	case HostModeASN:
-		// 仅 ASN，无额外 geo
-	case HostModeCity:
-		city := geoField(s.Geo.City, s.Geo.CityEn, lang)
-		prov := geoField(s.Geo.Prov, s.Geo.ProvEn, lang)
-		country := geoField(s.Geo.Country, s.Geo.CountryEn, lang)
-		if city != "" {
-			segs = append(segs, city)
-		} else if prov != "" {
-			segs = append(segs, prov)
-		} else if country != "" {
-			segs = append(segs, country)
-		}
-	case HostModeOwner:
-		owner := s.Geo.Owner
-		if owner == "" {
-			owner = s.Geo.Isp
-		}
-		if owner != "" {
-			segs = append(segs, owner)
-		}
-	default: // HostModeFull
-		country := geoField(s.Geo.Country, s.Geo.CountryEn, lang)
-		prov := geoField(s.Geo.Prov, s.Geo.ProvEn, lang)
-		city := geoField(s.Geo.City, s.Geo.CityEn, lang)
-		if country != "" {
-			segs = append(segs, country)
-		}
-		if prov != "" && prov != country {
-			segs = append(segs, prov)
-		}
-		if city != "" && city != prov {
-			segs = append(segs, city)
-		}
-		owner := s.Geo.Owner
-		if owner == "" {
-			owner = s.Geo.Isp
-		}
-		if owner != "" {
-			segs = append(segs, owner)
-		}
-	}
-
-	// 拼接顺序：asnPrefix + base + geo
-	var parts []string
-	if asnPrefix != "" {
-		parts = append(parts, asnPrefix)
-	}
-	parts = append(parts, base)
-	geo := strings.Join(segs, ", ")
-	if geo != "" {
-		parts = append(parts, geo)
-	}
-	return strings.Join(parts, " ")
+	return joinMTRHostParts(buildMTRHostParts(s, mode, nameMode, lang, showIPs), ", ")
 }
 
 // formatMTRHostWithMPLS 构建 Host 列完整内容（含内联 MPLS），供表格打印器使用。
@@ -355,73 +282,13 @@ func buildMTRHostParts(s trace.MTRHopStat, mode int, nameMode int, lang string, 
 		return mtrHostParts{waiting: true}
 	}
 
-	base := formatMTRHostBase(s, nameMode, showIPs)
-
-	var asn string
-	var extras []string
-
-	if s.Geo != nil {
-		if s.Geo.Asnumber != "" {
-			asn = "AS" + s.Geo.Asnumber
-		}
-
-		switch mode {
-		case HostModeBase:
-			// 仅 IP/PTR，无 ASN，无 geo
-		case HostModeASN:
-			// 仅 ASN，无额外 geo
-		case HostModeCity:
-			city := geoField(s.Geo.City, s.Geo.CityEn, lang)
-			prov := geoField(s.Geo.Prov, s.Geo.ProvEn, lang)
-			country := geoField(s.Geo.Country, s.Geo.CountryEn, lang)
-			if city != "" {
-				extras = append(extras, city)
-			} else if prov != "" {
-				extras = append(extras, prov)
-			} else if country != "" {
-				extras = append(extras, country)
-			}
-		case HostModeOwner:
-			owner := s.Geo.Owner
-			if owner == "" {
-				owner = s.Geo.Isp
-			}
-			if owner != "" {
-				extras = append(extras, owner)
-			}
-		default: // HostModeFull
-			country := geoField(s.Geo.Country, s.Geo.CountryEn, lang)
-			prov := geoField(s.Geo.Prov, s.Geo.ProvEn, lang)
-			city := geoField(s.Geo.City, s.Geo.CityEn, lang)
-			if country != "" {
-				extras = append(extras, country)
-			}
-			if prov != "" && prov != country {
-				extras = append(extras, prov)
-			}
-			if city != "" && city != prov {
-				extras = append(extras, city)
-			}
-			owner := s.Geo.Owner
-			if owner == "" {
-				owner = s.Geo.Isp
-			}
-			if owner != "" {
-				extras = append(extras, owner)
-			}
-		}
+	parts := mtrHostParts{base: formatMTRHostBase(s, nameMode, showIPs)}
+	if mode == HostModeBase || s.Geo == nil {
+		return parts
 	}
-
-	// HostModeBase 不设置 ASN
-	if mode == HostModeBase {
-		asn = ""
-	}
-
-	return mtrHostParts{
-		asn:    asn,
-		base:   base,
-		extras: extras,
-	}
+	parts.asn = mtrASNLabel(s.Geo)
+	parts.extras = mtrGeoExtras(s.Geo, mode, lang)
+	return parts
 }
 
 // buildTUIHostParts 构建仅供 TUI 使用的 host 组成部分。
@@ -465,20 +332,7 @@ func formatTUIHost(parts mtrHostParts, asnW int) string {
 
 // formatReportHost 构建 report 格式的 host 文本（空格分隔，waiting 感知，含 MPLS）。
 func formatReportHost(s trace.MTRHopStat, mode int, nameMode int, lang string, showIPs bool) string {
-	p := buildMTRHostParts(s, mode, nameMode, lang, showIPs)
-	if p.waiting {
-		return "(waiting for reply)"
-	}
-
-	var parts []string
-	if p.asn != "" {
-		parts = append(parts, p.asn)
-	}
-	parts = append(parts, p.base)
-	if len(p.extras) > 0 {
-		parts = append(parts, strings.Join(p.extras, " "))
-	}
-	host := strings.Join(parts, " ")
+	host := joinMTRHostParts(buildMTRHostParts(s, mode, nameMode, lang, showIPs), " ")
 	if len(s.MPLS) > 0 {
 		host += " " + strings.Join(s.MPLS, " ")
 	}
@@ -572,91 +426,188 @@ type MTRReportOptions struct {
 //	100 ≤ width < 140 → maxHost = 20
 //	width ≥ 140  → maxHost = 24
 func MTRReportPrint(stats []trace.MTRHopStat, opts MTRReportOptions) {
-	lang := opts.Lang
-	if lang == "" {
-		lang = "cn"
-	}
-
-	// Start 行
+	lang := normalizeMTRReportLang(opts.Lang)
 	fmt.Printf("Start: %s\n", opts.StartTime.Format("2006-01-02T15:04:05-0700"))
 
-	// 预先格式化所有 host 字符串，以便确定对齐宽度
+	hosts, hostColW := prepareMTRReportHosts(stats, opts, lang)
+	printMTRReportHeader(opts, hostColW)
+	printMTRReportRows(stats, hosts, hostColW)
+}
+
+func joinMTRHostParts(parts mtrHostParts, extrasSep string) string {
+	if parts.waiting {
+		return "(waiting for reply)"
+	}
+	segments := make([]string, 0, 3)
+	if parts.asn != "" {
+		segments = append(segments, parts.asn)
+	}
+	segments = append(segments, parts.base)
+	if len(parts.extras) > 0 {
+		segments = append(segments, strings.Join(parts.extras, extrasSep))
+	}
+	return strings.Join(segments, " ")
+}
+
+func mtrASNLabel(data *ipgeo.IPGeoData) string {
+	if data == nil || data.Asnumber == "" {
+		return ""
+	}
+	return "AS" + data.Asnumber
+}
+
+func mtrGeoExtras(data *ipgeo.IPGeoData, mode int, lang string) []string {
+	switch mode {
+	case HostModeBase, HostModeASN:
+		return nil
+	case HostModeCity:
+		return singleMTRGeoExtra(mtrBestLocation(data, lang))
+	case HostModeOwner:
+		return singleMTRGeoExtra(mtrGeoOwner(data))
+	default:
+		return buildMTRFullGeoExtras(data, lang)
+	}
+}
+
+func singleMTRGeoExtra(value string) []string {
+	if value == "" {
+		return nil
+	}
+	return []string{value}
+}
+
+func mtrBestLocation(data *ipgeo.IPGeoData, lang string) string {
+	if city := geoField(data.City, data.CityEn, lang); city != "" {
+		return city
+	}
+	if prov := geoField(data.Prov, data.ProvEn, lang); prov != "" {
+		return prov
+	}
+	return geoField(data.Country, data.CountryEn, lang)
+}
+
+func mtrGeoOwner(data *ipgeo.IPGeoData) string {
+	if data == nil {
+		return ""
+	}
+	if data.Owner != "" {
+		return data.Owner
+	}
+	return data.Isp
+}
+
+func buildMTRFullGeoExtras(data *ipgeo.IPGeoData, lang string) []string {
+	country := geoField(data.Country, data.CountryEn, lang)
+	prov := geoField(data.Prov, data.ProvEn, lang)
+	city := geoField(data.City, data.CityEn, lang)
+	extras := make([]string, 0, 4)
+	if country != "" {
+		extras = append(extras, country)
+	}
+	if prov != "" && prov != country {
+		extras = append(extras, prov)
+	}
+	if city != "" && city != prov {
+		extras = append(extras, city)
+	}
+	if owner := mtrGeoOwner(data); owner != "" {
+		extras = append(extras, owner)
+	}
+	return extras
+}
+
+func normalizeMTRReportLang(lang string) string {
+	if lang == "" {
+		return "cn"
+	}
+	return lang
+}
+
+func prepareMTRReportHosts(stats []trace.MTRHopStat, opts MTRReportOptions, lang string) ([]string, int) {
 	hosts := make([]string, len(stats))
 	for i, s := range stats {
-		if opts.Wide {
-			hosts[i] = formatReportHost(s, HostModeFull, HostNamePTRorIP, lang, opts.ShowIPs)
-		} else {
-			hosts[i] = formatCompactReportHost(s, HostNamePTRorIP, opts.ShowIPs)
-		}
+		hosts[i] = buildMTRReportHost(s, opts, lang)
 	}
-
-	// 确定 host 列对齐宽度
-	var hostColW int
 	if opts.Wide {
-		// wide: 取所有 host + 表头中的最大可视宽度
-		hostColW = reportDisplayWidth(opts.SrcHost)
-		for _, h := range hosts {
-			if w := reportDisplayWidth(h); w > hostColW {
-				hostColW = w
-			}
-		}
-		hostColW++ // 加 1 列间距
-	} else {
-		tw, _, err := term.GetSize(int(os.Stdout.Fd()))
-		if err != nil || tw <= 0 {
-			tw = 80
-		}
-		switch {
-		case tw < 100:
-			hostColW = 16
-		case tw < 140:
-			hostColW = 20
-		default:
-			hostColW = 24
-		}
-		// 截断 host 到 hostColW
-		for i, h := range hosts {
-			if reportDisplayWidth(h) > hostColW {
-				hosts[i] = reportTruncateToWidth(h, hostColW)
-			}
+		return hosts, computeWideMTRReportHostWidth(hosts, opts.SrcHost)
+	}
+	hostColW := narrowMTRReportHostWidth()
+	truncateMTRReportHosts(hosts, hostColW)
+	return hosts, hostColW
+}
+
+func buildMTRReportHost(s trace.MTRHopStat, opts MTRReportOptions, lang string) string {
+	if opts.Wide {
+		return formatReportHost(s, HostModeFull, HostNamePTRorIP, lang, opts.ShowIPs)
+	}
+	return formatCompactReportHost(s, HostNamePTRorIP, opts.ShowIPs)
+}
+
+func computeWideMTRReportHostWidth(hosts []string, srcHost string) int {
+	hostColW := reportDisplayWidth(srcHost)
+	for _, h := range hosts {
+		if w := reportDisplayWidth(h); w > hostColW {
+			hostColW = w
 		}
 	}
+	return hostColW + 1
+}
 
-	// 度量列格式：右对齐，固定宽度
-	const metricsFmt = " %6s %5s %6s %6s %6s %6s %6s"
+func narrowMTRReportHostWidth() int {
+	tw, _, err := term.GetSize(int(os.Stdout.Fd()))
+	if err != nil || tw <= 0 {
+		tw = 80
+	}
+	switch {
+	case tw < 100:
+		return 16
+	case tw < 140:
+		return 20
+	default:
+		return 24
+	}
+}
 
-	// HOST 表头行
+func truncateMTRReportHosts(hosts []string, hostColW int) {
+	for i, h := range hosts {
+		if reportDisplayWidth(h) > hostColW {
+			hosts[i] = reportTruncateToWidth(h, hostColW)
+		}
+	}
+}
+
+func printMTRReportHeader(opts MTRReportOptions, hostColW int) {
 	hostHeader := opts.SrcHost
 	if !opts.Wide && reportDisplayWidth(hostHeader) > hostColW {
 		hostHeader = reportTruncateToWidth(hostHeader, hostColW)
 	}
+	fmt.Printf("HOST: %s%s\n", reportPadRight(hostHeader, hostColW), mtrReportHeaderMetrics())
+}
 
-	headerMetrics := fmt.Sprintf(metricsFmt, "Loss%", "Snt", "Last", "Avg", "Best", "Wrst", "StDev")
-	fmt.Printf("HOST: %s%s\n", reportPadRight(hostHeader, hostColW), headerMetrics)
+func mtrReportHeaderMetrics() string {
+	const metricsFmt = " %6s %5s %6s %6s %6s %6s %6s"
+	return fmt.Sprintf(metricsFmt, "Loss%", "Snt", "Last", "Avg", "Best", "Wrst", "StDev")
+}
 
-	// 数据行
-	// 前缀 "  N. " 占 5 字符（%3d. + 空格），与 "HOST: " 的 6 字符差 1，
-	// 将额外 1 格留给 host 列左侧自然padding。
+func printMTRReportRows(stats []trace.MTRHopStat, hosts []string, hostColW int) {
 	prevTTL := 0
 	for i, s := range stats {
-		prefix := fmt.Sprintf("%3d. ", s.TTL)
-		if s.TTL == prevTTL {
-			prefix = "     "
-		}
+		fmt.Printf("%s%s%s\n", mtrReportPrefix(s.TTL, prevTTL), reportPadRight(hosts[i], hostColW), formatMTRReportMetrics(s))
 		prevTTL = s.TTL
-
-		m := formatMTRMetricStrings(s)
-		metrics := fmt.Sprintf(metricsFmt,
-			m.loss,
-			m.snt,
-			m.last,
-			m.avg,
-			m.best,
-			m.wrst,
-			m.stdev,
-		)
-		fmt.Printf("%s%s%s\n", prefix, reportPadRight(hosts[i], hostColW), metrics)
 	}
+}
+
+func mtrReportPrefix(ttl int, prevTTL int) string {
+	if ttl == prevTTL {
+		return "     "
+	}
+	return fmt.Sprintf("%3d. ", ttl)
+}
+
+func formatMTRReportMetrics(s trace.MTRHopStat) string {
+	const metricsFmt = " %6s %5s %6s %6s %6s %6s %6s"
+	m := formatMTRMetricStrings(s)
+	return fmt.Sprintf(metricsFmt, m.loss, m.snt, m.last, m.avg, m.best, m.wrst, m.stdev)
 }
 
 // reportDisplayWidth 返回字符串的终端显示宽度（CJK 字符占 2 列）。

@@ -15,14 +15,14 @@
 <h6 align="center">HomePage: www.nxtrace.org</h6>
 
 <p align="center">
-  <a href="https://github.com/nxtrace/NTrace-V1/actions">
-    <img src="https://img.shields.io/github/actions/workflow/status/nxtrace/NTrace-V1/build.yml?branch=main&style=flat-square" alt="Github Actions">
+  <a href="https://github.com/nxtrace/NTrace-dev/actions">
+    <img src="https://img.shields.io/github/actions/workflow/status/nxtrace/NTrace-dev/build.yml?branch=main&style=flat-square" alt="Github Actions">
   </a>
-  <a href="https://goreportcard.com/report/github.com/nxtrace/NTrace-V1">
-    <img src="https://goreportcard.com/badge/github.com/nxtrace/NTrace-V1?style=flat-square">
+  <a href="https://goreportcard.com/report/github.com/nxtrace/NTrace-dev">
+    <img src="https://goreportcard.com/badge/github.com/nxtrace/NTrace-dev?style=flat-square">
   </a>
-  <a href="https://github.com/nxtrace/NTrace-V1/releases">
-    <img src="https://img.shields.io/github/release/nxtrace/NTrace-V1/all.svg?style=flat-square">
+  <a href="https://github.com/nxtrace/NTrace-dev/releases">
+    <img src="https://img.shields.io/github/release/nxtrace/NTrace-dev/all.svg?style=flat-square">
   </a>
 </p>
 
@@ -48,10 +48,10 @@ We are extremely grateful to [DMIT](https://dmit.io), [Misaka](https://misaka.io
 
 Document Language: English | [简体中文](README_zh_CN.md)
 
-⚠️ Please note: We welcome PR submissions from the community, but please submit your PRs to the [NTrace-V1](https://github.com/nxtrace/NTrace-V1) repository instead of [NTrace-core](https://github.com/nxtrace/NTrace-core) repository.<br>
-Regarding the NTrace-V1 and NTrace-core repositories:<br>
-Both will largely remain consistent with each other. All development work is done within the NTrace-V1 repository. The NTrace-V1 repository releases new versions first. After running stably for an undetermined period, we will synchronize that version to NTrace-core. This means that the NTrace-V1 repository serves as a "beta" or "testing" version.<br>
-Please note, there are exceptions to this synchronization. If a version of NTrace-V1 encounters a serious bug, NTrace-core will skip that flawed version and synchronize directly to the next version that resolves the issue.
+⚠️ Please note: We welcome PR submissions from the community, but please submit your PRs to the [NTrace-dev](https://github.com/nxtrace/NTrace-dev) repository instead of [NTrace-core](https://github.com/nxtrace/NTrace-core) repository.<br>
+Regarding the NTrace-dev and NTrace-core repositories:<br>
+Both will largely remain consistent with each other. All development work is done within the NTrace-dev repository. The NTrace-dev repository releases new versions first. After running stably for an undetermined period, we will synchronize that version to NTrace-core. This means that the NTrace-dev repository serves as a "beta" or "testing" version.<br>
+Please note, there are exceptions to this synchronization. If a version of NTrace-dev encounters a serious bug, NTrace-core will skip that flawed version and synchronize directly to the next version that resolves the issue.
 
 ### Automated Install
 
@@ -146,6 +146,79 @@ Please note, the repositories for all of the above installation methods are main
   For users not covered by the above methods, please go directly to [Release](https://www.nxtrace.org/downloads) to download the compiled binary executable.
   - `Release` provides compiled binary executables for many systems and different architectures. If none are available, you can compile it yourself.
   - Some essential dependencies of this project are not fully implemented on `Windows` by `Golang`, so currently, `NextTrace` is in an experimental support phase on the `Windows` platform.
+
+### Build Variants
+
+Starting from this release, NextTrace is published in **three flavors** under the same tag. Choose the one that best fits your use case:
+
+| Feature               | `nexttrace` (Full) | `nexttrace-tiny` |    `ntr`     |
+| --------------------- | :----------------: | :--------------: | :----------: |
+| Normal traceroute     |         ✅         |        ✅        |      —       |
+| MTR TUI               |         ✅         |        —         | ✅ (default) |
+| MTR report (`-r`)     |         ✅         |        —         |      ✅      |
+| MTR wide (`-w`)       |         ✅         |        —         |      ✅      |
+| MTR raw (`--raw`)     |         ✅         |        —         |      ✅      |
+| Globalping (`--from`) |         ✅         |        —         |      —       |
+| WebUI (`--deploy`)    |         ✅         |        —         |      —       |
+| Fast Trace (`-F`)     |         ✅         |        ✅        |      —       |
+| Default mode          |     traceroute     |    traceroute    |   MTR TUI    |
+| Binary name           |    `nexttrace`     | `nexttrace-tiny` |    `ntr`     |
+
+> **Note:** Package managers (Homebrew, AUR, Scoop, etc.) currently install the **Full** (`nexttrace`) version only.
+
+### Feature Matrix
+
+- **`nexttrace`** — Full-featured build. Includes everything: traceroute, MTR, Globalping, and WebUI.
+- **`nexttrace-tiny`** — Lightweight build. Normal traceroute only, no MTR / Globalping / WebUI. Suitable for embedded or minimal environments.
+- **`ntr`** — MTR-focused build. Runs MTR TUI by default. No Globalping / WebUI; no normal traceroute mode.
+
+### Manual Build
+
+Build from source with Go 1.22+ installed:
+
+```bash
+# Full (all features)
+go build -trimpath -o dist/nexttrace -ldflags "-w -s" .
+
+# Tiny (no MTR, no Globalping, no WebUI)
+go build -tags flavor_tiny -trimpath -o dist/nexttrace-tiny -ldflags "-w -s" .
+
+# NTR (MTR-only)
+go build -tags flavor_ntr -trimpath -o dist/ntr -ldflags "-w -s" .
+```
+
+Cross-compile example:
+
+```bash
+# Linux arm64, Tiny flavor
+GOOS=linux GOARCH=arm64 CGO_ENABLED=0 \
+  go build -tags flavor_tiny -trimpath -o dist/nexttrace-tiny_linux_arm64 -ldflags "-w -s" .
+```
+
+The `tiny` and `ntr` flavors use **compile-time build tags** to exclude modules — this is not a runtime switch. You can verify with `go version -m <binary>` that `gin` and `globalping-cli` are absent from `nexttrace-tiny` and `ntr`.
+
+The `.cross_compile.sh` script supports building flavors:
+
+```bash
+./.cross_compile.sh all     # Build all three flavors for all platforms
+./.cross_compile.sh full    # Build only nexttrace (Full)
+./.cross_compile.sh tiny    # Build only nexttrace-tiny
+./.cross_compile.sh ntr     # Build only ntr
+```
+
+### Release Assets Naming
+
+Release binaries follow this naming convention:
+
+```
+{binary}_{os}_{arch}[v{arm}][.exe][_softfloat]
+```
+
+Examples:
+
+- `nexttrace_linux_amd64`, `nexttrace-tiny_linux_amd64`, `ntr_linux_amd64`
+- `nexttrace_darwin_universal`, `nexttrace-tiny_darwin_universal`, `ntr_darwin_universal`
+- `nexttrace_windows_amd64.exe`, `ntr_windows_amd64.exe`
 
 ### Get Started
 
@@ -295,6 +368,31 @@ nexttrace --route-path www.time.com.my
 nexttrace --no-color 1.1.1.1
 # or use ENV
 export NO_COLOR=1
+```
+
+#### Advanced tuning quick guide
+
+| Flag | What it controls | Default / starting point | When to change it |
+| --- | --- | --- | --- |
+| `--queries` | Samples per hop in normal traceroute; explicit probe count per hop in MTR | traceroute: `3`; MTR report: `10` when omitted; MTR TUI/raw: unlimited when omitted | Raise to `5-10` on unstable paths |
+| `--max-attempts` | Hard cap on probe packets per hop | auto-sized from `--queries` | Raise on lossy links when replies arrive slowly |
+| `--parallel-requests` | Total in-flight probes across TTLs | `18` | Use `1` on multipath/load-balanced paths; keep `6-18` on stable links |
+| `--send-time` | Gap between packets inside one TTL group | `50ms` | Raise to `100-200ms` on rate-limited devices; ignored in MTR |
+| `--ttl-time` | Gap between TTL groups in traceroute; per-hop interval in MTR | traceroute: `300ms`; MTR: `1000ms` when omitted | Lower to speed up; raise on remote/rate-limited paths |
+| `--timeout` | Per-probe timeout | `1000ms` | Raise to `2000-3000ms` for intercontinental or high-loss paths |
+| `--psize` | Payload size | `52` bytes | Raise only for MTU or large-packet testing |
+
+These probe knobs are CLI-only today; `nt_config.yaml` does not yet store them. If you want reusable profiles, keep them in shell aliases or small wrapper scripts.
+
+```bash
+# Conservative profile for multipath or ECMP networks
+nexttrace --parallel-requests 1 --send-time 100 --ttl-time 500 --timeout 2000 example.com
+
+# Faster profile for stable single-path networks
+nexttrace --parallel-requests 18 --send-time 20 --ttl-time 150 example.com
+
+# Lossy long-haul profile
+nexttrace --queries 5 --max-attempts 10 --timeout 2500 example.com
 ```
 
 #### `NextTrace` supports MTR (My Traceroute) continuous probing mode
@@ -469,6 +567,55 @@ NextTrace `LeoMoeAPI` now utilizes the Proof of Work (POW) mechanism to prevent 
 
 All NextTrace IP geolocation `API DEMO` can refer to [here](https://github.com/nxtrace/NTrace-core/blob/main/ipgeo/)
 
+### Environment Variables
+
+NextTrace currently reads the following environment variables. For boolean switches, only `1` and `0` are recognized; other values fall back to the built-in default. For consistency, restart NextTrace after changing them.
+
+#### Core Runtime / Network
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `NEXTTRACE_DEVMODE` | `0` | Turn fatal errors into panics with stack traces for debugging. |
+| `NEXTTRACE_DEBUG` | unset | Print detected environment values while `GetEnv*` helpers parse them. |
+| `NEXTTRACE_DISABLEMPLS` | `0` | Disable MPLS display globally, similar to `--disable-mpls`. |
+| `NEXTTRACE_ENABLEHIDDENDSTIP` | `0` | Mask the destination IP and omit its hostname in output. |
+| `NEXTTRACE_RANDOMPORT` | `0` | Use a different random source port for each TCP/UDP probe. |
+| `NEXTTRACE_MAXATTEMPTS` | auto | Provide a default `--max-attempts` value when the CLI flag is not set. |
+| `NEXTTRACE_ICMPMODE` | `0` | Provide a default `--icmp-mode` value (`0=auto`, `1=socket`, `2=WinDivert` on Windows). |
+| `NEXTTRACE_UNINTERRUPTED` | `0` | When used together with `--raw`, rerun traceroute continuously instead of stopping after one round. |
+| `NEXTTRACE_PROXY` | unset | Outbound proxy URL for HTTP / WebSocket requests used by PoW, Geo APIs, tracemap, etc. |
+| `NEXTTRACE_DATAPROVIDER` | unset | Override the default IP geolocation provider (for example `ipinfo`). |
+
+#### Service / Web / Backend
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `NEXTTRACE_HOSTPORT` | `api.nxtrace.org` | Override the backend host or `host:port` used by LeoMoeAPI, tracemap, and FastIP flows. |
+| `NEXTTRACE_TOKEN` | unset | Pre-supplied LeoMoeAPI bearer token; when present, token fetching via PoW is skipped. |
+| `NEXTTRACE_POWPROVIDER` | `api.nxtrace.org` | Select the PoW provider. The built-in non-default alias is `sakura`. |
+| `NEXTTRACE_DEPLOY_ADDR` | unset | Default listen address for `--deploy` when `--listen` is not provided. |
+| `NEXTTRACE_ALLOW_CROSS_ORIGIN` | `0` | Only for `--deploy`: allow cross-origin browser access to the Web UI / API. Disabled by default for safety. |
+
+#### IP Database / Third-Party Providers
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `NEXTTRACE_IPINFOLOCALPATH` | auto search | Full path to `ipinfoLocal.mmdb` for the `IPInfoLocal` provider. |
+| `NEXTTRACE_CHUNZHENURL` | `http://127.0.0.1:2060` | Base URL of the Chunzhen lookup service. |
+| `NEXTTRACE_IPINFO_TOKEN` | unset | Token for the `IPInfo` provider. |
+| `NEXTTRACE_IPINSIGHT_TOKEN` | unset | Token for the `IPInsight` provider. |
+| `NEXTTRACE_IPAPI_BASE` | provider built-in URL | Override the base URL used by compatible IP API clients in the current implementation (`IPInfo`, `IPInsight`, `ip-api.com`). |
+| `IPDBONE_BASE_URL` | `https://api.ipdb.one` | Override the IPDB.One API base URL. |
+| `IPDBONE_API_ID` | unset | IPDB.One API ID. |
+| `IPDBONE_API_KEY` | unset | IPDB.One API key. |
+| `GLOBALPING_TOKEN` | unset | Authentication token for Globalping; raises the anonymous hourly limit when provided. |
+
+#### Config Discovery
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `XDG_CONFIG_HOME` | OS / shell default | If set, NextTrace also searches `$XDG_CONFIG_HOME/nexttrace` for `nt_config.yaml`. |
+
 ### For full usage list, please refer to the usage menu
 
 ```shell
@@ -508,14 +655,17 @@ Arguments:
       --icmp-mode                    Windows ONLY: Choose the method to listen
                                      for ICMP packets (1=Socket, 2=WinDivert;
                                      0=Auto)
-  -q  --queries                      Set the number of latency samples to
-                                     display for each hop. Default: 3
-      --max-attempts                 Set the maximum number of probe packets
-
-                                     per hop (instead of a fixed auto value)
-      --parallel-requests            Set ParallelRequests number. It should be
-                                     1 when there is a multi-routing. Default:
-                                     18
+  -q  --queries                      Latency samples per hop. Increase to 5-10
+                                     on unstable paths for a steadier view.
+                                     Default: 3
+      --max-attempts                 Advanced: hard cap on probe packets per
+                                     hop. Leave unset for auto sizing; raise on
+                                     lossy links if --queries is not enough
+      --parallel-requests            Advanced: total concurrent in-flight
+                                     probes across TTLs. Use 1 on
+                                     multipath/load-balanced paths; 6-18 is a
+                                     good starting range on stable links.
+                                     Default: 18
   -m  --max-hops                     Set the max number of hops (max TTL to be
                                      reached). Default: 30
   -d  --data-provider                Choose IP Geograph Data Provider [IP.SB,
@@ -556,20 +706,21 @@ Arguments:
       --listen                       Set listen address for web console (e.g.
                                      127.0.0.1:30080)
       --deploy                       Start the Gin powered web console
-  -z  --send-time                    Set how many [milliseconds] between
-                                     sending each packet. Default: 50ms.
-                                     Ignored in MTR mode. Default: 50
-  -i  --ttl-time                     Interval [ms] between TTL groups in normal
-                                     traceroute (default: 300ms). In MTR mode
-                                     (--mtr/-r/-w, including --raw), sets
-                                     per-hop probe interval: how long between
-                                     successive probes to the same hop
-                                     (default: 1000ms when omitted). Default:
-                                     300
-      --timeout                      The number of [milliseconds] to keep probe
-                                     sockets open before giving up on the
-                                     connection. Default: 1000
-      --psize                        Set the payload size. Default: 52
+  -z  --send-time                    Advanced: per-packet gap [ms] inside the
+                                     same TTL group. Lower is faster; raise to
+                                     100-200ms on rate-limited links. Ignored
+                                     in MTR mode. Default: 50
+  -i  --ttl-time                     Advanced: TTL-group interval [ms] in
+                                     normal traceroute. In MTR mode
+                                     (--mtr/-r/-w, including --raw), this
+                                     becomes per-hop probe interval. 500-1000ms
+                                     is a good MTR starting range
+      --timeout                      Per-probe timeout [ms]. Raise to 2000-3000
+                                     on slow intercontinental or high-loss
+                                     paths. Default: 1000
+      --psize                        Payload size in bytes. Keep 52 for normal
+                                     routing checks; raise only for MTU or
+                                     large-packet testing. Default: 52
       --dot-server                   Use DoT Server for DNS Parse [dnssb,
                                      aliyun, dnspod, google, cloudflare]
   -g  --language                     Choose the language for displaying [en,
@@ -707,7 +858,7 @@ This Project uses [JetBrain Open-Source Project License](https://jb.gg/OpenSourc
 
 - How to obtain the freshly baked binary executable of the latest commit?
 
-  > Please go to the most recent [Build & Release](https://github.com/nxtrace/NTrace-V1/actions/workflows/build.yml) workflow in GitHub Actions.
+  > Please go to the most recent [Build & Release](https://github.com/nxtrace/NTrace-dev/actions/workflows/build.yml) workflow in GitHub Actions.
 
 - Common questions
   - On Windows, ICMP mode requires manual firewall allowance for ICMP/ICMPv6

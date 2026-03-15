@@ -501,7 +501,7 @@ func TestTUI_RightAlignedMetricsBlock(t *testing.T) {
 
 // TestTUI_HostExpandsOnWideTerminal 宽终端(200列)时 Host 列宽应大于默认 40。
 func TestTUI_HostExpandsOnWideTerminal(t *testing.T) {
-	lo := computeLayout(200, tuiPrefixW)
+	lo := computeLayout(200, tuiPrefixW, 0)
 	if lo.hostW <= tuiHostDefault {
 		t.Errorf("wide terminal: hostW=%d, want > %d", lo.hostW, tuiHostDefault)
 	}
@@ -510,9 +510,31 @@ func TestTUI_HostExpandsOnWideTerminal(t *testing.T) {
 	}
 }
 
+// TestTUI_ComputeLayout_NonZeroSntHint 验证 sntWidthForMax 返回非零值后
+// computeLayout 使用更宽的 Snt 列（maxSnt>=1000 → sntWidth>=4）。
+func TestTUI_ComputeLayout_NonZeroSntHint(t *testing.T) {
+	maxSnt := 1500
+	sntHint := sntWidthForMax(maxSnt)
+	if sntHint <= tuiSntDefault {
+		t.Fatalf("sntWidthForMax(%d)=%d, want > %d", maxSnt, sntHint, tuiSntDefault)
+	}
+
+	lo := computeLayout(200, tuiPrefixW, sntHint)
+	if lo.sntW != sntHint {
+		t.Errorf("computeLayout sntW=%d, want %d (from sntWidthForMax(%d))", lo.sntW, sntHint, maxSnt)
+	}
+
+	// 同终端宽度下，更宽的 Snt 列应压缩 Host 列
+	lo0 := computeLayout(200, tuiPrefixW, 0)
+	if lo.hostW >= lo0.hostW {
+		t.Errorf("wider snt column should reduce host width: hostW(snt=%d)=%d, hostW(snt=0)=%d",
+			sntHint, lo.hostW, lo0.hostW)
+	}
+}
+
 // TestTUI_HostShrinksWhenWidthReduced 窄终端(80列)时 Host 列宽应被压缩。
 func TestTUI_HostShrinksWhenWidthReduced(t *testing.T) {
-	lo := computeLayout(80, tuiPrefixW)
+	lo := computeLayout(80, tuiPrefixW, 0)
 	if lo.hostW >= tuiHostDefault {
 		t.Errorf("narrow terminal: hostW=%d, should be < %d", lo.hostW, tuiHostDefault)
 	}
@@ -646,7 +668,7 @@ func TestTUI_DisplayWidthCJK(t *testing.T) {
 
 // TestTUI_ComputeLayoutZeroWidth 验证 termWidth=0 回退到默认值。
 func TestTUI_ComputeLayoutZeroWidth(t *testing.T) {
-	lo := computeLayout(0, tuiPrefixW)
+	lo := computeLayout(0, tuiPrefixW, 0)
 	if lo.termWidth != tuiDefaultTerm {
 		t.Errorf("termWidth=%d, want default %d", lo.termWidth, tuiDefaultTerm)
 	}
@@ -659,7 +681,7 @@ func TestTUI_ComputeLayoutZeroWidth(t *testing.T) {
 // 对于 termWidth >= 20（绝对下限），totalWidth() == termWidth（右锚定）。
 func TestTUI_TotalWidthInvariant(t *testing.T) {
 	for _, tw := range []int{20, 23, 25, 30, 40, 50, 60, 61, 80, 120, 200} {
-		lo := computeLayout(tw, tuiPrefixW)
+		lo := computeLayout(tw, tuiPrefixW, 0)
 		if lo.totalWidth() != tw {
 			t.Errorf("termWidth=%d: totalWidth()=%d, want exact match (hostW=%d, metricsWidth=%d)",
 				tw, lo.totalWidth(), lo.hostW, lo.metricsWidth())
@@ -674,7 +696,7 @@ func TestTUI_TotalWidthInvariant(t *testing.T) {
 // 即 metricsStart + metricsWidth == termWidth。
 func TestTUI_NarrowRightAnchor(t *testing.T) {
 	for _, tw := range []int{62, 65, 70, 80} {
-		lo := computeLayout(tw, tuiPrefixW)
+		lo := computeLayout(tw, tuiPrefixW, 0)
 		rightEdge := lo.metricsStart + lo.metricsWidth()
 		if rightEdge != tw {
 			t.Errorf("termWidth=%d: metricsStart(%d)+metricsWidth(%d)=%d, want %d",
@@ -1721,7 +1743,7 @@ func TestTUI_ManualASNAlignment_StillRightAnchored(t *testing.T) {
 	const width = 120
 	result := mtrTUIRenderStringWithWidth(header, stats, width)
 
-	lo := computeLayout(width, tuiPrefixWidthForMaxTTL(3))
+	lo := computeLayout(width, tuiPrefixWidthForMaxTTL(3), 0)
 	lines := strings.Split(result, "\r\n")
 
 	// 在数据行中，指标区应出现在 metricsStart 附近
@@ -1948,7 +1970,7 @@ func TestTUI_ThreeDigitTTLAlignment(t *testing.T) {
 	}
 
 	// 布局不变式
-	lo := computeLayout(width, prefixW)
+	lo := computeLayout(width, prefixW, 0)
 	if lo.totalWidth() != width {
 		t.Errorf("totalWidth()=%d, want %d (prefixW=%d, hostW=%d)", lo.totalWidth(), width, lo.prefixW, lo.hostW)
 	}
@@ -2011,7 +2033,7 @@ func TestTUI_PrefixWidthForMaxTTL(t *testing.T) {
 func TestTUI_TotalWidthInvariant_ThreeDigitTTL(t *testing.T) {
 	prefixW := tuiPrefixWidthForMaxTTL(100) // 5
 	for _, tw := range []int{21, 25, 30, 40, 60, 80, 120, 200} {
-		lo := computeLayout(tw, prefixW)
+		lo := computeLayout(tw, prefixW, 0)
 		if lo.totalWidth() != tw {
 			t.Errorf("termWidth=%d, prefixW=%d: totalWidth()=%d, want exact match",
 				tw, prefixW, lo.totalWidth())

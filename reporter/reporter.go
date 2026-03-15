@@ -44,67 +44,65 @@ func experimentTag() {
 }
 
 func (r *reporter) generateRouteReportNode(ip string, ipGeoData ipgeo.IPGeoData, ttl uint16) {
-
-	var success = true
-
 	defer r.wg.Done()
 
-	rpn := routeReportNode{}
-	ptr, err := net.LookupAddr(ip)
-
-	if err == nil {
-		if strings.Contains(strings.ToLower(ptr[0]), "ix") {
-			rpn.ix = true
-		} else {
-			rpn.ix = false
-		}
-	}
-	// TODO: 这种写法不好，后面再重构一下
-	// 判断反向解析的域名中又或者是IP地理位置数据库中，是否出现了 IX
-	if strings.Contains(strings.ToLower(ipGeoData.Isp), "exchange") || strings.Contains(strings.ToLower(ipGeoData.Isp), "ix") || strings.Contains(strings.ToLower(ipGeoData.Owner), "exchange") || strings.Contains(strings.ToLower(ipGeoData.Owner), "ix") {
-		rpn.ix = true
-	}
-
-	// TODO: 正则判断POP并且提取带宽大小等信息
-
-	// CN2 需要特殊处理，因为他们很多没有ASN
-	// 但是目前这种写法是不规范的，属于凭空标记4809的IP
-	// TODO: 用更好的方式显示 CN2 骨干网的路由 Path
-	if strings.HasPrefix(ip, "59.43") {
-		rpn.asn = "4809"
-	} else {
-		rpn.asn = ipGeoData.Asnumber
-	}
-
-	// 无论最后一跳是否为存在地理位置信息（AnyCast），都应该给予显示
-	if (ipGeoData.Country == "" || ipGeoData.Country == "LAN Address" || ipGeoData.Country == "-") && ip != r.targetIP {
-		success = false
-	} else {
-		if ipGeoData.City == "" {
-			rpn.geo = []string{ipGeoData.Country, ipGeoData.Prov}
-		} else {
-			rpn.geo = []string{ipGeoData.Country, ipGeoData.City}
-		}
+	node := routeReportNode{
+		ix:  routeReportNodeIX(ip, ipGeoData),
+		asn: routeReportNodeASN(ip, ipGeoData),
+		isp: routeReportNodeISP(ipGeoData),
 	}
 	if ipGeoData.Asnumber == "" {
-		rpn.asn = "*"
+		node.asn = "*"
 	}
+	geo, ok := routeReportNodeGeo(ip, ipGeoData, r.targetIP)
+	if !ok {
+		return
+	}
+	node.geo = geo
+	r.appendRouteReportNode(ttl, node)
+}
 
-	if ipGeoData.Isp == "" {
-		rpn.isp = ipGeoData.Owner
-	} else {
-		rpn.isp = ipGeoData.Isp
+func routeReportNodeIX(ip string, ipGeoData ipgeo.IPGeoData) bool {
+	ptr, err := net.LookupAddr(ip)
+	if err == nil && len(ptr) > 0 && strings.Contains(strings.ToLower(ptr[0]), "ix") {
+		return true
 	}
+	return routeReportContainsIX(ipGeoData.Isp) || routeReportContainsIX(ipGeoData.Owner)
+}
 
-	// 有效记录
-	if success {
-		// 锁住资源，防止同时写panic
-		r.routeReportLock.Lock()
-		// 添加到MAP中
-		r.routeReport[ttl] = append(r.routeReport[ttl], rpn)
-		// 写入完成，解锁释放资源给其他协程
-		r.routeReportLock.Unlock()
+func routeReportContainsIX(value string) bool {
+	value = strings.ToLower(value)
+	return strings.Contains(value, "exchange") || strings.Contains(value, "ix")
+}
+
+func routeReportNodeASN(ip string, ipGeoData ipgeo.IPGeoData) string {
+	if strings.HasPrefix(ip, "59.43") {
+		return "4809"
 	}
+	return ipGeoData.Asnumber
+}
+
+func routeReportNodeGeo(ip string, ipGeoData ipgeo.IPGeoData, targetIP string) ([]string, bool) {
+	if (ipGeoData.Country == "" || ipGeoData.Country == "LAN Address" || ipGeoData.Country == "-") && ip != targetIP {
+		return nil, false
+	}
+	if ipGeoData.City == "" {
+		return []string{ipGeoData.Country, ipGeoData.Prov}, true
+	}
+	return []string{ipGeoData.Country, ipGeoData.City}, true
+}
+
+func routeReportNodeISP(ipGeoData ipgeo.IPGeoData) string {
+	if ipGeoData.Isp != "" {
+		return ipGeoData.Isp
+	}
+	return ipGeoData.Owner
+}
+
+func (r *reporter) appendRouteReportNode(ttl uint16, node routeReportNode) {
+	r.routeReportLock.Lock()
+	r.routeReport[ttl] = append(r.routeReport[ttl], node)
+	r.routeReportLock.Unlock()
 }
 
 func (r *reporter) InitialBaseData() Reporter {

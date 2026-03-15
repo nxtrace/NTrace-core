@@ -19,11 +19,31 @@ var (
 	geoDotServer string        // 当前 dot-server 选项（如 "dnssb"）
 	geoFallback  bool   = true // DoT 失败时是否回退系统 DNS
 	geoMu        sync.RWMutex
+	geoApplyMu   sync.Mutex
+	geoScopeMu   sync.Mutex
+	geoScopeDot  string
+	geoScopePrev struct {
+		dotServer string
+		fallback  bool
+	}
+	geoScopeDepth int
 
 	// geoResolverOverride 允许测试注入自定义 resolver（仅测试用）。
 	// 非 nil 时 LookupHostForGeo 的 DoT 阶段使用该 resolver 替代 ResolverForDot 的结果。
 	geoResolverOverride *net.Resolver
 )
+
+func setGeoResolverOverride(resolver *net.Resolver) {
+	geoMu.Lock()
+	defer geoMu.Unlock()
+	geoResolverOverride = resolver
+}
+
+func getGeoResolverOverride() *net.Resolver {
+	geoMu.RLock()
+	defer geoMu.RUnlock()
+	return geoResolverOverride
+}
 
 // SetGeoDNSResolver 设置 Geo 解析使用的 DoT 服务器名称。
 // 空字符串表示仅使用系统 DNS。
@@ -38,6 +58,64 @@ func SetGeoDNSFallback(enabled bool) {
 	geoMu.Lock()
 	defer geoMu.Unlock()
 	geoFallback = enabled
+}
+
+// WithGeoDNSResolver 在 callback 生命周期内临时切换 Geo DNS resolver。
+// 该辅助会串行化不同 resolver 的切换与恢复，并允许相同 resolver 作用域安全嵌套。
+func WithGeoDNSResolver[T any](dotServer string, callback func() (T, error)) (T, error) {
+	if callback == nil {
+		var zero T
+		return zero, nil
+	}
+	if dotServer == "" {
+		return callback()
+	}
+
+	geoApplyMu.Lock()
+	if geoScopeDepth > 0 && geoScopeDot == dotServer {
+		geoScopeDepth++
+		geoApplyMu.Unlock()
+		defer releaseGeoDNSResolverScope()
+		return callback()
+	}
+	geoApplyMu.Unlock()
+
+	geoScopeMu.Lock()
+	prevDotServer, prevFallback := getGeoDNSConfig()
+	SetGeoDNSResolver(dotServer)
+	geoApplyMu.Lock()
+	geoScopeDot = dotServer
+	geoScopePrev.dotServer = prevDotServer
+	geoScopePrev.fallback = prevFallback
+	geoScopeDepth = 1
+	geoApplyMu.Unlock()
+	defer releaseGeoDNSResolverScope()
+
+	return callback()
+}
+
+func releaseGeoDNSResolverScope() {
+	geoApplyMu.Lock()
+	if geoScopeDepth <= 0 {
+		geoApplyMu.Unlock()
+		return
+	}
+	geoScopeDepth--
+	if geoScopeDepth > 0 {
+		geoApplyMu.Unlock()
+		return
+	}
+
+	prevDotServer := geoScopePrev.dotServer
+	prevFallback := geoScopePrev.fallback
+	geoScopeDot = ""
+	geoScopePrev.dotServer = ""
+	geoScopePrev.fallback = true
+	geoApplyMu.Unlock()
+
+	SetGeoDNSResolver(prevDotServer)
+	SetGeoDNSFallback(prevFallback)
+	geoScopeMu.Unlock()
 }
 
 // getGeoDNSConfig 返回当前快照；并发安全。
@@ -82,8 +160,8 @@ func LookupHostForGeo(ctx context.Context, host string) ([]net.IP, error) {
 
 	// ── 2. DoT 解析 ──
 	r := ResolverForDot(dotServer)
-	if geoResolverOverride != nil {
-		r = geoResolverOverride
+	if override := getGeoResolverOverride(); override != nil {
+		r = override
 	}
 	if r != nil {
 		ips, err := resolveHost(ctx, r, host)

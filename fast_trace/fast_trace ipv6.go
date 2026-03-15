@@ -141,25 +141,13 @@ func (f *FastTracer) testFastGZ_v6() {
 }
 
 func FastTestv6(traceMode trace.Method, outEnable bool, paramsFastTrace ParamsFastTrace) {
-	var c string
-
 	oe = outEnable
 
-	fmt.Println("您想测试哪些ISP的路由？\n1. 北京三网快速测试\n2. 上海三网快速测试\n3. 广州三网快速测试\n4. 全国电信\n5. 全国联通\n6. 全国移动\n7. 全国教育网\n8. 全国五网")
-	fmt.Print("请选择选项：")
-	_, err := fmt.Scanln(&c)
-	if err != nil {
-		c = "1"
-	}
-
-	// 仅在使用 UDPv6 探测时，确保 UDP 负载长度 ≥ 2
-	if traceMode == trace.UDPTrace && paramsFastTrace.PktSize < 2 {
-		fmt.Println("UDPv6 模式下，数据包长度不能小于 2，已自动调整为 2")
-		paramsFastTrace.PktSize = 2
-	}
-
+	choice := readFastTestv6Choice()
+	normalizeFastTestv6PacketSize(traceMode, &paramsFastTrace)
 	ft := FastTracer{
-		ParamsFastTrace: paramsFastTrace,
+		ParamsFastTrace:  paramsFastTrace,
+		TracerouteMethod: fastTestMethod(traceMode),
 	}
 
 	// 建立 WebSocket 连接
@@ -167,19 +155,42 @@ func FastTestv6(traceMode trace.Method, outEnable bool, paramsFastTrace ParamsFa
 	w.Interrupt = make(chan os.Signal, 1)
 	signal.Notify(w.Interrupt, os.Interrupt)
 	defer func() {
-		w.Conn.Close()
+		if w.Conn != nil {
+			w.Conn.Close()
+		}
 	}()
 
-	switch traceMode {
-	case trace.ICMPTrace:
-		ft.TracerouteMethod = trace.ICMPTrace
-	case trace.TCPTrace:
-		ft.TracerouteMethod = trace.TCPTrace
-	case trace.UDPTrace:
-		ft.TracerouteMethod = trace.UDPTrace
-	}
+	runFastTestv6Selection(&ft, choice)
+}
 
-	switch c {
+func readFastTestv6Choice() string {
+	var choice string
+	fmt.Println("您想测试哪些ISP的路由？\n1. 北京三网快速测试\n2. 上海三网快速测试\n3. 广州三网快速测试\n4. 全国电信\n5. 全国联通\n6. 全国移动\n7. 全国教育网\n8. 全国五网")
+	fmt.Print("请选择选项：")
+	if _, err := fmt.Scanln(&choice); err != nil {
+		return "1"
+	}
+	return choice
+}
+
+func normalizeFastTestv6PacketSize(traceMode trace.Method, paramsFastTrace *ParamsFastTrace) {
+	if traceMode == trace.UDPTrace && paramsFastTrace.PktSize < 2 {
+		fmt.Println("UDPv6 模式下，数据包长度不能小于 2，已自动调整为 2")
+		paramsFastTrace.PktSize = 2
+	}
+}
+
+func fastTestMethod(traceMode trace.Method) trace.Method {
+	switch traceMode {
+	case trace.ICMPTrace, trace.TCPTrace, trace.UDPTrace:
+		return traceMode
+	default:
+		return trace.ICMPTrace
+	}
+}
+
+func runFastTestv6Selection(ft *FastTracer, choice string) {
+	switch choice {
 	case "1":
 		ft.testFastBJ_v6()
 	case "2":

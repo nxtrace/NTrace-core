@@ -117,10 +117,11 @@ func (t *UDPTracer) launchTTL(ctx context.Context, s *internal.UDPSpec, ttl int)
 				}
 			}(ttl, i)
 
-			select {
-			case <-ctx.Done():
+			if i+1 == t.MaxAttempts {
 				return
-			case <-time.After(time.Millisecond * time.Duration(t.PacketInterval)):
+			}
+			if !waitForTraceDelay(ctx, time.Millisecond*time.Duration(t.PacketInterval)) {
+				return
 			}
 		}
 	}(ttl)
@@ -318,12 +319,17 @@ func (t *UDPTracer) Execute() (res *Result, err error) {
 		t.DstIP,
 		t.DstPort,
 	)
+	s.SourceDevice = t.SourceDevice
 
 	s.InitICMP()
 	s.InitUDP()
 	defer s.Close()
 
-	sigCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	baseCtx := t.Context
+	if baseCtx == nil {
+		baseCtx = context.Background()
+	}
+	sigCtx, stop := signal.NotifyContext(baseCtx, os.Interrupt, syscall.SIGTERM)
 	ctx, cancel := context.WithCancelCause(sigCtx)
 	t.final.Store(-1)
 
@@ -370,10 +376,8 @@ func (t *UDPTracer) Execute() (res *Result, err error) {
 
 		for ttl := t.BeginHop + 1; ttl <= t.MaxHops; ttl++ {
 			// 之后按 TTLInterval 周期启动后续 TTL 组
-			select {
-			case <-ctx.Done():
+			if !waitForTraceDelay(ctx, time.Millisecond*time.Duration(t.TTLInterval)) {
 				return
-			case <-time.After(time.Millisecond * time.Duration(t.TTLInterval)):
 			}
 
 			// 如果到达最终跳，则退出
@@ -403,7 +407,7 @@ func (t *UDPTracer) Execute() (res *Result, err error) {
 }
 
 func (t *UDPTracer) handleICMPMessage(msg internal.ReceivedMessage, finish time.Time, data []byte) {
-	mpls := extractMPLS(msg)
+	mpls := extractMPLS(msg, t.DisableMPLS)
 
 	seq, err := util.GetUDPSeq(data)
 	if err != nil {
@@ -434,38 +438,44 @@ func (t *UDPTracer) handleICMPMessage(msg internal.ReceivedMessage, finish time.
 	}
 }
 
-func (t *UDPTracer) send(ctx context.Context, s *internal.UDPSpec, ttl, i int) error {
-	defer t.wg.Done()
+func randomPayload(size int, offset int) []byte {
+	payload := make([]byte, size)
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	for i := offset; i < size; i++ {
+		payload[i] = byte(r.Intn(256))
+	}
+	return payload
+}
 
+func (t *UDPTracer) acquireSendPermit(ctx context.Context, ttl int) (func(), bool, error) {
 	if t.ttlComp(ttl) {
-		// 快路径短路：若该 TTL 已完成，直接返回避免竞争信号量与无谓发包
-		return nil
+		return nil, true, nil
 	}
-
-	if err := t.sem.Acquire(ctx, 1); err != nil {
-		return err
+	if err := acquireTraceSemaphore(ctx, t.sem); err != nil {
+		return nil, false, err
 	}
-	defer t.sem.Release(1)
-
+	release := func() { t.sem.Release(1) }
 	if f := t.final.Load(); f != -1 && ttl > int(f) {
-		return nil
+		release()
+		return nil, true, nil
 	}
-
 	if t.ttlComp(ttl) {
-		// 竞态兜底：获取信号量期间可能已完成，再次检查以避免冗余发包
-		return nil
+		release()
+		return nil, true, nil
 	}
+	return release, false, nil
+}
 
-	// 将 TTL 编码到高 8 位；将索引 i 编码到低 8 位
+func (t *UDPTracer) resolveSourcePort() int {
+	if !util.RandomPortEnabled() && t.SrcPort > 0 {
+		return t.SrcPort
+	}
+	_, srcPort := util.LocalIPPort(t.DstIP, t.SrcIP, "udp")
+	return srcPort
+}
+
+func (t *UDPTracer) buildUDPPacket(ttl, i, srcPort int) (int, *layers.IPv4, *layers.UDP, []byte) {
 	seq := (ttl << 8) | (i & 0xFF)
-
-	_, SrcPort := func() (net.IP, int) {
-		if !util.RandomPortEnabled() && t.SrcPort > 0 {
-			return nil, t.SrcPort
-		}
-		return util.LocalIPPort(t.DstIP, t.SrcIP, "udp")
-	}()
-
 	ipHeader := &layers.IPv4{
 		Version:  4,
 		Id:       uint16(seq),
@@ -474,72 +484,79 @@ func (t *UDPTracer) send(ctx context.Context, s *internal.UDPSpec, ttl, i int) e
 		Protocol: layers.IPProtocolUDP,
 		TTL:      uint8(ttl),
 	}
-
 	udpHeader := &layers.UDP{
-		SrcPort: layers.UDPPort(SrcPort),
+		SrcPort: layers.UDPPort(srcPort),
 		DstPort: layers.UDPPort(t.DstPort),
 	}
+	return seq, ipHeader, udpHeader, randomPayload(t.PktSize, 0)
+}
 
-	desiredPayloadSize := t.PktSize
-	payload := make([]byte, desiredPayloadSize)
-
-	// 设置随机种子
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	for k := range payload {
-		payload[k] = byte(r.Intn(256))
-	}
-
-	if t.OSType == 1 {
-		// 记录 TTL 队列
-		t.enqueueTTLPort(ttl, i, SrcPort)
-	}
-
-	// 登记 pending，并启动超时守护
+func (t *UDPTracer) startSendTimeout(ctx context.Context, ttl, i, seq int) {
 	t.markPending(ttl, i)
 	go func(seq, ttl, i int) {
-		select {
-		case <-ctx.Done():
+		if !waitForTraceDelay(ctx, t.Timeout) {
 			_ = t.clearPending(ttl, i)
 			return
-		case <-time.After(t.Timeout):
-			// 仍未完成且未超出 final/未达成 ttlComp 才补位
-			if !t.clearPending(ttl, i) {
-				return
-			}
-
-			if f := t.final.Load(); f != -1 && ttl > int(f) {
-				return
-			}
-
-			if t.ttlComp(ttl) {
-				return
-			}
-
-			h := Hop{
-				Success: false,
-				Address: nil,
-				TTL:     ttl,
-				RTT:     0,
-				Error:   errHopLimitTimeout,
-			}
-
-			_, _ = t.res.add(h, i, t.NumMeasurements, t.MaxAttempts)
-			if t.OSType != 1 {
-				t.dropSent(seq)
-			} else {
-				t.dropByAttempt(ttl, i)
-			}
 		}
-	}(seq, ttl, i)
+		if !t.clearPending(ttl, i) {
+			return
+		}
+		if f := t.final.Load(); f != -1 && ttl > int(f) {
+			return
+		}
+		if t.ttlComp(ttl) {
+			return
+		}
 
+		h := Hop{
+			Success: false,
+			Address: nil,
+			TTL:     ttl,
+			RTT:     0,
+			Error:   errHopLimitTimeout,
+		}
+		_, _ = t.res.add(h, i, t.NumMeasurements, t.MaxAttempts)
+		if t.OSType != 1 {
+			t.dropSent(seq)
+			return
+		}
+		t.dropByAttempt(ttl, i)
+	}(seq, ttl, i)
+}
+
+func (t *UDPTracer) prepareDarwinSend(ttl, i, srcPort int) {
+	if t.OSType == 1 {
+		t.enqueueTTLPort(ttl, i, srcPort)
+	}
+}
+
+func (t *UDPTracer) finalizeSent(seq, srcPort int, start time.Time) {
+	if t.OSType != 1 {
+		t.storeSent(seq, 0, 0, srcPort, start)
+	}
+}
+
+func (t *UDPTracer) send(ctx context.Context, s *internal.UDPSpec, ttl, i int) error {
+	defer t.wg.Done()
+
+	release, skip, err := t.acquireSendPermit(ctx, ttl)
+	if err != nil {
+		return err
+	}
+	if skip {
+		return nil
+	}
+	defer release()
+
+	srcPort := t.resolveSourcePort()
+	seq, ipHeader, udpHeader, payload := t.buildUDPPacket(ttl, i, srcPort)
+	t.prepareDarwinSend(ttl, i, srcPort)
+	t.startSendTimeout(ctx, ttl, i, seq)
 	start, err := s.SendUDP(ctx, ipHeader, udpHeader, payload)
 	if err != nil {
 		_ = t.clearPending(ttl, i)
 		return err
 	}
-
-	if t.OSType != 1 {
-		t.storeSent(seq, 0, 0, SrcPort, start)
-	}
+	t.finalizeSent(seq, srcPort, start)
 	return nil
 }

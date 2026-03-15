@@ -212,86 +212,94 @@ const mtrParserMaxCSI = 64
 func (p *mtrInputParser) Feed(b byte) mtrInputAction {
 	switch p.state {
 	case mtrStateGround:
-		if b == 0x1B { // ESC
-			p.state = mtrStateEsc
-			return mtrActionNone
-		}
-		return mapKeyToAction(b)
-
+		return p.feedGround(b)
 	case mtrStateEsc:
-		switch b {
-		case '[':
-			p.state = mtrStateCSI
-			p.csiN = 0
-			return mtrActionNone
-		case 'O':
-			p.state = mtrStateSS3
-			return mtrActionNone
-		case ']':
-			p.state = mtrStateOSC
-			return mtrActionNone
-		default:
-			// ESC + 非序列头 → 忽略两个字节，回到 ground
-			p.state = mtrStateGround
-			return mtrActionNone
-		}
-
+		return p.feedEsc(b)
 	case mtrStateCSI:
-		p.csiN++
-		switch {
-		case b == 'M': // X10 mouse: ESC [ M Cb Cx Cy
-			p.state = mtrStateX10Mouse
-			p.csiN = 0
-			return mtrActionNone
-		case b == '<': // SGR mouse: ESC [ < params M/m
-			p.state = mtrStateSGRMouse
-			return mtrActionNone
-		case b == 'I' || b == 'O': // Focus in/out: ESC [ I / ESC [ O
-			p.state = mtrStateGround
-			return mtrActionNone
-		case b >= 0x40 && b <= 0x7E: // CSI 终止符
-			p.state = mtrStateGround
-			return mtrActionNone
-		case p.csiN > mtrParserMaxCSI: // 安全限制
-			p.state = mtrStateGround
-			return mtrActionNone
-		default: // CSI 参数/中间字节，继续吞
-			return mtrActionNone
-		}
-
+		return p.feedCSI(b)
 	case mtrStateSS3:
-		// SS3 序列只有 1 字节最终字符
-		p.state = mtrStateGround
-		return mtrActionNone
-
+		return p.feedSS3()
 	case mtrStateOSC:
-		// OSC 到 BEL (0x07) 或 ST (ESC \) 结束
-		if b == 0x07 {
-			p.state = mtrStateGround
-		} else if b == 0x1B {
-			// 可能是 ST 的 ESC 前缀；简化处理：回到 mtrStateEsc
-			p.state = mtrStateEsc
-		}
-		return mtrActionNone
-
+		return p.feedOSC(b)
 	case mtrStateX10Mouse:
-		p.csiN++
-		if p.csiN >= 3 { // 吃完 Cb Cx Cy 3 字节
-			p.state = mtrStateGround
-		}
-		return mtrActionNone
-
+		return p.feedX10Mouse()
 	case mtrStateSGRMouse:
-		// SGR mouse: 数字、分号、最终 M 或 m
-		if b == 'M' || b == 'm' {
-			p.state = mtrStateGround
-		}
-		return mtrActionNone
-
+		return p.feedSGRMouse(b)
 	default:
 		p.state = mtrStateGround
 		return mtrActionNone
 	}
+}
+
+func (p *mtrInputParser) feedGround(b byte) mtrInputAction {
+	if b == 0x1B {
+		p.state = mtrStateEsc
+		return mtrActionNone
+	}
+	return mapKeyToAction(b)
+}
+
+func (p *mtrInputParser) feedEsc(b byte) mtrInputAction {
+	switch b {
+	case '[':
+		p.state = mtrStateCSI
+		p.csiN = 0
+	case 'O':
+		p.state = mtrStateSS3
+	case ']':
+		p.state = mtrStateOSC
+	default:
+		p.state = mtrStateGround
+	}
+	return mtrActionNone
+}
+
+func (p *mtrInputParser) feedCSI(b byte) mtrInputAction {
+	p.csiN++
+	switch {
+	case b == 'M':
+		p.state = mtrStateX10Mouse
+		p.csiN = 0
+	case b == '<':
+		p.state = mtrStateSGRMouse
+	case b == 'I' || b == 'O':
+		p.state = mtrStateGround
+	case b >= 0x40 && b <= 0x7E:
+		p.state = mtrStateGround
+	case p.csiN > mtrParserMaxCSI:
+		p.state = mtrStateGround
+	}
+	return mtrActionNone
+}
+
+func (p *mtrInputParser) feedSS3() mtrInputAction {
+	p.state = mtrStateGround
+	return mtrActionNone
+}
+
+func (p *mtrInputParser) feedOSC(b byte) mtrInputAction {
+	switch b {
+	case 0x07:
+		p.state = mtrStateGround
+	case 0x1B:
+		p.state = mtrStateEsc
+	}
+	return mtrActionNone
+}
+
+func (p *mtrInputParser) feedX10Mouse() mtrInputAction {
+	p.csiN++
+	if p.csiN >= 3 {
+		p.state = mtrStateGround
+	}
+	return mtrActionNone
+}
+
+func (p *mtrInputParser) feedSGRMouse(b byte) mtrInputAction {
+	if b == 'M' || b == 'm' {
+		p.state = mtrStateGround
+	}
+	return mtrActionNone
 }
 
 // mapKeyToAction 将普通单字节映射为动作。
@@ -352,7 +360,9 @@ func (u *mtrUI) ReadKeysLoop(ctx context.Context) {
 			action := parser.Feed(buf[i])
 			switch action {
 			case mtrActionQuit:
-				u.cancel()
+				if u.cancel != nil {
+					u.cancel()
+				}
 				return
 			case mtrActionPause:
 				atomic.StoreInt32(&u.paused, 1)

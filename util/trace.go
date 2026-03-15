@@ -24,6 +24,70 @@ func GetIPHeaderLength(data []byte) (int, error) {
 	}
 }
 
+func extractIPv4Payload(data []byte, hdrLen int) ([]byte, error) {
+	if len(data) < hdrLen {
+		return nil, errors.New("inner IPv4 header too short")
+	}
+	return data[hdrLen:], nil
+}
+
+func nextIPv6PayloadOffset(data []byte, offset int, next byte) (int, byte, error) {
+	switch next {
+	case 0, 43, 60:
+		if offset+2 > len(data) {
+			return 0, 0, errors.New("IPv6 ext too short")
+		}
+		hdrExtLen := int(data[offset+1])
+		extLen := (hdrExtLen + 1) * 8
+		if offset+extLen > len(data) {
+			return 0, 0, errors.New("IPv6 ext overflow")
+		}
+		return offset + extLen, data[offset], nil
+	case 44:
+		if offset+8 > len(data) {
+			return 0, 0, errors.New("IPv6 frag too short")
+		}
+		return offset + 8, data[offset], nil
+	case 51:
+		if offset+2 > len(data) {
+			return 0, 0, errors.New("IPv6 AH too short")
+		}
+		ahLen := int(data[offset+1])
+		extLen := (ahLen + 2) * 4
+		if offset+extLen > len(data) {
+			return 0, 0, errors.New("IPv6 AH overflow")
+		}
+		return offset + extLen, data[offset], nil
+	case 50:
+		return 0, 0, errors.New("IPv6 ESP encountered; cannot locate upper-layer")
+	default:
+		return offset, next, nil
+	}
+}
+
+func extractIPv6Payload(data []byte, hdrLen int) ([]byte, error) {
+	if len(data) < hdrLen {
+		return nil, errors.New("inner IPv6 header too short")
+	}
+
+	offset := hdrLen
+	next := data[6]
+	for {
+		nextOffset, nextHeader, err := nextIPv6PayloadOffset(data, offset, next)
+		if err != nil {
+			return nil, err
+		}
+		if nextOffset == offset {
+			if offset > len(data) {
+				return nil, errors.New("IPv6 offset out of range")
+			}
+			return data[offset:], nil
+		}
+		offset = nextOffset
+		next = nextHeader
+	}
+}
+
 func GetICMPResponsePayload(data []byte) ([]byte, error) {
 	if len(data) < 1 {
 		return nil, errors.New("received invalid IP header")
@@ -35,56 +99,9 @@ func GetICMPResponsePayload(data []byte) ([]byte, error) {
 	}
 	switch version {
 	case 4:
-		if len(data) < hdrLen {
-			return nil, errors.New("inner IPv4 header too short")
-		}
-		return data[hdrLen:], nil
+		return extractIPv4Payload(data, hdrLen)
 	case 6:
-		if len(data) < hdrLen {
-			return nil, errors.New("inner IPv6 header too short")
-		}
-		next := data[6]
-		offset := hdrLen
-		for {
-			switch next {
-			case 0, 43, 60: // HBH, Routing, DestOpts
-				if offset+2 > len(data) {
-					return nil, errors.New("IPv6 ext too short")
-				}
-				hdrExtLen := int(data[offset+1])
-				extLen := (hdrExtLen + 1) * 8
-				if offset+extLen > len(data) {
-					return nil, errors.New("IPv6 ext overflow")
-				}
-				next = data[offset] // Next Header 是扩展头的第 0 字节
-				offset += extLen
-			case 44: // Fragment
-				if offset+8 > len(data) {
-					return nil, errors.New("IPv6 frag too short")
-				}
-				next = data[offset] // 第 0 字节仍是 Next Header
-				offset += 8
-			case 51: // AH
-				if offset+2 > len(data) {
-					return nil, errors.New("IPv6 AH too short")
-				}
-				ahLen := int(data[offset+1]) // 单位 4 字节，不含前 2 个 32-bit
-				extLen := (ahLen + 2) * 4
-				if offset+extLen > len(data) {
-					return nil, errors.New("IPv6 AH overflow")
-				}
-				next = data[offset]
-				offset += extLen
-			case 50: // ESP
-				return nil, errors.New("IPv6 ESP encountered; cannot locate upper-layer")
-			default:
-				// 到达上层（TCP=6, UDP=17, ICMPv6=58 等）
-				if offset > len(data) {
-					return nil, errors.New("IPv6 offset out of range")
-				}
-				return data[offset:], nil
-			}
-		}
+		return extractIPv6Payload(data, hdrLen)
 	default:
 		return nil, errors.New("unknown IP version")
 	}
