@@ -117,8 +117,8 @@ func initFastTraceWS() *wshandle.WsConn {
 }
 
 func closeFastTraceWS(w *wshandle.WsConn) {
-	if w != nil && w.Conn != nil {
-		w.Conn.Close()
+	if w != nil {
+		w.Close()
 	}
 }
 

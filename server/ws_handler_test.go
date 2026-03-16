@@ -88,6 +88,53 @@ func (f *fakeWSConn) NextReader() (messageType int, r io.Reader, err error) {
 	return 0, nil, io.EOF
 }
 
+type fakeWSInitConn struct {
+	deadlines []time.Time
+	readLimit int64
+	message   []byte
+	err       error
+}
+
+func (f *fakeWSInitConn) SetReadDeadline(t time.Time) error {
+	f.deadlines = append(f.deadlines, t)
+	return nil
+}
+
+func (f *fakeWSInitConn) SetReadLimit(limit int64) {
+	f.readLimit = limit
+}
+
+func (f *fakeWSInitConn) ReadMessage() (messageType int, p []byte, err error) {
+	if f.err != nil {
+		return 0, nil, f.err
+	}
+	return websocket.TextMessage, f.message, nil
+}
+
+func TestReadWSInitMessage_ClearsDeadlineAfterSuccessfulRead(t *testing.T) {
+	conn := &fakeWSInitConn{message: []byte(`{"target":"example.com"}`)}
+
+	msg, err := readWSInitMessage(conn)
+	if err != nil {
+		t.Fatalf("readWSInitMessage returned error: %v", err)
+	}
+	if string(msg) != `{"target":"example.com"}` {
+		t.Fatalf("readWSInitMessage()=%q, want payload unchanged", string(msg))
+	}
+	if conn.readLimit != maxWSInitMessageBytes {
+		t.Fatalf("SetReadLimit=%d, want %d", conn.readLimit, maxWSInitMessageBytes)
+	}
+	if len(conn.deadlines) != 2 {
+		t.Fatalf("SetReadDeadline called %d times, want 2", len(conn.deadlines))
+	}
+	if conn.deadlines[0].IsZero() {
+		t.Fatal("initial read deadline should be set")
+	}
+	if !conn.deadlines[1].IsZero() {
+		t.Fatalf("final read deadline=%v, want zero time", conn.deadlines[1])
+	}
+}
+
 func TestWSTraceSessionSend_QueueOverflowReturnsErrSlowConsumer(t *testing.T) {
 	conn := newFakeWSConn(true)
 	session := newWSTraceSession(conn, "cn", 1)

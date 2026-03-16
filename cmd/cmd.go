@@ -723,8 +723,8 @@ func initLeoWebsocket(dataOrigin, powProvider *string) *wshandle.WsConn {
 }
 
 func closeLeoWebsocket(leoWs *wshandle.WsConn) {
-	if leoWs != nil && leoWs.Conn != nil {
-		_ = leoWs.Conn.Close()
+	if leoWs != nil {
+		leoWs.Close()
 	}
 }
 

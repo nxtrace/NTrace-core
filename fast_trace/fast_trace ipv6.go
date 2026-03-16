@@ -155,9 +155,7 @@ func FastTestv6(traceMode trace.Method, outEnable bool, paramsFastTrace ParamsFa
 	w.Interrupt = make(chan os.Signal, 1)
 	signal.Notify(w.Interrupt, os.Interrupt)
 	defer func() {
-		if w.Conn != nil {
-			w.Conn.Close()
-		}
+		w.Close()
 	}()
 
 	runFastTestv6Selection(&ft, choice)
