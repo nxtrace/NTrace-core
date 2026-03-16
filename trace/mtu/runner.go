@@ -70,6 +70,7 @@ func runWithProber(ctx context.Context, cfg Config, p prober) (*Result, error) {
 	for ttl := cfg.BeginHop; ttl <= cfg.MaxHops; ttl++ {
 		var hop Hop
 		gotHop := false
+		ttlPMTU := 0
 
 		for attempt := 0; attempt < cfg.Queries; {
 			payloadSize := payloadSizeForMTU(res.PathMTU, res.IPVersion)
@@ -88,6 +89,7 @@ func runWithProber(ctx context.Context, cfg Config, p prober) (*Result, error) {
 						return nil, err
 					}
 					res.PathMTU = nextMTU
+					ttlPMTU = candidatePathMTU(ttlPMTU, nextMTU)
 					continue
 				}
 				return nil, err
@@ -99,6 +101,9 @@ func runWithProber(ctx context.Context, cfg Config, p prober) (*Result, error) {
 			}
 
 			hop = buildHop(cfg, ttl, resp)
+			if hop.PMTU == 0 && ttlPMTU > 0 {
+				hop.PMTU = ttlPMTU
+			}
 			res.PathMTU = candidatePathMTU(res.PathMTU, hop.PMTU)
 			if hop.PMTU != 0 && res.PathMTU != hop.PMTU {
 				hop.PMTU = res.PathMTU
@@ -108,7 +113,7 @@ func runWithProber(ctx context.Context, cfg Config, p prober) (*Result, error) {
 		}
 
 		if !gotHop {
-			hop = Hop{TTL: ttl, Event: EventTimeout}
+			hop = Hop{TTL: ttl, Event: EventTimeout, PMTU: ttlPMTU}
 		}
 		res.Hops = append(res.Hops, hop)
 
