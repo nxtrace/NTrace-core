@@ -131,7 +131,11 @@ func printMTUResult(w io.Writer, result *mtutrace.Result) error {
 
 func formatMTUHopLine(hop mtutrace.Hop) string {
 	if hop.Event == mtutrace.EventTimeout {
-		return fmt.Sprintf("%2d  *", hop.TTL)
+		line := fmt.Sprintf("%2d  *", hop.TTL)
+		if hop.PMTU > 0 {
+			line += fmt.Sprintf("  pmtu %d", hop.PMTU)
+		}
+		return line
 	}
 
 	target := hop.IP
