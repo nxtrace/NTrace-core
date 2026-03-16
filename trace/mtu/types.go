@@ -45,6 +45,7 @@ type Result struct {
 	Protocol   string `json:"protocol"`
 	IPVersion  int    `json:"ip_version"`
 	StartMTU   int    `json:"start_mtu"`
+	ProbeSize  int    `json:"probe_size"`
 	PathMTU    int    `json:"path_mtu"`
 	Hops       []Hop  `json:"hops"`
 }

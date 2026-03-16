@@ -59,14 +59,17 @@ func TestRunWithProberShrinksPMTUAndRetriesSameTTL(t *testing.T) {
 	if res.PathMTU != 1400 {
 		t.Fatalf("path mtu = %d, want 1400", res.PathMTU)
 	}
+	if res.ProbeSize != 65000 {
+		t.Fatalf("probe size = %d, want 65000", res.ProbeSize)
+	}
 	if len(res.Hops) != 3 {
 		t.Fatalf("hop count = %d, want 3", len(res.Hops))
 	}
 	if got := res.Hops[1].PMTU; got != 1400 {
 		t.Fatalf("ttl 2 pmtu = %d, want 1400", got)
 	}
-	if got := prober.plans[0].PayloadSize; got != 1472 {
-		t.Fatalf("initial payload size = %d, want 1472", got)
+	if got := prober.plans[0].PayloadSize; got != 64972 {
+		t.Fatalf("initial payload size = %d, want 64972", got)
 	}
 	if got := prober.plans[2].PayloadSize; got != 1372 {
 		t.Fatalf("payload size after local mtu shrink = %d, want 1372", got)

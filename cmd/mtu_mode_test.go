@@ -46,6 +46,7 @@ func TestPrintMTUResultIncludesPMTUAndSummary(t *testing.T) {
 		Target:     "example.com",
 		ResolvedIP: "203.0.113.9",
 		StartMTU:   1500,
+		ProbeSize:  65000,
 		PathMTU:    1400,
 		Hops: []mtutrace.Hop{
 			{TTL: 1, Event: mtutrace.EventTimeExceeded, IP: "192.0.2.1", RTTMs: 12.5, PMTU: 1400},
@@ -57,7 +58,7 @@ func TestPrintMTUResultIncludesPMTUAndSummary(t *testing.T) {
 	}
 	output := buf.String()
 	for _, want := range []string{
-		"tracepath to example.com (203.0.113.9), start MTU 1500",
+		"tracepath to example.com (203.0.113.9), start MTU 1500, 65000 byte packets",
 		"pmtu 1400",
 		"Path MTU: 1400",
 		" 2  *",

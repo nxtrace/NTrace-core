@@ -56,12 +56,14 @@ func runWithProber(ctx context.Context, cfg Config, p prober) (*Result, error) {
 	}
 
 	startMTU := initialPathMTU(cfg)
+	probeMTU := initialProbeMTU(cfg.ipVersion())
 	res := &Result{
 		Target:     cfg.Target,
 		ResolvedIP: cfg.DstIP.String(),
 		Protocol:   "udp",
 		IPVersion:  cfg.ipVersion(),
 		StartMTU:   startMTU,
+		ProbeSize:  probeMTU,
 		PathMTU:    startMTU,
 		Hops:       make([]Hop, 0, cfg.MaxHops-cfg.BeginHop+1),
 	}
@@ -73,7 +75,7 @@ func runWithProber(ctx context.Context, cfg Config, p prober) (*Result, error) {
 		ttlPMTU := 0
 
 		for attempt := 0; attempt < cfg.Queries; {
-			payloadSize := payloadSizeForMTU(res.PathMTU, res.IPVersion)
+			payloadSize := payloadSizeForMTU(probeMTU, res.IPVersion)
 			resp, err := p.Probe(ctx, probePlan{
 				TTL:         ttl,
 				Token:       token,
@@ -84,11 +86,16 @@ func runWithProber(ctx context.Context, cfg Config, p prober) (*Result, error) {
 			if err != nil {
 				var mtuErr *localMTUError
 				if errors.As(err, &mtuErr) {
-					nextMTU := candidatePathMTU(res.PathMTU, mtuErr.MTU)
-					if nextMTU == res.PathMTU {
+					reportedMTU := mtuErr.MTU
+					if reportedMTU <= 0 {
+						reportedMTU = res.PathMTU
+					}
+					nextMTU := candidatePathMTU(probeMTU, reportedMTU)
+					if nextMTU == probeMTU {
 						return nil, err
 					}
-					res.PathMTU = nextMTU
+					probeMTU = nextMTU
+					res.PathMTU = candidatePathMTU(res.PathMTU, nextMTU)
 					ttlPMTU = candidatePathMTU(ttlPMTU, nextMTU)
 					continue
 				}
@@ -104,6 +111,7 @@ func runWithProber(ctx context.Context, cfg Config, p prober) (*Result, error) {
 			if hop.PMTU == 0 && ttlPMTU > 0 {
 				hop.PMTU = ttlPMTU
 			}
+			probeMTU = candidatePathMTU(probeMTU, hop.PMTU)
 			res.PathMTU = candidatePathMTU(res.PathMTU, hop.PMTU)
 			if hop.PMTU != 0 && res.PathMTU != hop.PMTU {
 				hop.PMTU = res.PathMTU
@@ -180,6 +188,13 @@ func initialPathMTU(cfg Config) int {
 		return 1280
 	}
 	return 1500
+}
+
+func initialProbeMTU(ipVersion int) int {
+	if ipVersion == 6 {
+		return 65000
+	}
+	return 65000
 }
 
 func payloadSizeForMTU(pathMTU, ipVersion int) int {

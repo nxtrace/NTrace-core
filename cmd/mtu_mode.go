@@ -116,8 +116,8 @@ func printMTUResult(w io.Writer, result *mtutrace.Result) error {
 	if result == nil {
 		return errors.New("nil mtu result")
 	}
-	if _, err := fmt.Fprintf(w, "tracepath to %s (%s), start MTU %d\n",
-		result.Target, result.ResolvedIP, result.StartMTU); err != nil {
+	if _, err := fmt.Fprintf(w, "tracepath to %s (%s), start MTU %d, %d byte packets\n",
+		result.Target, result.ResolvedIP, result.StartMTU, result.ProbeSize); err != nil {
 		return err
 	}
 	for _, hop := range result.Hops {
