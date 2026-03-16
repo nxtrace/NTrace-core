@@ -70,6 +70,12 @@ type wsConn interface {
 	NextReader() (messageType int, r io.Reader, err error)
 }
 
+type wsInitConn interface {
+	SetReadDeadline(t time.Time) error
+	SetReadLimit(limit int64)
+	ReadMessage() (messageType int, p []byte, err error)
+}
+
 type wsTraceSession struct {
 	conn       wsConn
 	sendMu     sync.Mutex
@@ -97,6 +103,17 @@ func newWSTraceSession(conn wsConn, lang string, queueSize int) *wsTraceSession 
 	}
 	go s.writeLoop()
 	return s
+}
+
+func readWSInitMessage(conn wsInitConn) ([]byte, error) {
+	_ = conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+	conn.SetReadLimit(maxWSInitMessageBytes)
+	_, message, err := conn.ReadMessage()
+	if err != nil {
+		return nil, err
+	}
+	_ = conn.SetReadDeadline(time.Time{})
+	return message, nil
 }
 
 func (s *wsTraceSession) writeLoop() {
@@ -176,10 +193,7 @@ func traceWebsocketHandler(c *gin.Context) {
 		_ = conn.Close()
 	}()
 
-	// 设置首次读取超时，防止恶意客户端无限阻塞
-	conn.SetReadDeadline(time.Now().Add(30 * time.Second))
-	conn.SetReadLimit(maxWSInitMessageBytes)
-	_, message, err := conn.ReadMessage()
+	message, err := readWSInitMessage(conn)
 	if err != nil {
 		log.Printf("[deploy] websocket read failed: %v", err)
 		return

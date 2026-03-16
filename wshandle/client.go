@@ -49,8 +49,13 @@ type WsConn struct {
 	Conn         *websocket.Conn // 主连接
 	ConnMux      sync.Mutex      // 连接互斥锁
 	stateMu      sync.RWMutex
+	lifecycleMu  sync.Mutex
+	loopWG       sync.WaitGroup
+	closeOnce    sync.Once
 	writeCh      chan wsWriteJob // serialized write queue
 	writeStop    chan struct{}   // signals writeLoop to exit
+	closeCh      chan struct{}   // signals background loops to exit
+	closed       bool
 }
 
 func (c *WsConn) getConn() *websocket.Conn {
@@ -82,7 +87,7 @@ func (c *WsConn) setDoneChan(done chan struct{}) {
 func (c *WsConn) initWriteLoop() {
 	c.writeCh = make(chan wsWriteJob, wsClientWriteQueueSize)
 	c.writeStop = make(chan struct{})
-	go c.writeLoop()
+	c.startLoop(c.writeLoop)
 }
 
 // writeLoop is the sole goroutine allowed to call conn.WriteMessage.
@@ -112,6 +117,11 @@ func (c *WsConn) writeLoop() {
 // enqueueWrite sends a write job to the writeLoop. Returns an error if the
 // queue is full or writeLoop has stopped.
 func (c *WsConn) enqueueWrite(job wsWriteJob) error {
+	c.lifecycleMu.Lock()
+	defer c.lifecycleMu.Unlock()
+	if c.closed {
+		return errWriteLoopStopped
+	}
 	select {
 	case c.writeCh <- job:
 		return nil
@@ -128,10 +138,96 @@ var (
 )
 
 var wsconn *WsConn
+var wsconnMu sync.RWMutex
 var host, port, fastIp string
 var envToken = util.EnvToken
 var cacheToken string
 var cacheTokenFailedTimes int
+var createWsConnFn = createWsConn
+
+func newWsConn(conn *websocket.Conn, interrupt chan os.Signal) *WsConn {
+	c := &WsConn{
+		Conn:         conn,
+		MsgSendCh:    make(chan string, 10),
+		MsgReceiveCh: make(chan string, 10),
+		Interrupt:    interrupt,
+		closeCh:      make(chan struct{}),
+	}
+	c.initWriteLoop()
+	return c
+}
+
+func (c *WsConn) startLoop(fn func()) {
+	c.loopWG.Add(1)
+	go func() {
+		defer c.loopWG.Done()
+		fn()
+	}()
+}
+
+func (c *WsConn) isClosed() bool {
+	if c == nil {
+		return true
+	}
+	select {
+	case <-c.closeCh:
+		return true
+	default:
+		return false
+	}
+}
+
+func closeSignalChan(ch chan struct{}) {
+	if ch == nil {
+		return
+	}
+	defer func() {
+		_ = recover()
+	}()
+	close(ch)
+}
+
+func (c *WsConn) closeConn() {
+	conn := c.getConn()
+	if conn == nil {
+		return
+	}
+	_ = conn.Close()
+	c.setConn(nil)
+}
+
+func (c *WsConn) replaceConn(conn *websocket.Conn) {
+	c.stateMu.Lock()
+	prev := c.Conn
+	c.Conn = conn
+	c.stateMu.Unlock()
+	if prev != nil && prev != conn {
+		_ = prev.Close()
+	}
+}
+
+func (c *WsConn) Close() {
+	if c == nil {
+		return
+	}
+	c.closeOnce.Do(func() {
+		c.lifecycleMu.Lock()
+		c.closed = true
+		c.lifecycleMu.Unlock()
+
+		c.setConnectionState(false, false)
+		if c.closeCh != nil {
+			close(c.closeCh)
+		}
+		closeSignalChan(c.writeStop)
+		closeSignalChan(c.getDoneChan())
+		if c.Interrupt != nil {
+			signal.Stop(c.Interrupt)
+		}
+		c.closeConn()
+	})
+	c.loopWG.Wait()
+}
 
 func (c *WsConn) setConnectionState(connected, connecting bool) {
 	c.stateMu.Lock()
@@ -165,6 +261,9 @@ func (c *WsConn) IsConnecting() bool {
 }
 
 func (c *WsConn) startReconnecting() bool {
+	if c.isClosed() {
+		return false
+	}
 	c.stateMu.Lock()
 	defer c.stateMu.Unlock()
 	if c.Connected || c.Connecting {
@@ -175,28 +274,31 @@ func (c *WsConn) startReconnecting() bool {
 }
 
 func (c *WsConn) keepAlive() {
-	go func() {
-		// 开启一个定时器
-		for {
-			<-time.After(time.Second * 54)
-			if c.IsConnected() {
-				if err := c.enqueueWrite(wsWriteJob{
-					msgType: websocket.TextMessage,
-					data:    []byte("ping"),
-				}); err != nil {
-					log.Println(err)
-					c.setConnected(false)
-					return
-				}
+	pingTicker := time.NewTicker(54 * time.Second)
+	defer pingTicker.Stop()
+	reconnectTicker := time.NewTicker(200 * time.Millisecond)
+	defer reconnectTicker.Stop()
+
+	for {
+		select {
+		case <-c.closeCh:
+			return
+		case <-pingTicker.C:
+			if !c.IsConnected() {
+				continue
+			}
+			if err := c.enqueueWrite(wsWriteJob{
+				msgType: websocket.TextMessage,
+				data:    []byte("ping"),
+			}); err != nil {
+				log.Println(err)
+				c.setConnected(false)
+			}
+		case <-reconnectTicker.C:
+			if c.startReconnecting() {
+				c.recreateWsConn()
 			}
 		}
-	}()
-	for {
-		if c.startReconnecting() {
-			c.recreateWsConn()
-		}
-		// 降低检测频率，优化 CPU 占用情况
-		<-time.After(200 * time.Millisecond)
 	}
 }
 
@@ -213,6 +315,11 @@ func (c *WsConn) messageReceiveHandler() {
 		}
 	}()
 	for {
+		select {
+		case <-c.closeCh:
+			return
+		default:
+		}
 		if c.IsConnected() {
 			conn := c.getConn()
 			if conn == nil {
@@ -227,11 +334,19 @@ func (c *WsConn) messageReceiveHandler() {
 				return
 			}
 			if string(msg) != "pong" {
-				c.MsgReceiveCh <- string(msg)
+				select {
+				case c.MsgReceiveCh <- string(msg):
+				case <-c.closeCh:
+					return
+				}
 			}
 		} else {
 			// 降低断线时期的 CPU 占用
-			time.Sleep(200 * time.Millisecond)
+			select {
+			case <-c.closeCh:
+				return
+			case <-time.After(200 * time.Millisecond):
+			}
 		}
 	}
 }
@@ -246,7 +361,11 @@ func (c *WsConn) waitForNextDoneChan(doneCh chan struct{}) chan struct{} {
 		if newDone != nil && newDone != doneCh {
 			return newDone
 		}
-		time.Sleep(50 * time.Millisecond)
+		select {
+		case <-c.closeCh:
+			return nil
+		case <-time.After(50 * time.Millisecond):
+		}
 	}
 }
 
@@ -286,8 +405,13 @@ func (c *WsConn) messageSendHandler() {
 		}
 
 		select {
+		case <-c.closeCh:
+			return
 		case <-doneCh:
 			doneCh = c.waitForNextDoneChan(doneCh)
+			if doneCh == nil {
+				return
+			}
 		case msg := <-c.MsgSendCh:
 			c.sendQueuedMessage(msg)
 		case <-c.Interrupt:
@@ -298,6 +422,9 @@ func (c *WsConn) messageSendHandler() {
 }
 
 func (c *WsConn) recreateWsConn() {
+	if c.isClosed() {
+		return
+	}
 	c.setConnected(false)
 	// 尝试重新连线
 	if host != "" && net.ParseIP(host) == nil {
@@ -349,7 +476,13 @@ func (c *WsConn) recreateWsConn() {
 		dialer.Proxy = http.ProxyURL(proxyUrl)
 	}
 	ws, _, err := dialer.Dial(u.String(), requestHeader)
-	c.setConn(ws)
+	if c.isClosed() {
+		if ws != nil {
+			_ = ws.Close()
+		}
+		return
+	}
+	c.replaceConn(ws)
 	if err != nil {
 		log.Println("dial:", err)
 		// <-time.After(time.Second * 1)
@@ -362,7 +495,7 @@ func (c *WsConn) recreateWsConn() {
 	c.setConnectionState(err == nil, false)
 
 	c.setDoneChan(make(chan struct{}))
-	go c.messageReceiveHandler()
+	c.startLoop(c.messageReceiveHandler)
 }
 
 func createWsConn() *WsConn {
@@ -393,17 +526,12 @@ func createWsConn() *WsConn {
 				panic(err)
 			}
 			log.Printf("pow token fetch failed: %v", err)
-			wsconn = &WsConn{
-				MsgSendCh:    make(chan string, 10),
-				MsgReceiveCh: make(chan string, 10),
-				Done:         make(chan struct{}),
-				Interrupt:    interrupt,
-			}
-			wsconn.initWriteLoop()
-			wsconn.setConnectionState(false, false)
-			go wsconn.keepAlive()
-			go wsconn.messageSendHandler()
-			return wsconn
+			ws := newWsConn(nil, interrupt)
+			ws.setDoneChan(make(chan struct{}))
+			ws.setConnectionState(false, false)
+			ws.startLoop(ws.keepAlive)
+			ws.startLoop(ws.messageSendHandler)
+			return ws
 		}
 		ua = []string{util.UserAgent}
 	}
@@ -427,37 +555,39 @@ func createWsConn() *WsConn {
 
 	c, _, err := dialer.Dial(u.String(), requestHeader)
 
-	wsconn = &WsConn{
-		Conn:         c,
-		MsgSendCh:    make(chan string, 10),
-		MsgReceiveCh: make(chan string, 10),
-		Interrupt:    interrupt,
-	}
-	wsconn.initWriteLoop()
-	wsconn.setConnectionState(err == nil, false)
+	ws := newWsConn(c, interrupt)
+	ws.setConnectionState(err == nil, false)
 
 	if err != nil {
 		log.Println("dial:", err)
 		// <-time.After(time.Second * 1)
 		cacheTokenFailedTimes++
-		wsconn.setDoneChan(make(chan struct{}))
-		go wsconn.keepAlive()
-		go wsconn.messageSendHandler()
-		return wsconn
+		ws.setDoneChan(make(chan struct{}))
+		ws.startLoop(ws.keepAlive)
+		ws.startLoop(ws.messageSendHandler)
+		return ws
 	}
 	// defer c.Close()
 	// 将连接写入WsConn，方便随时可取
-	wsconn.setDoneChan(make(chan struct{}))
-	go wsconn.keepAlive()
-	go wsconn.messageReceiveHandler()
-	go wsconn.messageSendHandler()
-	return wsconn
+	ws.setDoneChan(make(chan struct{}))
+	ws.startLoop(ws.keepAlive)
+	ws.startLoop(ws.messageReceiveHandler)
+	ws.startLoop(ws.messageSendHandler)
+	return ws
 }
 
 func New() *WsConn {
-	return createWsConn()
+	wsconnMu.Lock()
+	defer wsconnMu.Unlock()
+	if wsconn != nil {
+		wsconn.Close()
+	}
+	wsconn = createWsConnFn()
+	return wsconn
 }
 
 func GetWsConn() *WsConn {
+	wsconnMu.RLock()
+	defer wsconnMu.RUnlock()
 	return wsconn
 }
