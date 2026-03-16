@@ -34,8 +34,7 @@ func newSocketProber(cfg Config) (*socketProber, error) {
 	}
 
 	localAddr := &net.UDPAddr{IP: cfg.SrcIP, Port: cfg.SrcPort}
-	remoteAddr := &net.UDPAddr{IP: cfg.DstIP, Port: cfg.DstPort}
-	udpConn, err := net.DialUDP(network, localAddr, remoteAddr)
+	udpConn, err := net.ListenUDP(network, localAddr)
 	if err != nil {
 		return nil, err
 	}
@@ -87,8 +86,9 @@ func (p *socketProber) Probe(ctx context.Context, plan probePlan) (probeResponse
 	}
 
 	start := time.Now()
-	payload := buildProbePayload(plan.PayloadSize, plan.Token)
-	if err := p.send(plan.TTL, payload); err != nil {
+	dstPort := probeDstPort(p.dstPort, plan.Token)
+	payload := buildProbePayload(plan.PayloadSize)
+	if err := p.send(plan.TTL, payload, dstPort); err != nil {
 		if isSendSizeErr(err) {
 			return probeResponse{}, &localMTUError{MTU: socketPathMTU(p.udp, p.ipVersion)}
 		}
@@ -122,7 +122,7 @@ func (p *socketProber) Probe(ctx context.Context, plan probePlan) (probeResponse
 			}
 			return probeResponse{}, err
 		}
-		resp, ok := parseICMPProbeResult(p.ipVersion, buf[:n], util.AddrIP(peer), p.dstIP, p.dstPort, p.srcPort, plan.Token)
+		resp, ok := parseICMPProbeResult(p.ipVersion, buf[:n], util.AddrIP(peer), p.dstIP, dstPort, p.srcPort)
 		if !ok {
 			continue
 		}
@@ -131,7 +131,7 @@ func (p *socketProber) Probe(ctx context.Context, plan probePlan) (probeResponse
 	}
 }
 
-func (p *socketProber) send(ttl int, payload []byte) error {
+func (p *socketProber) send(ttl int, payload []byte, dstPort int) error {
 	p.sendMu.Lock()
 	defer p.sendMu.Unlock()
 
@@ -144,6 +144,18 @@ func (p *socketProber) send(ttl int, payload []byte) error {
 			return err
 		}
 	}
-	_, err := p.udp.Write(payload)
+	_, err := p.udp.WriteToUDP(payload, &net.UDPAddr{IP: p.dstIP, Port: dstPort})
 	return err
+}
+
+func probeDstPort(base int, token uint32) int {
+	if base <= 0 || base > 65535 {
+		base = 33494
+	}
+	maxOffset := 65535 - base
+	if maxOffset <= 0 {
+		return base
+	}
+	offset := int((token - 1) % uint32(maxOffset+1))
+	return base + offset
 }

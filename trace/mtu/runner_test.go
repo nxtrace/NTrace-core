@@ -46,7 +46,7 @@ func TestRunWithProberShrinksPMTUAndRetriesSameTTL(t *testing.T) {
 	prober := &scriptedProber{
 		steps: []scriptedStep{
 			{response: probeResponse{Event: EventTimeExceeded, IP: net.ParseIP("192.0.2.1"), RTT: 12 * time.Millisecond}},
-			{err: &localMTUError{MTU: 1400}},
+			{response: probeResponse{Event: EventFragNeeded, IP: net.ParseIP("198.51.100.1"), RTT: 14 * time.Millisecond, PMTU: 1400}},
 			{response: probeResponse{Event: EventTimeExceeded, IP: net.ParseIP("198.51.100.1"), RTT: 15 * time.Millisecond}},
 			{response: probeResponse{Event: EventDestination, IP: cfg.DstIP, RTT: 18 * time.Millisecond}},
 		},
@@ -73,6 +73,104 @@ func TestRunWithProberShrinksPMTUAndRetriesSameTTL(t *testing.T) {
 	}
 	if got := prober.plans[2].PayloadSize; got != 1372 {
 		t.Fatalf("payload size after local mtu shrink = %d, want 1372", got)
+	}
+}
+
+func TestRunWithProberKeepsLocalPMTUOffHopOutput(t *testing.T) {
+	cfg := Config{
+		Target:      "example.com",
+		DstIP:       net.ParseIP("203.0.113.9"),
+		SrcIP:       net.ParseIP("192.0.2.10"),
+		DstPort:     33494,
+		BeginHop:    1,
+		MaxHops:     1,
+		Queries:     1,
+		Timeout:     time.Second,
+		TTLInterval: 0,
+	}
+
+	prober := &scriptedProber{
+		steps: []scriptedStep{
+			{err: &localMTUError{MTU: 1400}},
+			{response: probeResponse{Event: EventTimeExceeded, IP: net.ParseIP("192.0.2.1"), RTT: 11 * time.Millisecond}},
+		},
+	}
+
+	res, err := runWithProber(context.Background(), cfg, prober)
+	if err != nil {
+		t.Fatalf("runWithProber returned error: %v", err)
+	}
+	if res.PathMTU != 1400 {
+		t.Fatalf("path mtu = %d, want 1400", res.PathMTU)
+	}
+	if got := res.Hops[0].PMTU; got != 0 {
+		t.Fatalf("local pmtu should not be attributed to hop, got %d", got)
+	}
+	if got := prober.plans[1].PayloadSize; got != 1372 {
+		t.Fatalf("payload size after local mtu shrink = %d, want 1372", got)
+	}
+}
+
+func TestRunWithProberAnnotatesFirstHopWithLocalStartMTU(t *testing.T) {
+	cfg := Config{
+		Target:      "example.com",
+		DstIP:       net.ParseIP("203.0.113.9"),
+		SrcIP:       net.ParseIP("192.0.2.10"),
+		DstPort:     33494,
+		BeginHop:    1,
+		MaxHops:     1,
+		Queries:     1,
+		Timeout:     time.Second,
+		TTLInterval: 0,
+	}
+
+	prober := &scriptedProber{
+		steps: []scriptedStep{
+			{err: &localMTUError{MTU: 1500}},
+			{response: probeResponse{Event: EventTimeExceeded, IP: net.ParseIP("192.0.2.1"), RTT: 11 * time.Millisecond}},
+		},
+	}
+
+	res, err := runWithProber(context.Background(), cfg, prober)
+	if err != nil {
+		t.Fatalf("runWithProber returned error: %v", err)
+	}
+	if len(res.Hops) != 1 {
+		t.Fatalf("hop count = %d, want 1", len(res.Hops))
+	}
+	if got := res.Hops[0].PMTU; got != 1500 {
+		t.Fatalf("first hop pmtu = %d, want 1500", got)
+	}
+}
+
+func TestRunWithProberAnnotatesFirstHopWithStartMTUWithoutLocalEvent(t *testing.T) {
+	cfg := Config{
+		Target:      "example.com",
+		DstIP:       net.ParseIP("203.0.113.9"),
+		SrcIP:       net.ParseIP("192.0.2.10"),
+		DstPort:     33494,
+		BeginHop:    1,
+		MaxHops:     1,
+		Queries:     1,
+		Timeout:     time.Second,
+		TTLInterval: 0,
+	}
+
+	prober := &scriptedProber{
+		steps: []scriptedStep{
+			{response: probeResponse{Event: EventTimeExceeded, IP: net.ParseIP("192.0.2.1"), RTT: 11 * time.Millisecond}},
+		},
+	}
+
+	res, err := runWithProber(context.Background(), cfg, prober)
+	if err != nil {
+		t.Fatalf("runWithProber returned error: %v", err)
+	}
+	if len(res.Hops) != 1 {
+		t.Fatalf("hop count = %d, want 1", len(res.Hops))
+	}
+	if got := res.Hops[0].PMTU; got != 1500 {
+		t.Fatalf("first hop pmtu = %d, want 1500", got)
 	}
 }
 
@@ -139,7 +237,7 @@ func TestRunWithProberWritesTimeoutAfterExhaustingQueries(t *testing.T) {
 	}
 }
 
-func TestRunWithProberKeepsLocalPMTUOnTimeoutHop(t *testing.T) {
+func TestRunWithProberTimeoutHopDoesNotExposeLocalPMTU(t *testing.T) {
 	cfg := Config{
 		Target:      "example.com",
 		DstIP:       net.ParseIP("203.0.113.9"),
@@ -166,8 +264,8 @@ func TestRunWithProberKeepsLocalPMTUOnTimeoutHop(t *testing.T) {
 	if len(res.Hops) != 1 {
 		t.Fatalf("hop count = %d, want 1", len(res.Hops))
 	}
-	if got := res.Hops[0].PMTU; got != 1400 {
-		t.Fatalf("timeout hop pmtu = %d, want 1400", got)
+	if got := res.Hops[0].PMTU; got != 0 {
+		t.Fatalf("timeout hop pmtu = %d, want 0", got)
 	}
 }
 

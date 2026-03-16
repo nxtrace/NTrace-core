@@ -73,6 +73,7 @@ func runWithProber(ctx context.Context, cfg Config, p prober) (*Result, error) {
 		var hop Hop
 		gotHop := false
 		ttlPMTU := 0
+		ttlSawRemote := false
 
 		for attempt := 0; attempt < cfg.Queries; {
 			payloadSize := payloadSizeForMTU(probeMTU, res.IPVersion)
@@ -94,9 +95,11 @@ func runWithProber(ctx context.Context, cfg Config, p prober) (*Result, error) {
 					if nextMTU == probeMTU {
 						return nil, err
 					}
+					if ttl == cfg.BeginHop && probeMTU > res.StartMTU && nextMTU == res.StartMTU {
+						ttlPMTU = candidatePathMTU(ttlPMTU, nextMTU)
+					}
 					probeMTU = nextMTU
 					res.PathMTU = candidatePathMTU(res.PathMTU, nextMTU)
-					ttlPMTU = candidatePathMTU(ttlPMTU, nextMTU)
 					continue
 				}
 				return nil, err
@@ -108,20 +111,28 @@ func runWithProber(ctx context.Context, cfg Config, p prober) (*Result, error) {
 			}
 
 			hop = buildHop(cfg, ttl, resp)
-			if hop.PMTU == 0 && ttlPMTU > 0 {
+			if resp.Event == EventFragNeeded || resp.Event == EventPacketTooBig {
+				ttlSawRemote = true
+				ttlPMTU = candidatePathMTU(ttlPMTU, hop.PMTU)
+				probeMTU = candidatePathMTU(probeMTU, hop.PMTU)
+				res.PathMTU = candidatePathMTU(res.PathMTU, hop.PMTU)
 				hop.PMTU = ttlPMTU
+				gotHop = true
+				continue
 			}
-			probeMTU = candidatePathMTU(probeMTU, hop.PMTU)
-			res.PathMTU = candidatePathMTU(res.PathMTU, hop.PMTU)
-			if hop.PMTU != 0 && res.PathMTU != hop.PMTU {
-				hop.PMTU = res.PathMTU
+			if ttlPMTU > 0 {
+				hop.PMTU = ttlPMTU
+			} else if ttl == 1 && res.ProbeSize > res.StartMTU && res.StartMTU > 0 && res.PathMTU == res.StartMTU {
+				hop.PMTU = res.StartMTU
 			}
 			gotHop = true
 			break
 		}
 
 		if !gotHop {
-			hop = Hop{TTL: ttl, Event: EventTimeout, PMTU: ttlPMTU}
+			hop = Hop{TTL: ttl, Event: EventTimeout}
+		} else if ttlSawRemote && hop.PMTU == 0 {
+			hop.PMTU = ttlPMTU
 		}
 		res.Hops = append(res.Hops, hop)
 
@@ -202,10 +213,10 @@ func payloadSizeForMTU(pathMTU, ipVersion int) int {
 	if ipVersion == 6 {
 		overhead = 48
 	}
-	if payload := pathMTU - overhead; payload > probeTokenLen {
+	if payload := pathMTU - overhead; payload > probePayloadMinLen {
 		return payload
 	}
-	return probeTokenLen
+	return probePayloadMinLen
 }
 
 func candidatePathMTU(current, discovered int) int {

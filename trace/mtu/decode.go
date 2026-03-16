@@ -10,9 +10,7 @@ import (
 	"golang.org/x/net/ipv6"
 )
 
-const probeTokenLen = 8
-
-var probeMagic = [4]byte{'N', 'T', 'M', 'U'}
+const probePayloadMinLen = 8
 
 type probeResponse struct {
 	Event Event
@@ -21,17 +19,14 @@ type probeResponse struct {
 	PMTU  int
 }
 
-func buildProbePayload(size int, token uint32) []byte {
-	if size < probeTokenLen {
-		size = probeTokenLen
+func buildProbePayload(size int) []byte {
+	if size < probePayloadMinLen {
+		size = probePayloadMinLen
 	}
-	payload := make([]byte, size)
-	copy(payload[:4], probeMagic[:])
-	binary.BigEndian.PutUint32(payload[4:8], token)
-	return payload
+	return make([]byte, size)
 }
 
-func parseICMPProbeResult(ipVersion int, raw []byte, peerIP, dstIP net.IP, dstPort, srcPort int, token uint32) (probeResponse, bool) {
+func parseICMPProbeResult(ipVersion int, raw []byte, peerIP, dstIP net.IP, dstPort, srcPort int) (probeResponse, bool) {
 	protocol := 1
 	if ipVersion == 6 {
 		protocol = 58
@@ -108,7 +103,7 @@ func parseICMPProbeResult(ipVersion int, raw []byte, peerIP, dstIP net.IP, dstPo
 		return probeResponse{}, false
 	}
 
-	if !matchesEmbeddedUDP(data, ipVersion, dstIP, dstPort, srcPort, token) {
+	if !matchesEmbeddedUDP(data, ipVersion, dstIP, dstPort, srcPort) {
 		return probeResponse{}, false
 	}
 
@@ -119,22 +114,20 @@ func parseICMPProbeResult(ipVersion int, raw []byte, peerIP, dstIP net.IP, dstPo
 	}, true
 }
 
-func matchesEmbeddedUDP(data []byte, ipVersion int, dstIP net.IP, dstPort, srcPort int, token uint32) bool {
+func matchesEmbeddedUDP(data []byte, ipVersion int, dstIP net.IP, dstPort, srcPort int) bool {
 	packet, ok := parseEmbeddedUDPPacket(data, ipVersion)
 	if !ok {
 		return false
 	}
 	return packet.dstIP.Equal(dstIP) &&
 		packet.srcPort == srcPort &&
-		packet.dstPort == dstPort &&
-		packet.token == token
+		packet.dstPort == dstPort
 }
 
 type embeddedUDPPacket struct {
 	dstIP   net.IP
 	srcPort int
 	dstPort int
-	token   uint32
 }
 
 func parseEmbeddedUDPPacket(data []byte, ipVersion int) (embeddedUDPPacket, bool) {
@@ -168,25 +161,9 @@ func parseEmbeddedUDPFromOffsets(data []byte, udpOffset int, dstIP net.IP) (embe
 	if len(data) < udpOffset+8 {
 		return embeddedUDPPacket{}, false
 	}
-	payload := data[udpOffset+8:]
-	token, ok := parseProbeToken(payload)
-	if !ok {
-		return embeddedUDPPacket{}, false
-	}
 	return embeddedUDPPacket{
 		dstIP:   append(net.IP(nil), dstIP...),
 		srcPort: int(binary.BigEndian.Uint16(data[udpOffset : udpOffset+2])),
 		dstPort: int(binary.BigEndian.Uint16(data[udpOffset+2 : udpOffset+4])),
-		token:   token,
 	}, true
-}
-
-func parseProbeToken(payload []byte) (uint32, bool) {
-	if len(payload) < probeTokenLen {
-		return 0, false
-	}
-	if payload[0] != probeMagic[0] || payload[1] != probeMagic[1] || payload[2] != probeMagic[2] || payload[3] != probeMagic[3] {
-		return 0, false
-	}
-	return binary.BigEndian.Uint32(payload[4:8]), true
 }
