@@ -17,10 +17,10 @@ func configurePMTUSocket(conn *net.UDPConn, ipVersion int) error {
 	var controlErr error
 	if err := rawConn.Control(func(fd uintptr) {
 		if ipVersion == 6 {
-			controlErr = unix.SetsockoptInt(int(fd), unix.IPPROTO_IPV6, unix.IPV6_MTU_DISCOVER, unix.IPV6_PMTUDISC_DO)
+			controlErr = unix.SetsockoptInt(int(fd), unix.IPPROTO_IPV6, unix.IPV6_MTU_DISCOVER, unix.IPV6_PMTUDISC_PROBE)
 			return
 		}
-		controlErr = unix.SetsockoptInt(int(fd), unix.IPPROTO_IP, unix.IP_MTU_DISCOVER, unix.IP_PMTUDISC_DO)
+		controlErr = unix.SetsockoptInt(int(fd), unix.IPPROTO_IP, unix.IP_MTU_DISCOVER, unix.IP_PMTUDISC_PROBE)
 	}); err != nil {
 		return err
 	}
