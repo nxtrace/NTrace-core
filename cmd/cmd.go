@@ -987,6 +987,7 @@ func Execute() {
 	ipv6Only := parser.Flag("6", "ipv6", &argparse.Options{Help: "Use IPv6 only"})
 	tcp := parser.Flag("T", "tcp", &argparse.Options{Help: "Use TCP SYN for tracerouting (default dest-port is 80)"})
 	udp := parser.Flag("U", "udp", &argparse.Options{Help: "Use UDP SYN for tracerouting (default dest-port is 33494)"})
+	mtuMode := parser.Flag("", "mtu", &argparse.Options{Help: "Run standalone UDP path-MTU discovery mode"})
 	fastTraceFlag := registerFastTraceFlag(parser)
 	port := parser.Int("p", "port", &argparse.Options{Help: "Set the destination port to use. With default of 80 for \"tcp\", 33494 for \"udp\""})
 	icmpMode := registerICMPModeFlag(parser)
@@ -1056,6 +1057,30 @@ func Execute() {
 	}
 
 	mtrModes := deriveEffectiveMTRModes(*mtrMode, *reportMode, *wideMode, *rawPrint)
+	if *mtuMode {
+		conflictFlags := buildMTUConflictFlags(
+			*tcp,
+			*rawPrint,
+			mtrModes,
+			*tablePrint,
+			*classicPrint,
+			*routePath,
+			*output,
+			*deploy,
+			enableGlobalping,
+			*from,
+			*file,
+			*fastTraceFlag,
+		)
+		if conflict, ok := checkMTUConflicts(conflictFlags); !ok {
+			fmt.Printf("--mtu 不能与 %s 同时使用\n", conflict)
+			os.Exit(1)
+		}
+		if err := normalizeMTUProtocolFlags(tcp, udp); err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+	}
 	if mtrModes.mtr {
 		conflictFlags := map[string]bool{
 			"table":     *tablePrint,
@@ -1084,6 +1109,40 @@ func Execute() {
 	applyDefaultPort(port, *udp)
 	clampProbeSettings(*tcp, numMeasurements, maxAttempts)
 	configureGeoDNS(*dot)
+
+	if *mtuMode {
+		domain := resolveCLITargetOrExit(*str, sanitizeUsagePositionalArgs(parser.Usage(err)))
+		if domain == "" {
+			return
+		}
+		ip := lookupTargetIPOrExit(domain, *ipv4Only, *ipv6Only, *dot, *jsonPrint)
+		applySourceDevice(*srcDev, ip, srcAddr)
+		srcIP, srcErr := resolveMTUSourceIP(ip, *srcAddr)
+		if srcErr != nil {
+			fmt.Println(srcErr)
+			os.Exit(1)
+		}
+		conf := buildMTUTraceConfig(
+			domain,
+			ip,
+			srcIP,
+			*srcDev,
+			*srcPort,
+			*port,
+			*beginHop,
+			*maxHops,
+			*numMeasurements,
+			*timeout,
+			*ttlInterval,
+			!*norDNS,
+		)
+		if err := runStandaloneMTUMode(conf, *jsonPrint); err != nil {
+			if !errors.Is(err, context.Canceled) {
+				fmt.Println(err)
+			}
+		}
+		return
+	}
 
 	method := resolveTraceMethod(*tcp, *udp)
 	paramsFastTrace := fastTrace.ParamsFastTrace{
