@@ -1,0 +1,149 @@
+package mtu
+
+import (
+	"context"
+	"errors"
+	"net"
+	"sync"
+	"time"
+
+	traceinternal "github.com/nxtrace/NTrace-core/trace/internal"
+	"github.com/nxtrace/NTrace-core/util"
+	"golang.org/x/net/ipv4"
+	"golang.org/x/net/ipv6"
+)
+
+type socketProber struct {
+	ipVersion int
+	dstIP     net.IP
+	dstPort   int
+	srcPort   int
+	udp       *net.UDPConn
+	icmp      net.PacketConn
+	udp4      *ipv4.PacketConn
+	udp6      *ipv6.PacketConn
+	sendMu    sync.Mutex
+}
+
+func newSocketProber(cfg Config) (*socketProber, error) {
+	network := "udp4"
+	icmpNetwork := "ip4:icmp"
+	if cfg.ipVersion() == 6 {
+		network = "udp6"
+		icmpNetwork = "ip6:ipv6-icmp"
+	}
+
+	localAddr := &net.UDPAddr{IP: cfg.SrcIP, Port: cfg.SrcPort}
+	remoteAddr := &net.UDPAddr{IP: cfg.DstIP, Port: cfg.DstPort}
+	udpConn, err := net.DialUDP(network, localAddr, remoteAddr)
+	if err != nil {
+		return nil, err
+	}
+	if err := configurePMTUSocket(udpConn, cfg.ipVersion()); err != nil {
+		udpConn.Close()
+		return nil, err
+	}
+
+	icmpConn, err := traceinternal.ListenPacket(icmpNetwork, cfg.SrcIP.String())
+	if err != nil {
+		udpConn.Close()
+		return nil, err
+	}
+
+	prober := &socketProber{
+		ipVersion: cfg.ipVersion(),
+		dstIP:     append(net.IP(nil), cfg.DstIP...),
+		dstPort:   cfg.DstPort,
+		udp:       udpConn,
+		icmp:      icmpConn,
+	}
+	if addr, ok := udpConn.LocalAddr().(*net.UDPAddr); ok && addr != nil {
+		prober.srcPort = addr.Port
+	}
+	if prober.ipVersion == 6 {
+		prober.udp6 = ipv6.NewPacketConn(udpConn)
+	} else {
+		prober.udp4 = ipv4.NewPacketConn(udpConn)
+	}
+	return prober, nil
+}
+
+func (p *socketProber) Close() error {
+	if p == nil {
+		return nil
+	}
+	if p.icmp != nil {
+		_ = p.icmp.Close()
+	}
+	if p.udp != nil {
+		return p.udp.Close()
+	}
+	return nil
+}
+
+func (p *socketProber) Probe(ctx context.Context, plan probePlan) (probeResponse, error) {
+	if err := ctx.Err(); err != nil {
+		return probeResponse{}, err
+	}
+
+	start := time.Now()
+	payload := buildProbePayload(plan.PayloadSize, plan.Token)
+	if err := p.send(plan.TTL, payload); err != nil {
+		if isSendSizeErr(err) {
+			return probeResponse{}, &localMTUError{MTU: socketPathMTU(p.udp, p.ipVersion)}
+		}
+		return probeResponse{}, err
+	}
+
+	buf := make([]byte, 4096)
+	deadline := start.Add(plan.Timeout)
+	if ctxDeadline, ok := ctx.Deadline(); ok && ctxDeadline.Before(deadline) {
+		deadline = ctxDeadline
+	}
+
+	for {
+		if err := ctx.Err(); err != nil {
+			return probeResponse{}, err
+		}
+		if err := p.icmp.SetReadDeadline(deadline); err != nil {
+			return probeResponse{}, err
+		}
+		n, peer, err := p.icmp.ReadFrom(buf)
+		if err != nil {
+			if ctx.Err() != nil {
+				return probeResponse{}, ctx.Err()
+			}
+			var netErr net.Error
+			if errors.As(err, &netErr) && netErr.Timeout() {
+				return probeResponse{Event: EventTimeout}, nil
+			}
+			if isRecvSizeErr(err) {
+				continue
+			}
+			return probeResponse{}, err
+		}
+		resp, ok := parseICMPProbeResult(p.ipVersion, buf[:n], util.AddrIP(peer), p.dstIP, p.dstPort, p.srcPort, plan.Token)
+		if !ok {
+			continue
+		}
+		resp.RTT = time.Since(start)
+		return resp, nil
+	}
+}
+
+func (p *socketProber) send(ttl int, payload []byte) error {
+	p.sendMu.Lock()
+	defer p.sendMu.Unlock()
+
+	if p.ipVersion == 6 {
+		if err := p.udp6.SetHopLimit(ttl); err != nil {
+			return err
+		}
+	} else {
+		if err := p.udp4.SetTTL(ttl); err != nil {
+			return err
+		}
+	}
+	_, err := p.udp.Write(payload)
+	return err
+}
