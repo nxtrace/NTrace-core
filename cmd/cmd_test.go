@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	"net"
 	"strings"
 	"testing"
 
 	"github.com/akamensky/argparse"
+	"github.com/nxtrace/NTrace-core/trace"
 )
 
 func TestRegisterGlobalpingFlagWithAvailability_DisabledStillParses(t *testing.T) {
@@ -70,14 +72,14 @@ func TestAdvancedHelpTextMentionsTuningGuidance(t *testing.T) {
 	parser.Int("", "max-attempts", &argparse.Options{Help: buildMaxAttemptsHelp()})
 	parser.Int("", "parallel-requests", &argparse.Options{Default: 18, Help: buildParallelRequestsHelp()})
 	parser.Int("", "timeout", &argparse.Options{Default: 1000, Help: buildTimeoutHelp()})
-	parser.Int("", "psize", &argparse.Options{Default: 52, Help: buildPayloadSizeHelp()})
+	parser.Int("", "psize", &argparse.Options{Help: buildPayloadSizeHelp()})
 
 	usage := parser.Usage(nil)
 	for _, want := range []string{
 		"load-balanced paths",
 		"rate-limited links",
 		"intercontinental",
-		"MTU or large-packet",
+		"raise for MTU or",
 	} {
 		if !strings.Contains(usage, want) {
 			t.Fatalf("usage missing tuning guidance %q:\n%s", want, usage)
@@ -87,7 +89,7 @@ func TestAdvancedHelpTextMentionsTuningGuidance(t *testing.T) {
 
 func TestProbeOptionHelpMentionsRandomPacketSizeAndTOS(t *testing.T) {
 	parser := argparse.NewParser("ntr", "")
-	parser.Int("", "psize", &argparse.Options{Default: 52, Help: buildPayloadSizeHelp()})
+	parser.Int("", "psize", &argparse.Options{Help: buildPayloadSizeHelp()})
 	parser.Int("Q", "tos", &argparse.Options{Default: 0, Help: buildTOSHelp()})
 
 	usage := parser.Usage(nil)
@@ -105,7 +107,7 @@ func TestDetectExplicitProbeFlags(t *testing.T) {
 	parser := argparse.NewParser("ntr", "")
 	parser.Int("q", "queries", &argparse.Options{Default: 3})
 	parser.Int("i", "ttl-time", &argparse.Options{Default: 300})
-	parser.Int("", "psize", &argparse.Options{Default: 52})
+	parser.Int("", "psize", &argparse.Options{})
 	parser.Int("Q", "tos", &argparse.Options{Default: 0})
 
 	if err := parser.Parse([]string{"ntr", "--psize", "-123", "-Q", "46", "-q", "5"}); err != nil {
@@ -144,7 +146,7 @@ func TestNormalizeNegativePacketSizeArgs(t *testing.T) {
 
 func TestNegativePacketSizeParsesBeforeTarget(t *testing.T) {
 	parser := argparse.NewParser("ntr", "")
-	packetSize := parser.Int("", "psize", &argparse.Options{Default: 52})
+	packetSize := parser.Int("", "psize", &argparse.Options{})
 	ipv6Only := parser.Flag("6", "ipv6", &argparse.Options{})
 	target := parser.StringPositional(&argparse.Options{})
 
@@ -160,5 +162,12 @@ func TestNegativePacketSizeParsesBeforeTarget(t *testing.T) {
 	}
 	if *target != "2606:4700:4700::1111" {
 		t.Fatalf("target = %q, want 2606:4700:4700::1111", *target)
+	}
+}
+
+func TestResolvePacketSizeArg_DefaultsToProtocolMinimum(t *testing.T) {
+	got := resolvePacketSizeArg(0, false, trace.TCPTrace, net.ParseIP("2a00:1450:4009:81a::200e"))
+	if got != 64 {
+		t.Fatalf("resolvePacketSizeArg() = %d, want 64", got)
 	}
 }

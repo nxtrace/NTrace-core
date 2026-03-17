@@ -233,7 +233,7 @@ async function loadOptions() {
     maxHopsInput.value = data.defaultOptions.max_hops;
     disableMaptraceInput.checked = data.defaultOptions.disable_maptrace;
     const defaultOptionValue = traceFormHelpers.defaultOptionValue || ((opts, key, fallback) => (opts && Object.prototype.hasOwnProperty.call(opts, key) ? opts[key] : fallback));
-    payloadSizeInput.value = defaultOptionValue(data.defaultOptions, 'packet_size', payloadSizeInput.value || 52);
+    payloadSizeInput.value = defaultOptionValue(data.defaultOptions, 'packet_size', payloadSizeInput.value || '') ?? '';
     tosInput.value = defaultOptionValue(data.defaultOptions, 'tos', tosInput.value || 0);
     dstPortInput.value = data.defaultOptions.port || dstPortInput.value || '';
     updateDstPortState();

@@ -363,7 +363,7 @@ func buildTimeoutHelp() string {
 }
 
 func buildPayloadSizeHelp() string {
-	return "Probe packet size in bytes, inclusive IP and active probe headers. Keep 52 for normal routing checks; raise for MTU or large-packet testing. Negative values randomize each probe up to abs(value)"
+	return "Probe packet size in bytes, inclusive IP and active probe headers. Default is the minimum legal size for the chosen protocol and IP family; raise for MTU or large-packet testing. Negative values randomize each probe up to abs(value)"
 }
 
 func buildTOSHelp() string {
@@ -529,6 +529,13 @@ func detectExplicitProbeFlags(parser *argparse.Parser) (queriesExplicit, ttlTime
 		}
 	}
 	return queriesExplicit, ttlTimeExplicit, packetSizeExplicit, tosExplicit
+}
+
+func resolvePacketSizeArg(packetSize int, explicit bool, method trace.Method, dstIP net.IP) int {
+	if explicit {
+		return packetSize
+	}
+	return trace.DefaultPacketSize(method, dstIP)
 }
 
 func applyColorMode(noColor bool) {
@@ -1064,7 +1071,7 @@ func Execute() {
 	packetInterval := registerPacketIntervalFlag(parser)
 	ttlInterval := registerTTLIntervalFlag(parser)
 	timeout := parser.Int("", "timeout", &argparse.Options{Default: 1000, Help: buildTimeoutHelp()})
-	packetSize := parser.Int("", "psize", &argparse.Options{Default: 52, Help: buildPayloadSizeHelp()})
+	packetSize := parser.Int("", "psize", &argparse.Options{Help: buildPayloadSizeHelp()})
 	tos := parser.Int("Q", "tos", &argparse.Options{Default: 0, Help: buildTOSHelp()})
 	dot := parser.Selector("", "dot-server", []string{"dnssb", "aliyun", "dnspod", "google", "cloudflare"}, &argparse.Options{
 		Help: "Use DoT Server for DNS Parse [dnssb, aliyun, dnspod, google, cloudflare]"})
@@ -1215,6 +1222,7 @@ func Execute() {
 		AlwaysWaitRDNS: *alwaysrDNS,
 		Lang:           *lang,
 		PktSize:        *packetSize,
+		PacketSizeSet:  packetSizeExplicit,
 		TOS:            *tos,
 		Timeout:        time.Duration(*timeout) * time.Millisecond,
 		File:           *file,
@@ -1281,9 +1289,10 @@ func Execute() {
 	ip := lookupTargetIPOrExit(domain, *ipv4Only, *ipv6Only, *dot, *jsonPrint)
 
 	applySourceDevice(*srcDev, ip, srcAddr)
-	printTraceNav(*jsonPrint, mtrModes.mtr, ip, domain, *dataOrigin, *maxHops, *packetSize, *srcAddr, method)
+	effectivePacketSize := resolvePacketSizeArg(*packetSize, packetSizeExplicit, method, ip)
+	printTraceNav(*jsonPrint, mtrModes.mtr, ip, domain, *dataOrigin, *maxHops, effectivePacketSize, *srcAddr, method)
 
-	packetSizeSpec, packetSizeErr := trace.NormalizePacketSize(method, ip, *packetSize)
+	packetSizeSpec, packetSizeErr := trace.NormalizePacketSize(method, ip, effectivePacketSize)
 	if packetSizeErr != nil {
 		fmt.Println(packetSizeErr)
 		os.Exit(1)

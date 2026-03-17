@@ -89,6 +89,19 @@ func TestBuildTraceConfig_PreservesNegativePacketSizeAndTOS(t *testing.T) {
 	}
 }
 
+func TestBuildTraceConfig_DefaultsPacketSizeByProtocolAndFamily(t *testing.T) {
+	cfg, err := buildTraceConfig(traceRequest{}, trace.TCPTrace, net.ParseIP("2a00:1450:4009:81a::200e"), "disable-geoip", 80)
+	if err != nil {
+		t.Fatalf("buildTraceConfig returned error: %v", err)
+	}
+	if cfg.PktSize != 0 {
+		t.Fatalf("buildTraceConfig PktSize = %d, want 0 payload bytes for default TCP/IPv6 minimum", cfg.PktSize)
+	}
+	if cfg.RandomPacketSize {
+		t.Fatal("buildTraceConfig RandomPacketSize = true, want false")
+	}
+}
+
 func TestNormalizeTraceRequest_RejectsInvalidTOS(t *testing.T) {
 	tos := 256
 	statusCode, err := normalizeTraceRequest(&traceRequest{TOS: &tos})
