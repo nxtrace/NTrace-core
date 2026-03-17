@@ -336,7 +336,11 @@ func buildTimeoutHelp() string {
 }
 
 func buildPayloadSizeHelp() string {
-	return "Payload size in bytes. Keep 52 for normal routing checks; raise only for MTU or large-packet testing"
+	return "Probe packet size in bytes, inclusive IP and active probe headers. Keep 52 for normal routing checks; raise for MTU or large-packet testing. Negative values randomize each probe up to abs(value)"
+}
+
+func buildTOSHelp() string {
+	return "Set the IP type-of-service / traffic class value [0-255]"
 }
 
 func registerTracerouteOutputFlags(parser *argparse.Parser) tracerouteOutputFlags {
@@ -481,7 +485,7 @@ func deriveEffectiveMTRModes(mtrMode, reportMode, wideMode, rawPrint bool) effec
 	}
 }
 
-func detectExplicitProbeFlags(parser *argparse.Parser) (queriesExplicit, ttlTimeExplicit bool) {
+func detectExplicitProbeFlags(parser *argparse.Parser) (queriesExplicit, ttlTimeExplicit, packetSizeExplicit, tosExplicit bool) {
 	for _, a := range parser.GetArgs() {
 		if !a.GetParsed() {
 			continue
@@ -491,9 +495,13 @@ func detectExplicitProbeFlags(parser *argparse.Parser) (queriesExplicit, ttlTime
 			queriesExplicit = true
 		case "ttl-time":
 			ttlTimeExplicit = true
+		case "psize":
+			packetSizeExplicit = true
+		case "tos":
+			tosExplicit = true
 		}
 	}
-	return queriesExplicit, ttlTimeExplicit
+	return queriesExplicit, ttlTimeExplicit, packetSizeExplicit, tosExplicit
 }
 
 func applyColorMode(noColor bool) {
@@ -798,14 +806,6 @@ func applySourceDevice(srcDev string, dstIP net.IP, srcAddr *string) {
 	}
 }
 
-func normalizeUDPPacketSize(udp bool, ip net.IP, packetSize *int) {
-	if !udp || !util.IsIPv6(ip) || *packetSize >= 2 {
-		return
-	}
-	fmt.Println("UDPv6 模式下，数据包长度不能小于 2，已自动调整为 2")
-	*packetSize = 2
-}
-
 func printTraceNav(jsonPrint bool, effectiveMTR bool, ip net.IP, domain, dataOrigin string, maxHops, packetSize int, srcAddr string, method trace.Method) {
 	if !jsonPrint && !effectiveMTR {
 		printer.PrintTraceRouteNav(ip, domain, dataOrigin, maxHops, packetSize, srcAddr, string(method))
@@ -832,6 +832,8 @@ func buildTraceConfig(
 	dataOrigin string,
 	timeout int,
 	packetSize int,
+	randomPacketSize bool,
+	tos int,
 	disableMPLS bool,
 ) trace.Config {
 	return trace.Config{
@@ -856,6 +858,8 @@ func buildTraceConfig(
 		IPGeoSource:      ipgeo.GetSource(dataOrigin),
 		Timeout:          time.Duration(timeout) * time.Millisecond,
 		PktSize:          packetSize,
+		RandomPacketSize: randomPacketSize,
+		TOS:              tos,
 		DisableMPLS:      disableMPLS,
 	}
 }
@@ -1034,6 +1038,7 @@ func Execute() {
 	ttlInterval := registerTTLIntervalFlag(parser)
 	timeout := parser.Int("", "timeout", &argparse.Options{Default: 1000, Help: buildTimeoutHelp()})
 	packetSize := parser.Int("", "psize", &argparse.Options{Default: 52, Help: buildPayloadSizeHelp()})
+	tos := parser.Int("Q", "tos", &argparse.Options{Default: 0, Help: buildTOSHelp()})
 	dot := parser.Selector("", "dot-server", []string{"dnssb", "aliyun", "dnspod", "google", "cloudflare"}, &argparse.Options{
 		Help: "Use DoT Server for DNS Parse [dnssb, aliyun, dnspod, google, cloudflare]"})
 	lang := parser.Selector("g", "language", []string{"en", "cn"}, &argparse.Options{Default: "cn",
@@ -1106,11 +1111,16 @@ func Execute() {
 		}
 	}
 
-	queriesExplicit, ttlTimeExplicit := detectExplicitProbeFlags(parser)
+	queriesExplicit, ttlTimeExplicit, packetSizeExplicit, tosExplicit := detectExplicitProbeFlags(parser)
 	applyTTLIntervalDefault(ttlInterval, ttlTimeExplicit, mtrModes.mtr)
 	osType := resolveOSType()
 	if handleStartupModes(*noColor, *jsonPrint, mtrModes, *ver, *deploy, *deployListen, *init, osType) {
 		return
+	}
+
+	if *tos < 0 || *tos > 255 {
+		fmt.Println("--tos 必须在 0-255 之间")
+		os.Exit(1)
 	}
 
 	applyDefaultPort(port, *udp)
@@ -1118,6 +1128,14 @@ func Execute() {
 	configureGeoDNS(*dot)
 
 	if *mtuMode {
+		if packetSizeExplicit {
+			fmt.Println("--mtu 不支持 --psize")
+			os.Exit(1)
+		}
+		if tosExplicit {
+			fmt.Println("--mtu 不支持 --tos")
+			os.Exit(1)
+		}
 		domain := resolveCLITargetOrExit(*str, sanitizeUsagePositionalArgs(parser.Usage(err)))
 		if domain == "" {
 			return
@@ -1170,6 +1188,7 @@ func Execute() {
 		AlwaysWaitRDNS: *alwaysrDNS,
 		Lang:           *lang,
 		PktSize:        *packetSize,
+		TOS:            *tos,
 		Timeout:        time.Duration(*timeout) * time.Millisecond,
 		File:           *file,
 		Dot:            *dot,
@@ -1185,6 +1204,17 @@ func Execute() {
 
 	leoWs := prepareRuntimeEnvironment(mtrModes, *dn42, dataOrigin, disableMaptrace, powProvider)
 	defer closeLeoWebsocket(leoWs)
+
+	if *from != "" {
+		if packetSizeExplicit {
+			fmt.Println("Globalping 模式不支持 --psize")
+			os.Exit(1)
+		}
+		if tosExplicit {
+			fmt.Println("Globalping 模式不支持 --tos")
+			os.Exit(1)
+		}
+	}
 
 	if maybeHandleGlobalping(
 		*from,
@@ -1224,8 +1254,13 @@ func Execute() {
 	ip := lookupTargetIPOrExit(domain, *ipv4Only, *ipv6Only, *dot, *jsonPrint)
 
 	applySourceDevice(*srcDev, ip, srcAddr)
-	normalizeUDPPacketSize(*udp, ip, packetSize)
 	printTraceNav(*jsonPrint, mtrModes.mtr, ip, domain, *dataOrigin, *maxHops, *packetSize, *srcAddr, method)
+
+	packetSizeSpec, packetSizeErr := trace.NormalizePacketSize(method, ip, *packetSize)
+	if packetSizeErr != nil {
+		fmt.Println(packetSizeErr)
+		os.Exit(1)
+	}
 
 	util.SrcPort = *srcPort
 	util.DstIP = ip.String()
@@ -1249,7 +1284,9 @@ func Execute() {
 		*alwaysrDNS,
 		*dataOrigin,
 		*timeout,
-		*packetSize,
+		packetSizeSpec.PayloadSize,
+		packetSizeSpec.Random,
+		*tos,
 		*disableMPLS,
 	)
 

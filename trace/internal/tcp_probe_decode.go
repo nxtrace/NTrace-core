@@ -14,17 +14,17 @@ func tcpIPVersionPrefix(ipVersion int) string {
 	return "ip"
 }
 
-func tcpProbeSequence(tcp *layers.TCP, pktSize int) (int, bool) {
+func tcpProbeReply(tcp *layers.TCP) (seq int, ack int, ok bool) {
 	if tcp == nil {
-		return 0, false
+		return 0, 0, false
 	}
 	if tcp.ACK && tcp.RST {
-		return int(tcp.Ack) - 1 - pktSize, true
+		return 0, int(tcp.Ack), true
 	}
 	if tcp.ACK && tcp.SYN {
-		return int(tcp.Ack) - 1, true
+		return int(tcp.Ack) - 1, 0, true
 	}
-	return 0, false
+	return 0, 0, false
 }
 
 func tcpProbePeerIP(ipVersion int, pkt gopacket.Packet) (net.IP, bool) {
@@ -43,21 +43,21 @@ func tcpProbePeerIP(ipVersion int, pkt gopacket.Packet) (net.IP, bool) {
 	return ip6.SrcIP, true
 }
 
-func decodeTCPProbePacket(ipVersion, dstPort, pktSize int, pkt gopacket.Packet) (srcPort, seq int, peer net.Addr, ok bool) {
+func decodeTCPProbePacket(ipVersion, dstPort int, pkt gopacket.Packet) (srcPort, seq, ack int, peer net.Addr, ok bool) {
 	tcp, ok := pkt.Layer(layers.LayerTypeTCP).(*layers.TCP)
 	if !ok || tcp == nil || int(tcp.SrcPort) != dstPort {
-		return 0, 0, nil, false
+		return 0, 0, 0, nil, false
 	}
 
-	seq, ok = tcpProbeSequence(tcp, pktSize)
+	seq, ack, ok = tcpProbeReply(tcp)
 	if !ok {
-		return 0, 0, nil, false
+		return 0, 0, 0, nil, false
 	}
 
 	peerIP, ok := tcpProbePeerIP(ipVersion, pkt)
 	if !ok {
-		return 0, 0, nil, false
+		return 0, 0, 0, nil, false
 	}
 
-	return int(tcp.DstPort), seq, &net.IPAddr{IP: peerIP}, true
+	return int(tcp.DstPort), seq, ack, &net.IPAddr{IP: peerIP}, true
 }

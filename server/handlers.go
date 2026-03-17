@@ -26,6 +26,7 @@ var (
 		"max_hops":          30,
 		"timeout_ms":        1000,
 		"packet_size":       52,
+		"tos":               0,
 		"parallel_requests": 18,
 		"begin_hop":         1,
 		"language":          "cn",

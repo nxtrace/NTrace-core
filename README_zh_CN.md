@@ -365,8 +365,11 @@ export NEXTTRACE_ENABLEHIDDENDSTIP=1
 # 关闭IP反向解析功能
 nexttrace --no-rdns www.bbix.net
 
-# 设置载荷大小为1024字节
+# 设置探测包总大小为1024字节（含 IP + 探测协议头）
 nexttrace --psize 1024 example.com
+
+# 设置 TOS / traffic class 字段
+nexttrace -Q 46 example.com
 
 # 特色功能：打印Route-Path图
 # Route-Path图示例：
@@ -394,7 +397,8 @@ export NO_COLOR=1
 | `--send-time` | 同一 TTL 组内相邻探测包间隔 | `50ms` | 设备限速时升到 `100-200ms`；MTR 下忽略 |
 | `--ttl-time` | 常规 traceroute 的 TTL 组间隔；MTR 的每跳探测间隔 | traceroute: `300ms`；MTR: 未指定时 `1000ms` | 想加速就调低；远程/限速链路调高 |
 | `--timeout` | 单个探测包超时 | `1000ms` | 跨洲或高丢包链路升到 `2000-3000ms` |
-| `--psize` | 载荷大小 | `52` 字节 | 只在 MTU 或大包探测时增大 |
+| `--psize` | 探测包大小 | `52` 字节 | 含 IP + 探测协议头；负值表示每个 probe 在 `abs(value)` 内随机 |
+| `-Q`, `--tos` | IP TOS / traffic class | `0` | 设置 IP 头里的 TOS / traffic class |
 
 这些探测参数目前仍是 CLI 级配置，`nt_config.yaml` 还不能直接保存它们。若要复用一组调优参数，建议写成 shell alias 或小脚本。
 
@@ -716,9 +720,14 @@ Arguments:
       --timeout                      Per-probe timeout [ms]. Raise to 2000-3000
                                      on slow intercontinental or high-loss
                                      paths. Default: 1000
-      --psize                        Payload size in bytes. Keep 52 for normal
-                                     routing checks; raise only for MTU or
-                                     large-packet testing. Default: 52
+      --psize                        Probe packet size in bytes, inclusive IP
+                                     and active probe headers. Keep 52 for
+                                     normal routing checks; raise for MTU or
+                                     large-packet testing. Negative values
+                                     randomize each probe up to abs(value).
+                                     Default: 52
+  -Q  --tos                          Set the IP type-of-service / traffic class
+                                     value [0-255]. Default: 0
       --dot-server                   Use DoT Server for DNS Parse [dnssb,
                                      aliyun, dnspod, google, cloudflare]
   -g  --language                     Choose the language for displaying [en,

@@ -158,6 +158,9 @@ func (s *UDPSpec) sendUDPIPv6(ipHdr *layers.IPv6, udpHdr *layers.UDP, payload []
 	s.hopLimitLock.Lock()
 	defer s.hopLimitLock.Unlock()
 
+	if err := s.udp6.SetTrafficClass(int(ipHdr.TrafficClass)); err != nil {
+		return time.Time{}, err
+	}
 	if err := s.udp6.SetHopLimit(int(ipHdr.HopLimit)); err != nil {
 		return time.Time{}, err
 	}

@@ -407,11 +407,12 @@ func (t *UDPTracerIPv6) send(ctx context.Context, s *internal.UDPSpec, ttl, i in
 	}()
 
 	ipHeader := &layers.IPv6{
-		Version:    6,
-		SrcIP:      t.SrcIP,
-		DstIP:      t.DstIP,
-		NextHeader: layers.IPProtocolUDP,
-		HopLimit:   uint8(ttl),
+		Version:      6,
+		SrcIP:        t.SrcIP,
+		DstIP:        t.DstIP,
+		NextHeader:   layers.IPProtocolUDP,
+		HopLimit:     uint8(ttl),
+		TrafficClass: uint8(t.TOS),
 	}
 
 	udpHeader := &layers.UDP{
@@ -419,7 +420,7 @@ func (t *UDPTracerIPv6) send(ctx context.Context, s *internal.UDPSpec, ttl, i in
 		DstPort: layers.UDPPort(t.DstPort),
 	}
 
-	desiredPayloadSize := t.PktSize
+	desiredPayloadSize := resolveProbePayloadSize(UDPTrace, t.DstIP, t.PktSize, t.RandomPacketSize)
 	payload := make([]byte, desiredPayloadSize)
 
 	// 设置随机种子

@@ -389,11 +389,12 @@ func (t *ICMPTracerv6) send(ctx context.Context, s *internal.ICMPSpec, ttl, i in
 	seq := (ttl << 8) | (i & 0xFF)
 
 	ipHeader := &layers.IPv6{
-		Version:    6,
-		SrcIP:      t.SrcIP,
-		DstIP:      t.DstIP,
-		NextHeader: layers.IPProtocolICMPv6,
-		HopLimit:   uint8(ttl),
+		Version:      6,
+		SrcIP:        t.SrcIP,
+		DstIP:        t.DstIP,
+		NextHeader:   layers.IPProtocolICMPv6,
+		HopLimit:     uint8(ttl),
+		TrafficClass: uint8(t.TOS),
 	}
 
 	icmpHeader := &layers.ICMPv6{
@@ -405,7 +406,7 @@ func (t *ICMPTracerv6) send(ctx context.Context, s *internal.ICMPSpec, ttl, i in
 		SeqNumber:  uint16(seq),
 	}
 
-	desiredPayloadSize := t.PktSize
+	desiredPayloadSize := resolveProbePayloadSize(ICMPTrace, t.DstIP, t.PktSize, t.RandomPacketSize)
 	payload := make([]byte, desiredPayloadSize)
 
 	if desiredPayloadSize >= 3 {

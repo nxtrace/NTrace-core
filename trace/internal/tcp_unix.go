@@ -65,7 +65,7 @@ func (s *TCPSpec) ListenICMP(ctx context.Context, ready chan struct{}, onICMP fu
 	s.listenICMPSock(ctx, ready, onICMP)
 }
 
-func (s *TCPSpec) ListenTCP(ctx context.Context, ready chan struct{}, onTCP func(srcPort, seq int, peer net.Addr, finish time.Time)) {
+func (s *TCPSpec) ListenTCP(ctx context.Context, ready chan struct{}, onTCP func(srcPort, seq, ack int, peer net.Addr, finish time.Time)) {
 	lc := NewPacketListener(s.tcp)
 	go lc.Start(ctx)
 	close(ready)
@@ -96,25 +96,17 @@ func (s *TCPSpec) ListenTCP(ctx context.Context, ready chan struct{}, onTCP func
 
 			// 从包中获取 TCP 层信息
 			tl, ok := packet.Layer(layers.LayerTypeTCP).(*layers.TCP)
-			if !ok || tl == nil {
+			if !ok || tl == nil || int(tl.SrcPort) != s.DstPort {
 				continue
 			}
 
-			if int(tl.SrcPort) != s.DstPort {
+			seq, ack, ok := tcpProbeReply(tl)
+			if !ok {
 				continue
 			}
 
-			// 依据报文类型还原原始探测 seq：1=RST+ACK => ack-1-s.PktSize；2=SYN+ACK => ack-1
-			var seq int
-			if tl.ACK && tl.RST {
-				seq = int(tl.Ack) - 1 - s.PktSize
-			} else if tl.ACK && tl.SYN {
-				seq = int(tl.Ack) - 1
-			} else {
-				continue
-			}
 			srcPort := int(tl.DstPort)
-			onTCP(srcPort, seq, msg.Peer, finish)
+			onTCP(srcPort, seq, ack, msg.Peer, finish)
 		}
 	}
 }
@@ -152,6 +144,9 @@ func (s *TCPSpec) SendTCP(ctx context.Context, ipHdr gopacket.NetworkLayer, tcpH
 		s.hopLimitLock.Lock()
 		defer s.hopLimitLock.Unlock()
 
+		if err := s.tcp4.SetTOS(int(ip4.TOS)); err != nil {
+			return time.Time{}, err
+		}
 		if err := s.tcp4.SetTTL(ttl); err != nil {
 			return time.Time{}, err
 		}
@@ -189,6 +184,9 @@ func (s *TCPSpec) SendTCP(ctx context.Context, ipHdr gopacket.NetworkLayer, tcpH
 	s.hopLimitLock.Lock()
 	defer s.hopLimitLock.Unlock()
 
+	if err := s.tcp6.SetTrafficClass(int(ip6.TrafficClass)); err != nil {
+		return time.Time{}, err
+	}
 	if err := s.tcp6.SetHopLimit(ttl); err != nil {
 		return time.Time{}, err
 	}

@@ -7,6 +7,7 @@ const disableMaptraceInput = document.getElementById('disable-maptrace');
 const dstPortHint = document.getElementById('dst-port-hint');
 const dstPortInput = document.getElementById('dst-port');
 const payloadSizeInput = document.getElementById('payload-size');
+const tosInput = document.getElementById('tos');
 const modeSelect = document.getElementById('mode');
 const statusNode = document.getElementById('status');
 const resultNode = document.getElementById('result');
@@ -26,6 +27,7 @@ const labelMaxHops = document.getElementById('label-maxhops');
 const labelDisableMap = document.getElementById('label-disable-map');
 const labelDstPort = document.getElementById('label-dst-port');
 const labelPSize = document.getElementById('label-psize');
+const labelTOS = document.getElementById('label-tos');
 const labelMode = document.getElementById('label-mode');
 const targetInput = document.getElementById('target');
 const groupBasicParams = document.getElementById('group-basic-params');
@@ -52,6 +54,7 @@ let mtrRenderTimer = null;
 let mtrRenderRAF = null;
 let mtrRenderLastAt = 0;
 let mtrRawKnownFinalTTL = Infinity;
+const traceFormHelpers = globalThis.NextTraceForm || {};
 
 const uiText = {
   cn: {
@@ -65,7 +68,8 @@ const uiText = {
     labelMaxHops: '最大跳数',
     labelDisableMap: '禁用地图生成',
     labelDstPort: '目的端口',
-    labelPSize: '负载大小',
+    labelPSize: '探测包大小',
+    labelTOS: 'TOS',
     labelMode: '探测模式',
     buttonStartSingle: '开始探测',
     buttonStartMtr: '开始持续探测',
@@ -130,7 +134,8 @@ const uiText = {
     labelMaxHops: 'Max hops',
     labelDisableMap: 'Disable map generation',
     labelDstPort: 'Destination Port',
-    labelPSize: 'Payload Size',
+    labelPSize: 'Probe Packet Size',
+    labelTOS: 'TOS',
     labelMode: 'Mode',
     buttonStartSingle: 'Start Trace',
     buttonStartMtr: 'Start Continuous Trace',
@@ -227,7 +232,9 @@ async function loadOptions() {
     queriesInput.dataset.defaultValue = queriesInput.value;
     maxHopsInput.value = data.defaultOptions.max_hops;
     disableMaptraceInput.checked = data.defaultOptions.disable_maptrace;
-    payloadSizeInput.value = data.defaultOptions.packet_size || payloadSizeInput.value || 52;
+    const defaultOptionValue = traceFormHelpers.defaultOptionValue || ((opts, key, fallback) => (opts && Object.prototype.hasOwnProperty.call(opts, key) ? opts[key] : fallback));
+    payloadSizeInput.value = defaultOptionValue(data.defaultOptions, 'packet_size', payloadSizeInput.value || 52);
+    tosInput.value = defaultOptionValue(data.defaultOptions, 'tos', tosInput.value || 0);
     dstPortInput.value = data.defaultOptions.port || dstPortInput.value || '';
     updateDstPortState();
     updateModeUI();
@@ -604,47 +611,23 @@ function createMetaItem(label, value, allowHTML = false) {
 }
 
 function buildPayload() {
-  const payload = {
-    target: form.target.value.trim(),
+  const buildTracePayload = traceFormHelpers.buildTracePayload || ((values) => values);
+  const payload = buildTracePayload({
+    target: form.target.value,
     protocol: protocolSelect.value,
-    data_provider: providerSelect.value,
-    disable_maptrace: disableMaptraceInput.checked,
+    dataProvider: providerSelect.value,
+    disableMaptrace: disableMaptraceInput.checked,
     language: currentLang,
     mode: modeSelect.value || 'single',
-  };
-
-  const isMtrMode = payload.mode === 'mtr';
-  if (isMtrMode) {
-    payload.queries = 10;
-    if (queriesInput.value !== '10') {
-      queriesInput.value = '10';
-    }
-  } else {
-    const queries = readNumericValue(queriesInput);
-    if (queries !== undefined) {
-      payload.queries = Math.max(1, Math.min(63, queries));
-    }
+    queries: queriesInput.value,
+    maxHops: maxHopsInput.value,
+    dstPort: dstPortInput.value,
+    packetSize: payloadSizeInput.value,
+    tos: tosInput.value,
+  });
+  if (payload.mode === 'mtr' && queriesInput.value !== '10') {
+    queriesInput.value = '10';
   }
-
-  const maxHops = readNumericValue(maxHopsInput);
-  if (maxHops !== undefined) {
-    payload.max_hops = maxHops;
-  }
-
-  if (payload.mode === 'mtr') {
-    payload.hop_interval_ms = 1000;
-    payload.max_rounds = 0;
-  }
-  const dstPort = readNumericValue(dstPortInput);
-  if (dstPort !== undefined) {
-    payload.port = dstPort;
-  }
-
-  const psize = readNumericValue(payloadSizeInput);
-  if (psize !== undefined) {
-    payload.packet_size = psize;
-  }
-
   return payload;
 }
 
@@ -945,6 +928,7 @@ function applyTranslations() {
   labelDisableMap.textContent = t('labelDisableMap');
   labelDstPort.textContent = t('labelDstPort');
   labelPSize.textContent = t('labelPSize');
+  labelTOS.textContent = t('labelTOS');
   labelMode.textContent = t('labelMode');
   dstPortHint.textContent = t('hintDstPort');
   targetInput.placeholder = t('placeholderTarget');

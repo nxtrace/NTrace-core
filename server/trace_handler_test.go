@@ -44,11 +44,18 @@ func TestResolveWebMTRHopInterval_PrefersHopIntervalMs(t *testing.T) {
 }
 
 func TestBuildTraceConfig_PropagatesSessionScopedFields(t *testing.T) {
-	cfg := buildTraceConfig(traceRequest{
+	packetSize := 52
+	tos := 0
+	cfg, err := buildTraceConfig(traceRequest{
 		SourceDevice: "en7",
 		DisableMPLS:  true,
 		DotServer:    "cloudflare",
-	}, net.ParseIP("1.1.1.1"), "IPInfo", 80)
+		PacketSize:   &packetSize,
+		TOS:          &tos,
+	}, trace.ICMPTrace, net.ParseIP("1.1.1.1"), "IPInfo", 80)
+	if err != nil {
+		t.Fatalf("buildTraceConfig returned error: %v", err)
+	}
 
 	if cfg.SourceDevice != "en7" {
 		t.Fatalf("buildTraceConfig SourceDevice = %q, want en7", cfg.SourceDevice)
@@ -58,6 +65,38 @@ func TestBuildTraceConfig_PropagatesSessionScopedFields(t *testing.T) {
 	}
 	if cfg.IPGeoSource == nil {
 		t.Fatal("buildTraceConfig IPGeoSource = nil, want wrapped source")
+	}
+	if cfg.TOS != 0 {
+		t.Fatalf("buildTraceConfig TOS = %d, want 0", cfg.TOS)
+	}
+}
+
+func TestBuildTraceConfig_PreservesNegativePacketSizeAndTOS(t *testing.T) {
+	packetSize := -123
+	tos := 255
+	cfg, err := buildTraceConfig(traceRequest{
+		PacketSize: &packetSize,
+		TOS:        &tos,
+	}, trace.ICMPTrace, net.ParseIP("1.1.1.1"), "disable-geoip", 80)
+	if err != nil {
+		t.Fatalf("buildTraceConfig returned error: %v", err)
+	}
+	if !cfg.RandomPacketSize {
+		t.Fatal("buildTraceConfig RandomPacketSize = false, want true")
+	}
+	if cfg.TOS != 255 {
+		t.Fatalf("buildTraceConfig TOS = %d, want 255", cfg.TOS)
+	}
+}
+
+func TestNormalizeTraceRequest_RejectsInvalidTOS(t *testing.T) {
+	tos := 256
+	statusCode, err := normalizeTraceRequest(&traceRequest{TOS: &tos})
+	if err == nil {
+		t.Fatal("normalizeTraceRequest should reject invalid tos")
+	}
+	if statusCode != http.StatusBadRequest {
+		t.Fatalf("statusCode = %d, want %d", statusCode, http.StatusBadRequest)
 	}
 }
 

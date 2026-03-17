@@ -103,7 +103,7 @@ func mustSetDarwinTCPFilter(handle *pcap.Handle, filter string) {
 	}
 }
 
-func (s *TCPSpec) ListenTCP(ctx context.Context, ready chan struct{}, onTCP func(srcPort, seq int, peer net.Addr, finish time.Time)) {
+func (s *TCPSpec) ListenTCP(ctx context.Context, ready chan struct{}, onTCP func(srcPort, seq, ack int, peer net.Addr, finish time.Time)) {
 	handle := mustOpenDarwinTCPSniffHandle(s.captureDevice())
 	defer handle.Close()
 
@@ -121,11 +121,11 @@ func (s *TCPSpec) ListenTCP(ctx context.Context, ready chan struct{}, onTCP func
 				return
 			}
 			finish := pkt.Metadata().Timestamp
-			srcPort, seq, peer, ok := decodeTCPProbePacket(s.IPVersion, s.DstPort, s.PktSize, pkt)
+			srcPort, seq, ack, peer, ok := decodeTCPProbePacket(s.IPVersion, s.DstPort, pkt)
 			if !ok {
 				continue
 			}
-			onTCP(srcPort, seq, peer, finish)
+			onTCP(srcPort, seq, ack, peer, finish)
 		}
 	}
 }
@@ -163,6 +163,9 @@ func (s *TCPSpec) SendTCP(ctx context.Context, ipHdr gopacket.NetworkLayer, tcpH
 		s.hopLimitLock.Lock()
 		defer s.hopLimitLock.Unlock()
 
+		if err := s.tcp4.SetTOS(int(ip4.TOS)); err != nil {
+			return time.Time{}, err
+		}
 		if err := s.tcp4.SetTTL(ttl); err != nil {
 			return time.Time{}, err
 		}
@@ -200,6 +203,9 @@ func (s *TCPSpec) SendTCP(ctx context.Context, ipHdr gopacket.NetworkLayer, tcpH
 	s.hopLimitLock.Lock()
 	defer s.hopLimitLock.Unlock()
 
+	if err := s.tcp6.SetTrafficClass(int(ip6.TrafficClass)); err != nil {
+		return time.Time{}, err
+	}
 	if err := s.tcp6.SetHopLimit(ttl); err != nil {
 		return time.Time{}, err
 	}

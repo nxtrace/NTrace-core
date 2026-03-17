@@ -476,6 +476,7 @@ func (t *UDPTracer) resolveSourcePort() int {
 
 func (t *UDPTracer) buildUDPPacket(ttl, i, srcPort int) (int, *layers.IPv4, *layers.UDP, []byte) {
 	seq := (ttl << 8) | (i & 0xFF)
+	payloadSize := resolveProbePayloadSize(UDPTrace, t.DstIP, t.PktSize, t.RandomPacketSize)
 	ipHeader := &layers.IPv4{
 		Version:  4,
 		Id:       uint16(seq),
@@ -483,12 +484,13 @@ func (t *UDPTracer) buildUDPPacket(ttl, i, srcPort int) (int, *layers.IPv4, *lay
 		DstIP:    t.DstIP,
 		Protocol: layers.IPProtocolUDP,
 		TTL:      uint8(ttl),
+		TOS:      uint8(t.TOS),
 	}
 	udpHeader := &layers.UDP{
 		SrcPort: layers.UDPPort(srcPort),
 		DstPort: layers.UDPPort(t.DstPort),
 	}
-	return seq, ipHeader, udpHeader, randomPayload(t.PktSize, 0)
+	return seq, ipHeader, udpHeader, randomPayload(payloadSize, 0)
 }
 
 func (t *UDPTracer) startSendTimeout(ctx context.Context, ttl, i, seq int) {

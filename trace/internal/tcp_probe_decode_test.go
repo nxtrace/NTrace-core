@@ -56,12 +56,12 @@ func TestDecodeTCPProbePacketIPv4RSTAck(t *testing.T) {
 	}
 
 	pkt := mustSerializeTCPProbePacket(t, ip4, tcp)
-	srcPort, seq, peer, ok := decodeTCPProbePacket(4, 443, 32, pkt)
+	srcPort, seq, ack, peer, ok := decodeTCPProbePacket(4, 443, pkt)
 	if !ok {
 		t.Fatalf("decodeTCPProbePacket() ok = false")
 	}
-	if srcPort != 32100 || seq != 167 {
-		t.Fatalf("decodeTCPProbePacket() = (%d, %d), want (32100, 167)", srcPort, seq)
+	if srcPort != 32100 || seq != 0 || ack != 200 {
+		t.Fatalf("decodeTCPProbePacket() = (%d, %d, %d), want (32100, 0, 200)", srcPort, seq, ack)
 	}
 	if got := peer.(*net.IPAddr).IP; !got.Equal(srcIP) {
 		t.Fatalf("peer IP = %v, want %v", got, srcIP)
@@ -86,12 +86,12 @@ func TestDecodeTCPProbePacketIPv6SYNAck(t *testing.T) {
 	}
 
 	pkt := mustSerializeTCPProbePacket(t, ip6, tcp)
-	srcPort, seq, peer, ok := decodeTCPProbePacket(6, 8443, 0, pkt)
+	srcPort, seq, ack, peer, ok := decodeTCPProbePacket(6, 8443, pkt)
 	if !ok {
 		t.Fatalf("decodeTCPProbePacket() ok = false")
 	}
-	if srcPort != 45678 || seq != 90 {
-		t.Fatalf("decodeTCPProbePacket() = (%d, %d), want (45678, 90)", srcPort, seq)
+	if srcPort != 45678 || seq != 90 || ack != 0 {
+		t.Fatalf("decodeTCPProbePacket() = (%d, %d, %d), want (45678, 90, 0)", srcPort, seq, ack)
 	}
 	if got := peer.(*net.IPAddr).IP; !got.Equal(srcIP) {
 		t.Fatalf("peer IP = %v, want %v", got, srcIP)
@@ -115,7 +115,7 @@ func TestDecodeTCPProbePacketRejectsUnexpectedPort(t *testing.T) {
 	}
 
 	pkt := mustSerializeTCPProbePacket(t, ip4, tcp)
-	if _, _, _, ok := decodeTCPProbePacket(4, 443, 0, pkt); ok {
+	if _, _, _, _, ok := decodeTCPProbePacket(4, 443, pkt); ok {
 		t.Fatalf("decodeTCPProbePacket() ok = true, want false")
 	}
 }

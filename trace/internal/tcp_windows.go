@@ -132,7 +132,7 @@ func (s *TCPSpec) listenICMPWinDivert(ctx context.Context, ready chan struct{}, 
 	}
 }
 
-func (s *TCPSpec) ListenTCP(ctx context.Context, ready chan struct{}, onTCP func(srcPort, seq int, peer net.Addr, finish time.Time)) {
+func (s *TCPSpec) ListenTCP(ctx context.Context, ready chan struct{}, onTCP func(srcPort, seq, ack int, peer net.Addr, finish time.Time)) {
 	if err := s.sourceDeviceUnsupportedErr(); err != nil {
 		if util.EnvDevMode {
 			panic(err)
@@ -161,11 +161,11 @@ func (s *TCPSpec) ListenTCP(ctx context.Context, ready chan struct{}, onTCP func
 			continue
 		}
 
-		srcPort, seq, peer, ok := decodeWinDivertTCPPacket(s.IPVersion, raw, s.DstPort, s.PktSize)
+		srcPort, seq, ack, peer, ok := decodeWinDivertTCPPacket(s.IPVersion, raw, s.DstPort)
 		if !ok {
 			continue
 		}
-		onTCP(srcPort, seq, peer, finish)
+		onTCP(srcPort, seq, ack, peer, finish)
 	}
 }
 

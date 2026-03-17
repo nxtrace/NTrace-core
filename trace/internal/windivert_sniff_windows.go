@@ -106,9 +106,9 @@ func decodeWinDivertICMPPacket(ipVersion int, raw []byte) (*winDivertICMPPacket,
 	return decodeWinDivertICMPv6Packet(pkt, raw)
 }
 
-func decodeWinDivertTCPPacket(ipVersion int, raw []byte, dstPort, pktSize int) (srcPort, seq int, peer net.Addr, ok bool) {
+func decodeWinDivertTCPPacket(ipVersion int, raw []byte, dstPort int) (srcPort, seq, ack int, peer net.Addr, ok bool) {
 	pkt := gopacket.NewPacket(raw, packetDecoderForIPVersion(ipVersion), gopacket.NoCopy)
-	return decodeTCPProbePacket(ipVersion, dstPort, pktSize, pkt)
+	return decodeTCPProbePacket(ipVersion, dstPort, pkt)
 }
 
 func decodeWinDivertICMPv4Packet(pkt gopacket.Packet, raw []byte) (*winDivertICMPPacket, bool) {

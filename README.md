@@ -368,8 +368,11 @@ export NEXTTRACE_ENABLEHIDDENDSTIP=1
 # Turn off the IP reverse parsing function
 nexttrace --no-rdns www.bbix.net
 
-# Set the payload size to 1024 bytes
+# Set the probe packet size to 1024 bytes (inclusive IP + probe headers)
 nexttrace --psize 1024 example.com
+
+# Set the TOS / traffic class field
+nexttrace -Q 46 example.com
 
 # Feature: print Route-Path diagram
 # Route-Path diagram example:
@@ -398,7 +401,8 @@ export NO_COLOR=1
 | `--send-time` | Gap between packets inside one TTL group | `50ms` | Raise to `100-200ms` on rate-limited devices; ignored in MTR |
 | `--ttl-time` | Gap between TTL groups in traceroute; per-hop interval in MTR | traceroute: `300ms`; MTR: `1000ms` when omitted | Lower to speed up; raise on remote/rate-limited paths |
 | `--timeout` | Per-probe timeout | `1000ms` | Raise to `2000-3000ms` for intercontinental or high-loss paths |
-| `--psize` | Payload size | `52` bytes | Raise only for MTU or large-packet testing |
+| `--psize` | Probe packet size | `52` bytes | Inclusive IP + probe headers; negative values randomize each probe up to `abs(value)` |
+| `-Q`, `--tos` | IP TOS / traffic class | `0` | Set DSCP/TOS style marking in the IP header |
 
 These probe knobs are CLI-only today; `nt_config.yaml` does not yet store them. If you want reusable profiles, keep them in shell aliases or small wrapper scripts.
 
@@ -736,9 +740,14 @@ Arguments:
       --timeout                      Per-probe timeout [ms]. Raise to 2000-3000
                                      on slow intercontinental or high-loss
                                      paths. Default: 1000
-      --psize                        Payload size in bytes. Keep 52 for normal
-                                     routing checks; raise only for MTU or
-                                     large-packet testing. Default: 52
+      --psize                        Probe packet size in bytes, inclusive IP
+                                     and active probe headers. Keep 52 for
+                                     normal routing checks; raise for MTU or
+                                     large-packet testing. Negative values
+                                     randomize each probe up to abs(value).
+                                     Default: 52
+  -Q  --tos                          Set the IP type-of-service / traffic class
+                                     value [0-255]. Default: 0
       --dot-server                   Use DoT Server for DNS Parse [dnssb,
                                      aliyun, dnspod, google, cloudflare]
   -g  --language                     Choose the language for displaying [en,

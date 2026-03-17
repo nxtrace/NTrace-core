@@ -38,6 +38,7 @@ type ParamsFastTrace struct {
 	AlwaysWaitRDNS bool
 	Lang           string
 	PktSize        int
+	TOS            int
 	Timeout        time.Duration
 	File           string
 	Dot            string
@@ -215,15 +216,20 @@ func printFileTraceHeader(ip IpListElement, params ParamsFastTrace, tracerouteMe
 	if util.EnableHidDstIP {
 		dst = util.HideIPPart(ip.Ip)
 	}
-	fmt.Printf("traceroute to %s, %d hops max, %d bytes payload, %s mode\n", dst, params.MaxHops, params.PktSize, strings.ToUpper(string(tracerouteMethod)))
+	fmt.Printf("traceroute to %s, %d hops max, %s, %s mode\n", dst, params.MaxHops, trace.FormatPacketSizeLabel(params.PktSize), strings.ToUpper(string(tracerouteMethod)))
 }
 
 func buildFileTraceConfig(params ParamsFastTrace, tracerouteMethod trace.Method, ip IpListElement) trace.Config {
+	dstIP := net.ParseIP(ip.Ip)
+	packetSizeSpec, err := trace.NormalizePacketSize(tracerouteMethod, dstIP, params.PktSize)
+	if err != nil {
+		log.Fatal(err)
+	}
 	return trace.Config{
 		OSType:           params.OSType,
 		ICMPMode:         params.ICMPMode,
 		BeginHop:         params.BeginHop,
-		DstIP:            net.ParseIP(ip.Ip),
+		DstIP:            dstIP,
 		DstPort:          params.DstPort,
 		MaxHops:          params.MaxHops,
 		NumMeasurements:  3,
@@ -235,7 +241,9 @@ func buildFileTraceConfig(params ParamsFastTrace, tracerouteMethod trace.Method,
 		IPGeoSource:      ipgeo.GetSource("LeoMoeAPI"),
 		Timeout:          params.Timeout,
 		SrcAddr:          resolveFastTraceSourceAddr(params.SrcDev, ip.Version4),
-		PktSize:          params.PktSize,
+		PktSize:          packetSizeSpec.PayloadSize,
+		RandomPacketSize: packetSizeSpec.Random,
+		TOS:              params.TOS,
 		Lang:             params.Lang,
 	}
 }
@@ -264,7 +272,7 @@ func runFileTraceTarget(params ParamsFastTrace, tracerouteMethod trace.Method, i
 	printFileTraceHeader(ip, params, tracerouteMethod)
 
 	conf := buildFileTraceConfig(params, tracerouteMethod, ip)
-	header := fmt.Sprintf("『%s』\ntraceroute to %s, %d hops max, %d byte packets, %s mode\n", ip.Desc, ip.Ip, params.MaxHops, params.PktSize, strings.ToUpper(string(tracerouteMethod)))
+	header := fmt.Sprintf("『%s』\ntraceroute to %s, %d hops max, %s, %s mode\n", ip.Desc, ip.Ip, params.MaxHops, trace.FormatPacketSizeLabel(params.PktSize), strings.ToUpper(string(tracerouteMethod)))
 	if err := configureFastTraceRealtimePrinter(&conf, header); err != nil {
 		return
 	}
@@ -277,10 +285,14 @@ func runFileTraceTarget(params ParamsFastTrace, tracerouteMethod trace.Method, i
 
 func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 	fmt.Fprintf(color.Output, "%s\n", color.New(color.FgYellow, color.Bold).Sprintf("『%s %s 』", location, ispCollection.ISPName))
-	fmt.Printf("traceroute to %s, %d hops max, %d byte packets, %s mode\n", ispCollection.IP, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize, strings.ToUpper(string(f.TracerouteMethod)))
+	fmt.Printf("traceroute to %s, %d hops max, %s, %s mode\n", ispCollection.IP, f.ParamsFastTrace.MaxHops, trace.FormatPacketSizeLabel(f.ParamsFastTrace.PktSize), strings.ToUpper(string(f.TracerouteMethod)))
 
 	// ip, err := util.DomainLookUp(ispCollection.IP, "4", "", true)
 	ip, err := util.DomainLookUp(ispCollection.IP, "4", f.ParamsFastTrace.Dot, true)
+	if err != nil {
+		log.Fatal(err)
+	}
+	packetSizeSpec, err := trace.NormalizePacketSize(f.TracerouteMethod, ip, f.ParamsFastTrace.PktSize)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -301,7 +313,9 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 		IPGeoSource:      ipgeo.GetSource("LeoMoeAPI"),
 		Timeout:          f.ParamsFastTrace.Timeout,
 		SrcAddr:          f.ParamsFastTrace.SrcAddr,
-		PktSize:          f.ParamsFastTrace.PktSize,
+		PktSize:          packetSizeSpec.PayloadSize,
+		RandomPacketSize: packetSizeSpec.Random,
+		TOS:              f.ParamsFastTrace.TOS,
 		Lang:             f.ParamsFastTrace.Lang,
 	}
 
@@ -320,7 +334,7 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 		log.SetOutput(fp)
 		log.SetFlags(0)
 		log.Printf("『%s %s 』\n", location, ispCollection.ISPName)
-		log.Printf("traceroute to %s, %d hops max, %d byte packets, %s mode\n", ispCollection.IP, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize, strings.ToUpper(string(f.TracerouteMethod)))
+		log.Printf("traceroute to %s, %d hops max, %s, %s mode\n", ispCollection.IP, f.ParamsFastTrace.MaxHops, trace.FormatPacketSizeLabel(f.ParamsFastTrace.PktSize), strings.ToUpper(string(f.TracerouteMethod)))
 		conf.RealtimePrinter = tracelog.RealtimePrinter
 	} else {
 		conf.RealtimePrinter = printer.RealtimePrinter
