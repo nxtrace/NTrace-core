@@ -136,10 +136,10 @@ func (t *TCPTracer) clearPending(seq int) bool {
 	return ok
 }
 
-func (t *TCPTracer) storeSent(seq, srcPort int, start time.Time) {
+func (t *TCPTracer) storeSent(seq, srcPort, payloadSize int, start time.Time) {
 	t.sentMu.Lock()
 	defer t.sentMu.Unlock()
-	t.sentAt[seq] = sentInfo{srcPort: srcPort, start: start}
+	t.sentAt[seq] = sentInfo{srcPort: srcPort, payloadSize: payloadSize, start: start}
 }
 
 func (t *TCPTracer) lookupSent(seq int) (srcPort int, start time.Time, ok bool) {
@@ -150,6 +150,12 @@ func (t *TCPTracer) lookupSent(seq int) (srcPort int, start time.Time, ok bool) 
 		return 0, time.Time{}, false
 	}
 	return si.srcPort, si.start, true
+}
+
+func (t *TCPTracer) lookupSentByAck(srcPort, ack int) (seq int, start time.Time, ok bool) {
+	t.sentMu.RLock()
+	defer t.sentMu.RUnlock()
+	return lookupTCPSentByAck(t.sentAt, srcPort, ack)
 }
 
 func (t *TCPTracer) dropSent(seq int) {
@@ -208,12 +214,18 @@ func (t *TCPTracer) matchWorker(ctx context.Context) {
 			timer.Stop()
 
 			// 尝试一次匹配
-			srcPort, start, ok := t.lookupSent(task.seq)
-			if !ok {
-				continue
+			var (
+				srcPort int
+				start   time.Time
+				matched bool
+			)
+			if task.ack != 0 {
+				task.seq, start, matched = t.lookupSentByAck(task.srcPort, task.ack)
+				srcPort = task.srcPort
+			} else {
+				srcPort, start, matched = t.lookupSent(task.seq)
 			}
-
-			if task.srcPort != srcPort {
+			if !matched || task.srcPort != srcPort {
 				continue
 			}
 
@@ -302,11 +314,11 @@ func (t *TCPTracer) Execute() (res *Result, err error) {
 	t.wg.Add(1)
 	go func() {
 		defer t.wg.Done()
-		s.ListenTCP(ctx, t.readyTCP, func(srcPort, seq int, peer net.Addr, finish time.Time) {
+		s.ListenTCP(ctx, t.readyTCP, func(srcPort, seq, ack int, peer net.Addr, finish time.Time) {
 			// 非阻塞投递，队列满则丢弃任务
 			select {
 			case t.matchQ <- matchTask{
-				srcPort: srcPort, seq: seq, peer: peer, finish: finish, mpls: nil,
+				srcPort: srcPort, seq: seq, ack: ack, peer: peer, finish: finish, mpls: nil,
 			}:
 			default:
 				// 丢弃以避免阻塞抓包循环
@@ -427,6 +439,7 @@ func (t *TCPTracer) send(ctx context.Context, s *internal.TCPSpec, ttl, i int) e
 		DstIP:    t.DstIP,
 		Protocol: layers.IPProtocolTCP,
 		TTL:      uint8(ttl),
+		TOS:      uint8(t.TOS),
 	}
 
 	tcpHeader := &layers.TCP{
@@ -440,7 +453,7 @@ func (t *TCPTracer) send(ctx context.Context, s *internal.TCPSpec, ttl, i int) e
 		},
 	}
 
-	desiredPayloadSize := t.PktSize
+	desiredPayloadSize := resolveProbePayloadSize(TCPTrace, t.DstIP, t.PktSize, t.RandomPacketSize)
 	payload := make([]byte, desiredPayloadSize)
 
 	// 设置随机种子
@@ -483,6 +496,6 @@ func (t *TCPTracer) send(ctx context.Context, s *internal.TCPSpec, ttl, i int) e
 		_ = t.clearPending(seq)
 		return err
 	}
-	t.storeSent(seq, SrcPort, start)
+	t.storeSent(seq, SrcPort, desiredPayloadSize, start)
 	return nil
 }

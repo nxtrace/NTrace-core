@@ -49,7 +49,8 @@ type traceRequest struct {
 	Queries           int    `json:"queries"`
 	MaxHops           int    `json:"max_hops"`
 	TimeoutMs         int    `json:"timeout_ms"`
-	PacketSize        int    `json:"packet_size"`
+	PacketSize        *int   `json:"packet_size"`
+	TOS               *int   `json:"tos"`
 	ParallelRequests  int    `json:"parallel_requests"`
 	BeginHop          int    `json:"begin_hop"`
 	IPv4Only          bool   `json:"ipv4_only"`
@@ -132,6 +133,9 @@ func normalizeTraceRequest(req *traceRequest) (int, error) {
 	}
 	if req.MaxRounds < 0 {
 		req.MaxRounds = 0
+	}
+	if req.TOS != nil && (*req.TOS < 0 || *req.TOS > 255) {
+		return http.StatusBadRequest, errors.New("tos must be within range 0-255")
 	}
 	return 0, nil
 }
@@ -237,7 +241,10 @@ func prepareTrace(req traceRequest) (*traceExecution, int, error) {
 	exec.DataProvider = dataProvider
 	exec.PowProvider = strings.TrimSpace(exec.Req.PowProvider)
 	exec.NeedsLeoWS = needsLeoWS
-	exec.Config = buildTraceConfig(exec.Req, ip, dataProvider, protocol.dstPort)
+	exec.Config, err = buildTraceConfig(exec.Req, exec.Method, ip, dataProvider, protocol.dstPort)
+	if err != nil {
+		return nil, http.StatusBadRequest, err
+	}
 
 	return exec, 0, nil
 }
@@ -316,7 +323,7 @@ func traceHandler(c *gin.Context) {
 	c.JSON(200, response)
 }
 
-func buildTraceConfig(req traceRequest, ip net.IP, dataProvider string, port int) trace.Config {
+func buildTraceConfig(req traceRequest, method trace.Method, ip net.IP, dataProvider string, port int) (trace.Config, error) {
 	lang := strings.TrimSpace(req.Language)
 	if lang == "" {
 		lang = defaults["language"].(string)
@@ -327,9 +334,18 @@ func buildTraceConfig(req traceRequest, ip net.IP, dataProvider string, port int
 		timeout = defaults["timeout_ms"].(int)
 	}
 
-	packetSize := req.PacketSize
-	if packetSize <= 0 {
-		packetSize = defaults["packet_size"].(int)
+	packetSize := defaults["packet_size"].(int)
+	if req.PacketSize != nil {
+		packetSize = *req.PacketSize
+	}
+	packetSizeSpec, err := trace.NormalizePacketSize(method, ip, packetSize)
+	if err != nil {
+		return trace.Config{}, err
+	}
+
+	tos := defaults["tos"].(int)
+	if req.TOS != nil {
+		tos = *req.TOS
 	}
 
 	if req.PacketInterval <= 0 {
@@ -390,10 +406,12 @@ func buildTraceConfig(req traceRequest, ip net.IP, dataProvider string, port int
 		TTLInterval:      req.TTLInterval,
 		Lang:             lang,
 		DN42:             req.DN42,
-		PktSize:          packetSize,
+		PktSize:          packetSizeSpec.PayloadSize,
+		RandomPacketSize: packetSizeSpec.Random,
+		TOS:              tos,
 		Maptrace:         !req.DisableMaptrace,
 		DisableMPLS:      req.DisableMPLS,
-	}
+	}, nil
 }
 
 func withTraceSetupContext[T any](setup *traceExecution, callback func() (T, error)) (T, error) {

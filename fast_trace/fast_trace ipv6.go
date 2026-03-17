@@ -21,10 +21,14 @@ import (
 
 func (f *FastTracer) tracert_v6(location string, ispCollection ISPCollection) {
 	fmt.Fprintf(color.Output, "%s\n", color.New(color.FgYellow, color.Bold).Sprintf("『%s %s 』", location, ispCollection.ISPName))
-	fmt.Printf("traceroute to %s, %d hops max, %d byte packets, %s mode\n", ispCollection.IPv6, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize, strings.ToUpper(string(f.TracerouteMethod)))
+	fmt.Printf("traceroute to %s, %d hops max, %s, %s mode\n", ispCollection.IPv6, f.ParamsFastTrace.MaxHops, trace.FormatPacketSizeLabel(f.ParamsFastTrace.PktSize), strings.ToUpper(string(f.TracerouteMethod)))
 
 	// ip, err := util.DomainLookUp(ispCollection.IPv6, "6", "", true)
 	ip, err := util.DomainLookUp(ispCollection.IPv6, "6", f.ParamsFastTrace.Dot, true)
+	if err != nil {
+		log.Fatal(err)
+	}
+	packetSizeSpec, err := trace.NormalizePacketSize(f.TracerouteMethod, ip, f.ParamsFastTrace.PktSize)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -45,7 +49,9 @@ func (f *FastTracer) tracert_v6(location string, ispCollection ISPCollection) {
 		IPGeoSource:      ipgeo.GetSource("LeoMoeAPI"),
 		Timeout:          f.ParamsFastTrace.Timeout,
 		SrcAddr:          f.ParamsFastTrace.SrcAddr,
-		PktSize:          f.ParamsFastTrace.PktSize,
+		PktSize:          packetSizeSpec.PayloadSize,
+		RandomPacketSize: packetSizeSpec.Random,
+		TOS:              f.ParamsFastTrace.TOS,
 		Lang:             f.ParamsFastTrace.Lang,
 	}
 
@@ -63,7 +69,7 @@ func (f *FastTracer) tracert_v6(location string, ispCollection ISPCollection) {
 		log.SetOutput(fp)
 		log.SetFlags(0)
 		log.Printf("『%s %s 』\n", location, ispCollection.ISPName)
-		log.Printf("traceroute to %s, %d hops max, %d byte packets, %s mode\n", ispCollection.IPv6, f.ParamsFastTrace.MaxHops, f.ParamsFastTrace.PktSize, strings.ToUpper(string(f.TracerouteMethod)))
+		log.Printf("traceroute to %s, %d hops max, %s, %s mode\n", ispCollection.IPv6, f.ParamsFastTrace.MaxHops, trace.FormatPacketSizeLabel(f.ParamsFastTrace.PktSize), strings.ToUpper(string(f.TracerouteMethod)))
 		conf.RealtimePrinter = tracelog.RealtimePrinter
 	} else {
 		conf.RealtimePrinter = printer.RealtimePrinter
@@ -144,7 +150,6 @@ func FastTestv6(traceMode trace.Method, outEnable bool, paramsFastTrace ParamsFa
 	oe = outEnable
 
 	choice := readFastTestv6Choice()
-	normalizeFastTestv6PacketSize(traceMode, &paramsFastTrace)
 	ft := FastTracer{
 		ParamsFastTrace:  paramsFastTrace,
 		TracerouteMethod: fastTestMethod(traceMode),
@@ -169,13 +174,6 @@ func readFastTestv6Choice() string {
 		return "1"
 	}
 	return choice
-}
-
-func normalizeFastTestv6PacketSize(traceMode trace.Method, paramsFastTrace *ParamsFastTrace) {
-	if traceMode == trace.UDPTrace && paramsFastTrace.PktSize < 2 {
-		fmt.Println("UDPv6 模式下，数据包长度不能小于 2，已自动调整为 2")
-		paramsFastTrace.PktSize = 2
-	}
 }
 
 func fastTestMethod(traceMode trace.Method) trace.Method {

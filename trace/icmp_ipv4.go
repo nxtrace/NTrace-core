@@ -394,6 +394,7 @@ func (t *ICMPTracer) send(ctx context.Context, s *internal.ICMPSpec, ttl, i int)
 		DstIP:    t.DstIP,
 		Protocol: layers.IPProtocolICMPv4,
 		TTL:      uint8(ttl),
+		TOS:      uint8(t.TOS),
 	}
 
 	icmpHeader := &layers.ICMPv4{
@@ -402,7 +403,7 @@ func (t *ICMPTracer) send(ctx context.Context, s *internal.ICMPSpec, ttl, i int)
 		Seq:      uint16(seq),
 	}
 
-	desiredPayloadSize := t.PktSize
+	desiredPayloadSize := resolveProbePayloadSize(ICMPTrace, t.DstIP, t.PktSize, t.RandomPacketSize)
 	payload := make([]byte, desiredPayloadSize)
 
 	if desiredPayloadSize >= 3 {

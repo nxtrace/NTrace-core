@@ -65,8 +65,15 @@
             <small id="dst-port-hint">仅 TCP/UDP 模式有效</small>
           </div>
           <div>
-            <label for="payload-size" id="label-psize">负载大小</label>
-            <input id="payload-size" name="payloadSize" type="number" min="16" max="2048">
+            <label for="payload-size" id="label-psize">探测包大小</label>
+            <input id="payload-size" name="payloadSize" type="number" step="1">
+          </div>
+        </div>
+
+        <div class="form__group grid">
+          <div>
+            <label for="tos" id="label-tos">TOS</label>
+            <input id="tos" name="tos" type="number" min="0" max="255">
           </div>
         </div>
 
@@ -98,6 +105,7 @@
   </footer>
 
   <script src="/assets/mtr_agg.js" defer></script>
+  <script src="/assets/trace_form.js" defer></script>
   <script src="/assets/app.js" defer></script>
 </body>
 </html>

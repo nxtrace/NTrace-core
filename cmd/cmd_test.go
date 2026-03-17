@@ -84,3 +84,45 @@ func TestAdvancedHelpTextMentionsTuningGuidance(t *testing.T) {
 		}
 	}
 }
+
+func TestProbeOptionHelpMentionsRandomPacketSizeAndTOS(t *testing.T) {
+	parser := argparse.NewParser("ntr", "")
+	parser.Int("", "psize", &argparse.Options{Default: 52, Help: buildPayloadSizeHelp()})
+	parser.Int("Q", "tos", &argparse.Options{Default: 0, Help: buildTOSHelp()})
+
+	usage := parser.Usage(nil)
+	for _, want := range []string{
+		"Negative values randomize each probe",
+		"type-of-service / traffic class",
+	} {
+		if !strings.Contains(usage, want) {
+			t.Fatalf("usage missing %q:\n%s", want, usage)
+		}
+	}
+}
+
+func TestDetectExplicitProbeFlags(t *testing.T) {
+	parser := argparse.NewParser("ntr", "")
+	parser.Int("q", "queries", &argparse.Options{Default: 3})
+	parser.Int("i", "ttl-time", &argparse.Options{Default: 300})
+	parser.Int("", "psize", &argparse.Options{Default: 52})
+	parser.Int("Q", "tos", &argparse.Options{Default: 0})
+
+	if err := parser.Parse([]string{"ntr", "--psize", "-123", "-Q", "46", "-q", "5"}); err != nil {
+		t.Fatalf("Parse returned error: %v", err)
+	}
+
+	queriesExplicit, ttlTimeExplicit, packetSizeExplicit, tosExplicit := detectExplicitProbeFlags(parser)
+	if !queriesExplicit {
+		t.Fatal("queriesExplicit = false, want true")
+	}
+	if ttlTimeExplicit {
+		t.Fatal("ttlTimeExplicit = true, want false")
+	}
+	if !packetSizeExplicit {
+		t.Fatal("packetSizeExplicit = false, want true")
+	}
+	if !tosExplicit {
+		t.Fatal("tosExplicit = false, want true")
+	}
+}

@@ -57,6 +57,8 @@ type Config struct {
 	RealtimePrinter  func(res *Result, ttl int)
 	AsyncPrinter     func(res *Result)
 	PktSize          int
+	RandomPacketSize bool
+	TOS              int
 	Maptrace         bool
 	DisableMPLS      bool
 }
@@ -80,15 +82,17 @@ type attemptPort struct {
 }
 
 type sentInfo struct {
-	ttl     int
-	i       int
-	srcPort int
-	start   time.Time
+	ttl         int
+	i           int
+	srcPort     int
+	payloadSize int
+	start       time.Time
 }
 
 type matchTask struct {
 	srcPort int
 	seq     int
+	ack     int
 	peer    net.Addr
 	finish  time.Time
 	mpls    []string
@@ -104,9 +108,6 @@ func applyTracerouteDefaults(config *Config) {
 	}
 	if config.MaxHops == 0 {
 		config.MaxHops = 30
-	}
-	if config.PktSize < 0 {
-		config.PktSize = 0
 	}
 	if config.NumMeasurements == 0 {
 		config.NumMeasurements = 3
@@ -275,9 +276,6 @@ func normalizeRuntimeConfig(config *Config) {
 	}
 	if config.SourceDevice == "" && util.SrcDev != "" {
 		config.SourceDevice = util.SrcDev
-	}
-	if config.PktSize < 0 {
-		config.PktSize = 0
 	}
 }
 

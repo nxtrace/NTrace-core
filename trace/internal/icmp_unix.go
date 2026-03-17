@@ -69,6 +69,9 @@ func (s *ICMPSpec) SendICMP(ctx context.Context, ipHdr gopacket.NetworkLayer, ic
 		s.hopLimitLock.Lock()
 		defer s.hopLimitLock.Unlock()
 
+		if err := s.icmp4.SetTOS(int(ip4.TOS)); err != nil {
+			return time.Time{}, err
+		}
 		if err := s.icmp4.SetTTL(ttl); err != nil {
 			return time.Time{}, err
 		}
@@ -111,6 +114,9 @@ func (s *ICMPSpec) SendICMP(ctx context.Context, ipHdr gopacket.NetworkLayer, ic
 	s.hopLimitLock.Lock()
 	defer s.hopLimitLock.Unlock()
 
+	if err := s.icmp6.SetTrafficClass(int(ip6.TrafficClass)); err != nil {
+		return time.Time{}, err
+	}
 	if err := s.icmp6.SetHopLimit(ttl); err != nil {
 		return time.Time{}, err
 	}

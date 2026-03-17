@@ -66,12 +66,12 @@ func PrintTraceRouteNav(ip net.IP, domain string, dataOrigin string, maxHops int
 	}
 	if !util.EnableHidDstIP {
 		if ip.String() == domain {
-			fmt.Printf("%s %s, %d hops max, %d bytes payload, %s mode\n", srcAddr, ip.String(), maxHops, packetSize, strings.ToUpper(mode))
+			fmt.Printf("%s %s, %d hops max, %s, %s mode\n", srcAddr, ip.String(), maxHops, trace.FormatPacketSizeLabel(packetSize), strings.ToUpper(mode))
 		} else {
-			fmt.Printf("%s %s (%s), %d hops max, %d bytes payload, %s mode\n", srcAddr, ip.String(), domain, maxHops, packetSize, strings.ToUpper(mode))
+			fmt.Printf("%s %s (%s), %d hops max, %s, %s mode\n", srcAddr, ip.String(), domain, maxHops, trace.FormatPacketSizeLabel(packetSize), strings.ToUpper(mode))
 		}
 	} else {
-		fmt.Printf("%s %s, %d hops max, %d bytes payload, %s mode\n", srcAddr, util.HideIPPart(ip.String()), maxHops, packetSize, strings.ToUpper(mode))
+		fmt.Printf("%s %s, %d hops max, %s, %s mode\n", srcAddr, util.HideIPPart(ip.String()), maxHops, trace.FormatPacketSizeLabel(packetSize), strings.ToUpper(mode))
 	}
 }
 

@@ -558,7 +558,8 @@ func (e *mtrICMPEngine) signalReplyReady() {
 
 // sendProbe 发送一个 ICMP echo（IPv4 或 IPv6），返回发送时间戳。
 func (e *mtrICMPEngine) sendProbe(ctx context.Context, ttl, seq int) (time.Time, error) {
-	payload := make([]byte, e.config.PktSize)
+	payloadSize := resolveProbePayloadSize(ICMPTrace, e.config.DstIP, e.config.PktSize, e.config.RandomPacketSize)
+	payload := make([]byte, payloadSize)
 	if len(payload) >= 3 {
 		copy(payload[len(payload)-3:], []byte{'n', 't', 'r'})
 	}
@@ -570,6 +571,7 @@ func (e *mtrICMPEngine) sendProbe(ctx context.Context, ttl, seq int) (time.Time,
 			DstIP:    e.config.DstIP,
 			Protocol: layers.IPProtocolICMPv4,
 			TTL:      uint8(ttl),
+			TOS:      uint8(e.config.TOS),
 		}
 		icmpHdr := &layers.ICMPv4{
 			TypeCode: layers.CreateICMPv4TypeCode(layers.ICMPv4TypeEchoRequest, 0),
@@ -581,11 +583,12 @@ func (e *mtrICMPEngine) sendProbe(ctx context.Context, ttl, seq int) (time.Time,
 
 	// IPv6
 	ipHdr := &layers.IPv6{
-		Version:    6,
-		SrcIP:      e.srcIP,
-		DstIP:      e.config.DstIP,
-		NextHeader: layers.IPProtocolICMPv6,
-		HopLimit:   uint8(ttl),
+		Version:      6,
+		SrcIP:        e.srcIP,
+		DstIP:        e.config.DstIP,
+		NextHeader:   layers.IPProtocolICMPv6,
+		HopLimit:     uint8(ttl),
+		TrafficClass: uint8(e.config.TOS),
 	}
 	icmpHdr := &layers.ICMPv6{
 		TypeCode: layers.CreateICMPv6TypeCode(layers.ICMPv6TypeEchoRequest, 0),

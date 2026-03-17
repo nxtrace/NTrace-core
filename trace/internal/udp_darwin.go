@@ -173,6 +173,9 @@ func (s *UDPSpec) SendUDP(ctx context.Context, ipHdr gopacket.NetworkLayer, udpH
 		s.hopLimitLock.Lock()
 		defer s.hopLimitLock.Unlock()
 
+		if err := s.udp4.SetTOS(int(ip4.TOS)); err != nil {
+			return time.Time{}, err
+		}
 		if err := s.udp4.SetTTL(ttl); err != nil {
 			return time.Time{}, err
 		}
@@ -210,6 +213,9 @@ func (s *UDPSpec) SendUDP(ctx context.Context, ipHdr gopacket.NetworkLayer, udpH
 	s.hopLimitLock.Lock()
 	defer s.hopLimitLock.Unlock()
 
+	if err := s.udp6.SetTrafficClass(int(ip6.TrafficClass)); err != nil {
+		return time.Time{}, err
+	}
 	if err := s.udp6.SetHopLimit(ttl); err != nil {
 		return time.Time{}, err
 	}
