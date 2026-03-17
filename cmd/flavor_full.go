@@ -3,9 +3,10 @@
 package cmd
 
 const (
-	appBinName      = "nexttrace"
-	enableWebUI     = true
+	appBinName       = "nexttrace"
+	enableWebUI      = true
 	enableGlobalping = true
-	enableMTR       = true
-	defaultMTR      = false
+	enableMTR        = true
+	enableMTU        = true
+	defaultMTR       = false
 )

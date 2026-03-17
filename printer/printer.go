@@ -44,7 +44,7 @@ func HopPrinter(h trace.Hop, info HopInfo) {
 		}
 
 		if h.Geo != nil {
-			txt += " " + formatIpGeoData(h.Address.String(), h.Geo)
+			txt += " " + FormatIPGeoData(h.Address.String(), h.Geo)
 		}
 		for _, v := range h.MPLS {
 			txt += " " + v
@@ -68,13 +68,33 @@ func HopPrinter(h trace.Hop, info HopInfo) {
 	}
 }
 
-func formatIpGeoData(ip string, data *ipgeo.IPGeoData) string {
+func FormatIPGeoData(ip string, data *ipgeo.IPGeoData) string {
 	var res = make([]string, 0, 10)
+	if data.Source == "timeout" {
+		if data.Country != "" {
+			return data.Country
+		}
+		if data.CountryEn != "" {
+			return data.CountryEn
+		}
+	}
 
 	if data.Asnumber == "" {
 		res = append(res, "*")
 	} else {
 		res = append(res, "AS"+data.Asnumber)
+	}
+	if data.Whois != "" &&
+		data.Country == "" &&
+		data.CountryEn == "" &&
+		data.Prov == "" &&
+		data.ProvEn == "" &&
+		data.City == "" &&
+		data.CityEn == "" &&
+		data.Owner == "" &&
+		data.Isp == "" {
+		res = append(res, data.Whois)
+		return strings.Join(res, ", ")
 	}
 
 	// TODO: 判断阿里云和腾讯云内网，数据不足，有待进一步完善
@@ -91,11 +111,7 @@ func formatIpGeoData(ip string, data *ipgeo.IPGeoData) string {
 		if data.Owner == "" {
 			data.Owner = data.Isp
 		}
-		if data.Prov == "" && data.City == "" {
-			// anyCast或是骨干网数据不应该有国家信息
-			data.Owner = data.Owner + ", " + data.Owner
-		} else {
-			// 非骨干网正常填入IP的国家信息数据
+		if data.Country != "" {
 			res = append(res, data.Country)
 		}
 

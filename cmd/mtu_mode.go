@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nxtrace/NTrace-core/ipgeo"
+	"github.com/nxtrace/NTrace-core/printer"
 	mtutrace "github.com/nxtrace/NTrace-core/trace/mtu"
 	"github.com/nxtrace/NTrace-core/util"
 )
@@ -92,12 +94,11 @@ func runStandaloneMTUMode(cfg mtutrace.Config, jsonPrint bool) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
-	result, err := mtutrace.Run(ctx, cfg)
-	if err != nil {
-		return err
-	}
-
 	if jsonPrint {
+		result, err := mtutrace.Run(ctx, cfg)
+		if err != nil {
+			return err
+		}
 		encoded, err := json.Marshal(result)
 		if err != nil {
 			return err
@@ -109,15 +110,31 @@ func runStandaloneMTUMode(cfg mtutrace.Config, jsonPrint bool) error {
 	if runtime.GOOS == "darwin" {
 		fmt.Println("Warning: macOS --mtu support is experimental.")
 	}
-	return printMTUResult(os.Stdout, result)
+	streamCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	renderer := newMTUStreamRenderer(os.Stdout, CheckTTY(int(os.Stdout.Fd())))
+	var renderErr error
+	_, err := mtutrace.RunStream(streamCtx, cfg, func(event mtutrace.StreamEvent) {
+		if renderErr != nil {
+			return
+		}
+		if err := renderer.Render(event); err != nil {
+			renderErr = err
+			cancel()
+		}
+	})
+	if renderErr != nil {
+		return renderErr
+	}
+	return err
 }
 
 func printMTUResult(w io.Writer, result *mtutrace.Result) error {
 	if result == nil {
 		return errors.New("nil mtu result")
 	}
-	if _, err := fmt.Fprintf(w, "tracepath to %s (%s), start MTU %d, %d byte packets\n",
-		result.Target, result.ResolvedIP, result.StartMTU, result.ProbeSize); err != nil {
+	if err := printMTUHeader(w, result.Target, result.ResolvedIP, result.StartMTU, result.ProbeSize); err != nil {
 		return err
 	}
 	for _, hop := range result.Hops {
@@ -125,8 +142,7 @@ func printMTUResult(w io.Writer, result *mtutrace.Result) error {
 			return err
 		}
 	}
-	_, err := fmt.Fprintf(w, "Path MTU: %d\n", result.PathMTU)
-	return err
+	return printMTUSummary(w, result.PathMTU)
 }
 
 func formatMTUHopLine(hop mtutrace.Hop) string {
@@ -149,7 +165,101 @@ func formatMTUHopLine(hop mtutrace.Hop) string {
 	if hop.PMTU > 0 {
 		line += fmt.Sprintf("  pmtu %d", hop.PMTU)
 	}
+	if geo := formatMTUGeo(hop); geo != "" {
+		line += "  " + geo
+	}
 	return line
+}
+
+func formatMTUHopSnapshot(event mtutrace.StreamEvent) string {
+	if event.Kind == mtutrace.StreamEventTTLStart {
+		return fmt.Sprintf("%2d  ...", event.TTL)
+	}
+	return formatMTUHopLine(event.Hop)
+}
+
+func printMTUHeader(w io.Writer, target, resolvedIP string, startMTU, probeSize int) error {
+	_, err := fmt.Fprintf(w, "tracepath to %s (%s), start MTU %d, %d byte packets\n",
+		target, resolvedIP, startMTU, probeSize)
+	return err
+}
+
+func printMTUSummary(w io.Writer, pathMTU int) error {
+	_, err := fmt.Fprintf(w, "Path MTU: %d\n", pathMTU)
+	return err
+}
+
+type mtuStreamRenderer struct {
+	w             io.Writer
+	isTTY         bool
+	headerPrinted bool
+	lineActive    bool
+}
+
+func newMTUStreamRenderer(w io.Writer, isTTY bool) *mtuStreamRenderer {
+	return &mtuStreamRenderer{w: w, isTTY: isTTY}
+}
+
+func (r *mtuStreamRenderer) Render(event mtutrace.StreamEvent) error {
+	if err := r.ensureHeader(event); err != nil {
+		return err
+	}
+
+	switch event.Kind {
+	case mtutrace.StreamEventTTLStart:
+		if !r.isTTY {
+			return nil
+		}
+		return r.renderTTYLine(formatMTUHopSnapshot(event), false)
+	case mtutrace.StreamEventTTLUpdate:
+		if !r.isTTY {
+			return nil
+		}
+		return r.renderTTYLine(formatMTUHopSnapshot(event), false)
+	case mtutrace.StreamEventTTLFinal:
+		line := formatMTUHopSnapshot(event)
+		if r.isTTY {
+			return r.renderTTYLine(line, true)
+		}
+		_, err := fmt.Fprintln(r.w, line)
+		return err
+	case mtutrace.StreamEventDone:
+		if r.isTTY && r.lineActive {
+			if _, err := io.WriteString(r.w, "\n"); err != nil {
+				return err
+			}
+			r.lineActive = false
+		}
+		return printMTUSummary(r.w, event.PathMTU)
+	default:
+		return nil
+	}
+}
+
+func (r *mtuStreamRenderer) ensureHeader(event mtutrace.StreamEvent) error {
+	if r.headerPrinted {
+		return nil
+	}
+	if event.Target == "" || event.ResolvedIP == "" {
+		return nil
+	}
+	if err := printMTUHeader(r.w, event.Target, event.ResolvedIP, event.StartMTU, event.ProbeSize); err != nil {
+		return err
+	}
+	r.headerPrinted = true
+	return nil
+}
+
+func (r *mtuStreamRenderer) renderTTYLine(line string, final bool) error {
+	if _, err := fmt.Fprintf(r.w, "\r\033[2K%s", line); err != nil {
+		return err
+	}
+	r.lineActive = !final
+	if !final {
+		return nil
+	}
+	_, err := io.WriteString(r.w, "\n")
+	return err
 }
 
 func buildMTUTraceConfig(
@@ -165,19 +275,45 @@ func buildMTUTraceConfig(
 	timeoutMs int,
 	ttlIntervalMs int,
 	rdns bool,
+	alwaysWaitRDNS bool,
+	geoSource ipgeo.Source,
+	lang string,
 ) mtutrace.Config {
 	return mtutrace.Config{
-		Target:       target,
-		DstIP:        dstIP,
-		SrcIP:        srcIP,
-		SourceDevice: srcDev,
-		SrcPort:      srcPort,
-		DstPort:      dstPort,
-		BeginHop:     beginHop,
-		MaxHops:      maxHops,
-		Queries:      queries,
-		Timeout:      time.Duration(timeoutMs) * time.Millisecond,
-		TTLInterval:  time.Duration(ttlIntervalMs) * time.Millisecond,
-		RDNS:         rdns,
+		Target:         target,
+		DstIP:          dstIP,
+		SrcIP:          srcIP,
+		SourceDevice:   srcDev,
+		SrcPort:        srcPort,
+		DstPort:        dstPort,
+		BeginHop:       beginHop,
+		MaxHops:        maxHops,
+		Queries:        queries,
+		Timeout:        time.Duration(timeoutMs) * time.Millisecond,
+		TTLInterval:    time.Duration(ttlIntervalMs) * time.Millisecond,
+		RDNS:           rdns,
+		AlwaysWaitRDNS: alwaysWaitRDNS,
+		IPGeoSource:    geoSource,
+		Lang:           lang,
 	}
+}
+
+func formatMTUGeo(hop mtutrace.Hop) string {
+	if hop.Geo == nil || hop.IP == "" {
+		return ""
+	}
+	if hop.Geo.Asnumber == "" &&
+		hop.Geo.Country == "" &&
+		hop.Geo.CountryEn == "" &&
+		hop.Geo.Prov == "" &&
+		hop.Geo.ProvEn == "" &&
+		hop.Geo.City == "" &&
+		hop.Geo.CityEn == "" &&
+		hop.Geo.District == "" &&
+		hop.Geo.Owner == "" &&
+		hop.Geo.Isp == "" &&
+		hop.Geo.Whois == "" {
+		return ""
+	}
+	return printer.FormatIPGeoData(hop.IP, hop.Geo)
 }

@@ -30,6 +30,21 @@
 - `--table`：现在是"最终汇总表"模式（一次探测完成后输出汇总表），不再是旧的异步 table 刷新模式。
 - `--route-path`：仍由 `reporter.New(...).Print()` 负责（与 MTR report 无关）。
 
+### 独立 `--mtu` 路径
+
+- `--mtu`：独立 UDP path-MTU / tracepath 风格模式，不复用普通 `trace.Traceroute` / MTR / Web 路径。
+- flavor 可用性：仅 `nexttrace` / `nexttrace-tiny` 包含；`ntr` 不注册该 flag。
+- 输出：
+  - `TTY`：当前 TTL 占位后原地更新，边探测边刷行。
+  - `非 TTY`：TTL 定稿后逐行流式输出，不使用 renderer 自己的 ANSI 控制序列。
+  - `--json`：输出独立 mtu schema；`hop.geo` 已存在。
+- 参数语义：
+  - 复用 `--data-provider`、`--language`、`--no-rdns`、`--always-rdns`、`--dot-server`。
+  - `--mtu` 仍只支持 UDP；显式 `--tcp` 冲突报错。
+- Geo/RDNS：
+  - `trace/mtu` 自带独立 metadata helper，不依赖普通 `trace.Hop.fetchIPData`。
+  - 流式事件会先输出基础 hop，再在同一 TTL 内补一条带 Geo/RDNS 的 update，最后 `ttl_final` 定稿。
+
 ### 间隔默认值（分层体系）
 
 - `-z/--send-time`：每包间隔，默认 `defaultPacketIntervalMs = 50` ms。

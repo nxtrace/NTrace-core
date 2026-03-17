@@ -154,6 +154,7 @@ Starting from this release, NextTrace is published in **three flavors** under th
 | Feature               | `nexttrace` (Full) | `nexttrace-tiny` |    `ntr`     |
 | --------------------- | :----------------: | :--------------: | :----------: |
 | Normal traceroute     |         ✅         |        ✅        |      —       |
+| Standalone MTU (`--mtu`) |      ✅         |        ✅        |      —       |
 | MTR TUI               |         ✅         |        —         | ✅ (default) |
 | MTR report (`-r`)     |         ✅         |        —         |      ✅      |
 | MTR wide (`-w`)       |         ✅         |        —         |      ✅      |
@@ -170,7 +171,7 @@ Starting from this release, NextTrace is published in **three flavors** under th
 
 - **`nexttrace`** — Full-featured build. Includes everything: traceroute, MTR, Globalping, and WebUI.
 - **`nexttrace-tiny`** — Lightweight build. Normal traceroute only, no MTR / Globalping / WebUI. Suitable for embedded or minimal environments.
-- **`ntr`** — MTR-focused build. Runs MTR TUI by default. No Globalping / WebUI; no normal traceroute mode.
+- **`ntr`** — MTR-focused build. Runs MTR TUI by default. No Globalping / WebUI; no normal traceroute mode and no standalone `--mtu` mode.
 
 ### Manual Build
 
@@ -326,6 +327,23 @@ nexttrace --udp --port 5353 1.0.0.1
 # (If you need to use a different random source port for each packet, please set the ENV variable NEXTTRACE_RANDOMPORT, or set the source port to -1)
 nexttrace --tcp --source-port 14514 www.bing.com
 ```
+
+#### `NextTrace` also supports standalone path-MTU discovery mode
+
+```bash
+# Tracepath-style UDP PMTU discovery with live hop output
+nexttrace --mtu 1.1.1.1
+
+# Reuse the normal GeoIP / RDNS knobs in mtu mode
+nexttrace --mtu --data-provider IPInfo --language en 1.1.1.1
+
+# JSON output keeps the standalone mtu schema and now includes hop.geo
+nexttrace --mtu --json 1.1.1.1
+```
+
+- `--mtu` is an independent UDP-only mode. It does not reuse the normal traceroute engine.
+- TTY output updates the current hop in place; redirected / piped output falls back to finalized line-by-line streaming.
+- GeoIP, RDNS, `--data-provider`, `--language`, `--no-rdns`, `--always-rdns`, and `--dot-server` all apply to this mode.
 
 #### `NextTrace` also supports some advanced functions, such as ttl control, concurrent probe packet count control, mode switching, etc.
 
