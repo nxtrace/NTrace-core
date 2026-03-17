@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/nxtrace/NTrace-core/util"
@@ -37,6 +36,10 @@ func (e *localMTUError) Error() string {
 }
 
 func Run(ctx context.Context, cfg Config) (*Result, error) {
+	return RunStream(ctx, cfg, nil)
+}
+
+func RunStream(ctx context.Context, cfg Config, sink StreamSink) (*Result, error) {
 	cfg, err := normalizeConfig(cfg)
 	if err != nil {
 		return nil, err
@@ -46,10 +49,14 @@ func Run(ctx context.Context, cfg Config) (*Result, error) {
 		return nil, err
 	}
 	defer p.Close()
-	return runWithProber(ctx, cfg, p)
+	return runStreamWithProber(ctx, cfg, p, sink)
 }
 
 func runWithProber(ctx context.Context, cfg Config, p prober) (*Result, error) {
+	return runStreamWithProber(ctx, cfg, p, nil)
+}
+
+func runStreamWithProber(ctx context.Context, cfg Config, p prober, sink StreamSink) (*Result, error) {
 	cfg, err := normalizeConfig(cfg)
 	if err != nil {
 		return nil, err
@@ -70,6 +77,8 @@ func runWithProber(ctx context.Context, cfg Config, p prober) (*Result, error) {
 
 	var token uint32 = 1
 	for ttl := cfg.BeginHop; ttl <= cfg.MaxHops; ttl++ {
+		emitStreamEvent(sink, StreamEventTTLStart, res, Hop{TTL: ttl})
+
 		var hop Hop
 		gotHop := false
 		ttlPMTU := 0
@@ -117,6 +126,7 @@ func runWithProber(ctx context.Context, cfg Config, p prober) (*Result, error) {
 				probeMTU = candidatePathMTU(probeMTU, hop.PMTU)
 				res.PathMTU = candidatePathMTU(res.PathMTU, hop.PMTU)
 				hop.PMTU = ttlPMTU
+				emitStreamEvent(sink, StreamEventTTLUpdate, res, hop)
 				gotHop = true
 				continue
 			}
@@ -125,16 +135,23 @@ func runWithProber(ctx context.Context, cfg Config, p prober) (*Result, error) {
 			} else if ttl == 1 && res.ProbeSize > res.StartMTU && res.StartMTU > 0 && res.PathMTU == res.StartMTU {
 				hop.PMTU = res.StartMTU
 			}
+			emitStreamEvent(sink, StreamEventTTLUpdate, res, hop)
 			gotHop = true
 			break
 		}
 
 		if !gotHop {
 			hop = Hop{TTL: ttl, Event: EventTimeout}
+			emitStreamEvent(sink, StreamEventTTLUpdate, res, hop)
 		} else if ttlSawRemote && hop.PMTU == 0 {
 			hop.PMTU = ttlPMTU
 		}
+		if updatedHop, changed := enrichHopMetadata(cfg, hop); changed {
+			hop = updatedHop
+			emitStreamEvent(sink, StreamEventTTLUpdate, res, hop)
+		}
 		res.Hops = append(res.Hops, hop)
+		emitStreamEvent(sink, StreamEventTTLFinal, res, hop)
 
 		if hop.Event == EventDestination {
 			break
@@ -147,6 +164,7 @@ func runWithProber(ctx context.Context, cfg Config, p prober) (*Result, error) {
 	}
 
 	res.PathMTU = candidatePathMTU(res.StartMTU, res.PathMTU)
+	emitStreamEvent(sink, StreamEventDone, res, Hop{})
 	return res, nil
 }
 
@@ -237,22 +255,11 @@ func buildHop(cfg Config, ttl int, resp probeResponse) Hop {
 	}
 	if resp.IP != nil {
 		hop.IP = resp.IP.String()
-		if cfg.RDNS {
-			hop.Hostname = reverseLookup(hop.IP)
-		}
 	}
 	if resp.RTT > 0 {
 		hop.RTTMs = float64(resp.RTT) / float64(time.Millisecond)
 	}
 	return hop
-}
-
-func reverseLookup(ip string) string {
-	ptrs, err := util.LookupAddr(ip)
-	if err != nil || len(ptrs) == 0 {
-		return ""
-	}
-	return strings.TrimSuffix(ptrs[0], ".")
 }
 
 func sleepContext(ctx context.Context, d time.Duration) error {
@@ -264,4 +271,25 @@ func sleepContext(ctx context.Context, d time.Duration) error {
 	case <-timer.C:
 		return nil
 	}
+}
+
+func emitStreamEvent(sink StreamSink, kind StreamEventKind, res *Result, hop Hop) {
+	if sink == nil || res == nil {
+		return
+	}
+	if hop.TTL == 0 && kind != StreamEventDone {
+		hop.TTL = 0
+	}
+	sink(StreamEvent{
+		Kind:       kind,
+		TTL:        hop.TTL,
+		Hop:        hop,
+		Target:     res.Target,
+		ResolvedIP: res.ResolvedIP,
+		Protocol:   res.Protocol,
+		IPVersion:  res.IPVersion,
+		StartMTU:   res.StartMTU,
+		ProbeSize:  res.ProbeSize,
+		PathMTU:    res.PathMTU,
+	})
 }

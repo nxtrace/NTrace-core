@@ -3,9 +3,10 @@
 package cmd
 
 const (
-	appBinName      = "ntr"
-	enableWebUI     = false
+	appBinName       = "ntr"
+	enableWebUI      = false
 	enableGlobalping = false
-	enableMTR       = true
-	defaultMTR      = true
+	enableMTR        = true
+	enableMTU        = false
+	defaultMTR       = true
 )

@@ -3,9 +3,10 @@
 package cmd
 
 const (
-	appBinName      = "nexttrace-tiny"
-	enableWebUI     = false
+	appBinName       = "nexttrace-tiny"
+	enableWebUI      = false
 	enableGlobalping = false
-	enableMTR       = false
-	defaultMTR      = false
+	enableMTR        = false
+	enableMTU        = true
+	defaultMTR       = false
 )

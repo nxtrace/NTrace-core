@@ -159,6 +159,7 @@ Document Language: [English](README.md) | 简体中文
 | 功能                    | `nexttrace`（完整版） | `nexttrace-tiny` |   `ntr`    |
 | ----------------------- | :-------------------: | :--------------: | :--------: |
 | 常规 traceroute         |          ✅           |        ✅        |     —      |
+| 独立 MTU（`--mtu`）     |          ✅           |        ✅        |     —      |
 | MTR TUI                 |          ✅           |        —         | ✅（默认） |
 | MTR 报告（`-r`）        |          ✅           |        —         |     ✅     |
 | MTR 宽报告（`-w`）      |          ✅           |        —         |     ✅     |
@@ -175,7 +176,7 @@ Document Language: [English](README.md) | 简体中文
 
 - **`nexttrace`** — 完整版。包含所有功能：traceroute、MTR、Globalping 与 WebUI。
 - **`nexttrace-tiny`** — 精简版。仅保留常规 traceroute，不含 MTR / Globalping / WebUI。适合嵌入式或极简环境。
-- **`ntr`** — MTR 专用版。默认启动 MTR TUI。无 Globalping / WebUI，无常规 traceroute 模式。
+- **`ntr`** — MTR 专用版。默认启动 MTR TUI。无 Globalping / WebUI，无常规 traceroute 模式，也不带独立 `--mtu` 模式。
 
 ### 手动编译
 
@@ -329,6 +330,23 @@ nexttrace --udp --port 5353 1.0.0.1
 # TCP/UDP Trace 可以自行指定源端口，默认使用随机一个固定的端口(如需每次发包随机使用不同的源端口，请设置`ENV` `NEXTTRACE_RANDOMPORT`)
 nexttrace --tcp --source-port 14514 www.bing.com
 ```
+
+#### `NextTrace` 也支持独立的路径 MTU 探测模式
+
+```bash
+# 类 tracepath 的 UDP PMTU 探测，运行中实时刷行
+nexttrace --mtu 1.1.1.1
+
+# mtu 模式同样复用常规的 GeoIP / RDNS 参数
+nexttrace --mtu --data-provider IPInfo --language en 1.1.1.1
+
+# JSON 输出沿用独立 mtu schema，并包含 hop.geo
+nexttrace --mtu --json 1.1.1.1
+```
+
+- `--mtu` 是独立的 UDP-only 模式，不复用普通 traceroute 引擎。
+- TTY 下会原地更新当前 hop；重定向/管道输出会退化成“定稿一跳输出一行”的流式文本。
+- GeoIP、RDNS、`--data-provider`、`--language`、`--no-rdns`、`--always-rdns`、`--dot-server` 都对该模式生效。
 
 #### `NextTrace`也同样支持一些进阶功能，如 TTL 控制、并发数控制、模式切换等
 

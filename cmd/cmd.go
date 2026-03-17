@@ -294,6 +294,13 @@ func registerFastTraceFlag(parser *argparse.Parser) *bool {
 	return ptrBool(false)
 }
 
+func registerMTUFlag(parser *argparse.Parser) *bool {
+	if enableMTU {
+		return parser.Flag("", "mtu", &argparse.Options{Help: "Run standalone UDP path-MTU discovery mode with streaming output and GeoIP/RDNS"})
+	}
+	return ptrBool(false)
+}
+
 func registerICMPModeFlag(parser *argparse.Parser) *int {
 	if runtime.GOOS == "windows" {
 		return parser.Int("", "icmp-mode", &argparse.Options{Help: "Choose the method to listen for ICMP packets (1=Socket, 2=WinDivert; 0=Auto)"})
@@ -987,7 +994,7 @@ func Execute() {
 	ipv6Only := parser.Flag("6", "ipv6", &argparse.Options{Help: "Use IPv6 only"})
 	tcp := parser.Flag("T", "tcp", &argparse.Options{Help: "Use TCP SYN for tracerouting (default dest-port is 80)"})
 	udp := parser.Flag("U", "udp", &argparse.Options{Help: "Use UDP SYN for tracerouting (default dest-port is 33494)"})
-	mtuMode := parser.Flag("", "mtu", &argparse.Options{Help: "Run standalone UDP path-MTU discovery mode"})
+	mtuMode := registerMTUFlag(parser)
 	fastTraceFlag := registerFastTraceFlag(parser)
 	port := parser.Int("p", "port", &argparse.Options{Help: "Set the destination port to use. With default of 80 for \"tcp\", 33494 for \"udp\""})
 	icmpMode := registerICMPModeFlag(parser)
@@ -1122,6 +1129,8 @@ func Execute() {
 			fmt.Println(srcErr)
 			os.Exit(1)
 		}
+		leoWs := prepareRuntimeEnvironment(mtrModes, *dn42, dataOrigin, disableMaptrace, powProvider)
+		defer closeLeoWebsocket(leoWs)
 		conf := buildMTUTraceConfig(
 			domain,
 			ip,
@@ -1135,6 +1144,9 @@ func Execute() {
 			*timeout,
 			*ttlInterval,
 			!*norDNS,
+			*alwaysrDNS,
+			ipgeo.GetSource(*dataOrigin),
+			*lang,
 		)
 		if err := runStandaloneMTUMode(conf, *jsonPrint); err != nil {
 			if !errors.Is(err, context.Canceled) {
