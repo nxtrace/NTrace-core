@@ -50,3 +50,7 @@ test('defaultOptionValue keeps explicit zero', () => {
   assert.equal(defaultOptionValue({ tos: 0 }, 'tos', 5), 0);
   assert.equal(defaultOptionValue({}, 'tos', 5), 5);
 });
+
+test('defaultOptionValue preserves explicit null for auto packet size', () => {
+  assert.equal(defaultOptionValue({ packet_size: null }, 'packet_size', 52), null);
+});

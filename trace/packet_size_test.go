@@ -82,3 +82,10 @@ func TestMinPacketSize(t *testing.T) {
 		}
 	}
 }
+
+func TestDefaultPacketSizeMatchesMinimum(t *testing.T) {
+	ip := net.ParseIP("2a00:1450:4009:81a::200e")
+	if got := DefaultPacketSize(TCPTrace, ip); got != 64 {
+		t.Fatalf("DefaultPacketSize(TCPTrace, %v) = %d, want 64", ip, got)
+	}
+}

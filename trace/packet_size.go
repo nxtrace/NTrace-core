@@ -22,6 +22,10 @@ type PacketSizeSpec struct {
 	Random      bool
 }
 
+func DefaultPacketSize(method Method, dstIP net.IP) int {
+	return MinPacketSize(method, dstIP)
+}
+
 func packetSizeIPHeaderBytes(dstIP net.IP) int {
 	if util.IsIPv6(dstIP) {
 		return ipv6HeaderBytes

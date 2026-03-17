@@ -38,6 +38,7 @@ type ParamsFastTrace struct {
 	AlwaysWaitRDNS bool
 	Lang           string
 	PktSize        int
+	PacketSizeSet  bool
 	TOS            int
 	Timeout        time.Duration
 	File           string
@@ -216,12 +217,20 @@ func printFileTraceHeader(ip IpListElement, params ParamsFastTrace, tracerouteMe
 	if util.EnableHidDstIP {
 		dst = util.HideIPPart(ip.Ip)
 	}
-	fmt.Printf("traceroute to %s, %d hops max, %s, %s mode\n", dst, params.MaxHops, trace.FormatPacketSizeLabel(params.PktSize), strings.ToUpper(string(tracerouteMethod)))
+	displayPacketSize := params.PktSize
+	if !params.PacketSizeSet {
+		displayPacketSize = trace.DefaultPacketSize(tracerouteMethod, net.ParseIP(ip.Ip))
+	}
+	fmt.Printf("traceroute to %s, %d hops max, %s, %s mode\n", dst, params.MaxHops, trace.FormatPacketSizeLabel(displayPacketSize), strings.ToUpper(string(tracerouteMethod)))
 }
 
 func buildFileTraceConfig(params ParamsFastTrace, tracerouteMethod trace.Method, ip IpListElement) trace.Config {
 	dstIP := net.ParseIP(ip.Ip)
-	packetSizeSpec, err := trace.NormalizePacketSize(tracerouteMethod, dstIP, params.PktSize)
+	packetSize := params.PktSize
+	if !params.PacketSizeSet {
+		packetSize = trace.DefaultPacketSize(tracerouteMethod, dstIP)
+	}
+	packetSizeSpec, err := trace.NormalizePacketSize(tracerouteMethod, dstIP, packetSize)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -272,7 +281,11 @@ func runFileTraceTarget(params ParamsFastTrace, tracerouteMethod trace.Method, i
 	printFileTraceHeader(ip, params, tracerouteMethod)
 
 	conf := buildFileTraceConfig(params, tracerouteMethod, ip)
-	header := fmt.Sprintf("『%s』\ntraceroute to %s, %d hops max, %s, %s mode\n", ip.Desc, ip.Ip, params.MaxHops, trace.FormatPacketSizeLabel(params.PktSize), strings.ToUpper(string(tracerouteMethod)))
+	displayPacketSize := params.PktSize
+	if !params.PacketSizeSet {
+		displayPacketSize = trace.DefaultPacketSize(tracerouteMethod, net.ParseIP(ip.Ip))
+	}
+	header := fmt.Sprintf("『%s』\ntraceroute to %s, %d hops max, %s, %s mode\n", ip.Desc, ip.Ip, params.MaxHops, trace.FormatPacketSizeLabel(displayPacketSize), strings.ToUpper(string(tracerouteMethod)))
 	if err := configureFastTraceRealtimePrinter(&conf, header); err != nil {
 		return
 	}
@@ -285,14 +298,22 @@ func runFileTraceTarget(params ParamsFastTrace, tracerouteMethod trace.Method, i
 
 func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 	fmt.Fprintf(color.Output, "%s\n", color.New(color.FgYellow, color.Bold).Sprintf("『%s %s 』", location, ispCollection.ISPName))
-	fmt.Printf("traceroute to %s, %d hops max, %s, %s mode\n", ispCollection.IP, f.ParamsFastTrace.MaxHops, trace.FormatPacketSizeLabel(f.ParamsFastTrace.PktSize), strings.ToUpper(string(f.TracerouteMethod)))
+	displayPacketSize := f.ParamsFastTrace.PktSize
+	if !f.ParamsFastTrace.PacketSizeSet {
+		displayPacketSize = trace.DefaultPacketSize(f.TracerouteMethod, net.ParseIP(ispCollection.IP))
+	}
+	fmt.Printf("traceroute to %s, %d hops max, %s, %s mode\n", ispCollection.IP, f.ParamsFastTrace.MaxHops, trace.FormatPacketSizeLabel(displayPacketSize), strings.ToUpper(string(f.TracerouteMethod)))
 
 	// ip, err := util.DomainLookUp(ispCollection.IP, "4", "", true)
 	ip, err := util.DomainLookUp(ispCollection.IP, "4", f.ParamsFastTrace.Dot, true)
 	if err != nil {
 		log.Fatal(err)
 	}
-	packetSizeSpec, err := trace.NormalizePacketSize(f.TracerouteMethod, ip, f.ParamsFastTrace.PktSize)
+	packetSize := f.ParamsFastTrace.PktSize
+	if !f.ParamsFastTrace.PacketSizeSet {
+		packetSize = trace.DefaultPacketSize(f.TracerouteMethod, ip)
+	}
+	packetSizeSpec, err := trace.NormalizePacketSize(f.TracerouteMethod, ip, packetSize)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -334,7 +355,11 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 		log.SetOutput(fp)
 		log.SetFlags(0)
 		log.Printf("『%s %s 』\n", location, ispCollection.ISPName)
-		log.Printf("traceroute to %s, %d hops max, %s, %s mode\n", ispCollection.IP, f.ParamsFastTrace.MaxHops, trace.FormatPacketSizeLabel(f.ParamsFastTrace.PktSize), strings.ToUpper(string(f.TracerouteMethod)))
+		displayPacketSize := f.ParamsFastTrace.PktSize
+		if !f.ParamsFastTrace.PacketSizeSet {
+			displayPacketSize = trace.DefaultPacketSize(f.TracerouteMethod, net.ParseIP(ispCollection.IP))
+		}
+		log.Printf("traceroute to %s, %d hops max, %s, %s mode\n", ispCollection.IP, f.ParamsFastTrace.MaxHops, trace.FormatPacketSizeLabel(displayPacketSize), strings.ToUpper(string(f.TracerouteMethod)))
 		conf.RealtimePrinter = tracelog.RealtimePrinter
 	} else {
 		conf.RealtimePrinter = printer.RealtimePrinter

@@ -334,7 +334,7 @@ func buildTraceConfig(req traceRequest, method trace.Method, ip net.IP, dataProv
 		timeout = defaults["timeout_ms"].(int)
 	}
 
-	packetSize := defaults["packet_size"].(int)
+	packetSize := trace.DefaultPacketSize(method, ip)
 	if req.PacketSize != nil {
 		packetSize = *req.PacketSize
 	}
