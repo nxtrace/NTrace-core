@@ -368,6 +368,9 @@ nexttrace --no-rdns www.bbix.net
 # 设置探测包总大小为1024字节（含 IP + 探测协议头）
 nexttrace --psize 1024 example.com
 
+# 让每个 probe 在 1500 字节内随机大小
+nexttrace --psize -1500 example.com
+
 # 设置 TOS / traffic class 字段
 nexttrace -Q 46 example.com
 
@@ -397,7 +400,7 @@ export NO_COLOR=1
 | `--send-time` | 同一 TTL 组内相邻探测包间隔 | `50ms` | 设备限速时升到 `100-200ms`；MTR 下忽略 |
 | `--ttl-time` | 常规 traceroute 的 TTL 组间隔；MTR 的每跳探测间隔 | traceroute: `300ms`；MTR: 未指定时 `1000ms` | 想加速就调低；远程/限速链路调高 |
 | `--timeout` | 单个探测包超时 | `1000ms` | 跨洲或高丢包链路升到 `2000-3000ms` |
-| `--psize` | 探测包大小 | `52` 字节 | 含 IP + 探测协议头；负值表示每个 probe 在 `abs(value)` 内随机 |
+| `--psize` | 探测包大小 | `52` 字节 | 含 IP + 探测协议头；负值表示每个 probe 在 `abs(value)` 内随机；超过出接口/路径 MTU 时，链路上可能看到分片 |
 | `-Q`, `--tos` | IP TOS / traffic class | `0` | 设置 IP 头里的 TOS / traffic class |
 
 这些探测参数目前仍是 CLI 级配置，`nt_config.yaml` 还不能直接保存它们。若要复用一组调优参数，建议写成 shell alias 或小脚本。

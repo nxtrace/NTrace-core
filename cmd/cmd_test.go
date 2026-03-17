@@ -126,3 +126,39 @@ func TestDetectExplicitProbeFlags(t *testing.T) {
 		t.Fatal("tosExplicit = false, want true")
 	}
 }
+
+func TestNormalizeNegativePacketSizeArgs(t *testing.T) {
+	args := []string{"ntr", "--psize", "-84", "1.1.1.1"}
+	got := normalizeNegativePacketSizeArgs(args)
+	want := []string{"ntr", "--psize=-84", "1.1.1.1"}
+
+	if len(got) != len(want) {
+		t.Fatalf("len(got) = %d, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("got[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestNegativePacketSizeParsesBeforeTarget(t *testing.T) {
+	parser := argparse.NewParser("ntr", "")
+	packetSize := parser.Int("", "psize", &argparse.Options{Default: 52})
+	ipv6Only := parser.Flag("6", "ipv6", &argparse.Options{})
+	target := parser.StringPositional(&argparse.Options{})
+
+	args := normalizeNegativePacketSizeArgs([]string{"ntr", "-6", "--psize", "-96", "2606:4700:4700::1111"})
+	if err := parser.Parse(args); err != nil {
+		t.Fatalf("Parse returned error: %v", err)
+	}
+	if !*ipv6Only {
+		t.Fatal("-6 should parse as true")
+	}
+	if *packetSize != -96 {
+		t.Fatalf("--psize = %d, want -96", *packetSize)
+	}
+	if *target != "2606:4700:4700::1111" {
+		t.Fatalf("target = %q, want 2606:4700:4700::1111", *target)
+	}
+}
