@@ -371,6 +371,9 @@ nexttrace --no-rdns www.bbix.net
 # Set the probe packet size to 1024 bytes (inclusive IP + probe headers)
 nexttrace --psize 1024 example.com
 
+# Randomize each probe packet size up to 1500 bytes
+nexttrace --psize -1500 example.com
+
 # Set the TOS / traffic class field
 nexttrace -Q 46 example.com
 
@@ -401,7 +404,7 @@ export NO_COLOR=1
 | `--send-time` | Gap between packets inside one TTL group | `50ms` | Raise to `100-200ms` on rate-limited devices; ignored in MTR |
 | `--ttl-time` | Gap between TTL groups in traceroute; per-hop interval in MTR | traceroute: `300ms`; MTR: `1000ms` when omitted | Lower to speed up; raise on remote/rate-limited paths |
 | `--timeout` | Per-probe timeout | `1000ms` | Raise to `2000-3000ms` for intercontinental or high-loss paths |
-| `--psize` | Probe packet size | `52` bytes | Inclusive IP + probe headers; negative values randomize each probe up to `abs(value)` |
+| `--psize` | Probe packet size | `52` bytes | Inclusive IP + probe headers; negative values randomize each probe up to `abs(value)`; sizes above the egress/path MTU may fragment on wire |
 | `-Q`, `--tos` | IP TOS / traffic class | `0` | Set DSCP/TOS style marking in the IP header |
 
 These probe knobs are CLI-only today; `nt_config.yaml` does not yet store them. If you want reusable profiles, keep them in shell aliases or small wrapper scripts.

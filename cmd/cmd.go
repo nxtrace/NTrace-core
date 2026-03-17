@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -117,6 +118,32 @@ func isDigitsOnly(s string) bool {
 		}
 	}
 	return true
+}
+
+func normalizeNegativePacketSizeArgs(args []string) []string {
+	if len(args) < 3 {
+		return args
+	}
+
+	normalized := make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		cur := args[i]
+		if cur == "--psize" && i+1 < len(args) && isNegativeInteger(args[i+1]) {
+			normalized = append(normalized, "--psize="+args[i+1])
+			i++
+			continue
+		}
+		normalized = append(normalized, cur)
+	}
+	return normalized
+}
+
+func isNegativeInteger(s string) bool {
+	if !strings.HasPrefix(s, "-") || len(s) < 2 {
+		return false
+	}
+	v, err := strconv.Atoi(s)
+	return err == nil && v < 0
 }
 
 func guessLocalIPv4() string {
@@ -1060,7 +1087,7 @@ func Execute() {
 	file := registerFileFlag(parser)
 	str := parser.StringPositional(&argparse.Options{Help: "Trace target: IPv4 address (e.g. 8.8.8.8), IPv6 address (e.g. 2001:db8::1), domain name (e.g. example.com), or URL (e.g. https://example.com)"})
 
-	err := parser.Parse(os.Args)
+	err := parser.Parse(normalizeNegativePacketSizeArgs(os.Args))
 	if err != nil {
 		// In case of error print error and print usage
 		// This can also be done by passing -h or --help flags
