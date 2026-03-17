@@ -29,6 +29,8 @@ type ICMPSpec struct {
 	icmp         net.PacketConn
 	icmp4        *ipv4.PacketConn
 	icmp6        *ipv6.PacketConn
+	sendHandle   wd.Handle
+	sendAddr     wd.Address
 	hopLimitLock sync.Mutex
 }
 
@@ -38,6 +40,9 @@ func ListenPacket(network string, laddr string) (net.PacketConn, error) {
 
 func (s *ICMPSpec) Close() {
 	_ = s.icmp.Close()
+	if s.sendHandle != 0 {
+		_ = s.sendHandle.Close()
+	}
 }
 
 // isAdmin 判断当前进程是否具有管理员权限
@@ -215,13 +220,17 @@ func (s *ICMPSpec) SendICMP(ctx context.Context, ipHdr gopacket.NetworkLayer, ic
 		return time.Time{}, fmt.Errorf("SetNetworkLayerForChecksum: %w", err)
 	}
 
+	if shouldUseICMPv6RawSend(ip6) {
+		return s.sendICMPv6WithWinDivert(ip6, icmpHdr, icmpEcho, payload)
+	}
+
 	buf := gopacket.NewSerializeBuffer()
 	opts := gopacket.SerializeOptions{
 		ComputeChecksums: true,
 		FixLengths:       true,
 	}
 
-	// 序列化 ICMP 头与 payload 到缓冲区
+	// Socket path only needs the ICMPv6 payload; the kernel prepends the IPv6 header.
 	if err := gopacket.SerializeLayers(buf, opts, icmpHdr, icmpEcho, gopacket.Payload(payload)); err != nil {
 		return time.Time{}, err
 	}
@@ -230,9 +239,6 @@ func (s *ICMPSpec) SendICMP(ctx context.Context, ipHdr gopacket.NetworkLayer, ic
 	s.hopLimitLock.Lock()
 	defer s.hopLimitLock.Unlock()
 
-	if err := s.icmp6.SetTrafficClass(int(ip6.TrafficClass)); err != nil {
-		return time.Time{}, err
-	}
 	if err := s.icmp6.SetHopLimit(ttl); err != nil {
 		return time.Time{}, err
 	}
@@ -243,4 +249,55 @@ func (s *ICMPSpec) SendICMP(ctx context.Context, ipHdr gopacket.NetworkLayer, ic
 		return time.Time{}, err
 	}
 	return start, nil
+}
+
+func shouldUseICMPv6RawSend(ip6 *layers.IPv6) bool {
+	return ip6 != nil && ip6.TrafficClass != 0
+}
+
+func (s *ICMPSpec) sendICMPv6WithWinDivert(ip6 *layers.IPv6, icmpHdr, icmpEcho gopacket.SerializableLayer, payload []byte) (time.Time, error) {
+	s.hopLimitLock.Lock()
+	defer s.hopLimitLock.Unlock()
+
+	if err := s.ensureICMPSendHandle(true); err != nil {
+		return time.Time{}, err
+	}
+
+	buf := gopacket.NewSerializeBuffer()
+	opts := gopacket.SerializeOptions{
+		ComputeChecksums: true,
+		FixLengths:       true,
+	}
+	if err := gopacket.SerializeLayers(buf, opts, ip6, icmpHdr, icmpEcho, gopacket.Payload(payload)); err != nil {
+		return time.Time{}, err
+	}
+
+	start := time.Now()
+	if _, err := s.sendHandle.Send(buf.Bytes(), &s.sendAddr); err != nil {
+		return time.Time{}, err
+	}
+	return start, nil
+}
+
+func (s *ICMPSpec) ensureICMPSendHandle(ipv6 bool) error {
+	if s.sendHandle != 0 {
+		return nil
+	}
+
+	handle, err := wd.Open("false", wd.LayerNetwork, 0, 0)
+	if err != nil {
+		if ipv6 {
+			return fmt.Errorf("ICMPv6 --tos on Windows requires WinDivert send support: %w", err)
+		}
+		return err
+	}
+
+	s.sendHandle = handle
+	s.sendAddr.SetLayer(wd.LayerNetwork)
+	s.sendAddr.SetEvent(wd.EventNetworkPacket)
+	s.sendAddr.SetOutbound()
+	if ipv6 {
+		s.sendAddr.SetIPv6()
+	}
+	return nil
 }

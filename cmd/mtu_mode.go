@@ -9,7 +9,6 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"runtime"
 	"strings"
 	"time"
 
@@ -107,9 +106,6 @@ func runStandaloneMTUMode(cfg mtutrace.Config, jsonPrint bool) error {
 		return nil
 	}
 
-	if runtime.GOOS == "darwin" {
-		fmt.Println("Warning: macOS --mtu support is experimental.")
-	}
 	streamCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 

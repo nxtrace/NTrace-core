@@ -276,6 +276,7 @@ PS: 路由可视化的绘制模块为独立模块，具体代码可在 [nxtrace/
 - 对于管理员模式：  
   **TCP/UDP mode** 依赖 `WinDivert`。  
   **ICMP mode** 支持 `1=Socket` 与 `2=WinDivert`（`0=Auto`）。使用 Socket 模式时，需防火墙配置允许`ICMP/ICMPv6`。  
+  在 `Windows` 上，`ICMPv6` 未传 `--tos` 或显式 `--tos 0` 时继续走原生 Socket 发送路径；只有非零 `ICMPv6 --tos` 才额外依赖 `WinDivert` 发送能力，并要求管理员权限。  
   `WinDivert` 可使用 `--init` 参数自动配置环境。
 
 #### `NextTrace` 现已经支持快速测试，有一次性测试回程路由需求的朋友可以使用
@@ -401,7 +402,7 @@ export NO_COLOR=1
 | `--ttl-time` | 常规 traceroute 的 TTL 组间隔；MTR 的每跳探测间隔 | traceroute: `300ms`；MTR: 未指定时 `1000ms` | 想加速就调低；远程/限速链路调高 |
 | `--timeout` | 单个探测包超时 | `1000ms` | 跨洲或高丢包链路升到 `2000-3000ms` |
 | `--psize` | 探测包大小 | 按协议/IP 族自动取最小合法值 | 含 IP + 探测协议头；负值表示每个 probe 在 `abs(value)` 内随机；超过出接口/路径 MTU 时，链路上可能看到分片 |
-| `-Q`, `--tos` | IP TOS / traffic class | `0` | 设置 IP 头里的 TOS / traffic class |
+| `-Q`, `--tos` | IP TOS / traffic class | `0` | 设置 IP 头里的 TOS / traffic class；在 Windows 上仅 `ICMPv6` 且值非零时额外依赖 `WinDivert` |
 
 这些探测参数目前仍是 CLI 级配置，`nt_config.yaml` 还不能直接保存它们。若要复用一组调优参数，建议写成 shell alias 或小脚本。
 

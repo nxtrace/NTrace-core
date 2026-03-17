@@ -274,6 +274,7 @@ The routing visualization function requires the geographical coordinates of each
 - **For Administrator Mode:**  
   **TCP/UDP mode** requires `WinDivert`.  
   **ICMP mode** supports `1=Socket` and `2=WinDivert` (`0=Auto`). If running in Socket mode, the firewall must allow `ICMP/ICMPv6`.  
+  On `Windows`, `ICMPv6` without `--tos` (or with `--tos 0`) keeps using the native Socket send path. A non-zero `ICMPv6 --tos` requires `WinDivert` send support in addition to administrator privilege.  
   `WinDivert` can be automatically configured using the `--init` parameter.
 
 #### `NextTrace` now supports quick testing, and friends who have a one-time backhaul routing test requirement can use it
@@ -405,7 +406,7 @@ export NO_COLOR=1
 | `--ttl-time` | Gap between TTL groups in traceroute; per-hop interval in MTR | traceroute: `300ms`; MTR: `1000ms` when omitted | Lower to speed up; raise on remote/rate-limited paths |
 | `--timeout` | Per-probe timeout | `1000ms` | Raise to `2000-3000ms` for intercontinental or high-loss paths |
 | `--psize` | Probe packet size | Protocol/IP-family minimum | Inclusive IP + probe headers; negative values randomize each probe up to `abs(value)`; sizes above the egress/path MTU may fragment on wire |
-| `-Q`, `--tos` | IP TOS / traffic class | `0` | Set DSCP/TOS style marking in the IP header |
+| `-Q`, `--tos` | IP TOS / traffic class | `0` | Set DSCP/TOS style marking in the IP header; on Windows only `ICMPv6` with a non-zero value requires `WinDivert` |
 
 These probe knobs are CLI-only today; `nt_config.yaml` does not yet store them. If you want reusable profiles, keep them in shell aliases or small wrapper scripts.
 
