@@ -88,6 +88,13 @@ func (p *socketProber) Probe(ctx context.Context, plan probePlan) (probeResponse
 	start := time.Now()
 	dstPort := probeDstPort(p.dstPort, plan.Token)
 	payload := buildProbePayload(plan.PayloadSize)
+	capture, err := p.beginICMPResponseCapture(ctx, deadlineFromStart(ctx, start, plan.Timeout))
+	if err != nil {
+		return probeResponse{}, err
+	}
+	if capture != nil {
+		defer capture.Close()
+	}
 	if err := p.send(plan.TTL, payload, dstPort); err != nil {
 		if isSendSizeErr(err) {
 			return probeResponse{}, &localMTUError{MTU: socketPathMTU(p.udp, p.ipVersion)}
@@ -96,39 +103,13 @@ func (p *socketProber) Probe(ctx context.Context, plan probePlan) (probeResponse
 	}
 
 	buf := make([]byte, 4096)
-	deadline := start.Add(plan.Timeout)
-	if ctxDeadline, ok := ctx.Deadline(); ok && ctxDeadline.Before(deadline) {
-		deadline = ctxDeadline
+	deadline := deadlineFromStart(ctx, start, plan.Timeout)
+	resp, err := p.readICMPResponse(ctx, capture, deadline, dstPort, buf)
+	if err != nil {
+		return probeResponse{}, err
 	}
-
-	for {
-		if err := ctx.Err(); err != nil {
-			return probeResponse{}, err
-		}
-		if err := p.icmp.SetReadDeadline(deadline); err != nil {
-			return probeResponse{}, err
-		}
-		n, peer, err := p.icmp.ReadFrom(buf)
-		if err != nil {
-			if ctx.Err() != nil {
-				return probeResponse{}, ctx.Err()
-			}
-			var netErr net.Error
-			if errors.As(err, &netErr) && netErr.Timeout() {
-				return probeResponse{Event: EventTimeout}, nil
-			}
-			if isRecvSizeErr(err) {
-				continue
-			}
-			return probeResponse{}, err
-		}
-		resp, ok := parseICMPProbeResult(p.ipVersion, buf[:n], util.AddrIP(peer), p.dstIP, dstPort, p.srcPort)
-		if !ok {
-			continue
-		}
-		resp.RTT = time.Since(start)
-		return resp, nil
-	}
+	resp.RTT = time.Since(start)
+	return resp, nil
 }
 
 func (p *socketProber) send(ttl int, payload []byte, dstPort int) error {
@@ -158,4 +139,46 @@ func probeDstPort(base int, token uint32) int {
 	}
 	offset := int((token - 1) % uint32(maxOffset+1))
 	return base + offset
+}
+
+type icmpResponseCapture interface {
+	Close() error
+}
+
+func deadlineFromStart(ctx context.Context, start time.Time, timeout time.Duration) time.Time {
+	deadline := start.Add(timeout)
+	if ctxDeadline, ok := ctx.Deadline(); ok && ctxDeadline.Before(deadline) {
+		return ctxDeadline
+	}
+	return deadline
+}
+
+func (p *socketProber) readICMPResponseFromSocket(ctx context.Context, deadline time.Time, dstPort int, buf []byte) (probeResponse, error) {
+	for {
+		if err := ctx.Err(); err != nil {
+			return probeResponse{}, err
+		}
+		if err := p.icmp.SetReadDeadline(deadline); err != nil {
+			return probeResponse{}, err
+		}
+		n, peer, err := p.icmp.ReadFrom(buf)
+		if err != nil {
+			if ctx.Err() != nil {
+				return probeResponse{}, ctx.Err()
+			}
+			var netErr net.Error
+			if errors.As(err, &netErr) && netErr.Timeout() {
+				return probeResponse{Event: EventTimeout}, nil
+			}
+			if isRecvSizeErr(err) {
+				continue
+			}
+			return probeResponse{}, err
+		}
+		resp, ok := parseICMPProbeResult(p.ipVersion, buf[:n], util.AddrIP(peer), p.dstIP, dstPort, p.srcPort)
+		if !ok {
+			continue
+		}
+		return resp, nil
+	}
 }

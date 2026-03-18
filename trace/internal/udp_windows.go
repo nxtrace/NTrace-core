@@ -68,7 +68,7 @@ func (s *UDPSpec) resolveICMPMode() int {
 	ok, err := winDivertAvailable()
 	if !ok {
 		if icmpMode == 2 {
-			log.Printf("WinDivert sniff mode requested, but WinDivert is not available: %v; falling back to Socket mode.", err)
+			log.Printf("请求使用 WinDivert 嗅探模式，但 WinDivert 不可用: %v；已回退到 Socket 模式。", err)
 		}
 		return 1
 	}
