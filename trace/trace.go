@@ -256,7 +256,7 @@ func Traceroute(method Method, config Config) (*Result, error) {
 
 	result, err := tracer.Execute()
 	if err != nil && errors.Is(err, syscall.EPERM) {
-		err = fmt.Errorf("%w, please run as root", err)
+		err = fmt.Errorf("%w，请使用 root 权限运行", err)
 	}
 	waitForPendingGeoData(result)
 	return result, err
