@@ -2,6 +2,8 @@ package printer
 
 import (
 	"fmt"
+	"io"
+	"os"
 	"strings"
 
 	"github.com/fatih/color"
@@ -23,7 +25,7 @@ type rowData struct {
 	Owner    string
 }
 
-func TracerouteTablePrinter(res *trace.Result) {
+func writeTracerouteTable(w io.Writer, res *trace.Result, clearScreen bool) {
 	// 初始化表格
 	tbl := New()
 	for _, hop := range res.Hops {
@@ -46,9 +48,15 @@ func TracerouteTablePrinter(res *trace.Result) {
 			}
 		}
 	}
-	fmt.Print("\033[H\033[2J")
+	if clearScreen {
+		_, _ = io.WriteString(w, "\033[H\033[2J")
+	}
 	// 打印表格
-	tbl.Print()
+	tbl.WithWriter(w).Print()
+}
+
+func TracerouteTablePrinter(res *trace.Result, clearScreen bool) {
+	writeTracerouteTable(os.Stdout, res, clearScreen)
 }
 
 func New() table.Table {

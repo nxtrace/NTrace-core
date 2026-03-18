@@ -55,7 +55,7 @@ func handleGlobalpingTrace(opts *trace.GlobalpingOptions, config *trace.Config) 
 	fmt.Fprintln(color.Output, color.New(color.FgGreen, color.Bold).Sprintf("> %s", trace.GlobalpingFormatLocation(&measurement.Results[0])))
 
 	if opts.TablePrint {
-		printer.TracerouteTablePrinter(res)
+		printer.TracerouteTablePrinter(res, opts.ClearScreen)
 	} else {
 		for i := range res.Hops {
 			if opts.ClassicPrint {

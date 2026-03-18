@@ -3,7 +3,6 @@ package tracelog
 import (
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"os"
 	"strings"
@@ -12,6 +11,8 @@ import (
 	"github.com/nxtrace/NTrace-core/ipgeo"
 	"github.com/nxtrace/NTrace-core/trace"
 )
+
+const DefaultPath = "/tmp/trace.log"
 
 func formatTraceLogWhois(whois string) string {
 	whoisFormat := strings.Split(whois, "-")
@@ -37,6 +38,18 @@ func traceLogLocationLine(hop *trace.Hop, ip string) string {
 
 func traceLogTimingLine(values []string) string {
 	return strings.Join(values, "/ ")
+}
+
+func OpenFile(path string) (*os.File, error) {
+	return os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+}
+
+func WriteHeader(w io.Writer, header string) error {
+	if header == "" {
+		return nil
+	}
+	_, err := io.WriteString(w, header)
+	return err
 }
 
 func renderTraceLogLine(res *trace.Result, ttl int, group hoprender.Group, blockDisplay bool) string {
@@ -71,26 +84,12 @@ func renderTraceLogLine(res *trace.Result, ttl int, group hoprender.Group, block
 	return builder.String()
 }
 
-func RealtimePrinter(res *trace.Result, ttl int) {
-	f, err := os.OpenFile("/tmp/trace.log", os.O_CREATE|os.O_APPEND|os.O_RDWR, os.ModePerm)
-	if err != nil {
-		return
-	}
-	defer func(f *os.File) {
-		err := f.Close()
-		if err != nil {
-			log.Fatal(err)
-		}
-	}(f)
-
-	multiWriter := io.MultiWriter(os.Stdout, f)
-	log.SetOutput(multiWriter)
-	log.SetFlags(0)
+func WriteRealtime(w io.Writer, res *trace.Result, ttl int) error {
 	prefix := fmt.Sprintf("%-2d  ", ttl+1)
 	groups := hoprender.GroupHopAttempts(res.Hops[ttl])
 	if len(groups) == 0 {
-		log.Print(prefix + "*")
-		return
+		_, err := fmt.Fprintln(w, prefix+"*")
+		return err
 	}
 
 	for i, group := range groups {
@@ -98,6 +97,26 @@ func RealtimePrinter(res *trace.Result, ttl int) {
 		if i == 0 {
 			line = prefix + line
 		}
-		log.Print(line)
+		if _, err := fmt.Fprintln(w, line); err != nil {
+			return err
+		}
 	}
+	return nil
+}
+
+func NewRealtimePrinter(w io.Writer) func(res *trace.Result, ttl int) {
+	return func(res *trace.Result, ttl int) {
+		_ = WriteRealtime(w, res, ttl)
+	}
+}
+
+func RealtimePrinter(res *trace.Result, ttl int) {
+	f, err := OpenFile(DefaultPath)
+	if err != nil {
+		return
+	}
+	defer func() { _ = f.Close() }()
+
+	w := io.MultiWriter(os.Stdout, f)
+	_ = WriteRealtime(w, res, ttl)
 }
