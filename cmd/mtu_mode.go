@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fatih/color"
+
 	"github.com/nxtrace/NTrace-core/ipgeo"
 	"github.com/nxtrace/NTrace-core/printer"
 	mtutrace "github.com/nxtrace/NTrace-core/trace/mtu"
@@ -45,7 +47,7 @@ func normalizeMTUProtocolFlags(tcp, udp *bool) error {
 func buildMTUConflictFlags(
 	tcp, rawPrint bool,
 	mtrModes effectiveMTRModes,
-	tablePrint, classicPrint, routePath, output, deploy bool,
+	tablePrint, classicPrint, routePath, outputPath, outputDefault, deploy bool,
 	globalping bool,
 	from, file string,
 	fastTrace bool,
@@ -57,7 +59,8 @@ func buildMTUConflictFlags(
 		{flag: "--table", enabled: tablePrint},
 		{flag: "--classic", enabled: classicPrint},
 		{flag: "--route-path", enabled: routePath},
-		{flag: "--output", enabled: output},
+		{flag: "--output", enabled: outputPath},
+		{flag: "--output-default", enabled: outputDefault},
 		{flag: "--from", enabled: globalping && from != ""},
 		{flag: "--fast-trace", enabled: fastTrace},
 		{flag: "--file", enabled: file != ""},
@@ -127,25 +130,33 @@ func runStandaloneMTUMode(cfg mtutrace.Config, jsonPrint bool) error {
 }
 
 func printMTUResult(w io.Writer, result *mtutrace.Result) error {
+	return printMTUResultWithStyle(w, result, newMTUTextStyle(false))
+}
+
+func printMTUResultWithStyle(w io.Writer, result *mtutrace.Result, style mtuTextStyle) error {
 	if result == nil {
 		return errors.New("nil mtu result")
 	}
-	if err := printMTUHeader(w, result.Target, result.ResolvedIP, result.StartMTU, result.ProbeSize); err != nil {
+	if err := printMTUHeader(w, result.Target, result.ResolvedIP, result.StartMTU, result.ProbeSize, style); err != nil {
 		return err
 	}
 	for _, hop := range result.Hops {
-		if _, err := fmt.Fprintln(w, formatMTUHopLine(hop)); err != nil {
+		if _, err := fmt.Fprintln(w, formatMTUHopLineWithStyle(hop, style)); err != nil {
 			return err
 		}
 	}
-	return printMTUSummary(w, result.PathMTU)
+	return printMTUSummary(w, result.PathMTU, style)
 }
 
 func formatMTUHopLine(hop mtutrace.Hop) string {
+	return formatMTUHopLineWithStyle(hop, newMTUTextStyle(false))
+}
+
+func formatMTUHopLineWithStyle(hop mtutrace.Hop, style mtuTextStyle) string {
 	if hop.Event == mtutrace.EventTimeout {
-		line := fmt.Sprintf("%2d  *", hop.TTL)
+		line := fmt.Sprintf("%s  %s", style.ttl(hop.TTL), style.timeout())
 		if hop.PMTU > 0 {
-			line += fmt.Sprintf("  pmtu %d", hop.PMTU)
+			line += "  " + style.pmtu(hop.PMTU)
 		}
 		return line
 	}
@@ -154,12 +165,12 @@ func formatMTUHopLine(hop mtutrace.Hop) string {
 	if hop.Hostname != "" {
 		target = fmt.Sprintf("%s (%s)", hop.Hostname, hop.IP)
 	}
-	line := fmt.Sprintf("%2d  %s", hop.TTL, target)
+	line := fmt.Sprintf("%s  %s", style.ttl(hop.TTL), style.hopTarget(hop.Event, target))
 	if hop.RTTMs > 0 {
 		line += fmt.Sprintf("  %.2fms", hop.RTTMs)
 	}
 	if hop.PMTU > 0 {
-		line += fmt.Sprintf("  pmtu %d", hop.PMTU)
+		line += "  " + style.pmtu(hop.PMTU)
 	}
 	if geo := formatMTUGeo(hop); geo != "" {
 		line += "  " + geo
@@ -168,32 +179,41 @@ func formatMTUHopLine(hop mtutrace.Hop) string {
 }
 
 func formatMTUHopSnapshot(event mtutrace.StreamEvent) string {
-	if event.Kind == mtutrace.StreamEventTTLStart {
-		return fmt.Sprintf("%2d  ...", event.TTL)
-	}
-	return formatMTUHopLine(event.Hop)
+	return formatMTUHopSnapshotWithStyle(event, newMTUTextStyle(false))
 }
 
-func printMTUHeader(w io.Writer, target, resolvedIP string, startMTU, probeSize int) error {
-	_, err := fmt.Fprintf(w, "tracepath to %s (%s), start MTU %d, %d byte packets\n",
-		target, resolvedIP, startMTU, probeSize)
+func formatMTUHopSnapshotWithStyle(event mtutrace.StreamEvent, style mtuTextStyle) string {
+	if event.Kind == mtutrace.StreamEventTTLStart {
+		return fmt.Sprintf("%s  %s", style.ttl(event.TTL), style.placeholder())
+	}
+	return formatMTUHopLineWithStyle(event.Hop, style)
+}
+
+func printMTUHeader(w io.Writer, target, resolvedIP string, startMTU, probeSize int, style mtuTextStyle) error {
+	_, err := fmt.Fprintln(w, style.header(fmt.Sprintf("tracepath to %s (%s), start MTU %d, %d byte packets",
+		target, resolvedIP, startMTU, probeSize)))
 	return err
 }
 
-func printMTUSummary(w io.Writer, pathMTU int) error {
-	_, err := fmt.Fprintf(w, "Path MTU: %d\n", pathMTU)
+func printMTUSummary(w io.Writer, pathMTU int, style mtuTextStyle) error {
+	_, err := fmt.Fprintln(w, style.summary(pathMTU))
 	return err
 }
 
 type mtuStreamRenderer struct {
 	w             io.Writer
 	isTTY         bool
+	style         mtuTextStyle
 	headerPrinted bool
 	lineActive    bool
 }
 
 func newMTUStreamRenderer(w io.Writer, isTTY bool) *mtuStreamRenderer {
-	return &mtuStreamRenderer{w: w, isTTY: isTTY}
+	return &mtuStreamRenderer{
+		w:     w,
+		isTTY: isTTY,
+		style: newMTUTextStyle(isTTY && !color.NoColor),
+	}
 }
 
 func (r *mtuStreamRenderer) Render(event mtutrace.StreamEvent) error {
@@ -206,14 +226,14 @@ func (r *mtuStreamRenderer) Render(event mtutrace.StreamEvent) error {
 		if !r.isTTY {
 			return nil
 		}
-		return r.renderTTYLine(formatMTUHopSnapshot(event), false)
+		return r.renderTTYLine(formatMTUHopSnapshotWithStyle(event, r.style), false)
 	case mtutrace.StreamEventTTLUpdate:
 		if !r.isTTY {
 			return nil
 		}
-		return r.renderTTYLine(formatMTUHopSnapshot(event), false)
+		return r.renderTTYLine(formatMTUHopSnapshotWithStyle(event, r.style), false)
 	case mtutrace.StreamEventTTLFinal:
-		line := formatMTUHopSnapshot(event)
+		line := formatMTUHopSnapshotWithStyle(event, r.style)
 		if r.isTTY {
 			return r.renderTTYLine(line, true)
 		}
@@ -226,7 +246,7 @@ func (r *mtuStreamRenderer) Render(event mtutrace.StreamEvent) error {
 			}
 			r.lineActive = false
 		}
-		return printMTUSummary(r.w, event.PathMTU)
+		return printMTUSummary(r.w, event.PathMTU, r.style)
 	default:
 		return nil
 	}
@@ -239,7 +259,7 @@ func (r *mtuStreamRenderer) ensureHeader(event mtutrace.StreamEvent) error {
 	if event.Target == "" || event.ResolvedIP == "" {
 		return nil
 	}
-	if err := printMTUHeader(r.w, event.Target, event.ResolvedIP, event.StartMTU, event.ProbeSize); err != nil {
+	if err := printMTUHeader(r.w, event.Target, event.ResolvedIP, event.StartMTU, event.ProbeSize, r.style); err != nil {
 		return err
 	}
 	r.headerPrinted = true
@@ -256,6 +276,54 @@ func (r *mtuStreamRenderer) renderTTYLine(line string, final bool) error {
 	}
 	_, err := io.WriteString(r.w, "\n")
 	return err
+}
+
+type mtuTextStyle struct {
+	enabled bool
+}
+
+func newMTUTextStyle(enabled bool) mtuTextStyle {
+	return mtuTextStyle{enabled: enabled}
+}
+
+func (s mtuTextStyle) apply(text string, attrs ...color.Attribute) string {
+	if !s.enabled {
+		return text
+	}
+	return color.New(attrs...).Sprint(text)
+}
+
+func (s mtuTextStyle) header(text string) string {
+	return s.apply(text, color.FgCyan, color.Bold)
+}
+
+func (s mtuTextStyle) ttl(ttl int) string {
+	return s.apply(fmt.Sprintf("%2d", ttl), color.Faint)
+}
+
+func (s mtuTextStyle) placeholder() string {
+	return s.apply("...", color.FgHiBlack)
+}
+
+func (s mtuTextStyle) timeout() string {
+	return s.apply("*", color.FgRed, color.Bold)
+}
+
+func (s mtuTextStyle) hopTarget(event mtutrace.Event, target string) string {
+	switch event {
+	case mtutrace.EventDestination:
+		return s.apply(target, color.FgGreen, color.Bold)
+	default:
+		return s.apply(target, color.FgYellow)
+	}
+}
+
+func (s mtuTextStyle) pmtu(pmtu int) string {
+	return s.apply(fmt.Sprintf("pmtu %d", pmtu), color.FgCyan, color.Bold)
+}
+
+func (s mtuTextStyle) summary(pathMTU int) string {
+	return s.apply(fmt.Sprintf("Path MTU: %d", pathMTU), color.FgGreen, color.Bold)
 }
 
 func buildMTUTraceConfig(

@@ -11,9 +11,7 @@ import (
 	"github.com/fatih/color"
 
 	"github.com/nxtrace/NTrace-core/ipgeo"
-	"github.com/nxtrace/NTrace-core/printer"
 	"github.com/nxtrace/NTrace-core/trace"
-	"github.com/nxtrace/NTrace-core/tracelog"
 	"github.com/nxtrace/NTrace-core/util"
 	"github.com/nxtrace/NTrace-core/wshandle"
 )
@@ -64,28 +62,18 @@ func (f *FastTracer) tracert_v6(location string, ispCollection ISPCollection) {
 		Lang:             f.ParamsFastTrace.Lang,
 	}
 
-	if oe {
-		fp, err := os.OpenFile("/tmp/trace.log", os.O_CREATE|os.O_APPEND|os.O_RDWR, os.ModePerm)
-		if err != nil {
-			return
-		}
-		defer func(fp *os.File) {
-			err := fp.Close()
-			if err != nil {
-				log.Fatal(err)
+	header := fmt.Sprintf("『%s %s 』\ntraceroute to %s, %d hops max, %s, %s mode\n",
+		location, ispCollection.ISPName, ispCollection.IPv6, f.ParamsFastTrace.MaxHops, trace.FormatPacketSizeLabel(displayPacketSize), strings.ToUpper(string(f.TracerouteMethod)))
+	cleanup, err := configureFastTraceRealtimePrinter(&conf, f.ParamsFastTrace.OutputPath, header)
+	if err != nil {
+		return
+	}
+	if cleanup != nil {
+		defer func() {
+			if closeErr := cleanup(); closeErr != nil {
+				log.Println(closeErr)
 			}
-		}(fp)
-		log.SetOutput(fp)
-		log.SetFlags(0)
-		log.Printf("『%s %s 』\n", location, ispCollection.ISPName)
-		displayPacketSize := f.ParamsFastTrace.PktSize
-		if !f.ParamsFastTrace.PacketSizeSet {
-			displayPacketSize = trace.DefaultPacketSize(f.TracerouteMethod, net.ParseIP(ispCollection.IPv6))
-		}
-		log.Printf("traceroute to %s, %d hops max, %s, %s mode\n", ispCollection.IPv6, f.ParamsFastTrace.MaxHops, trace.FormatPacketSizeLabel(displayPacketSize), strings.ToUpper(string(f.TracerouteMethod)))
-		conf.RealtimePrinter = tracelog.RealtimePrinter
-	} else {
-		conf.RealtimePrinter = printer.RealtimePrinter
+		}()
 	}
 
 	_, err = trace.Traceroute(f.TracerouteMethod, conf)
@@ -159,9 +147,7 @@ func (f *FastTracer) testFastGZ_v6() {
 	f.tracert_v6(TestIPsCollection.Guangzhou.Location, TestIPsCollection.Guangzhou.CM)
 }
 
-func FastTestv6(traceMode trace.Method, outEnable bool, paramsFastTrace ParamsFastTrace) {
-	oe = outEnable
-
+func FastTestv6(traceMode trace.Method, paramsFastTrace ParamsFastTrace) {
 	choice := readFastTestv6Choice()
 	ft := FastTracer{
 		ParamsFastTrace:  paramsFastTrace,

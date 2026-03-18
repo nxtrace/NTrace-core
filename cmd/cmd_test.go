@@ -7,6 +7,8 @@ import (
 
 	"github.com/akamensky/argparse"
 	"github.com/nxtrace/NTrace-core/trace"
+	"github.com/nxtrace/NTrace-core/tracelog"
+	"github.com/nxtrace/NTrace-core/util"
 )
 
 func TestRegisterGlobalpingFlagWithAvailability_DisabledStillParses(t *testing.T) {
@@ -169,5 +171,114 @@ func TestResolvePacketSizeArg_DefaultsToProtocolMinimum(t *testing.T) {
 	got := resolvePacketSizeArg(0, false, trace.TCPTrace, net.ParseIP("2a00:1450:4009:81a::200e"))
 	if got != 64 {
 		t.Fatalf("resolvePacketSizeArg() = %d, want 64", got)
+	}
+}
+
+func TestRegisterTracerouteOutputFlagsParsesOutputPath(t *testing.T) {
+	parser := argparse.NewParser("nexttrace", "")
+	flags := registerTracerouteOutputFlags(parser)
+	target := parser.StringPositional(&argparse.Options{})
+
+	if err := parser.Parse([]string{"nexttrace", "-o", "trace.log", "1.1.1.1"}); err != nil {
+		t.Fatalf("Parse returned error: %v", err)
+	}
+	if got := strings.TrimSpace(*flags.outputPath); got != "trace.log" {
+		t.Fatalf("--output = %q, want trace.log", got)
+	}
+	if *flags.outputDefault {
+		t.Fatal("--output-default should be false")
+	}
+	if *target != "1.1.1.1" {
+		t.Fatalf("target = %q, want 1.1.1.1", *target)
+	}
+}
+
+func TestRegisterTracerouteOutputFlagsParsesOutputDefault(t *testing.T) {
+	parser := argparse.NewParser("nexttrace", "")
+	flags := registerTracerouteOutputFlags(parser)
+	target := parser.StringPositional(&argparse.Options{})
+
+	if err := parser.Parse([]string{"nexttrace", "-O", "1.1.1.1"}); err != nil {
+		t.Fatalf("Parse returned error: %v", err)
+	}
+	if !*flags.outputDefault {
+		t.Fatal("--output-default should be true")
+	}
+	if got := strings.TrimSpace(*flags.outputPath); got != "" {
+		t.Fatalf("--output = %q, want empty", got)
+	}
+	if *target != "1.1.1.1" {
+		t.Fatalf("target = %q, want 1.1.1.1", *target)
+	}
+}
+
+func TestResolveOutputPath(t *testing.T) {
+	tests := []struct {
+		name          string
+		outputPath    string
+		outputDefault bool
+		want          string
+		wantErr       string
+	}{
+		{name: "custom", outputPath: "custom.log", want: "custom.log"},
+		{name: "default", outputDefault: true, want: tracelog.DefaultPath},
+		{name: "disabled"},
+		{name: "conflict", outputPath: "custom.log", outputDefault: true, wantErr: "--output 与 --output-default 不能同时使用"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := resolveOutputPath(tt.outputPath, tt.outputDefault)
+			if tt.wantErr != "" {
+				if err == nil || err.Error() != tt.wantErr {
+					t.Fatalf("err = %v, want %q", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("resolveOutputPath returned error: %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("resolveOutputPath() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSetFastIPOutputSuppressionRestoresPreviousValue(t *testing.T) {
+	orig := util.SuppressFastIPOutput
+	util.SuppressFastIPOutput = false
+	restore := setFastIPOutputSuppression(true)
+	if !util.SuppressFastIPOutput {
+		t.Fatal("SuppressFastIPOutput should be true after suppression")
+	}
+	restore()
+	if util.SuppressFastIPOutput != false {
+		t.Fatalf("SuppressFastIPOutput = %v, want false", util.SuppressFastIPOutput)
+	}
+	util.SuppressFastIPOutput = orig
+}
+
+func TestShouldForceNoColorForMTUNonTTY(t *testing.T) {
+	tests := []struct {
+		name        string
+		mtuMode     bool
+		jsonPrint   bool
+		stdoutIsTTY bool
+		want        bool
+	}{
+		{name: "mtu non-tty text", mtuMode: true, jsonPrint: false, stdoutIsTTY: false, want: true},
+		{name: "mtu tty text", mtuMode: true, jsonPrint: false, stdoutIsTTY: true, want: false},
+		{name: "mtu non-tty json", mtuMode: true, jsonPrint: true, stdoutIsTTY: false, want: false},
+		{name: "non-mtu non-tty text", mtuMode: false, jsonPrint: false, stdoutIsTTY: false, want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := shouldForceNoColorForMTUNonTTY(tt.mtuMode, tt.jsonPrint, tt.stdoutIsTTY)
+			if got != tt.want {
+				t.Fatalf("shouldForceNoColorForMTUNonTTY() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }

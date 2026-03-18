@@ -31,6 +31,7 @@ func checkMTRConflicts(flags map[string]bool) (conflict string, ok bool) {
 		{"--classic", flags["classic"]},
 		{"--json", flags["json"]},
 		{"--output", flags["output"]},
+		{"--output-default", flags["outputDefault"]},
 		{"--route-path", flags["routePath"]},
 		{"--from", flags["from"]},
 		{"--fast-trace", flags["fastTrace"]},

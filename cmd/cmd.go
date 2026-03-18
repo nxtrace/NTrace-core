@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
@@ -287,11 +288,12 @@ type effectiveMTRModes struct {
 }
 
 type tracerouteOutputFlags struct {
-	routePath    *bool
-	output       *bool
-	tablePrint   *bool
-	jsonPrint    *bool
-	classicPrint *bool
+	routePath     *bool
+	outputPath    *string
+	outputDefault *bool
+	tablePrint    *bool
+	jsonPrint     *bool
+	classicPrint  *bool
 }
 
 type webUIFlags struct {
@@ -373,19 +375,21 @@ func buildTOSHelp() string {
 func registerTracerouteOutputFlags(parser *argparse.Parser) tracerouteOutputFlags {
 	if !defaultMTR {
 		return tracerouteOutputFlags{
-			routePath:    parser.Flag("P", "route-path", &argparse.Options{Help: "Print traceroute hop path by ASN and location"}),
-			output:       parser.Flag("o", "output", &argparse.Options{Help: "Write trace result to file (RealTimePrinter ONLY)"}),
-			tablePrint:   parser.Flag("", "table", &argparse.Options{Help: "Output trace results as a final summary table (traceroute report mode)"}),
-			jsonPrint:    parser.Flag("j", "json", &argparse.Options{Help: "Output trace results as JSON"}),
-			classicPrint: parser.Flag("c", "classic", &argparse.Options{Help: "Classic Output trace results like BestTrace"}),
+			routePath:     parser.Flag("P", "route-path", &argparse.Options{Help: "Print traceroute hop path by ASN and location"}),
+			outputPath:    parser.String("o", "output", &argparse.Options{Help: "Write trace result to FILE (RealtimePrinter only)"}),
+			outputDefault: parser.Flag("O", "output-default", &argparse.Options{Help: "Write trace result to the default log file (/tmp/trace.log)"}),
+			tablePrint:    parser.Flag("", "table", &argparse.Options{Help: "Output trace results as a final summary table (traceroute report mode)"}),
+			jsonPrint:     parser.Flag("j", "json", &argparse.Options{Help: "Output trace results as JSON"}),
+			classicPrint:  parser.Flag("c", "classic", &argparse.Options{Help: "Classic Output trace results like BestTrace"}),
 		}
 	}
 	return tracerouteOutputFlags{
-		routePath:    ptrBool(false),
-		output:       ptrBool(false),
-		tablePrint:   ptrBool(false),
-		jsonPrint:    ptrBool(false),
-		classicPrint: ptrBool(false),
+		routePath:     ptrBool(false),
+		outputPath:    ptrStr(""),
+		outputDefault: ptrBool(false),
+		tablePrint:    ptrBool(false),
+		jsonPrint:     ptrBool(false),
+		classicPrint:  ptrBool(false),
 	}
 }
 
@@ -542,6 +546,10 @@ func applyColorMode(noColor bool) {
 	color.NoColor = noColor
 }
 
+func shouldForceNoColorForMTUNonTTY(mtuMode, jsonPrint, stdoutIsTTY bool) bool {
+	return mtuMode && !jsonPrint && !stdoutIsTTY
+}
+
 func printStartupBanner(jsonPrint bool, effectiveMTR bool) {
 	if !jsonPrint && !effectiveMTR {
 		printer.Version()
@@ -673,13 +681,13 @@ func resolveTraceMethod(tcp, udp bool) trace.Method {
 	}
 }
 
-func maybeRunFastTraceMode(from string, fastTraceFlag bool, file string, params fastTrace.ParamsFastTrace, method trace.Method, output bool) bool {
+func maybeRunFastTraceMode(from string, fastTraceFlag bool, file string, params fastTrace.ParamsFastTrace, method trace.Method) bool {
 	if from != "" || (!fastTraceFlag && file == "") {
 		return false
 	}
-	fastTrace.FastTest(method, output, params)
-	if output {
-		fmt.Println("您的追踪日志已经存放在 /tmp/trace.log 中")
+	fastTrace.FastTest(method, params)
+	if params.OutputPath != "" {
+		fmt.Printf("您的追踪日志已经存放在 %s 中\n", params.OutputPath)
 	}
 	os.Exit(0)
 	return true
@@ -740,12 +748,9 @@ func applyDN42Mode(enabled bool, dataOrigin *string, disableMaptrace *bool) {
 	*disableMaptrace = true
 }
 
-func prepareRuntimeEnvironment(modes effectiveMTRModes, dn42 bool, dataOrigin *string, disableMaptrace *bool, powProvider *string) *wshandle.WsConn {
+func prepareRuntimeEnvironment(dn42 bool, dataOrigin *string, disableMaptrace *bool, powProvider *string) *wshandle.WsConn {
 	capabilitiesCheck()
 	applyDN42Mode(dn42, dataOrigin, disableMaptrace)
-	if modes.mtr {
-		util.SuppressFastIPOutput = true
-	}
 	return initLeoWebsocket(dataOrigin, powProvider)
 }
 
@@ -937,9 +942,31 @@ func maybeRunMTRMode(
 	return true
 }
 
-func configureTracePrinters(conf *trace.Config, tablePrint, classicPrint, rawPrint, output bool) {
+func resolveOutputPath(outputPath string, outputDefault bool) (string, error) {
+	trimmed := strings.TrimSpace(outputPath)
+	if trimmed != "" && outputDefault {
+		return "", errors.New("--output 与 --output-default 不能同时使用")
+	}
+	if trimmed != "" {
+		return trimmed, nil
+	}
+	if outputDefault {
+		return tracelog.DefaultPath, nil
+	}
+	return "", nil
+}
+
+func setFastIPOutputSuppression(suppress bool) func() {
+	prev := util.SuppressFastIPOutput
+	util.SuppressFastIPOutput = suppress
+	return func() {
+		util.SuppressFastIPOutput = prev
+	}
+}
+
+func configureTracePrinters(conf *trace.Config, tablePrint, classicPrint, rawPrint bool, outputPath string) (func() error, error) {
 	if tablePrint {
-		return
+		return nil, nil
 	}
 	router := false
 	switch {
@@ -947,14 +974,20 @@ func configureTracePrinters(conf *trace.Config, tablePrint, classicPrint, rawPri
 		conf.RealtimePrinter = printer.ClassicPrinter
 	case rawPrint:
 		conf.RealtimePrinter = printer.EasyPrinter
-	case output:
-		conf.RealtimePrinter = tracelog.RealtimePrinter
+	case outputPath != "":
+		f, err := tracelog.OpenFile(outputPath)
+		if err != nil {
+			return nil, err
+		}
+		conf.RealtimePrinter = tracelog.NewRealtimePrinter(io.MultiWriter(os.Stdout, f))
+		return f.Close, nil
 	case router:
 		conf.RealtimePrinter = printer.RealtimePrinterWithRouter
 		fmt.Println("路由表数据源由 BGP.Tools 提供，在此特表感谢")
 	default:
 		conf.RealtimePrinter = printer.RealtimePrinter
 	}
+	return nil, nil
 }
 
 func applyJSONOutputMode(conf *trace.Config, jsonPrint bool) {
@@ -986,9 +1019,9 @@ func runTraceOnce(method trace.Method, conf trace.Config) (*trace.Result, bool) 
 	return res, true
 }
 
-func finalizeTraceResult(res *trace.Result, tablePrint, routePath bool, dstIP net.IP, disableMaptrace, jsonPrint bool, dataOrigin string) {
+func finalizeTraceResult(res *trace.Result, tablePrint, tableClearScreen, routePath bool, dstIP net.IP, disableMaptrace, jsonPrint bool, dataOrigin string) {
 	if tablePrint {
-		printer.TracerouteTablePrinter(res)
+		printer.TracerouteTablePrinter(res, tableClearScreen)
 	}
 	if routePath {
 		reporter.New(res, dstIP.String()).Print()
@@ -1048,7 +1081,8 @@ func Execute() {
 	alwaysrDNS := parser.Flag("a", "always-rdns", &argparse.Options{Help: "Always resolve IP addresses to their domain names"})
 	outputFlags := registerTracerouteOutputFlags(parser)
 	routePath := outputFlags.routePath
-	output := outputFlags.output
+	outputPath := outputFlags.outputPath
+	outputDefault := outputFlags.outputDefault
 	tablePrint := outputFlags.tablePrint
 	jsonPrint := outputFlags.jsonPrint
 	classicPrint := outputFlags.classicPrint
@@ -1103,6 +1137,11 @@ func Execute() {
 	}
 
 	mtrModes := deriveEffectiveMTRModes(*mtrMode, *reportMode, *wideMode, *rawPrint)
+	resolvedOutputPath, outputErr := resolveOutputPath(*outputPath, *outputDefault)
+	if outputErr != nil {
+		fmt.Println(outputErr)
+		os.Exit(1)
+	}
 	if *mtuMode {
 		conflictFlags := buildMTUConflictFlags(
 			*tcp,
@@ -1111,7 +1150,8 @@ func Execute() {
 			*tablePrint,
 			*classicPrint,
 			*routePath,
-			*output,
+			*outputPath != "",
+			*outputDefault,
 			*deploy,
 			enableGlobalping,
 			*from,
@@ -1129,15 +1169,16 @@ func Execute() {
 	}
 	if mtrModes.mtr {
 		conflictFlags := map[string]bool{
-			"table":     *tablePrint,
-			"classic":   *classicPrint,
-			"json":      *jsonPrint,
-			"output":    *output,
-			"routePath": *routePath,
-			"from":      enableGlobalping && *from != "",
-			"fastTrace": *fastTraceFlag,
-			"file":      *file != "",
-			"deploy":    enableWebUI && *deploy,
+			"table":         *tablePrint,
+			"classic":       *classicPrint,
+			"json":          *jsonPrint,
+			"output":        *outputPath != "",
+			"outputDefault": *outputDefault,
+			"routePath":     *routePath,
+			"from":          enableGlobalping && *from != "",
+			"fastTrace":     *fastTraceFlag,
+			"file":          *file != "",
+			"deploy":        enableWebUI && *deploy,
 		}
 		if conflict, ok := checkMTRConflicts(conflictFlags); !ok {
 			fmt.Printf("--mtr 不能与 %s 同时使用\n", conflict)
@@ -1148,9 +1189,15 @@ func Execute() {
 	queriesExplicit, ttlTimeExplicit, packetSizeExplicit, tosExplicit := detectExplicitProbeFlags(parser)
 	applyTTLIntervalDefault(ttlInterval, ttlTimeExplicit, mtrModes.mtr)
 	osType := resolveOSType()
+	stdoutIsTTY := CheckTTY(int(os.Stdout.Fd()))
+	if shouldForceNoColorForMTUNonTTY(*mtuMode, *jsonPrint, stdoutIsTTY) {
+		*noColor = true
+	}
 	if handleStartupModes(*noColor, *jsonPrint, mtrModes, *ver, *deploy, *deployListen, *init, osType) {
 		return
 	}
+	restoreFastIPOutput := setFastIPOutputSuppression(*jsonPrint || mtrModes.mtr)
+	defer restoreFastIPOutput()
 
 	if *tos < 0 || *tos > 255 {
 		fmt.Println("--tos 必须在 0-255 之间")
@@ -1181,7 +1228,7 @@ func Execute() {
 			fmt.Println(srcErr)
 			os.Exit(1)
 		}
-		leoWs := prepareRuntimeEnvironment(mtrModes, *dn42, dataOrigin, disableMaptrace, powProvider)
+		leoWs := prepareRuntimeEnvironment(*dn42, dataOrigin, disableMaptrace, powProvider)
 		defer closeLeoWebsocket(leoWs)
 		conf := buildMTUTraceConfig(
 			domain,
@@ -1227,8 +1274,9 @@ func Execute() {
 		Timeout:        time.Duration(*timeout) * time.Millisecond,
 		File:           *file,
 		Dot:            *dot,
+		OutputPath:     resolvedOutputPath,
 	}
-	if maybeRunFastTraceMode(*from, *fastTraceFlag, *file, paramsFastTrace, method, *output) {
+	if maybeRunFastTraceMode(*from, *fastTraceFlag, *file, paramsFastTrace, method) {
 		return
 	}
 
@@ -1237,7 +1285,7 @@ func Execute() {
 		return
 	}
 
-	leoWs := prepareRuntimeEnvironment(mtrModes, *dn42, dataOrigin, disableMaptrace, powProvider)
+	leoWs := prepareRuntimeEnvironment(*dn42, dataOrigin, disableMaptrace, powProvider)
 	defer closeLeoWebsocket(leoWs)
 
 	if *from != "" {
@@ -1271,6 +1319,7 @@ func Execute() {
 			ClassicPrint: *classicPrint,
 			RawPrint:     *rawPrint,
 			JSONPrint:    *jsonPrint,
+			ClearScreen:  stdoutIsTTY,
 		},
 		&trace.Config{
 			OSType:          osType,
@@ -1330,7 +1379,18 @@ func Execute() {
 		return
 	}
 
-	configureTracePrinters(&conf, *tablePrint, *classicPrint, *rawPrint, *output)
+	outputCleanup, err := configureTracePrinters(&conf, *tablePrint, *classicPrint, *rawPrint, resolvedOutputPath)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	if outputCleanup != nil {
+		defer func() {
+			if closeErr := outputCleanup(); closeErr != nil {
+				fmt.Println(closeErr)
+			}
+		}()
+	}
 	applyJSONOutputMode(&conf, *jsonPrint)
 	maybeRunUninterruptedRaw(*rawPrint, method, conf)
 
@@ -1339,7 +1399,7 @@ func Execute() {
 		return
 	}
 
-	finalizeTraceResult(res, *tablePrint, *routePath, ip, *disableMaptrace, *jsonPrint, *dataOrigin)
+	finalizeTraceResult(res, *tablePrint, stdoutIsTTY, *routePath, ip, *disableMaptrace, *jsonPrint, *dataOrigin)
 }
 
 type mtrRunMode int

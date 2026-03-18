@@ -234,9 +234,15 @@ nexttrace http://example.com:8080/index.html?q=1
 # Table output (report mode): runs trace once and prints a final summary table
 nexttrace --table 1.0.0.1
 
-# An Output Easy to Parse
+# Machine-readable output: stdout is a single JSON document
 nexttrace --raw 1.0.0.1
 nexttrace --json 1.0.0.1
+
+# Realtime trace output to a custom file
+nexttrace --output ./trace.log 1.0.0.1
+
+# Realtime trace output to the default log file
+nexttrace --output-default 1.0.0.1
 
 # IPv4/IPv6 Resolve Only, and automatically select the first IP when there are multiple IPs
 nexttrace --ipv4 g.co
@@ -343,7 +349,8 @@ nexttrace --mtu --json 1.1.1.1
 ```
 
 - `--mtu` is an independent UDP-only mode. It does not reuse the normal traceroute engine.
-- TTY output updates the current hop in place; redirected / piped output falls back to finalized line-by-line streaming.
+- TTY output updates the current hop in place and adds color for hop state / PMTU highlights; redirected / piped output falls back to finalized line-by-line streaming without ANSI.
+- `--mtu --json` prints only the standalone MTU JSON document on stdout.
 - GeoIP, RDNS, `--data-provider`, `--language`, `--no-rdns`, `--always-rdns`, and `--dot-server` all apply to this mode.
 
 #### `NextTrace` also supports some advanced functions, such as ttl control, concurrent probe packet count control, mode switching, etc.
@@ -523,7 +530,7 @@ In MTR mode (`--mtr`, `-r`, `-w`, including `--raw`), `-i/--ttl-time` sets the *
 
 > Note: `--show-ips` only takes effect in MTR mode (`--mtr`, `-r`, `-w`); otherwise it is ignored.
 >
-> Note: `--mtr` cannot be used together with `--table`, `--classic`, `--json`, `--output`, `--route-path`, `--from`, `--fast-trace`, `--file`, or `--deploy`.
+> Note: `--mtr` cannot be used together with `--table`, `--classic`, `--json`, `--output`, `--output-default`, `--route-path`, `--from`, `--fast-trace`, `--file`, or `--deploy`.
 
 #### `NextTrace` supports users to select their own IP API (currently supports: `LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`, `IPInfoLocal`, `CHUNZHEN`)
 
@@ -652,9 +659,10 @@ Usage: nexttrace [-h|--help] [--init] [-4|--ipv4] [-6|--ipv6] [-T|--tcp]
                  [-m|--max-hops <integer>] [-d|--data-provider
                  (IP.SB|ip.sb|IPInfo|ipinfo|IPInsight|ipinsight|IPAPI.com|ip-api.com|IPInfoLocal|ipinfolocal|chunzhen|LeoMoeAPI|leomoeapi|ipdb.one|disable-geoip)]
                  [--pow-provider (api.nxtrace.org|sakura)] [-n|--no-rdns]
-                 [-a|--always-rdns] [-P|--route-path] [--dn42] [-o|--output]
-                 [--table] [--raw] [-j|--json] [-c|--classic] [-f|--first
-                 <integer>] [-M|--map] [-e|--disable-mpls] [-V|--version]
+                 [-a|--always-rdns] [-P|--route-path] [--dn42] [-o|--output
+                 "<value>"] [-O|--output-default] [--table] [--raw]
+                 [-j|--json] [-c|--classic] [-f|--first <integer>] [-M|--map]
+                 [-e|--disable-mpls] [-V|--version]
                  [-s|--source "<value>"] [--source-port <integer>] [-D|--dev
                  "<value>"] [--listen "<value>"] [--deploy] [-z|--send-time
                  <integer>] [-i|--ttl-time <integer>] [--timeout <integer>]
@@ -708,8 +716,10 @@ Arguments:
   -P  --route-path                   Print traceroute hop path by ASN and
                                      location
       --dn42                         DN42 Mode
-  -o  --output                       Write trace result to file
-                                     (RealTimePrinter ONLY)
+  -o  --output                       Write trace result to FILE
+                                     (RealtimePrinter only)
+  -O  --output-default               Write trace result to the default log file
+                                     (/tmp/trace.log)
       --table                        Output trace results as a final summary
                                      table (traceroute report mode)
       --raw                          Machine-friendly output. With MTR

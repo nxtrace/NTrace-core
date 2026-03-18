@@ -239,9 +239,15 @@ nexttrace http://example.com:8080/index.html?q=1
 # 表格输出（报告模式）：运行一次探测后打印最终汇总表格
 nexttrace --table 1.0.0.1
 
-# 一个方便供机器读取转化的模式
+# 机器可读输出：stdout 只包含一个 JSON 文档
 nexttrace --raw 1.0.0.1
 nexttrace --json 1.0.0.1
+
+# 将实时 traceroute 输出写入自定义文件
+nexttrace --output ./trace.log 1.0.0.1
+
+# 将实时 traceroute 输出写入默认日志文件
+nexttrace --output-default 1.0.0.1
 
 # 只进行IPv4/IPv6解析，且当多个IP时自动选择第一个IP
 nexttrace --ipv4 g.co
@@ -346,7 +352,8 @@ nexttrace --mtu --json 1.1.1.1
 ```
 
 - `--mtu` 是独立的 UDP-only 模式，不复用普通 traceroute 引擎。
-- TTY 下会原地更新当前 hop；重定向/管道输出会退化成“定稿一跳输出一行”的流式文本。
+- TTY 下会原地更新当前 hop，并为 hop 状态 / PMTU 高亮加色；重定向/管道输出会退化成“定稿一跳输出一行”的无 ANSI 流式文本。
+- `--mtu --json` 在 stdout 上只输出独立的 MTU JSON 文档。
 - GeoIP、RDNS、`--data-provider`、`--language`、`--no-rdns`、`--always-rdns`、`--dot-server` 都对该模式生效。
 
 #### `NextTrace`也同样支持一些进阶功能，如 TTL 控制、并发数控制、模式切换等
@@ -519,7 +526,7 @@ wide 报告模式（`-w` / `--wide`）继续保留当前完整信息行为，包
 
 > 注意：`--show-ips` 仅在 MTR 模式（`--mtr`、`-r`、`-w`）生效，其他模式会忽略。
 >
-> 注意：`--mtr` 不可与 `--table`、`--classic`、`--json`、`--output`、`--route-path`、`--from`、`--fast-trace`、`--file`、`--deploy` 同时使用。
+> 注意：`--mtr` 不可与 `--table`、`--classic`、`--json`、`--output`、`--output-default`、`--route-path`、`--from`、`--fast-trace`、`--file`、`--deploy` 同时使用。
 
 #### `NextTrace`支持用户自主选择 IP 数据库（目前支持：`LeoMoeAPI`, `IP.SB`, `IPInfo`, `IPInsight`, `IPAPI.com`, `IPInfoLocal`, `CHUNZHEN`)
 
@@ -632,9 +639,10 @@ Usage: nexttrace [-h|--help] [--init] [-4|--ipv4] [-6|--ipv6] [-T|--tcp]
                  [-m|--max-hops <integer>] [-d|--data-provider
                  (IP.SB|ip.sb|IPInfo|ipinfo|IPInsight|ipinsight|IPAPI.com|ip-api.com|IPInfoLocal|ipinfolocal|chunzhen|LeoMoeAPI|leomoeapi|ipdb.one|disable-geoip)]
                  [--pow-provider (api.nxtrace.org|sakura)] [-n|--no-rdns]
-                 [-a|--always-rdns] [-P|--route-path] [--dn42] [-o|--output]
-                 [--table] [--raw] [-j|--json] [-c|--classic] [-f|--first
-                 <integer>] [-M|--map] [-e|--disable-mpls] [-V|--version]
+                 [-a|--always-rdns] [-P|--route-path] [--dn42] [-o|--output
+                 "<value>"] [-O|--output-default] [--table] [--raw]
+                 [-j|--json] [-c|--classic] [-f|--first <integer>] [-M|--map]
+                 [-e|--disable-mpls] [-V|--version]
                  [-s|--source "<value>"] [--source-port <integer>] [-D|--dev
                  "<value>"] [--listen "<value>"] [--deploy] [-z|--send-time
                  <integer>] [-i|--ttl-time <integer>] [--timeout <integer>]
@@ -688,8 +696,10 @@ Arguments:
   -P  --route-path                   Print traceroute hop path by ASN and
                                      location
       --dn42                         DN42 Mode
-  -o  --output                       Write trace result to file
-                                     (RealTimePrinter ONLY)
+  -o  --output                       Write trace result to FILE
+                                     (RealtimePrinter only)
+  -O  --output-default               Write trace result to the default log file
+                                     (/tmp/trace.log)
       --table                        Output trace results as a final summary
                                      table (traceroute report mode)
       --raw                          Machine-friendly output. With MTR

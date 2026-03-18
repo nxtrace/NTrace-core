@@ -18,6 +18,7 @@ type GlobalpingOptions struct {
 	DataOrigin      string
 
 	TablePrint   bool
+	ClearScreen  bool
 	ClassicPrint bool
 	RawPrint     bool
 	JSONPrint    bool

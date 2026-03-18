@@ -46,7 +46,7 @@ func TestCheckMTRConflicts_Table(t *testing.T) {
 func TestCheckMTRConflicts_JSON(t *testing.T) {
 	flags := map[string]bool{
 		"table": false, "raw": false, "classic": false,
-		"json": true, "output": false,
+		"json": true, "output": false, "outputDefault": false,
 		"routePath": false, "from": false, "fastTrace": false,
 		"file": false, "deploy": false,
 	}
@@ -56,6 +56,22 @@ func TestCheckMTRConflicts_JSON(t *testing.T) {
 	}
 	if conflict != "--json" {
 		t.Errorf("conflict = %q, want --json", conflict)
+	}
+}
+
+func TestCheckMTRConflicts_OutputDefault(t *testing.T) {
+	flags := map[string]bool{
+		"table": false, "raw": false, "classic": false,
+		"json": false, "output": false, "outputDefault": true,
+		"routePath": false, "from": false, "fastTrace": false,
+		"file": false, "deploy": false,
+	}
+	conflict, ok := checkMTRConflicts(flags)
+	if ok {
+		t.Fatal("expected conflict with --output-default")
+	}
+	if conflict != "--output-default" {
+		t.Errorf("conflict = %q, want --output-default", conflict)
 	}
 }
 
