@@ -173,3 +173,5 @@ NTrace-core
 .gocache
 .gomodcache
 .cache
+
+scripts/regression/
