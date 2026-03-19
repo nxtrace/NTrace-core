@@ -271,6 +271,54 @@ func TestRunWithProberTimeoutHopDoesNotExposeLocalPMTU(t *testing.T) {
 	}
 }
 
+func TestRunWithProberFallbackShrinksAfterRepeatedLocalMTUErrors(t *testing.T) {
+	cfg := Config{
+		Target:      "example.com",
+		DstIP:       net.ParseIP("203.0.113.9"),
+		SrcIP:       net.ParseIP("192.0.2.10"),
+		DstPort:     33494,
+		BeginHop:    1,
+		MaxHops:     1,
+		Queries:     1,
+		Timeout:     time.Second,
+		TTLInterval: 0,
+	}
+
+	prober := &scriptedProber{
+		steps: []scriptedStep{
+			{err: &localMTUError{}},
+			{err: &localMTUError{}},
+			{response: probeResponse{Event: EventTimeExceeded, IP: net.ParseIP("192.0.2.1"), RTT: 11 * time.Millisecond}},
+		},
+	}
+
+	res, err := runWithProber(context.Background(), cfg, prober)
+	if err != nil {
+		t.Fatalf("runWithProber returned error: %v", err)
+	}
+	if got := len(prober.plans); got != 3 {
+		t.Fatalf("probe count = %d, want 3", got)
+	}
+	if got := prober.plans[0].PayloadSize; got != 64972 {
+		t.Fatalf("initial payload size = %d, want 64972", got)
+	}
+	if got := prober.plans[1].PayloadSize; got != 1472 {
+		t.Fatalf("payload size after first local mtu shrink = %d, want 1472", got)
+	}
+	if got := prober.plans[2].PayloadSize; got != 1471 {
+		t.Fatalf("payload size after fallback local mtu shrink = %d, want 1471", got)
+	}
+	if got := res.PathMTU; got != 1499 {
+		t.Fatalf("path mtu = %d, want 1499", got)
+	}
+	if len(res.Hops) != 1 || res.Hops[0].Event != EventTimeExceeded {
+		t.Fatalf("unexpected hops: %+v", res.Hops)
+	}
+	if got := res.Hops[0].PMTU; got != 1500 {
+		t.Fatalf("first hop pmtu = %d, want 1500", got)
+	}
+}
+
 func TestRunStreamWithProberEmitsOrderedEvents(t *testing.T) {
 	cfg := Config{
 		Target:      "example.com",

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -66,5 +67,93 @@ func TestNewClosesPreviousGlobalWsConn(t *testing.T) {
 	}
 	if err := oldConn.enqueueWrite(wsWriteJob{msgType: websocket.TextMessage, data: []byte("ping")}); !errors.Is(err, errWriteLoopStopped) {
 		t.Fatalf("old enqueueWrite error=%v, want %v", err, errWriteLoopStopped)
+	}
+}
+
+func TestGetWsConnDoesNotBlockWhileNewClosesPreviousConn(t *testing.T) {
+	oldCreateFn := createWsConnFn
+	defer func() {
+		createWsConnFn = oldCreateFn
+	}()
+
+	release := make(chan struct{})
+	oldConn := newWsConn(nil, make(chan os.Signal, 1))
+	oldConn.setDoneChan(make(chan struct{}))
+	oldConn.startLoop(func() {
+		<-release
+	})
+
+	wsconnMu.Lock()
+	wsconn = oldConn
+	wsconnMu.Unlock()
+
+	newConn := newStartedTestWsConn()
+	defer newConn.Close()
+	createWsConnFn = func() *WsConn {
+		return newConn
+	}
+
+	newResult := make(chan *WsConn, 1)
+	go func() {
+		newResult <- New()
+	}()
+
+	select {
+	case <-oldConn.closeCh:
+	case <-time.After(time.Second):
+		t.Fatal("New did not start closing the previous connection")
+	}
+
+	getResult := make(chan *WsConn, 1)
+	go func() {
+		getResult <- GetWsConn()
+	}()
+
+	select {
+	case got := <-getResult:
+		if got != newConn {
+			t.Fatalf("GetWsConn returned %p, want %p", got, newConn)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("GetWsConn blocked while New was waiting for old Close")
+	}
+
+	close(release)
+
+	select {
+	case got := <-newResult:
+		if got != newConn {
+			t.Fatalf("New returned %p, want %p", got, newConn)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("New did not finish after releasing old Close")
+	}
+}
+
+func TestMessageReceiveHandlerCloseRaceDoesNotPanic(t *testing.T) {
+	for i := 0; i < 50; i++ {
+		conn := newWsConn(nil, make(chan os.Signal, 1))
+		conn.setDoneChan(make(chan struct{}))
+		conn.setConnectionState(false, false)
+
+		started := make(chan struct{})
+		conn.startLoop(func() {
+			close(started)
+			conn.messageReceiveHandler()
+		})
+
+		<-started
+
+		done := make(chan struct{})
+		go func() {
+			conn.Close()
+			close(done)
+		}()
+
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+			t.Fatal("Close hung while messageReceiveHandler was exiting")
+		}
 	}
 }
