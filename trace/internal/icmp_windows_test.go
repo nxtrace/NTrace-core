@@ -19,3 +19,15 @@ func TestShouldUseICMPv6RawSend(t *testing.T) {
 		t.Fatal("non-zero traffic class should use raw send")
 	}
 }
+
+func TestShouldUseICMPv4RawSend(t *testing.T) {
+	if shouldUseICMPv4RawSend(nil) {
+		t.Fatal("nil header should not use raw send")
+	}
+	if shouldUseICMPv4RawSend(&layers.IPv4{}) {
+		t.Fatal("zero tos should keep socket send")
+	}
+	if !shouldUseICMPv4RawSend(&layers.IPv4{TOS: 46}) {
+		t.Fatal("non-zero tos should use raw send")
+	}
+}

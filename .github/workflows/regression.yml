@@ -1,0 +1,87 @@
+name: Runtime Regression CI
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - "**/*.go"
+      - "go.mod"
+      - "go.sum"
+      - "scripts/regression/**"
+      - ".github/workflows/*.yml"
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "**/*.go"
+      - "go.mod"
+      - "go.sum"
+      - "scripts/regression/**"
+      - ".github/workflows/*.yml"
+
+jobs:
+  regression:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: linux
+          - os: macos-latest
+            name: macos
+          - os: windows-latest
+            name: windows
+    steps:
+      - name: Checkout codebase
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.26.x"
+          check-latest: true
+          cache: true
+
+      - name: Install Linux runtime deps
+        if: ${{ matrix.name == 'linux' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tcpdump
+
+      - name: Run regression on Linux
+        if: ${{ matrix.name == 'linux' }}
+        env:
+          ART_ROOT: ${{ github.workspace }}/.regression/linux
+        run: bash scripts/regression/linux.sh
+
+      - name: Run regression on macOS
+        if: ${{ matrix.name == 'macos' }}
+        env:
+          ART_ROOT: ${{ github.workspace }}/.regression/macos
+        run: bash scripts/regression/macos.sh
+
+      - name: Run regression on Windows
+        if: ${{ matrix.name == 'windows' }}
+        shell: pwsh
+        run: |
+          .\scripts\regression\windows.ps1 -ArtifactsRoot "${{ github.workspace }}\.regression\windows"
+
+      - name: Upload regression artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: regression-${{ matrix.name }}
+          path: ${{ github.workspace }}/.regression/${{ matrix.name }}
+          if-no-files-found: warn
