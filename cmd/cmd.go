@@ -786,11 +786,11 @@ func closeLeoWebsocket(leoWs *wshandle.WsConn) {
 	}
 }
 
-func maybeHandleGlobalping(ctx context.Context, from string, opts *trace.GlobalpingOptions, conf *trace.Config) bool {
+func maybeHandleGlobalping(from string, opts *trace.GlobalpingOptions, conf *trace.Config) bool {
 	if from == "" {
 		return false
 	}
-	handleGlobalpingTrace(ctx, opts, conf)
+	handleGlobalpingTrace(opts, conf)
 	return true
 }
 
@@ -1391,7 +1391,6 @@ func Execute() {
 	}
 
 	if maybeHandleGlobalping(
-		rootCtx,
 		*from,
 		&trace.GlobalpingOptions{
 			Target:  *str,

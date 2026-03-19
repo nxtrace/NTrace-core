@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -160,6 +161,23 @@ func TestReadWSInitMessage_ReturnsClearDeadlineError(t *testing.T) {
 
 	if _, err := readWSInitMessage(conn); err == nil || err.Error() != "clear deadline failed" {
 		t.Fatalf("readWSInitMessage error = %v, want clear deadline error", err)
+	}
+}
+
+func TestNewWSSessionContextInheritsParentCancellation(t *testing.T) {
+	parent, cancelParent := context.WithCancel(context.Background())
+	ctx, cancel := newWSSessionContext(parent)
+	defer cancel()
+
+	cancelParent()
+
+	select {
+	case <-ctx.Done():
+		if !errors.Is(ctx.Err(), context.Canceled) {
+			t.Fatalf("ctx.Err() = %v, want context.Canceled", ctx.Err())
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("session context did not inherit parent cancellation")
 	}
 }
 

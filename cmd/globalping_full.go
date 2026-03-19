@@ -16,9 +16,10 @@ import (
 	"github.com/nxtrace/NTrace-core/util"
 )
 
-func handleGlobalpingTrace(ctx context.Context, opts *trace.GlobalpingOptions, config *trace.Config) {
-	if config != nil {
-		config.Context = ctx
+func handleGlobalpingTrace(opts *trace.GlobalpingOptions, config *trace.Config) {
+	ctx := context.Background()
+	if config != nil && config.Context != nil {
+		ctx = config.Context
 	}
 	res, measurement, err := trace.GlobalpingTraceroute(opts, config)
 	if err != nil {

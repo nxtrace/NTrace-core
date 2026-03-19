@@ -243,7 +243,7 @@ func buildAPIInfo(dataOrigin string) string {
 	if !strings.EqualFold(dataOrigin, "LeoMoeAPI") {
 		return ""
 	}
-	meta := util.FastIPMetaCache
+	meta := util.GetFastIPMetaCache()
 	if meta.IP == "" {
 		return ""
 	}
@@ -258,7 +258,7 @@ func buildRawAPIInfoLine(dataOrigin string) string {
 	if !strings.EqualFold(dataOrigin, "LeoMoeAPI") {
 		return ""
 	}
-	meta := util.FastIPMetaCache
+	meta := util.GetFastIPMetaCache()
 	if meta.IP == "" {
 		return ""
 	}

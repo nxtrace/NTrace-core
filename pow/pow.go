@@ -17,6 +17,27 @@ const (
 
 var retTokenFn = powclient.RetToken
 
+func resolveTokenRequestTimeout(ctx context.Context, fallback time.Duration) time.Duration {
+	if fallback <= 0 {
+		fallback = 5 * time.Second
+	}
+	if ctx == nil {
+		return fallback
+	}
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return fallback
+	}
+	remaining := time.Until(deadline)
+	if remaining <= 0 {
+		return time.Millisecond
+	}
+	if remaining < fallback {
+		return remaining
+	}
+	return fallback
+}
+
 func GetToken(fastIp string, host string, port string) (string, error) {
 	return GetTokenWithContext(context.Background(), fastIp, host, port)
 }
@@ -34,6 +55,7 @@ func GetTokenWithContext(ctx context.Context, fastIp string, host string, port s
 	getTokenParams.SNI = host
 	getTokenParams.Host = host
 	getTokenParams.UserAgent = util.UserAgent
+	getTokenParams.TimeoutSec = resolveTokenRequestTimeout(opCtx, getTokenParams.TimeoutSec)
 	proxyUrl := util.GetProxy()
 	if proxyUrl != nil {
 		getTokenParams.Proxy = proxyUrl

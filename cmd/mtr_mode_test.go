@@ -426,16 +426,17 @@ func TestNormalizeMTRReportConfig_WidePreservesGeoSettings(t *testing.T) {
 }
 
 func TestBuildRawAPIInfoLine_LeoMoeAPI(t *testing.T) {
-	old := util.FastIPMetaCache
+	oldCache := util.GetFastIPCache()
+	oldMeta := util.GetFastIPMetaCache()
 	t.Cleanup(func() {
-		util.FastIPMetaCache = old
+		util.SetFastIPCacheState(oldCache, oldMeta)
 	})
 
-	util.FastIPMetaCache = util.FastIPMeta{
+	util.SetFastIPCacheState("", util.FastIPMeta{
 		IP:       "2403:18c0:1001:462:dd:38ff:fe48:e0c5",
 		Latency:  "21.33",
 		NodeName: "DMIT.NRT",
-	}
+	})
 
 	got := buildRawAPIInfoLine("LeoMoeAPI")
 	want := "[NextTrace API] preferred API IP - [2403:18c0:1001:462:dd:38ff:fe48:e0c5] - 21.33ms - DMIT.NRT"

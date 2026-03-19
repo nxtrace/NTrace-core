@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/fatih/color"
@@ -21,7 +22,8 @@ type ResponseInfo struct {
 }
 
 var (
-	timeout = 5 * time.Second
+	timeout       = 5 * time.Second
+	fastIPCacheMu sync.RWMutex
 )
 var FastIpCache = ""
 
@@ -53,6 +55,25 @@ func GetFastIP(domain string, port string, enableOutput bool) string {
 	return ip
 }
 
+func GetFastIPCache() string {
+	fastIPCacheMu.RLock()
+	defer fastIPCacheMu.RUnlock()
+	return FastIpCache
+}
+
+func GetFastIPMetaCache() FastIPMeta {
+	fastIPCacheMu.RLock()
+	defer fastIPCacheMu.RUnlock()
+	return FastIPMetaCache
+}
+
+func SetFastIPCacheState(ip string, meta FastIPMeta) {
+	fastIPCacheMu.Lock()
+	FastIpCache = ip
+	FastIPMetaCache = meta
+	fastIPCacheMu.Unlock()
+}
+
 func GetFastIPWithContext(ctx context.Context, domain string, port string, enableOutput bool) (string, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -61,8 +82,8 @@ func GetFastIPWithContext(ctx context.Context, domain string, port string, enabl
 	if proxyUrl != nil {
 		return "api.nxtrace.org", nil
 	}
-	if FastIpCache != "" {
-		return FastIpCache, nil
+	if cachedIP := GetFastIPCache(); cachedIP != "" {
+		return cachedIP, nil
 	}
 
 	var ips []net.IP
@@ -107,11 +128,12 @@ func GetFastIPWithContext(ctx context.Context, domain string, port string, enabl
 		result.IP = defaultFastIP()
 	}
 
-	FastIPMetaCache = FastIPMeta{
+	meta := FastIPMeta{
 		IP:       result.IP,
 		Latency:  result.Latency,
 		NodeName: strings.TrimSpace(result.Content),
 	}
+	SetFastIPCacheState(result.IP, meta)
 
 	if enableOutput && !SuppressFastIPOutput {
 		_, _ = fmt.Fprintf(color.Output, "%s preferred API IP - %s - %s - %s",
@@ -122,7 +144,6 @@ func GetFastIPWithContext(ctx context.Context, domain string, port string, enabl
 		)
 	}
 
-	FastIpCache = result.IP
 	return result.IP, nil
 }
 
