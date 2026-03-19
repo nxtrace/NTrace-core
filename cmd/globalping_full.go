@@ -3,6 +3,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -15,7 +16,10 @@ import (
 	"github.com/nxtrace/NTrace-core/util"
 )
 
-func handleGlobalpingTrace(opts *trace.GlobalpingOptions, config *trace.Config) {
+func handleGlobalpingTrace(ctx context.Context, opts *trace.GlobalpingOptions, config *trace.Config) {
+	if config != nil {
+		config.Context = ctx
+	}
 	res, measurement, err := trace.GlobalpingTraceroute(opts, config)
 	if err != nil {
 		fmt.Println(err)
@@ -29,7 +33,7 @@ func handleGlobalpingTrace(opts *trace.GlobalpingOptions, config *trace.Config) 
 			fmt.Println(err)
 			return
 		}
-		url, err := tracemap.GetMapUrl(string(r))
+		url, err := tracemap.GetMapUrlWithContext(ctx, string(r))
 		if err != nil {
 			fmt.Println(err)
 			return

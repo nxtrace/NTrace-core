@@ -2,6 +2,7 @@ package fastTrace
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -27,6 +28,7 @@ type FastTracer struct {
 }
 
 type ParamsFastTrace struct {
+	Context        context.Context
 	OSType         int
 	ICMPMode       int
 	SrcDev         string
@@ -111,8 +113,8 @@ func promptFastTraceChoice(prompt, defaultChoice string) string {
 	return choice
 }
 
-func initFastTraceWS() *wshandle.WsConn {
-	w := wshandle.New()
+func initFastTraceWS(ctx context.Context) *wshandle.WsConn {
+	w := wshandle.NewWithContext(ctx)
 	w.Interrupt = make(chan os.Signal, 1)
 	signal.Notify(w.Interrupt, os.Interrupt)
 	return w
@@ -152,7 +154,7 @@ func runFastTraceByChoice(ft FastTracer, choice string) {
 	}
 }
 
-func parseIPListLine(line string) (IpListElement, bool) {
+func parseIPListLine(ctx context.Context, line string) (IpListElement, bool) {
 	parts := strings.SplitN(line, " ", 2)
 	if len(parts) == 0 {
 		return IpListElement{}, false
@@ -166,7 +168,7 @@ func parseIPListLine(line string) (IpListElement, bool) {
 
 	parsedIP := net.ParseIP(ip)
 	if parsedIP == nil {
-		netIP, err := util.DomainLookUp(ip, "all", "", true)
+		netIP, err := util.DomainLookUpWithContext(ctx, ip, "all", "", true)
 		if err != nil {
 			fmt.Printf("Ignoring invalid IP: %s\n", ip)
 			return IpListElement{}, false
@@ -181,7 +183,7 @@ func parseIPListLine(line string) (IpListElement, bool) {
 	}, true
 }
 
-func loadIPList(filePath string) []IpListElement {
+func loadIPList(ctx context.Context, filePath string) []IpListElement {
 	file, err := os.Open(filePath)
 	if err != nil {
 		fmt.Println("Error opening file:", err)
@@ -198,7 +200,7 @@ func loadIPList(filePath string) []IpListElement {
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := scanner.Text()
-		if ipElem, ok := parseIPListLine(line); ok {
+		if ipElem, ok := parseIPListLine(ctx, line); ok {
 			ipList = append(ipList, ipElem)
 		} else if strings.TrimSpace(line) != "" {
 			fmt.Printf("Ignoring invalid line: %s\n", line)
@@ -235,6 +237,7 @@ func buildFileTraceConfig(params ParamsFastTrace, tracerouteMethod trace.Method,
 		log.Fatal(err)
 	}
 	return trace.Config{
+		Context:          params.Context,
 		OSType:           params.OSType,
 		ICMPMode:         params.ICMPMode,
 		BeginHop:         params.BeginHop,
@@ -317,7 +320,7 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 	fmt.Printf("traceroute to %s, %d hops max, %s, %s mode\n", ispCollection.IP, f.ParamsFastTrace.MaxHops, trace.FormatPacketSizeLabel(displayPacketSize), strings.ToUpper(string(f.TracerouteMethod)))
 
 	// ip, err := util.DomainLookUp(ispCollection.IP, "4", "", true)
-	ip, err := util.DomainLookUp(ispCollection.IP, "4", f.ParamsFastTrace.Dot, true)
+	ip, err := util.DomainLookUpWithContext(f.ParamsFastTrace.Context, ispCollection.IP, "4", f.ParamsFastTrace.Dot, true)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -330,6 +333,7 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 		log.Fatal(err)
 	}
 	var conf = trace.Config{
+		Context:          f.ParamsFastTrace.Context,
 		OSType:           f.ParamsFastTrace.OSType,
 		ICMPMode:         f.ParamsFastTrace.ICMPMode,
 		BeginHop:         f.ParamsFastTrace.BeginHop,
@@ -394,18 +398,18 @@ func FastTest(traceMode trace.Method, paramsFastTrace ParamsFastTrace) {
 	fmt.Println("您想测试哪些ISP的路由？\n1. 北京三网快速测试\n2. 上海三网快速测试\n3. 广州三网快速测试\n4. 全国电信\n5. 全国联通\n6. 全国移动\n7. 全国教育网\n8. 全国五网")
 	choice := promptFastTraceChoice("请选择选项：", "1")
 
-	w := initFastTraceWS()
+	w := initFastTraceWS(paramsFastTrace.Context)
 	defer closeFastTraceWS(w)
 
 	runFastTraceByChoice(newFastTracer(traceMode, paramsFastTrace), choice)
 }
 
 func testFile(paramsFastTrace ParamsFastTrace, traceMode trace.Method) {
-	w := initFastTraceWS()
+	w := initFastTraceWS(paramsFastTrace.Context)
 	defer closeFastTraceWS(w)
 
 	tracerouteMethod := resolveTraceMethod(traceMode)
-	for _, ip := range loadIPList(paramsFastTrace.File) {
+	for _, ip := range loadIPList(paramsFastTrace.Context, paramsFastTrace.File) {
 		runFileTraceTarget(paramsFastTrace, tracerouteMethod, ip)
 	}
 }

@@ -27,7 +27,7 @@ func (f *FastTracer) tracert_v6(location string, ispCollection ISPCollection) {
 	fmt.Printf("traceroute to %s, %d hops max, %s, %s mode\n", ispCollection.IPv6, f.ParamsFastTrace.MaxHops, trace.FormatPacketSizeLabel(displayPacketSize), strings.ToUpper(string(f.TracerouteMethod)))
 
 	// ip, err := util.DomainLookUp(ispCollection.IPv6, "6", "", true)
-	ip, err := util.DomainLookUp(ispCollection.IPv6, "6", f.ParamsFastTrace.Dot, true)
+	ip, err := util.DomainLookUpWithContext(f.ParamsFastTrace.Context, ispCollection.IPv6, "6", f.ParamsFastTrace.Dot, true)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -40,6 +40,7 @@ func (f *FastTracer) tracert_v6(location string, ispCollection ISPCollection) {
 		log.Fatal(err)
 	}
 	var conf = trace.Config{
+		Context:          f.ParamsFastTrace.Context,
 		OSType:           f.ParamsFastTrace.OSType,
 		ICMPMode:         f.ParamsFastTrace.ICMPMode,
 		BeginHop:         f.ParamsFastTrace.BeginHop,
@@ -155,7 +156,7 @@ func FastTestv6(traceMode trace.Method, paramsFastTrace ParamsFastTrace) {
 	}
 
 	// 建立 WebSocket 连接
-	w := wshandle.New()
+	w := wshandle.NewWithContext(paramsFastTrace.Context)
 	w.Interrupt = make(chan os.Signal, 1)
 	signal.Notify(w.Interrupt, os.Interrupt)
 	defer func() {

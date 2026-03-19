@@ -3,9 +3,11 @@ package trace
 import (
 	"context"
 	"errors"
+	"net"
 	"testing"
 	"time"
 
+	"github.com/nxtrace/NTrace-core/ipgeo"
 	"golang.org/x/sync/semaphore"
 )
 
@@ -51,4 +53,55 @@ func TestAcquireTraceSemaphoreChecksCanceledContextFirst(t *testing.T) {
 		t.Fatalf("acquireTraceSemaphore should still acquire after release: %v", err)
 	}
 	sem.Release(1)
+}
+
+func TestWaitForPendingGeoDataReturnsOnCanceledContext(t *testing.T) {
+	res := &Result{
+		Hops: [][]Hop{{
+			{
+				Address: &net.IPAddr{IP: net.ParseIP("1.1.1.1")},
+				Geo:     pendingGeo(),
+			},
+		}},
+	}
+	res.geoWG.Add(1)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer res.geoWG.Done()
+		<-done
+	}()
+
+	start := time.Now()
+	cancel()
+	waitForPendingGeoData(ctx, res)
+	if elapsed := time.Since(start); elapsed > 100*time.Millisecond {
+		t.Fatalf("waitForPendingGeoData returned too slowly after cancel: %v", elapsed)
+	}
+	if !res.geoCanceled.Load() {
+		t.Fatal("geoCanceled = false, want true")
+	}
+	geo := res.Hops[0][0].Geo
+	if geo == nil || geo.Source != timeoutGeoSource {
+		t.Fatalf("hop geo = %+v, want timeout geo", geo)
+	}
+	close(done)
+}
+
+func TestWaitForPendingGeoDataReturnsImmediatelyForCompletedWorkers(t *testing.T) {
+	res := &Result{
+		Hops: [][]Hop{{
+			{
+				Address: &net.IPAddr{IP: net.ParseIP("1.1.1.1")},
+				Geo:     &ipgeo.IPGeoData{CountryEn: "US"},
+			},
+		}},
+	}
+
+	start := time.Now()
+	waitForPendingGeoData(context.Background(), res)
+	if elapsed := time.Since(start); elapsed > 100*time.Millisecond {
+		t.Fatalf("waitForPendingGeoData returned too slowly for completed result: %v", elapsed)
+	}
 }

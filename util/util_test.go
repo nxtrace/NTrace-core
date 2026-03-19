@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"net"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -169,6 +171,22 @@ func (f fakeHostLookupResolver) LookupHost(context.Context, string) ([]string, e
 	return f.hosts, nil
 }
 
+type fakeHostLookupResolverWithContext struct {
+	lookup func(ctx context.Context, host string) ([]string, error)
+}
+
+func (f fakeHostLookupResolverWithContext) LookupHost(ctx context.Context, host string) ([]string, error) {
+	return f.lookup(ctx, host)
+}
+
+type fakeAddrLookupResolver struct {
+	lookup func(ctx context.Context, addr string) ([]string, error)
+}
+
+func (f fakeAddrLookupResolver) LookupAddr(ctx context.Context, addr string) ([]string, error) {
+	return f.lookup(ctx, addr)
+}
+
 func TestLookupIPs_SkipsInvalidValues(t *testing.T) {
 	ips, err := lookupIPs(context.Background(), fakeHostLookupResolver{
 		hosts: []string{"1.1.1.1", "not-an-ip", "2606:4700::1"},
@@ -183,6 +201,95 @@ func TestLookupIPs_ReturnsWrappedError(t *testing.T) {
 	_, err := lookupIPs(context.Background(), fakeHostLookupResolver{err: errors.New("boom")}, "example.com")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "DNS lookup failed")
+}
+
+func TestDomainLookUpWithContextReturnsContextCanceled(t *testing.T) {
+	oldFactory := domainResolverFactory
+	domainResolverFactory = func(string) hostLookupResolver {
+		return fakeHostLookupResolverWithContext{
+			lookup: func(ctx context.Context, host string) ([]string, error) {
+				<-ctx.Done()
+				return nil, ctx.Err()
+			},
+		}
+	}
+	defer func() { domainResolverFactory = oldFactory }()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	start := time.Now()
+	_, err := DomainLookUpWithContext(ctx, "example.com", "all", "", true)
+	require.Error(t, err)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("DomainLookUpWithContext error = %v, want context.Canceled", err)
+	}
+	if elapsed := time.Since(start); elapsed > 100*time.Millisecond {
+		t.Fatalf("DomainLookUpWithContext returned too slowly after cancel: %v", elapsed)
+	}
+}
+
+func TestLookupAddrWithContextUsesCache(t *testing.T) {
+	oldResolver := rdnsResolver
+	rdnsResolver = fakeAddrLookupResolver{
+		lookup: func(context.Context, string) ([]string, error) {
+			t.Fatal("resolver should not be called when cache is warm")
+			return nil, nil
+		},
+	}
+	defer func() { rdnsResolver = oldResolver }()
+
+	rDNSCache = sync.Map{}
+	rDNSCache.Store("1.1.1.1", "cached.example.")
+
+	names, err := LookupAddrWithContext(context.Background(), "1.1.1.1")
+	require.NoError(t, err)
+	require.Equal(t, []string{"cached.example."}, names)
+}
+
+func TestLookupAddrWithContextStoresResultInCache(t *testing.T) {
+	oldResolver := rdnsResolver
+	rdnsResolver = fakeAddrLookupResolver{
+		lookup: func(context.Context, string) ([]string, error) {
+			return []string{"resolver.example."}, nil
+		},
+	}
+	defer func() { rdnsResolver = oldResolver }()
+
+	rDNSCache = sync.Map{}
+
+	names, err := LookupAddrWithContext(context.Background(), "1.1.1.1")
+	require.NoError(t, err)
+	require.Equal(t, []string{"resolver.example."}, names)
+
+	cached, ok := rDNSCache.Load("1.1.1.1")
+	require.True(t, ok)
+	require.Equal(t, "resolver.example.", cached)
+}
+
+func TestLookupAddrWithContextReturnsContextCanceled(t *testing.T) {
+	oldResolver := rdnsResolver
+	rdnsResolver = fakeAddrLookupResolver{
+		lookup: func(ctx context.Context, addr string) ([]string, error) {
+			<-ctx.Done()
+			return nil, ctx.Err()
+		},
+	}
+	defer func() { rdnsResolver = oldResolver }()
+
+	rDNSCache = sync.Map{}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	start := time.Now()
+	_, err := LookupAddrWithContext(ctx, "1.1.1.1")
+	require.Error(t, err)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("LookupAddrWithContext error = %v, want context.Canceled", err)
+	}
+	if elapsed := time.Since(start); elapsed > 100*time.Millisecond {
+		t.Fatalf("LookupAddrWithContext returned too slowly after cancel: %v", elapsed)
+	}
 }
 
 func TestFilterByFamily_PicksFirstMatchingAddress(t *testing.T) {

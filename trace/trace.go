@@ -28,7 +28,6 @@ var (
 	errTracerouteExecuted = errors.New("traceroute already executed")
 	geoCache              = sync.Map{}
 	ipGeoSF               singleflight.Group
-	rDNSSF                singleflight.Group
 )
 
 type Config struct {
@@ -222,7 +221,7 @@ func selectTracer(method Method, config Config) (Tracer, error) {
 	}
 }
 
-func waitForPendingGeoData(result *Result) {
+func waitForPendingGeoData(ctx context.Context, result *Result) {
 	if result == nil {
 		return
 	}
@@ -234,13 +233,18 @@ func waitForPendingGeoData(result *Result) {
 
 	select {
 	case <-done:
+	case <-ctxDoneChan(ctx):
 	case <-time.After(30 * time.Second):
-		// Signal workers to skip updateHop, then mark pending as timed out.
-		result.geoCanceled.Store(true)
-		result.markAllPendingGeoTimeout()
-		// Wait for in-flight workers to finish so Result is stable on return.
-		result.geoWG.Wait()
 	}
+	result.geoCanceled.Store(true)
+	result.markAllPendingGeoTimeout()
+}
+
+func ctxDoneChan(ctx context.Context) <-chan struct{} {
+	if ctx == nil {
+		return nil
+	}
+	return ctx.Done()
 }
 
 func Traceroute(method Method, config Config) (*Result, error) {
@@ -258,7 +262,7 @@ func Traceroute(method Method, config Config) (*Result, error) {
 	if err != nil && errors.Is(err, syscall.EPERM) {
 		err = fmt.Errorf("%w，请使用 root 权限运行", err)
 	}
-	waitForPendingGeoData(result)
+	waitForPendingGeoData(config.Context, result)
 	return result, err
 }
 
@@ -636,11 +640,12 @@ func lookupGeoWithRetry(c Config, cacheKey, query string, dn42 bool) (*ipgeo.IPG
 	return nil, lastErr
 }
 
-func lookupPTR(ipStr string) []string {
-	v, _, _ := rDNSSF.Do(ipStr, func() (any, error) {
-		return util.LookupAddr(ipStr)
-	})
-	if ptrs, _ := v.([]string); len(ptrs) > 0 {
+func lookupPTR(ctx context.Context, ipStr string) []string {
+	ptrs, err := util.LookupAddrWithContext(ctx, ipStr)
+	if err != nil {
+		return nil
+	}
+	if len(ptrs) > 0 {
 		return ptrs
 	}
 	return nil
@@ -652,11 +657,11 @@ func applyPTRResult(h *Hop, ptrs []string) {
 	}
 }
 
-func startPTRLookup(ipStr string) <-chan []string {
+func startPTRLookup(ctx context.Context, ipStr string) <-chan []string {
 	rDNSCh := make(chan []string, 1)
 	go func() {
 		select {
-		case rDNSCh <- lookupPTR(ipStr):
+		case rDNSCh <- lookupPTR(ctx, ipStr):
 		default:
 		}
 	}()
@@ -666,7 +671,7 @@ func startPTRLookup(ipStr string) <-chan []string {
 func (h *Hop) resolveDN42Metadata(c Config, ipStr string) error {
 	combined := ipStr
 	if c.RDNS && h.Hostname == "" {
-		applyPTRResult(h, lookupPTR(ipStr))
+		applyPTRResult(h, lookupPTR(c.Context, ipStr))
 		if h.Hostname != "" {
 			combined = ipStr + "," + h.Hostname
 		}
@@ -758,7 +763,7 @@ func (h *Hop) fetchIPData(c Config) error {
 	rDNSStarted := c.RDNS && h.Hostname == ""
 	var rDNSCh <-chan []string
 	if rDNSStarted {
-		rDNSCh = startPTRLookup(ipStr)
+		rDNSCh = startPTRLookup(c.Context, ipStr)
 	}
 	return h.waitForGeoAndPTR(c, ipGeoCh, rDNSStarted, rDNSCh)
 }

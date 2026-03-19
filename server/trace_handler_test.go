@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -16,7 +17,7 @@ import (
 )
 
 func TestPrepareTrace_DoesNotForceLegacyInterval(t *testing.T) {
-	setup, statusCode, err := prepareTrace(traceRequest{
+	setup, statusCode, err := prepareTrace(context.Background(), traceRequest{
 		Target:       "1.1.1.1",
 		Mode:         "mtr",
 		DataProvider: "disable-geoip",
@@ -114,7 +115,7 @@ func TestNormalizeTraceRequest_RejectsInvalidTOS(t *testing.T) {
 }
 
 func TestPrepareTrace_RejectsUnknownSourceDevice(t *testing.T) {
-	_, statusCode, err := prepareTrace(traceRequest{
+	_, statusCode, err := prepareTrace(context.Background(), traceRequest{
 		Target:       "1.1.1.1",
 		DataProvider: "disable-geoip",
 		SourceDevice: "codex-nonexistent-dev0",
@@ -270,8 +271,11 @@ func TestTraceMapURLForResult_UsesRequestScopedMapHelper(t *testing.T) {
 		}
 		return callback()
 	}
-	traceMapURLFn = func(payload string) (string, error) {
+	traceMapURLFn = func(ctx context.Context, payload string) (string, error) {
 		traceMapCalled = true
+		if ctx == nil {
+			t.Fatal("context should not be nil")
+		}
 		if payload == "" {
 			t.Fatal("payload should not be empty")
 		}
@@ -294,5 +298,29 @@ func TestTraceMapURLForResult_UsesRequestScopedMapHelper(t *testing.T) {
 	}
 	if !traceMapCalled {
 		t.Fatal("expected traceMapURLFn to be called")
+	}
+}
+
+func TestPrepareTraceHonorsCanceledContext(t *testing.T) {
+	oldLookup := traceDomainLookupFn
+	traceDomainLookupFn = func(ctx context.Context, target, ipVersion, dotServer string, disableOutput bool) (net.IP, error) {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	defer func() { traceDomainLookupFn = oldLookup }()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	start := time.Now()
+	_, _, err := prepareTrace(ctx, traceRequest{
+		Target:       "example.com",
+		DataProvider: "disable-geoip",
+	})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("prepareTrace error = %v, want context.Canceled", err)
+	}
+	if elapsed := time.Since(start); elapsed > 100*time.Millisecond {
+		t.Fatalf("prepareTrace returned too slowly after cancel: %v", elapsed)
 	}
 }

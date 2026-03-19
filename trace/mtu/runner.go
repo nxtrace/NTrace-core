@@ -146,7 +146,7 @@ func runStreamWithProber(ctx context.Context, cfg Config, p prober, sink StreamS
 		} else if ttlSawRemote && hop.PMTU == 0 {
 			hop.PMTU = ttlPMTU
 		}
-		if updatedHop, changed := enrichHopMetadata(cfg, hop); changed {
+		if updatedHop, changed := enrichHopMetadata(ctx, cfg, hop); changed {
 			hop = updatedHop
 			emitStreamEvent(sink, StreamEventTTLUpdate, res, hop)
 		}

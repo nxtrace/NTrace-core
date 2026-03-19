@@ -1,6 +1,7 @@
 package tracemap
 
 import (
+	"context"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -16,7 +17,17 @@ import (
 	"github.com/nxtrace/NTrace-core/util"
 )
 
+var getFastIPWithContextFn = util.GetFastIPWithContext
+var traceMapHTTPClientFn = newTraceMapHTTPClient
+
 func GetMapUrl(r string) (string, error) {
+	return GetMapUrlWithContext(context.Background(), r)
+}
+
+func GetMapUrlWithContext(ctx context.Context, r string) (string, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	host, port := util.GetHostAndPort()
 	var fastIp string
 	// 如果 host 是一个 IP 使用默认域名
@@ -28,26 +39,23 @@ func GetMapUrl(r string) (string, error) {
 		host = "api.nxtrace.org"
 	} else {
 		// 默认配置完成，开始寻找最优 IP
-		fastIp = util.GetFastIP(host, port, false)
+		var err error
+		fastIp, err = getFastIPWithContextFn(ctx, host, port, false)
+		if err != nil {
+			return "", err
+		}
 	}
 	u := url.URL{Scheme: "https", Host: fastIp + ":" + port, Path: "/tracemap/api"}
 	tracemapUrl := u.String()
 
-	client := &http.Client{
-		Timeout: 5 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				ServerName: host,
-			},
-		},
-	}
+	client := traceMapHTTPClientFn(host)
 	proxyUrl := util.GetProxy()
 	if proxyUrl != nil {
 		if t, ok := client.Transport.(*http.Transport); ok {
 			t.Proxy = http.ProxyURL(proxyUrl)
 		}
 	}
-	req, err := http.NewRequest("POST", tracemapUrl, strings.NewReader(r))
+	req, err := http.NewRequestWithContext(ctx, "POST", tracemapUrl, strings.NewReader(r))
 	if err != nil {
 		return "", errors.New("an issue occurred while connecting to the tracemap API")
 	}
@@ -56,6 +64,9 @@ func GetMapUrl(r string) (string, error) {
 	req.Header.Add("Content-Type", "application/json")
 	resp, err := client.Do(req)
 	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return "", err
+		}
 		return "", errors.New("an issue occurred while connecting to the tracemap API")
 	}
 	defer func(Body io.ReadCloser) {
@@ -69,6 +80,17 @@ func GetMapUrl(r string) (string, error) {
 		return "", errors.New("an issue occurred while connecting to the tracemap API")
 	}
 	return string(body), nil
+}
+
+func newTraceMapHTTPClient(host string) *http.Client {
+	return &http.Client{
+		Timeout: 5 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				ServerName: host,
+			},
+		},
+	}
 }
 
 func PrintMapUrl(r string) {

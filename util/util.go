@@ -30,6 +30,17 @@ var cachedLocalIPv6 net.IP
 var cachedLocalPort6 int
 var localIPv6Once sync.Once
 
+const dnsLookupTimeout = 5 * time.Second
+
+type addrLookupResolver interface {
+	LookupAddr(ctx context.Context, addr string) ([]string, error)
+}
+
+var (
+	domainResolverFactory                    = resolverFactory
+	rdnsResolver          addrLookupResolver = net.DefaultResolver
+)
+
 func IsIPv6(ip net.IP) bool {
 	return ip != nil && ip.To4() == nil && ip.To16() != nil
 }
@@ -54,6 +65,10 @@ func RandomPortEnabled() bool {
 }
 
 func LookupAddr(addr string) ([]string, error) {
+	return LookupAddrWithContext(context.Background(), addr)
+}
+
+func LookupAddrWithContext(ctx context.Context, addr string) ([]string, error) {
 	// 如果在缓存中找到，直接返回
 	if hostname, ok := rDNSCache.Load(addr); ok {
 		//fmt.Println("hit rDNSCache for", addr, hostname)
@@ -62,8 +77,14 @@ func LookupAddr(addr string) ([]string, error) {
 		}
 	}
 
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	child, cancel := context.WithTimeout(ctx, dnsLookupTimeout)
+	defer cancel()
+
 	// 如果缓存中未找到，进行 DNS 查询
-	names, err := net.LookupAddr(addr)
+	names, err := rdnsResolver.LookupAddr(child, addr)
 	if err != nil {
 		return nil, err
 	}
@@ -330,10 +351,17 @@ func selectResolvedIP(ips []net.IP, disableOutput bool, prompt resolvedIPPrompt)
 }
 
 func DomainLookUp(host string, ipVersion string, dotServer string, disableOutput bool) (net.IP, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	return DomainLookUpWithContext(context.Background(), host, ipVersion, dotServer, disableOutput)
+}
+
+func DomainLookUpWithContext(ctx context.Context, host string, ipVersion string, dotServer string, disableOutput bool) (net.IP, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	child, cancel := context.WithTimeout(ctx, dnsLookupTimeout)
 	defer cancel()
 
-	ips, err := lookupIPs(ctx, resolverFactory(dotServer), host)
+	ips, err := lookupIPs(child, domainResolverFactory(dotServer), host)
 	if err != nil {
 		return nil, err
 	}
