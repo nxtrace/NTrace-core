@@ -36,12 +36,12 @@ func (c *winDivertCapture) Close() error {
 	return err
 }
 
-func (p *socketProber) beginICMPResponseCapture(ctx context.Context, deadline time.Time) (icmpResponseCapture, error) {
+func (p *socketProber) beginICMPResponseCapture(ctx context.Context, _ time.Time) (icmpResponseCapture, error) {
 	handle, err := wd.Open(winDivertMTUFilter(p.ipVersion, p.udp.LocalAddr()), wd.LayerNetwork, 0, wd.FlagSniff|wd.FlagRecvOnly)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrWinDivertUnavailable, err)
 	}
-	probeCtx, cancel := context.WithDeadline(ctx, deadline)
+	probeCtx, cancel := context.WithCancel(ctx)
 	capture := &winDivertCapture{
 		ctx:       probeCtx,
 		cancel:    cancel,
@@ -61,19 +61,25 @@ func (p *socketProber) beginICMPResponseCapture(ctx context.Context, deadline ti
 }
 
 func (p *socketProber) readICMPResponse(ctx context.Context, capture icmpResponseCapture, deadline time.Time, dstPort int, buf []byte) (probeResponse, error) {
-	if resp, err, ok := p.readICMPResponseViaWinDivert(ctx, capture, dstPort); ok {
+	if resp, err, ok := p.readICMPResponseViaWinDivert(ctx, capture, deadline, dstPort); ok {
 		return resp, err
 	}
 	return p.readICMPResponseFromSocket(ctx, deadline, dstPort, buf)
 }
 
-func (p *socketProber) readICMPResponseViaWinDivert(ctx context.Context, capture icmpResponseCapture, dstPort int) (probeResponse, error, bool) {
+func (p *socketProber) readICMPResponseViaWinDivert(ctx context.Context, capture icmpResponseCapture, deadline time.Time, dstPort int) (probeResponse, error, bool) {
 	winCapture, ok := capture.(*winDivertCapture)
 	if !ok || winCapture == nil {
 		return probeResponse{}, nil, false
 	}
+	readCtx, cancel := context.WithDeadline(winCapture.ctx, deadline)
+	defer cancel()
+	go func() {
+		<-readCtx.Done()
+		_ = winCapture.Close()
+	}()
 	for {
-		if err := winCapture.ctx.Err(); err != nil {
+		if err := readCtx.Err(); err != nil {
 			if ctx.Err() != nil {
 				return probeResponse{}, ctx.Err(), true
 			}
@@ -85,7 +91,7 @@ func (p *socketProber) readICMPResponseViaWinDivert(ctx context.Context, capture
 			if ctx.Err() != nil {
 				return probeResponse{}, ctx.Err(), true
 			}
-			if winCapture.ctx.Err() != nil {
+			if readCtx.Err() != nil {
 				return probeResponse{Event: EventTimeout}, nil, true
 			}
 			return probeResponse{}, err, true
@@ -103,17 +109,7 @@ func (p *socketProber) readICMPResponseViaWinDivert(ctx context.Context, capture
 }
 
 func winDivertMTUFilter(ipVersion int, localAddr net.Addr) string {
-	srcIP := util.AddrIP(localAddr)
-	if srcIP == nil {
-		if ipVersion == 6 {
-			return "inbound and icmpv6"
-		}
-		return "inbound and icmp"
-	}
-	if ipVersion == 6 {
-		return "inbound and icmpv6 and ipv6.DstAddr == " + srcIP.String()
-	}
-	return "inbound and icmp and ip.DstAddr == " + srcIP.String()
+	return buildWinDivertMTUFilter(ipVersion, util.AddrIP(localAddr))
 }
 
 func extractWinDivertICMPMessage(ipVersion int, raw []byte) (net.IP, []byte, bool) {

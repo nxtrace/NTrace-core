@@ -149,6 +149,19 @@ func probeDstPort(base int, token uint32) int {
 	return base + offset
 }
 
+func buildWinDivertMTUFilter(ipVersion int, srcIP net.IP) string {
+	if srcIP == nil || srcIP.IsUnspecified() {
+		if ipVersion == 6 {
+			return "inbound and icmpv6"
+		}
+		return "inbound and icmp"
+	}
+	if ipVersion == 6 {
+		return "inbound and icmpv6 and ipv6.DstAddr == " + srcIP.String()
+	}
+	return "inbound and icmp and ip.DstAddr == " + srcIP.String()
+}
+
 type icmpResponseCapture interface {
 	Close() error
 }
