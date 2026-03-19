@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/nxtrace/NTrace-core/util"
@@ -13,19 +14,26 @@ import (
 )
 
 type winDivertCapture struct {
-	ctx    context.Context
-	cancel context.CancelFunc
-	handle wd.Handle
-	buf    []byte
-	addr   wd.Address
+	ctx       context.Context
+	cancel    context.CancelFunc
+	handle    wd.Handle
+	buf       []byte
+	addr      wd.Address
+	closeOnce sync.Once
 }
 
 func (c *winDivertCapture) Close() error {
 	if c == nil {
 		return nil
 	}
-	c.cancel()
-	return c.handle.Close()
+	if c.cancel != nil {
+		c.cancel()
+	}
+	var err error
+	c.closeOnce.Do(func() {
+		err = c.handle.Close()
+	})
+	return err
 }
 
 func (p *socketProber) beginICMPResponseCapture(ctx context.Context, deadline time.Time) (icmpResponseCapture, error) {
@@ -34,20 +42,22 @@ func (p *socketProber) beginICMPResponseCapture(ctx context.Context, deadline ti
 		return nil, fmt.Errorf("%w: %v", ErrWinDivertUnavailable, err)
 	}
 	probeCtx, cancel := context.WithDeadline(ctx, deadline)
+	capture := &winDivertCapture{
+		ctx:       probeCtx,
+		cancel:    cancel,
+		handle:    handle,
+		buf:       make([]byte, 65535),
+		closeOnce: sync.Once{},
+	}
 	go func() {
 		<-probeCtx.Done()
-		_ = handle.Close()
+		_ = capture.Close()
 	}()
 
 	_ = handle.SetParam(wd.QueueLength, 8192)
 	_ = handle.SetParam(wd.QueueTime, 4000)
 
-	return &winDivertCapture{
-		ctx:    probeCtx,
-		cancel: cancel,
-		handle: handle,
-		buf:    make([]byte, 65535),
-	}, nil
+	return capture, nil
 }
 
 func (p *socketProber) readICMPResponse(ctx context.Context, capture icmpResponseCapture, deadline time.Time, dstPort int, buf []byte) (probeResponse, error) {
