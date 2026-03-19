@@ -139,6 +139,7 @@ var (
 
 var wsconn *WsConn
 var wsconnMu sync.RWMutex
+var wsconnNewMu sync.Mutex
 var host, port, fastIp string
 var envToken = util.EnvToken
 var cacheToken string
@@ -304,16 +305,7 @@ func (c *WsConn) keepAlive() {
 
 func (c *WsConn) messageReceiveHandler() {
 	done := c.getDoneChan()
-	defer func() {
-		if done == nil {
-			return
-		}
-		select {
-		case <-done:
-		default:
-			close(done)
-		}
-	}()
+	defer closeSignalChan(done)
 	for {
 		select {
 		case <-c.closeCh:
@@ -577,13 +569,20 @@ func createWsConn() *WsConn {
 }
 
 func New() *WsConn {
+	wsconnNewMu.Lock()
+	defer wsconnNewMu.Unlock()
+
+	newConn := createWsConnFn()
+
 	wsconnMu.Lock()
-	defer wsconnMu.Unlock()
-	if wsconn != nil {
-		wsconn.Close()
+	oldConn := wsconn
+	wsconn = newConn
+	wsconnMu.Unlock()
+
+	if oldConn != nil && oldConn != newConn {
+		oldConn.Close()
 	}
-	wsconn = createWsConnFn()
-	return wsconn
+	return newConn
 }
 
 func GetWsConn() *WsConn {

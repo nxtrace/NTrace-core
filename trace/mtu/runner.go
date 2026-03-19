@@ -100,8 +100,8 @@ func runStreamWithProber(ctx context.Context, cfg Config, p prober, sink StreamS
 					if reportedMTU <= 0 {
 						reportedMTU = res.PathMTU
 					}
-					nextMTU := candidatePathMTU(probeMTU, reportedMTU)
-					if nextMTU == probeMTU {
+					nextMTU, ok := nextLocalProbeMTU(probeMTU, reportedMTU, res.IPVersion)
+					if !ok {
 						return nil, err
 					}
 					if ttl == cfg.BeginHop && probeMTU > res.StartMTU && nextMTU == res.StartMTU {
@@ -235,6 +235,25 @@ func payloadSizeForMTU(pathMTU, ipVersion int) int {
 		return payload
 	}
 	return probePayloadMinLen
+}
+
+func minProbeMTU(ipVersion int) int {
+	if ipVersion == 6 {
+		return 48 + probePayloadMinLen
+	}
+	return 28 + probePayloadMinLen
+}
+
+func nextLocalProbeMTU(currentProbeMTU, reportedMTU, ipVersion int) (int, bool) {
+	nextMTU := candidatePathMTU(currentProbeMTU, reportedMTU)
+	if nextMTU < currentProbeMTU {
+		return nextMTU, true
+	}
+	// Some platforms report EMSGSIZE before exposing a smaller socket MTU.
+	if currentProbeMTU <= minProbeMTU(ipVersion) {
+		return 0, false
+	}
+	return currentProbeMTU - 1, true
 }
 
 func candidatePathMTU(current, discovered int) int {
