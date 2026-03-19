@@ -11,17 +11,15 @@ import (
 func TestGetFastIPWithContextReturnsCanceled(t *testing.T) {
 	oldLookup := fastIPLookupHostFn
 	oldCheck := fastIPCheckLatency
-	oldCache := FastIpCache
-	oldMeta := FastIPMetaCache
+	oldCache := GetFastIPCache()
+	oldMeta := GetFastIPMetaCache()
 	defer func() {
 		fastIPLookupHostFn = oldLookup
 		fastIPCheckLatency = oldCheck
-		FastIpCache = oldCache
-		FastIPMetaCache = oldMeta
+		SetFastIPCacheState(oldCache, oldMeta)
 	}()
 
-	FastIpCache = ""
-	FastIPMetaCache = FastIPMeta{}
+	SetFastIPCacheState("", FastIPMeta{})
 	fastIPLookupHostFn = func(ctx context.Context, host string) ([]net.IP, error) {
 		return []net.IP{net.ParseIP("1.1.1.1")}, nil
 	}

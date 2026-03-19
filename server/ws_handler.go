@@ -55,6 +55,13 @@ func sanitizeLogParam(s string) string {
 	return b.String()
 }
 
+func newWSSessionContext(parent context.Context) (context.Context, context.CancelFunc) {
+	if parent == nil {
+		parent = context.Background()
+	}
+	return context.WithCancel(parent)
+}
+
 type wsEnvelope struct {
 	Type   string      `json:"type"`
 	Data   interface{} `json:"data,omitempty"`
@@ -209,7 +216,7 @@ func traceWebsocketHandler(c *gin.Context) {
 		return
 	}
 
-	sessionCtx, cancel := context.WithCancel(context.Background())
+	sessionCtx, cancel := newWSSessionContext(c.Request.Context())
 	defer cancel()
 	var sessionRef atomic.Pointer[wsTraceSession]
 	go func() {

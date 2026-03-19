@@ -60,3 +60,34 @@ func TestGetTokenWithContextReturnsCanceled(t *testing.T) {
 		t.Fatal("GetTokenWithContext did not return promptly after cancel")
 	}
 }
+
+func TestGetTokenWithContextClampsRequestTimeoutToContextDeadline(t *testing.T) {
+	oldRetTokenFn := retTokenFn
+	defer func() { retTokenFn = oldRetTokenFn }()
+
+	gotTimeout := make(chan time.Duration, 1)
+	retTokenFn = func(params *powclient.GetTokenParams) (string, error) {
+		select {
+		case gotTimeout <- params.TimeoutSec:
+		default:
+		}
+		return "", errors.New("boom")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	defer cancel()
+
+	_, _ = GetTokenWithContext(ctx, "example.com", "example.com", "443")
+
+	select {
+	case timeout := <-gotTimeout:
+		if timeout <= 0 {
+			t.Fatalf("retToken timeout = %v, want > 0", timeout)
+		}
+		if timeout > 150*time.Millisecond {
+			t.Fatalf("retToken timeout = %v, want <= 150ms", timeout)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("retTokenFn was not called")
+	}
+}
