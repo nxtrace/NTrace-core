@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"os"
 	"os/signal"
 	"strings"
@@ -228,41 +227,14 @@ func writeMTRRawRuntimeError(w io.Writer, err error) {
 // resolveSrcIP 按优先级解析源 IP：--source > --dev 推导 > udp dial fallback。
 // 保证与目标 IP 族匹配，失败时返回 "unknown"。
 func resolveSrcIP(conf trace.Config) string {
-	// 1. --source 已指定
-	if conf.SrcAddr != "" {
-		return conf.SrcAddr
-	}
-
-	// 2. --dev 推导（已在 cmd.go 中赋值到 conf.SrcAddr，这里做兜底）
 	sourceDevice := conf.SourceDevice
 	if sourceDevice == "" {
 		sourceDevice = util.SrcDev
 	}
-	if sourceDevice != "" {
-		if dev, err := net.InterfaceByName(sourceDevice); err == nil {
-			if addrs, err2 := dev.Addrs(); err2 == nil {
-				for _, addr := range addrs {
-					if ipNet, ok := addr.(*net.IPNet); ok {
-						if (ipNet.IP.To4() == nil) == (conf.DstIP.To4() == nil) {
-							return ipNet.IP.String()
-						}
-					}
-				}
-			}
-		}
+	resolved, _, err := resolveConfiguredSrcAddr(conf.DstIP, conf.SrcAddr, sourceDevice)
+	if err == nil && strings.TrimSpace(resolved) != "" {
+		return resolved
 	}
-
-	// 3. udp dial fallback
-	if conf.DstIP != nil {
-		if c, err := net.Dial("udp", net.JoinHostPort(conf.DstIP.String(), "80")); err == nil {
-			if addr, ok := c.LocalAddr().(*net.UDPAddr); ok {
-				c.Close()
-				return addr.IP.String()
-			}
-			c.Close()
-		}
-	}
-
 	return "unknown"
 }
 

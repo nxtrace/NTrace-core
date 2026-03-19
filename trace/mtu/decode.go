@@ -148,12 +148,54 @@ func parseEmbeddedUDPPacket(data []byte, ipVersion int) (embeddedUDPPacket, bool
 		if len(data) < 48 || data[0]>>4 != 6 {
 			return embeddedUDPPacket{}, false
 		}
-		if data[6] != 17 {
-			return embeddedUDPPacket{}, false
-		}
-		return parseEmbeddedUDPFromOffsets(data, 40, net.IP(data[24:40]))
+		return parseEmbeddedIPv6UDP(data)
 	default:
 		return embeddedUDPPacket{}, false
+	}
+}
+
+func parseEmbeddedIPv6UDP(data []byte) (embeddedUDPPacket, bool) {
+	const ipv6HeaderLen = 40
+
+	nextHeader := data[6]
+	offset := ipv6HeaderLen
+	dstIP := net.IP(data[24:40])
+
+	for {
+		switch nextHeader {
+		case 17:
+			return parseEmbeddedUDPFromOffsets(data, offset, dstIP)
+		case 0, 43, 60:
+			if len(data) < offset+2 {
+				return embeddedUDPPacket{}, false
+			}
+			nextHeader = data[offset]
+			hdrLen := (int(data[offset+1]) + 1) * 8
+			if hdrLen < 8 || len(data) < offset+hdrLen {
+				return embeddedUDPPacket{}, false
+			}
+			offset += hdrLen
+		case 44:
+			if len(data) < offset+8 {
+				return embeddedUDPPacket{}, false
+			}
+			nextHeader = data[offset]
+			offset += 8
+		case 51:
+			if len(data) < offset+2 {
+				return embeddedUDPPacket{}, false
+			}
+			nextHeader = data[offset]
+			hdrLen := (int(data[offset+1]) + 2) * 4
+			if hdrLen < 8 || len(data) < offset+hdrLen {
+				return embeddedUDPPacket{}, false
+			}
+			offset += hdrLen
+		case 50:
+			return embeddedUDPPacket{}, false
+		default:
+			return embeddedUDPPacket{}, false
+		}
 	}
 }
 

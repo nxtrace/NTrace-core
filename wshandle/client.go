@@ -1,6 +1,7 @@
 package wshandle
 
 import (
+	"context"
 	"crypto/tls"
 	"errors"
 	"log"
@@ -36,6 +37,7 @@ type wsWriteJob struct {
 const (
 	wsClientWriteQueueSize = 1024
 	wsClientWriteTimeout   = 5 * time.Second
+	wsClientDialTimeout    = 5 * time.Second
 )
 
 type WsConn struct {
@@ -347,6 +349,15 @@ func apiServerErrorMessage(ip string) string {
 	return `{"ip":"` + ip + `", "asnumber":"API Server Error"}`
 }
 
+func (c *WsConn) trySendReceiveMessage(msg string) {
+	select {
+	case c.MsgReceiveCh <- msg:
+	case <-c.closeCh:
+	default:
+		log.Println("wshandle: dropping queued receive message")
+	}
+}
+
 func (c *WsConn) waitForNextDoneChan(doneCh chan struct{}) chan struct{} {
 	for {
 		newDone := c.getDoneChan()
@@ -363,7 +374,7 @@ func (c *WsConn) waitForNextDoneChan(doneCh chan struct{}) chan struct{} {
 
 func (c *WsConn) sendQueuedMessage(msg string) {
 	if !c.IsConnected() {
-		c.MsgReceiveCh <- apiServerErrorMessage(msg)
+		c.trySendReceiveMessage(apiServerErrorMessage(msg))
 		return
 	}
 
@@ -373,7 +384,7 @@ func (c *WsConn) sendQueuedMessage(msg string) {
 	}); err != nil {
 		log.Println("write:", err)
 		c.setConnected(false)
-		c.MsgReceiveCh <- apiServerErrorMessage(msg)
+		c.trySendReceiveMessage(apiServerErrorMessage(msg))
 	}
 }
 
@@ -467,14 +478,15 @@ func (c *WsConn) recreateWsConn() {
 	if proxyUrl != nil {
 		dialer.Proxy = http.ProxyURL(proxyUrl)
 	}
-	ws, _, err := dialer.Dial(u.String(), requestHeader)
+	ctx, cancel := context.WithTimeout(context.Background(), wsClientDialTimeout)
+	ws, _, err := dialer.DialContext(ctx, u.String(), requestHeader)
+	cancel()
 	if c.isClosed() {
 		if ws != nil {
 			_ = ws.Close()
 		}
 		return
 	}
-	c.replaceConn(ws)
 	if err != nil {
 		log.Println("dial:", err)
 		// <-time.After(time.Second * 1)
@@ -484,7 +496,8 @@ func (c *WsConn) recreateWsConn() {
 		//fmt.Println("重连失败", cacheTokenFailedTimes, "次")
 		return
 	}
-	c.setConnectionState(err == nil, false)
+	c.replaceConn(ws)
+	c.setConnectionState(true, false)
 
 	c.setDoneChan(make(chan struct{}))
 	c.startLoop(c.messageReceiveHandler)
@@ -545,7 +558,9 @@ func createWsConn() *WsConn {
 	u := url.URL{Scheme: "wss", Host: formatHostPort(fastIp, port), Path: "/v3/ipGeoWs"}
 	// log.Printf("connecting to %s", u.String())
 
-	c, _, err := dialer.Dial(u.String(), requestHeader)
+	ctx, cancel := context.WithTimeout(context.Background(), wsClientDialTimeout)
+	c, _, err := dialer.DialContext(ctx, u.String(), requestHeader)
+	cancel()
 
 	ws := newWsConn(c, interrupt)
 	ws.setConnectionState(err == nil, false)

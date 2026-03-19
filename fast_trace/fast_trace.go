@@ -265,11 +265,15 @@ func configureFastTraceRealtimePrinter(conf *trace.Config, outputPath, header st
 
 	fp, err := tracelog.OpenFile(outputPath)
 	if err != nil {
-		return nil, err
+		log.Printf("fast trace output open failed for %q: %v; falling back to stdout", outputPath, err)
+		conf.RealtimePrinter = printer.RealtimePrinter
+		return nil, nil
 	}
 	if err := tracelog.WriteHeader(fp, header); err != nil {
 		_ = fp.Close()
-		return nil, err
+		log.Printf("fast trace output header write failed for %q: %v; falling back to stdout", outputPath, err)
+		conf.RealtimePrinter = printer.RealtimePrinter
+		return nil, nil
 	}
 	conf.RealtimePrinter = tracelog.NewRealtimePrinter(io.MultiWriter(os.Stdout, fp))
 	return fp.Close, nil
@@ -286,6 +290,7 @@ func runFileTraceTarget(params ParamsFastTrace, tracerouteMethod trace.Method, i
 	header := fmt.Sprintf("『%s』\ntraceroute to %s, %d hops max, %s, %s mode\n", ip.Desc, ip.Ip, params.MaxHops, trace.FormatPacketSizeLabel(displayPacketSize), strings.ToUpper(string(tracerouteMethod)))
 	cleanup, err := configureFastTraceRealtimePrinter(&conf, params.OutputPath, header)
 	if err != nil {
+		log.Println(err)
 		return
 	}
 	if cleanup != nil {
@@ -297,7 +302,8 @@ func runFileTraceTarget(params ParamsFastTrace, tracerouteMethod trace.Method, i
 	}
 
 	if _, err := trace.Traceroute(tracerouteMethod, conf); err != nil {
-		log.Fatalln(err)
+		log.Println(err)
+		return
 	}
 	fmt.Println()
 }
@@ -350,6 +356,7 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 		location, ispCollection.ISPName, ispCollection.IP, f.ParamsFastTrace.MaxHops, trace.FormatPacketSizeLabel(displayPacketSize), strings.ToUpper(string(f.TracerouteMethod)))
 	cleanup, err := configureFastTraceRealtimePrinter(&conf, f.ParamsFastTrace.OutputPath, header)
 	if err != nil {
+		log.Println(err)
 		return
 	}
 	if cleanup != nil {
@@ -363,7 +370,8 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 	_, err = trace.Traceroute(f.TracerouteMethod, conf)
 
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
+		return
 	}
 	fmt.Println()
 }

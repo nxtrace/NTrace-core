@@ -69,23 +69,32 @@ func buildMTUConflictFlags(
 }
 
 func resolveMTUSourceIP(dstIP net.IP, srcAddr string) (net.IP, error) {
-	var srcIP net.IP
 	if trimmed := strings.TrimSpace(srcAddr); trimmed != "" {
-		srcIP = net.ParseIP(trimmed)
+		srcIP := net.ParseIP(trimmed)
 		if srcIP == nil {
 			return nil, fmt.Errorf("invalid source IP %q", srcAddr)
 		}
+		if util.IsIPv6(dstIP) {
+			if !util.IsIPv6(srcIP) {
+				return nil, fmt.Errorf("source IP %q does not match IPv6 destination %s", srcAddr, dstIP)
+			}
+			return srcIP, nil
+		}
+		if srcIP.To4() == nil {
+			return nil, fmt.Errorf("source IP %q does not match IPv4 destination %s", srcAddr, dstIP)
+		}
+		return srcIP.To4(), nil
 	}
 
 	if util.IsIPv6(dstIP) {
-		resolved, _ := util.LocalIPPortv6(dstIP, srcIP, "udp6")
+		resolved, _ := util.LocalIPPortv6(dstIP, nil, "udp6")
 		if resolved == nil {
 			return nil, fmt.Errorf("unable to determine IPv6 source address for %s", dstIP)
 		}
 		return resolved, nil
 	}
 
-	resolved, _ := util.LocalIPPort(dstIP, srcIP, "udp")
+	resolved, _ := util.LocalIPPort(dstIP, nil, "udp")
 	if resolved == nil {
 		return nil, fmt.Errorf("unable to determine IPv4 source address for %s", dstIP)
 	}
