@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -25,7 +26,8 @@ import (
 
 var traceMu sync.Mutex
 var leoConnMu sync.Mutex
-var traceMapURLFn = tracemap.GetMapUrl
+var traceMapURLFn = tracemap.GetMapUrlWithContext
+var traceDomainLookupFn = util.DomainLookUpWithContext
 var withTraceMapScopeFn = func(setup *traceExecution, callback func() (string, error)) (string, error) {
 	return withTraceGeoDNSScope(setup, callback)
 }
@@ -209,7 +211,7 @@ func resolveTraceIPVersion(req traceRequest) string {
 	}
 }
 
-func prepareTrace(req traceRequest) (*traceExecution, int, error) {
+func prepareTrace(ctx context.Context, req traceRequest) (*traceExecution, int, error) {
 	exec := &traceExecution{
 		Req: req,
 	}
@@ -232,7 +234,7 @@ func prepareTrace(req traceRequest) (*traceExecution, int, error) {
 	exec.Method = protocol.method
 
 	dataProvider, needsLeoWS := resolveTraceDataProvider(&exec.Req)
-	ip, err := util.DomainLookUp(target, resolveTraceIPVersion(exec.Req), strings.ToLower(exec.Req.DotServer), true)
+	ip, err := traceDomainLookupFn(ctx, target, resolveTraceIPVersion(exec.Req), strings.ToLower(exec.Req.DotServer), true)
 	if err != nil {
 		return nil, http.StatusInternalServerError, err
 	}
@@ -245,6 +247,7 @@ func prepareTrace(req traceRequest) (*traceExecution, int, error) {
 	if err != nil {
 		return nil, http.StatusBadRequest, err
 	}
+	exec.Config.Context = ctx
 
 	return exec, 0, nil
 }
@@ -262,8 +265,11 @@ func traceHandler(c *gin.Context) {
 		return
 	}
 
-	setup, statusCode, err := prepareTrace(req)
+	setup, statusCode, err := prepareTrace(c.Request.Context(), req)
 	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return
+		}
 		if statusCode == 0 {
 			statusCode = 500
 		}
@@ -298,6 +304,9 @@ func traceHandler(c *gin.Context) {
 	})
 	duration := time.Since(start)
 	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return
+		}
 		log.Printf("[deploy] trace failed target=%s error=%v", sanitizeLogParam(setup.Target), err)
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
@@ -462,7 +471,11 @@ func traceMapURLForResult(setup *traceExecution, res *trace.Result) string {
 		return ""
 	}
 	url, err := withTraceMapScopeFn(setup, func() (string, error) {
-		return traceMapURLFn(string(payload))
+		ctx := setup.Config.Context
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		return traceMapURLFn(ctx, string(payload))
 	})
 	if err != nil {
 		return ""

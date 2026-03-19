@@ -1,15 +1,39 @@
 package cmd
 
 import (
+	"context"
+	"errors"
 	"net"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/akamensky/argparse"
 	"github.com/nxtrace/NTrace-core/trace"
 	"github.com/nxtrace/NTrace-core/tracelog"
 	"github.com/nxtrace/NTrace-core/util"
 )
+
+func TestLookupTargetIPHonorsContextCancellation(t *testing.T) {
+	oldLookup := domainLookupFn
+	domainLookupFn = func(ctx context.Context, host, ipVersion, dotServer string, disableOutput bool) (net.IP, error) {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	defer func() { domainLookupFn = oldLookup }()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	start := time.Now()
+	_, err := lookupTargetIP(ctx, "example.com", false, false, "", true)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("lookupTargetIP error = %v, want context.Canceled", err)
+	}
+	if elapsed := time.Since(start); elapsed > 100*time.Millisecond {
+		t.Fatalf("lookupTargetIP returned too slowly after cancel: %v", elapsed)
+	}
+}
 
 func TestRegisterGlobalpingFlagWithAvailability_DisabledStillParses(t *testing.T) {
 	parser := argparse.NewParser("ntr", "")

@@ -58,6 +58,7 @@ type WsConn struct {
 	writeStop    chan struct{}   // signals writeLoop to exit
 	closeCh      chan struct{}   // signals background loops to exit
 	closed       bool
+	baseCtx      context.Context
 }
 
 func (c *WsConn) getConn() *websocket.Conn {
@@ -147,6 +148,8 @@ var envToken = util.EnvToken
 var cacheToken string
 var cacheTokenFailedTimes int
 var createWsConnFn = createWsConn
+var wsGetFastIPFn = util.GetFastIPWithContext
+var wsGetTokenFn = pow.GetTokenWithContext
 
 func newWsConn(conn *websocket.Conn, interrupt chan os.Signal) *WsConn {
 	c := &WsConn{
@@ -155,9 +158,39 @@ func newWsConn(conn *websocket.Conn, interrupt chan os.Signal) *WsConn {
 		MsgReceiveCh: make(chan string, 10),
 		Interrupt:    interrupt,
 		closeCh:      make(chan struct{}),
+		baseCtx:      context.Background(),
 	}
 	c.initWriteLoop()
 	return c
+}
+
+func normalizeContext(ctx context.Context) context.Context {
+	if ctx == nil {
+		return context.Background()
+	}
+	return ctx
+}
+
+func deriveOperationContext(parent context.Context, stopCh <-chan struct{}, timeout time.Duration) (context.Context, context.CancelFunc) {
+	base := normalizeContext(parent)
+	linkedCtx, linkedCancel := context.WithCancel(base)
+	if stopCh != nil {
+		go func() {
+			select {
+			case <-stopCh:
+				linkedCancel()
+			case <-linkedCtx.Done():
+			}
+		}()
+	}
+	if timeout <= 0 {
+		return linkedCtx, linkedCancel
+	}
+	ctx, cancel := context.WithTimeout(linkedCtx, timeout)
+	return ctx, func() {
+		cancel()
+		linkedCancel()
+	}
 }
 
 func (c *WsConn) startLoop(fn func()) {
@@ -432,7 +465,17 @@ func (c *WsConn) recreateWsConn() {
 	// 尝试重新连线
 	if host != "" && net.ParseIP(host) == nil {
 		// 刷新一次最优 IP，防止旧 IP 已失效
-		fastIp = util.GetFastIP(host, port, true)
+		fastIPCtx, cancelFastIP := deriveOperationContext(c.baseCtx, c.closeCh, 0)
+		refreshedFastIP, err := wsGetFastIPFn(fastIPCtx, host, port, true)
+		cancelFastIP()
+		if err != nil {
+			if !errors.Is(err, context.Canceled) {
+				log.Printf("fast ip refresh failed: %v", err)
+			}
+			c.setConnectionState(false, false)
+			return
+		}
+		fastIp = refreshedFastIP
 	}
 	u := url.URL{Scheme: "wss", Host: formatHostPort(fastIp, port), Path: "/v3/ipGeoWs"}
 	// log.Printf("connecting to %s", u.String())
@@ -442,16 +485,20 @@ func (c *WsConn) recreateWsConn() {
 		// 无环境变量 token
 		if cacheToken == "" {
 			// 无cacheToken, 重新获取 token
+			tokenCtx, cancelToken := deriveOperationContext(c.baseCtx, c.closeCh, 0)
 			if util.GetPowProvider() == "" {
-				jwtToken, err = pow.GetToken(fastIp, host, port)
+				jwtToken, err = wsGetTokenFn(tokenCtx, fastIp, host, port)
 			} else {
-				jwtToken, err = pow.GetToken(util.GetPowProvider(), util.GetPowProvider(), port)
+				jwtToken, err = wsGetTokenFn(tokenCtx, util.GetPowProvider(), util.GetPowProvider(), port)
 			}
+			cancelToken()
 			if err != nil {
 				if util.EnvDevMode {
 					panic(err)
 				}
-				log.Printf("pow token fetch failed: %v", err)
+				if !errors.Is(err, context.Canceled) {
+					log.Printf("pow token fetch failed: %v", err)
+				}
 				cacheToken = ""
 				cacheTokenFailedTimes++
 				c.setConnectionState(false, false)
@@ -478,7 +525,7 @@ func (c *WsConn) recreateWsConn() {
 	if proxyUrl != nil {
 		dialer.Proxy = http.ProxyURL(proxyUrl)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), wsClientDialTimeout)
+	ctx, cancel := deriveOperationContext(c.baseCtx, c.closeCh, wsClientDialTimeout)
 	ws, _, err := dialer.DialContext(ctx, u.String(), requestHeader)
 	cancel()
 	if c.isClosed() {
@@ -503,12 +550,13 @@ func (c *WsConn) recreateWsConn() {
 	c.startLoop(c.messageReceiveHandler)
 }
 
-func createWsConn() *WsConn {
+func createWsConn(ctx context.Context) *WsConn {
 	proxyUrl := util.GetProxy()
 	//fmt.Println("正在连接 WS")
 	// 设置终端中断通道
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
+	ctx = normalizeContext(ctx)
 	host, port = util.GetHostAndPort()
 	// 如果 host 是一个 IP 使用默认域名
 	if valid := net.ParseIP(host); valid != nil {
@@ -516,15 +564,29 @@ func createWsConn() *WsConn {
 		host = "api.nxtrace.org"
 	} else {
 		// 默认配置完成，开始寻找最优 IP
-		fastIp = util.GetFastIP(host, port, true)
+		refreshedFastIP, err := wsGetFastIPFn(ctx, host, port, true)
+		if err != nil {
+			if util.EnvDevMode {
+				panic(err)
+			}
+			log.Printf("fast ip probe failed: %v", err)
+			ws := newWsConn(nil, interrupt)
+			ws.baseCtx = ctx
+			ws.setDoneChan(make(chan struct{}))
+			ws.setConnectionState(false, false)
+			ws.startLoop(ws.keepAlive)
+			ws.startLoop(ws.messageSendHandler)
+			return ws
+		}
+		fastIp = refreshedFastIP
 	}
 	jwtToken, ua := envToken, []string{"Privileged Client"}
 	err := error(nil)
 	if envToken == "" {
 		if util.GetPowProvider() == "" {
-			jwtToken, err = pow.GetToken(fastIp, host, port)
+			jwtToken, err = wsGetTokenFn(ctx, fastIp, host, port)
 		} else {
-			jwtToken, err = pow.GetToken(util.GetPowProvider(), util.GetPowProvider(), port)
+			jwtToken, err = wsGetTokenFn(ctx, util.GetPowProvider(), util.GetPowProvider(), port)
 		}
 		if err != nil {
 			if util.EnvDevMode {
@@ -558,11 +620,12 @@ func createWsConn() *WsConn {
 	u := url.URL{Scheme: "wss", Host: formatHostPort(fastIp, port), Path: "/v3/ipGeoWs"}
 	// log.Printf("connecting to %s", u.String())
 
-	ctx, cancel := context.WithTimeout(context.Background(), wsClientDialTimeout)
-	c, _, err := dialer.DialContext(ctx, u.String(), requestHeader)
+	dialCtx, cancel := deriveOperationContext(ctx, nil, wsClientDialTimeout)
+	c, _, err := dialer.DialContext(dialCtx, u.String(), requestHeader)
 	cancel()
 
 	ws := newWsConn(c, interrupt)
+	ws.baseCtx = ctx
 	ws.setConnectionState(err == nil, false)
 
 	if err != nil {
@@ -583,11 +646,14 @@ func createWsConn() *WsConn {
 	return ws
 }
 
-func New() *WsConn {
+func NewWithContext(ctx context.Context) *WsConn {
 	wsconnNewMu.Lock()
 	defer wsconnNewMu.Unlock()
 
-	newConn := createWsConnFn()
+	newConn := createWsConnFn(ctx)
+	if newConn != nil {
+		newConn.baseCtx = normalizeContext(ctx)
+	}
 
 	wsconnMu.Lock()
 	oldConn := wsconn
@@ -598,6 +664,10 @@ func New() *WsConn {
 		oldConn.Close()
 	}
 	return newConn
+}
+
+func New() *WsConn {
+	return NewWithContext(context.Background())
 }
 
 func GetWsConn() *WsConn {

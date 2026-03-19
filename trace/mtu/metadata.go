@@ -1,6 +1,7 @@
 package mtu
 
 import (
+	"context"
 	"reflect"
 	"strings"
 	"time"
@@ -11,28 +12,31 @@ import (
 
 const mtuTimeoutGeoSource = "timeout"
 
-var mtuLookupAddr = util.LookupAddr
+var mtuLookupAddr = util.LookupAddrWithContext
 
 type mtuGeoLookupResult struct {
 	geo *ipgeo.IPGeoData
 	err error
 }
 
-func enrichHopMetadata(cfg Config, hop Hop) (Hop, bool) {
+func enrichHopMetadata(ctx context.Context, cfg Config, hop Hop) (Hop, bool) {
 	if !shouldFetchHopMetadata(cfg, hop) {
 		return hop, false
 	}
 
 	updated := hop
+	if ctx != nil && ctx.Err() != nil {
+		return updated, false
+	}
 	ipStr := strings.TrimSpace(hop.IP)
 	geoCh := startMTUGeoLookup(cfg, ipStr)
 	rDNSStarted := cfg.RDNS && updated.Hostname == ""
 	var rDNSCh <-chan []string
 	if rDNSStarted {
-		rDNSCh = startMTUPTRLookup(ipStr)
+		rDNSCh = startMTUPTRLookup(ctx, ipStr)
 	}
 
-	updated = waitForMTUGeoAndPTR(cfg, updated, geoCh, rDNSStarted, rDNSCh)
+	updated = waitForMTUGeoAndPTR(ctx, cfg, updated, geoCh, rDNSStarted, rDNSCh)
 	return updated, !reflect.DeepEqual(updated, hop)
 }
 
@@ -43,10 +47,10 @@ func shouldFetchHopMetadata(cfg Config, hop Hop) bool {
 	return cfg.IPGeoSource != nil || cfg.RDNS
 }
 
-func startMTUPTRLookup(ipStr string) <-chan []string {
+func startMTUPTRLookup(ctx context.Context, ipStr string) <-chan []string {
 	ch := make(chan []string, 1)
 	go func() {
-		ptrs, err := mtuLookupAddr(ipStr)
+		ptrs, err := mtuLookupAddr(ctx, ipStr)
 		if err != nil {
 			ch <- nil
 			return
@@ -89,7 +93,7 @@ func startMTUGeoLookup(cfg Config, ipStr string) <-chan mtuGeoLookupResult {
 	return ch
 }
 
-func waitForMTUGeoAndPTR(cfg Config, hop Hop, geoCh <-chan mtuGeoLookupResult, rDNSStarted bool, rDNSCh <-chan []string) Hop {
+func waitForMTUGeoAndPTR(ctx context.Context, cfg Config, hop Hop, geoCh <-chan mtuGeoLookupResult, rDNSStarted bool, rDNSCh <-chan []string) Hop {
 	applyGeo := func(res mtuGeoLookupResult) {
 		if res.geo != nil {
 			hop.Geo = res.geo
@@ -102,17 +106,26 @@ func waitForMTUGeoAndPTR(cfg Config, hop Hop, geoCh <-chan mtuGeoLookupResult, r
 			case ptrs := <-rDNSCh:
 				applyMTUPTRResult(&hop, ptrs)
 			case <-time.After(time.Second):
+			case <-ctxDoneChan(ctx):
 			}
 		}
 		if geoCh != nil {
-			applyGeo(<-geoCh)
+			select {
+			case res := <-geoCh:
+				applyGeo(res)
+			case <-ctxDoneChan(ctx):
+			}
 		}
 		return hop
 	}
 
 	if rDNSStarted {
 		if geoCh == nil {
-			applyMTUPTRResult(&hop, <-rDNSCh)
+			select {
+			case ptrs := <-rDNSCh:
+				applyMTUPTRResult(&hop, ptrs)
+			case <-ctxDoneChan(ctx):
+			}
 			return hop
 		}
 		select {
@@ -121,15 +134,32 @@ func waitForMTUGeoAndPTR(cfg Config, hop Hop, geoCh <-chan mtuGeoLookupResult, r
 			return hop
 		case ptrs := <-rDNSCh:
 			applyMTUPTRResult(&hop, ptrs)
-			applyGeo(<-geoCh)
+			select {
+			case res := <-geoCh:
+				applyGeo(res)
+			case <-ctxDoneChan(ctx):
+			}
+			return hop
+		case <-ctxDoneChan(ctx):
 			return hop
 		}
 	}
 
 	if geoCh != nil {
-		applyGeo(<-geoCh)
+		select {
+		case res := <-geoCh:
+			applyGeo(res)
+		case <-ctxDoneChan(ctx):
+		}
 	}
 	return hop
+}
+
+func ctxDoneChan(ctx context.Context) <-chan struct{} {
+	if ctx == nil {
+		return nil
+	}
+	return ctx.Done()
 }
 
 func normalizeMTUGeoData(geo *ipgeo.IPGeoData) *ipgeo.IPGeoData {

@@ -1,6 +1,7 @@
 package wshandle
 
 import (
+	"context"
 	"errors"
 	"os"
 	"testing"
@@ -68,7 +69,7 @@ func TestNewClosesPreviousGlobalWsConn(t *testing.T) {
 	wsconn = oldConn
 	wsconnMu.Unlock()
 
-	createWsConnFn = func() *WsConn {
+	createWsConnFn = func(context.Context) *WsConn {
 		return newStartedTestWsConn()
 	}
 
@@ -109,7 +110,7 @@ func TestGetWsConnDoesNotBlockWhileNewClosesPreviousConn(t *testing.T) {
 
 	newConn := newStartedTestWsConn()
 	defer newConn.Close()
-	createWsConnFn = func() *WsConn {
+	createWsConnFn = func(context.Context) *WsConn {
 		return newConn
 	}
 
@@ -216,5 +217,76 @@ func TestMessageReceiveHandlerCloseRaceDoesNotPanic(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Fatal("Close hung while messageReceiveHandler was exiting")
 		}
+	}
+}
+
+func TestCreateWsConnHonorsCanceledContextDuringFastIP(t *testing.T) {
+	oldFastIPFn := wsGetFastIPFn
+	defer func() { wsGetFastIPFn = oldFastIPFn }()
+
+	started := make(chan struct{})
+	wsGetFastIPFn = func(ctx context.Context, domain string, port string, enableOutput bool) (string, error) {
+		close(started)
+		<-ctx.Done()
+		return "", ctx.Err()
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan *WsConn, 1)
+	go func() {
+		done <- createWsConn(ctx)
+	}()
+
+	<-started
+	cancel()
+
+	select {
+	case conn := <-done:
+		if conn == nil {
+			t.Fatal("createWsConn returned nil")
+		}
+		defer conn.Close()
+		if conn.IsConnected() {
+			t.Fatal("connection should not be connected after canceled startup")
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("createWsConn did not return promptly after cancel")
+	}
+}
+
+func TestRecreateWsConnCloseCancelsFastIP(t *testing.T) {
+	oldFastIPFn := wsGetFastIPFn
+	oldHost, oldPort := host, port
+	defer func() {
+		wsGetFastIPFn = oldFastIPFn
+		host, port = oldHost, oldPort
+	}()
+
+	started := make(chan struct{})
+	wsGetFastIPFn = func(ctx context.Context, domain string, port string, enableOutput bool) (string, error) {
+		close(started)
+		<-ctx.Done()
+		return "", ctx.Err()
+	}
+
+	host = "example.com"
+	port = "443"
+
+	conn := newStartedTestWsConn()
+	defer conn.Close()
+
+	done := make(chan struct{})
+	go func() {
+		conn.recreateWsConn()
+		close(done)
+	}()
+
+	<-started
+	conn.Close()
+
+	select {
+	case <-done:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("recreateWsConn did not stop promptly after Close")
 	}
 }

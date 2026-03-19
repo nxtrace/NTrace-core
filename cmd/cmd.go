@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/akamensky/argparse"
@@ -43,6 +44,10 @@ type listenInfo struct {
 const (
 	defaultPacketIntervalMs        = 50
 	defaultTracerouteTTLIntervalMs = 300
+)
+
+var (
+	domainLookupFn = util.DomainLookUpWithContext
 )
 
 func normalizeListenAddr(addr string) string {
@@ -747,13 +752,13 @@ func applyDN42Mode(enabled bool, dataOrigin *string, disableMaptrace *bool) {
 	*disableMaptrace = true
 }
 
-func prepareRuntimeEnvironment(dn42 bool, dataOrigin *string, disableMaptrace *bool, powProvider *string) *wshandle.WsConn {
+func prepareRuntimeEnvironment(ctx context.Context, dn42 bool, dataOrigin *string, disableMaptrace *bool, powProvider *string) *wshandle.WsConn {
 	capabilitiesCheck()
 	applyDN42Mode(dn42, dataOrigin, disableMaptrace)
-	return initLeoWebsocket(dataOrigin, powProvider)
+	return initLeoWebsocket(ctx, dataOrigin, powProvider)
 }
 
-func initLeoWebsocket(dataOrigin, powProvider *string) *wshandle.WsConn {
+func initLeoWebsocket(ctx context.Context, dataOrigin, powProvider *string) *wshandle.WsConn {
 	if !strings.EqualFold(*dataOrigin, "LEOMOEAPI") {
 		return nil
 	}
@@ -767,7 +772,7 @@ func initLeoWebsocket(dataOrigin, powProvider *string) *wshandle.WsConn {
 		return nil
 	}
 
-	leoWs := wshandle.New()
+	leoWs := wshandle.NewWithContext(ctx)
 	if leoWs != nil {
 		leoWs.Interrupt = make(chan os.Signal, 1)
 		signal.Notify(leoWs.Interrupt, os.Interrupt)
@@ -781,27 +786,27 @@ func closeLeoWebsocket(leoWs *wshandle.WsConn) {
 	}
 }
 
-func maybeHandleGlobalping(from string, opts *trace.GlobalpingOptions, conf *trace.Config) bool {
+func maybeHandleGlobalping(ctx context.Context, from string, opts *trace.GlobalpingOptions, conf *trace.Config) bool {
 	if from == "" {
 		return false
 	}
-	handleGlobalpingTrace(opts, conf)
+	handleGlobalpingTrace(ctx, opts, conf)
 	return true
 }
 
-func lookupTargetIP(domain string, ipv4Only, ipv6Only bool, dot string, jsonPrint bool) (net.IP, error) {
+func lookupTargetIP(ctx context.Context, domain string, ipv4Only, ipv6Only bool, dot string, jsonPrint bool) (net.IP, error) {
 	switch {
 	case ipv6Only:
-		return util.DomainLookUp(domain, "6", dot, jsonPrint)
+		return domainLookupFn(ctx, domain, "6", dot, jsonPrint)
 	case ipv4Only:
-		return util.DomainLookUp(domain, "4", dot, jsonPrint)
+		return domainLookupFn(ctx, domain, "4", dot, jsonPrint)
 	default:
-		return util.DomainLookUp(domain, "all", dot, jsonPrint)
+		return domainLookupFn(ctx, domain, "all", dot, jsonPrint)
 	}
 }
 
-func lookupTargetIPOrExit(domain string, ipv4Only, ipv6Only bool, dot string, jsonPrint bool) net.IP {
-	ip, err := lookupTargetIP(domain, ipv4Only, ipv6Only, dot, jsonPrint)
+func lookupTargetIPOrExit(ctx context.Context, domain string, ipv4Only, ipv6Only bool, dot string, jsonPrint bool) net.IP {
+	ip, err := lookupTargetIP(ctx, domain, ipv4Only, ipv6Only, dot, jsonPrint)
 	if err != nil {
 		if util.EnvDevMode {
 			panic(err)
@@ -1084,7 +1089,7 @@ func runTraceOnce(method trace.Method, conf trace.Config) (*trace.Result, bool) 
 	return res, true
 }
 
-func finalizeTraceResult(res *trace.Result, tablePrint, tableClearScreen, routePath bool, dstIP net.IP, disableMaptrace, jsonPrint bool, dataOrigin string) {
+func finalizeTraceResult(ctx context.Context, res *trace.Result, tablePrint, tableClearScreen, routePath bool, dstIP net.IP, disableMaptrace, jsonPrint bool, dataOrigin string) {
 	if tablePrint {
 		printer.TracerouteTablePrinter(res, tableClearScreen)
 	}
@@ -1099,7 +1104,7 @@ func finalizeTraceResult(res *trace.Result, tablePrint, tableClearScreen, routeP
 	}
 	if !disableMaptrace &&
 		(util.StringInSlice(strings.ToUpper(dataOrigin), []string{"LEOMOEAPI", "IPINFO", "IP-API.COM", "IPAPI.COM"})) {
-		url, err := tracemap.GetMapUrl(string(r))
+		url, err := tracemap.GetMapUrlWithContext(ctx, string(r))
 		if err != nil {
 			fmt.Println(err)
 			return
@@ -1200,6 +1205,8 @@ func Execute() {
 		fmt.Print(sanitizeUsagePositionalArgs(parser.Usage(err)))
 		return
 	}
+	rootCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 	util.SrcDev = ""
 
 	mtrModes := deriveEffectiveMTRModes(*mtrMode, *reportMode, *wideMode, *rawPrint)
@@ -1294,7 +1301,7 @@ func Execute() {
 		if domain == "" {
 			return
 		}
-		ip := lookupTargetIPOrExit(domain, *ipv4Only, *ipv6Only, *dot, *jsonPrint)
+		ip := lookupTargetIPOrExit(rootCtx, domain, *ipv4Only, *ipv6Only, *dot, *jsonPrint)
 		resolvedSrcAddr, explicitSrc, srcResolveErr := resolveConfiguredSrcAddr(ip, *srcAddr, *srcDev)
 		if srcResolveErr != nil {
 			fmt.Println(srcResolveErr)
@@ -1311,7 +1318,7 @@ func Execute() {
 			fmt.Println(srcErr)
 			os.Exit(1)
 		}
-		leoWs := prepareRuntimeEnvironment(*dn42, dataOrigin, disableMaptrace, powProvider)
+		leoWs := prepareRuntimeEnvironment(rootCtx, *dn42, dataOrigin, disableMaptrace, powProvider)
 		defer closeLeoWebsocket(leoWs)
 		conf := buildMTUTraceConfig(
 			domain,
@@ -1340,6 +1347,7 @@ func Execute() {
 
 	method := resolveTraceMethod(*tcp, *udp)
 	paramsFastTrace := fastTrace.ParamsFastTrace{
+		Context:        rootCtx,
 		OSType:         osType,
 		ICMPMode:       *icmpMode,
 		SrcDev:         *srcDev,
@@ -1368,7 +1376,7 @@ func Execute() {
 		return
 	}
 
-	leoWs := prepareRuntimeEnvironment(*dn42, dataOrigin, disableMaptrace, powProvider)
+	leoWs := prepareRuntimeEnvironment(rootCtx, *dn42, dataOrigin, disableMaptrace, powProvider)
 	defer closeLeoWebsocket(leoWs)
 
 	if *from != "" {
@@ -1383,6 +1391,7 @@ func Execute() {
 	}
 
 	if maybeHandleGlobalping(
+		rootCtx,
 		*from,
 		&trace.GlobalpingOptions{
 			Target:  *str,
@@ -1405,6 +1414,7 @@ func Execute() {
 			ClearScreen:  stdoutIsTTY,
 		},
 		&trace.Config{
+			Context:         rootCtx,
 			OSType:          osType,
 			DN42:            *dn42,
 			NumMeasurements: *numMeasurements,
@@ -1418,7 +1428,7 @@ func Execute() {
 		return
 	}
 
-	ip := lookupTargetIPOrExit(domain, *ipv4Only, *ipv6Only, *dot, *jsonPrint)
+	ip := lookupTargetIPOrExit(rootCtx, domain, *ipv4Only, *ipv6Only, *dot, *jsonPrint)
 
 	resolvedSrcAddr, explicitSrc, srcResolveErr := resolveConfiguredSrcAddr(ip, *srcAddr, *srcDev)
 	if srcResolveErr != nil {
@@ -1468,6 +1478,7 @@ func Execute() {
 		*tos,
 		*disableMPLS,
 	)
+	conf.Context = rootCtx
 
 	if maybeRunMTRMode(mtrModes, method, conf, queriesExplicit, *numMeasurements, ttlTimeExplicit, *ttlInterval, domain, *dataOrigin, *showIPs, *ipInfoMode) {
 		return
@@ -1493,7 +1504,7 @@ func Execute() {
 		return
 	}
 
-	finalizeTraceResult(res, *tablePrint, stdoutIsTTY, *routePath, ip, *disableMaptrace, *jsonPrint, *dataOrigin)
+	finalizeTraceResult(rootCtx, res, *tablePrint, stdoutIsTTY, *routePath, ip, *disableMaptrace, *jsonPrint, *dataOrigin)
 }
 
 type mtrRunMode int

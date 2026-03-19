@@ -3,9 +3,11 @@
 package trace
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"net"
+	"net/http"
 	"strings"
 	"time"
 
@@ -16,8 +18,12 @@ import (
 )
 
 func GlobalpingTraceroute(opts *GlobalpingOptions, config *Config) (*Result, *globalping.Measurement, error) {
-	client := newGlobalpingClient()
-	measurement, err := createGlobalpingMeasurement(client, buildGlobalpingMeasurement(opts))
+	ctx := context.Background()
+	if config != nil && config.Context != nil {
+		ctx = config.Context
+	}
+	client := newGlobalpingClient(ctx)
+	measurement, err := createGlobalpingMeasurement(ctx, client, buildGlobalpingMeasurement(opts))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -29,9 +35,13 @@ func GlobalpingTraceroute(opts *GlobalpingOptions, config *Config) (*Result, *gl
 	return buildGlobalpingResult(gpHops, limit, config), measurement, nil
 }
 
-func newGlobalpingClient() globalping.Client {
+func newGlobalpingClient(ctx context.Context) globalping.Client {
 	cfg := globalping.Config{
 		UserAgent: "NextTrace/" + _config.Version,
+		HTTPClient: &http.Client{
+			Timeout:   30 * time.Second,
+			Transport: newContextBoundTransport(ctx),
+		},
 	}
 	if util.GlobalpingToken != "" {
 		cfg.AuthToken = &globalping.Token{
@@ -40,6 +50,25 @@ func newGlobalpingClient() globalping.Client {
 		}
 	}
 	return globalping.NewClient(cfg)
+}
+
+func newContextBoundTransport(ctx context.Context) http.RoundTripper {
+	base := http.DefaultTransport
+	if base == nil {
+		base = http.DefaultTransport
+	}
+	return roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+		if ctx == nil {
+			return base.RoundTrip(req)
+		}
+		return base.RoundTrip(req.Clone(ctx))
+	})
+}
+
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (fn roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return fn(req)
 }
 
 func buildGlobalpingMeasurement(opts *GlobalpingOptions) *globalping.MeasurementCreate {
@@ -80,12 +109,37 @@ func assignGlobalpingIPVersion(options *globalping.MeasurementOptions, opts *Glo
 	}
 }
 
-func createGlobalpingMeasurement(client globalping.Client, req *globalping.MeasurementCreate) (*globalping.Measurement, error) {
+func createGlobalpingMeasurement(ctx context.Context, client globalping.Client, req *globalping.MeasurementCreate) (*globalping.Measurement, error) {
 	res, err := client.CreateMeasurement(req)
 	if err != nil {
 		return nil, err
 	}
-	return client.AwaitMeasurement(res.ID)
+	return awaitGlobalpingMeasurement(ctx, client, res.ID)
+}
+
+func awaitGlobalpingMeasurement(ctx context.Context, client globalping.Client, id string) (*globalping.Measurement, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		measurement, err := client.GetMeasurement(id)
+		if err != nil {
+			return nil, err
+		}
+		if measurement.Status != globalping.StatusInProgress {
+			return measurement, nil
+		}
+		timer := time.NewTimer(500 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
+	}
 }
 
 func decodeGlobalpingMeasurementHops(measurement *globalping.Measurement) ([]globalping.MTRHop, error) {

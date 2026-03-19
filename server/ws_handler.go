@@ -209,8 +209,26 @@ func traceWebsocketHandler(c *gin.Context) {
 		return
 	}
 
-	setup, statusCode, err := prepareTrace(req)
+	sessionCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var sessionRef atomic.Pointer[wsTraceSession]
+	go func() {
+		for {
+			if _, _, err := conn.NextReader(); err != nil {
+				cancel()
+				if session := sessionRef.Load(); session != nil {
+					session.closeWithCode(websocket.CloseNormalClosure, "client disconnected")
+				}
+				return
+			}
+		}
+	}()
+
+	setup, statusCode, err := prepareTrace(sessionCtx, req)
 	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return
+		}
 		if statusCode == 0 {
 			statusCode = 500
 		}
@@ -220,6 +238,7 @@ func traceWebsocketHandler(c *gin.Context) {
 	}
 
 	session := newWSTraceSession(conn, setup.Config.Lang, wsSendQueueSize)
+	sessionRef.Store(session)
 	defer session.finish()
 
 	startPayload := gin.H{
@@ -234,15 +253,6 @@ func traceWebsocketHandler(c *gin.Context) {
 		return
 	}
 
-	go func() {
-		for {
-			if _, _, err := conn.NextReader(); err != nil {
-				session.closeWithCode(websocket.CloseNormalClosure, "client disconnected")
-				return
-			}
-		}
-	}()
-
 	log.Printf("[deploy] (ws) trace request target=%s proto=%s provider=%s lang=%s ipv4_only=%t ipv6_only=%t", sanitizeLogParam(setup.Target), sanitizeLogParam(setup.Protocol), sanitizeLogParam(setup.DataProvider), sanitizeLogParam(setup.Config.Lang), setup.Req.IPv4Only, setup.Req.IPv6Only)
 	log.Printf("[deploy] (ws) target resolved target=%s ip=%s via dot=%s", sanitizeLogParam(setup.Target), setup.IP, sanitizeLogParam(strings.ToLower(setup.Req.DotServer)))
 
@@ -253,16 +263,16 @@ func traceWebsocketHandler(c *gin.Context) {
 
 	switch mode {
 	case "mtr", "continuous":
-		runMTRTrace(session, setup)
+		runMTRTrace(sessionCtx, session, setup)
 	default:
-		runSingleTrace(session, setup)
+		runSingleTrace(sessionCtx, session, setup)
 	}
 }
 
-func runSingleTrace(session *wsTraceSession, setup *traceExecution) {
+func runSingleTrace(ctx context.Context, session *wsTraceSession, setup *traceExecution) {
 	session.seen = make(map[int]int)
 
-	res, duration, err := executeTrace(session, setup, func(cfg *trace.Config) {
+	res, duration, err := executeTrace(ctx, session, setup, func(cfg *trace.Config) {
 		cfg.RealtimePrinter = nil
 		cfg.AsyncPrinter = func(result *trace.Result) {
 			for idx, attempts := range result.Hops {
@@ -292,6 +302,9 @@ func runSingleTrace(session *wsTraceSession, setup *traceExecution) {
 	})
 
 	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return
+		}
 		log.Printf("[deploy] websocket trace failed target=%s error=%v", sanitizeLogParam(setup.Target), err)
 		_ = session.send(wsEnvelope{Type: "error", Error: err.Error(), Status: 500})
 		return
@@ -323,30 +336,13 @@ func runSingleTrace(session *wsTraceSession, setup *traceExecution) {
 	log.Printf("[deploy] (ws) trace completed target=%s hops=%d duration=%s", sanitizeLogParam(setup.Target), len(final.Hops), duration)
 }
 
-func runMTRTrace(session *wsTraceSession, setup *traceExecution) {
+func runMTRTrace(parentCtx context.Context, session *wsTraceSession, setup *traceExecution) {
 	hopInterval := resolveWebMTRHopInterval(setup.Req)
 	maxPerHop := setup.Req.MaxRounds // 0 = unlimited
 
 	iteration := 0
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(parentCtx)
 	defer cancel()
-
-	// Client disconnect / stop should terminate continuous raw stream.
-	go func() {
-		ticker := time.NewTicker(100 * time.Millisecond)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				if session.closed.Load() {
-					cancel()
-					return
-				}
-			}
-		}
-	}()
 
 	err := executeMTRRaw(ctx, session, setup, trace.MTRRawOptions{
 		HopInterval: hopInterval,
@@ -359,7 +355,7 @@ func runMTRTrace(session *wsTraceSession, setup *traceExecution) {
 			cancel()
 		}
 	})
-	if err != nil && !errors.Is(err, context.Canceled) {
+	if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
 		log.Printf("[deploy] websocket MTR raw trace failed target=%s error=%v", sanitizeLogParam(setup.Target), err)
 		_ = session.send(wsEnvelope{Type: "error", Error: err.Error(), Status: 500})
 		return
@@ -417,11 +413,12 @@ func executeMTRRaw(ctx context.Context, session *wsTraceSession, setup *traceExe
 	return traceRunMTRRawFn(ctx, setup.Method, config, opts, onRecord)
 }
 
-func executeTrace(session *wsTraceSession, setup *traceExecution, configure func(*trace.Config)) (*trace.Result, time.Duration, error) {
+func executeTrace(ctx context.Context, session *wsTraceSession, setup *traceExecution, configure func(*trace.Config)) (*trace.Result, time.Duration, error) {
 	traceMu.Lock()
 	defer traceMu.Unlock()
 
 	config := setup.Config
+	config.Context = ctx
 	if configure != nil {
 		configure(&config)
 	}
