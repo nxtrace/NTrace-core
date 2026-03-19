@@ -2,7 +2,10 @@ package tracelog
 
 import (
 	"bytes"
+	"io"
 	"net"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -60,5 +63,66 @@ func TestNewRealtimePrinterWrapsWriter(t *testing.T) {
 	printer(testTraceLogResult(), 0)
 	if buf.Len() == 0 {
 		t.Fatal("expected writer to receive trace output")
+	}
+}
+
+func captureStdIO(t *testing.T, fn func()) (string, string) {
+	t.Helper()
+
+	oldStdout := os.Stdout
+	oldStderr := os.Stderr
+	stdoutR, stdoutW, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("stdout pipe: %v", err)
+	}
+	stderrR, stderrW, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("stderr pipe: %v", err)
+	}
+
+	os.Stdout = stdoutW
+	os.Stderr = stderrW
+	defer func() {
+		os.Stdout = oldStdout
+		os.Stderr = oldStderr
+	}()
+
+	fn()
+
+	_ = stdoutW.Close()
+	_ = stderrW.Close()
+
+	stdoutBytes, err := io.ReadAll(stdoutR)
+	if err != nil {
+		t.Fatalf("read stdout: %v", err)
+	}
+	stderrBytes, err := io.ReadAll(stderrR)
+	if err != nil {
+		t.Fatalf("read stderr: %v", err)
+	}
+	return string(stdoutBytes), string(stderrBytes)
+}
+
+func TestDefaultPathUsesTempDir(t *testing.T) {
+	want := filepath.Join(os.TempDir(), "trace.log")
+	if DefaultPath != want {
+		t.Fatalf("DefaultPath = %q, want %q", DefaultPath, want)
+	}
+}
+
+func TestRealtimePrinterFallsBackToStdoutWhenOpenFails(t *testing.T) {
+	oldDefaultPath := DefaultPath
+	DefaultPath = t.TempDir()
+	defer func() { DefaultPath = oldDefaultPath }()
+
+	stdout, stderr := captureStdIO(t, func() {
+		RealtimePrinter(testTraceLogResult(), 0)
+	})
+
+	if !strings.Contains(stdout, "192.0.2.1") {
+		t.Fatalf("stdout missing realtime output:\n%q", stdout)
+	}
+	if !strings.Contains(stderr, "open trace log") {
+		t.Fatalf("stderr missing open failure:\n%q", stderr)
 	}
 }

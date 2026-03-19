@@ -18,6 +18,24 @@ func newStartedTestWsConn() *WsConn {
 	return c
 }
 
+func saveAndRestoreGlobalWsConn(t *testing.T) {
+	t.Helper()
+
+	wsconnMu.RLock()
+	oldWsconn := wsconn
+	wsconnMu.RUnlock()
+
+	t.Cleanup(func() {
+		wsconnMu.Lock()
+		current := wsconn
+		wsconn = oldWsconn
+		wsconnMu.Unlock()
+		if current != nil && current != oldWsconn {
+			current.Close()
+		}
+	})
+}
+
 func TestWsConnCloseStopsBackgroundLoops(t *testing.T) {
 	conn := newStartedTestWsConn()
 	doneCh := conn.getDoneChan()
@@ -43,6 +61,7 @@ func TestNewClosesPreviousGlobalWsConn(t *testing.T) {
 	defer func() {
 		createWsConnFn = oldCreateFn
 	}()
+	saveAndRestoreGlobalWsConn(t)
 
 	oldConn := newStartedTestWsConn()
 	wsconnMu.Lock()
@@ -75,6 +94,7 @@ func TestGetWsConnDoesNotBlockWhileNewClosesPreviousConn(t *testing.T) {
 	defer func() {
 		createWsConnFn = oldCreateFn
 	}()
+	saveAndRestoreGlobalWsConn(t)
 
 	release := make(chan struct{})
 	oldConn := newWsConn(nil, make(chan os.Signal, 1))
@@ -127,6 +147,47 @@ func TestGetWsConnDoesNotBlockWhileNewClosesPreviousConn(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("New did not finish after releasing old Close")
+	}
+}
+
+func TestSendQueuedMessageDoesNotBlockWhenDisconnectedAndReceiveQueueIsUnavailable(t *testing.T) {
+	conn := newWsConn(nil, make(chan os.Signal, 1))
+	defer conn.Close()
+	conn.MsgReceiveCh = make(chan string)
+
+	done := make(chan struct{})
+	go func() {
+		conn.sendQueuedMessage("1.1.1.1")
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("sendQueuedMessage blocked while disconnected")
+	}
+}
+
+func TestSendQueuedMessageDoesNotBlockWhenEnqueueWriteFails(t *testing.T) {
+	conn := newWsConn(nil, make(chan os.Signal, 1))
+	defer conn.Close()
+	conn.MsgReceiveCh = make(chan string)
+	conn.setConnectionState(true, false)
+
+	conn.lifecycleMu.Lock()
+	conn.closed = true
+	conn.lifecycleMu.Unlock()
+
+	done := make(chan struct{})
+	go func() {
+		conn.sendQueuedMessage("1.1.1.1")
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("sendQueuedMessage blocked after enqueueWrite failure")
 	}
 }
 

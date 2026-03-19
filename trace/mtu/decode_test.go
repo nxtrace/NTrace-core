@@ -96,6 +96,30 @@ func TestParseICMPProbeResultIPv4MatchesMinimumQuotedUDPHeader(t *testing.T) {
 	}
 }
 
+func TestParseEmbeddedUDPPacketIPv6WithExtensionHeaders(t *testing.T) {
+	dstIP := net.ParseIP("2001:db8::9")
+	data := make([]byte, 56)
+	data[0] = 6 << 4
+	data[6] = 0
+	copy(data[24:40], dstIP.To16())
+
+	data[40] = 17
+	data[41] = 0
+	binary.BigEndian.PutUint16(data[48:50], 40001)
+	binary.BigEndian.PutUint16(data[50:52], 33494)
+
+	packet, ok := parseEmbeddedUDPPacket(data, 6)
+	if !ok {
+		t.Fatal("expected IPv6 UDP packet behind extension header to match")
+	}
+	if !packet.dstIP.Equal(dstIP) {
+		t.Fatalf("dst ip = %v, want %v", packet.dstIP, dstIP)
+	}
+	if packet.srcPort != 40001 || packet.dstPort != 33494 {
+		t.Fatalf("unexpected ports: %+v", packet)
+	}
+}
+
 func mustSerializeIPv4UDP(t *testing.T, srcIP, dstIP net.IP, srcPort, dstPort int, payload []byte) []byte {
 	t.Helper()
 	ip := &layers.IPv4{

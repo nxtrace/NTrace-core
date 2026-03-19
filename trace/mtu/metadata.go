@@ -64,12 +64,16 @@ func applyMTUPTRResult(h *Hop, ptrs []string) {
 }
 
 func startMTUGeoLookup(cfg Config, ipStr string) <-chan mtuGeoLookupResult {
+	if cfg.IPGeoSource == nil {
+		if cfg.RDNS {
+			return nil
+		}
+		ch := make(chan mtuGeoLookupResult, 1)
+		ch <- mtuGeoLookupResult{}
+		return ch
+	}
 	ch := make(chan mtuGeoLookupResult, 1)
 	go func() {
-		if cfg.IPGeoSource == nil {
-			ch <- mtuGeoLookupResult{}
-			return
-		}
 		if geo, ok := ipgeo.Filter(ipStr); ok {
 			ch <- mtuGeoLookupResult{geo: normalizeMTUGeoData(geo)}
 			return
@@ -100,11 +104,17 @@ func waitForMTUGeoAndPTR(cfg Config, hop Hop, geoCh <-chan mtuGeoLookupResult, r
 			case <-time.After(time.Second):
 			}
 		}
-		applyGeo(<-geoCh)
+		if geoCh != nil {
+			applyGeo(<-geoCh)
+		}
 		return hop
 	}
 
 	if rDNSStarted {
+		if geoCh == nil {
+			applyMTUPTRResult(&hop, <-rDNSCh)
+			return hop
+		}
 		select {
 		case res := <-geoCh:
 			applyGeo(res)
@@ -116,7 +126,9 @@ func waitForMTUGeoAndPTR(cfg Config, hop Hop, geoCh <-chan mtuGeoLookupResult, r
 		}
 	}
 
-	applyGeo(<-geoCh)
+	if geoCh != nil {
+		applyGeo(<-geoCh)
+	}
 	return hop
 }
 

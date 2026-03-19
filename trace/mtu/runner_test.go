@@ -271,6 +271,18 @@ func TestRunWithProberTimeoutHopDoesNotExposeLocalPMTU(t *testing.T) {
 	}
 }
 
+func TestNormalizeConfigRejectsSourceDestinationFamilyMismatch(t *testing.T) {
+	_, err := normalizeConfig(Config{
+		DstIP:    net.ParseIP("203.0.113.9"),
+		SrcIP:    net.ParseIP("2001:db8::1"),
+		BeginHop: 1,
+		MaxHops:  1,
+	})
+	if err == nil || err.Error() != "source and destination IP address families do not match" {
+		t.Fatalf("err = %v, want family mismatch error", err)
+	}
+}
+
 func TestRunWithProberFallbackShrinksAfterRepeatedLocalMTUErrors(t *testing.T) {
 	cfg := Config{
 		Target:      "example.com",

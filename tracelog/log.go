@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/nxtrace/NTrace-core/internal/hoprender"
@@ -12,7 +13,7 @@ import (
 	"github.com/nxtrace/NTrace-core/trace"
 )
 
-const DefaultPath = "/tmp/trace.log"
+var DefaultPath = filepath.Join(os.TempDir(), "trace.log")
 
 func formatTraceLogWhois(whois string) string {
 	whoisFormat := strings.Split(whois, "-")
@@ -113,6 +114,8 @@ func NewRealtimePrinter(w io.Writer) func(res *trace.Result, ttl int) {
 func RealtimePrinter(res *trace.Result, ttl int) {
 	f, err := OpenFile(DefaultPath)
 	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "open trace log %q failed: %v\n", DefaultPath, err)
+		_ = WriteRealtime(os.Stdout, res, ttl)
 		return
 	}
 	defer func() { _ = f.Close() }()

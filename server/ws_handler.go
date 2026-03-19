@@ -106,13 +106,17 @@ func newWSTraceSession(conn wsConn, lang string, queueSize int) *wsTraceSession 
 }
 
 func readWSInitMessage(conn wsInitConn) ([]byte, error) {
-	_ = conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+	if err := conn.SetReadDeadline(time.Now().Add(30 * time.Second)); err != nil {
+		return nil, err
+	}
 	conn.SetReadLimit(maxWSInitMessageBytes)
 	_, message, err := conn.ReadMessage()
 	if err != nil {
 		return nil, err
 	}
-	_ = conn.SetReadDeadline(time.Time{})
+	if err := conn.SetReadDeadline(time.Time{}); err != nil {
+		return nil, err
+	}
 	return message, nil
 }
 

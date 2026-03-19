@@ -811,20 +811,27 @@ func lookupTargetIPOrExit(domain string, ipv4Only, ipv6Only bool, dot string, js
 	return ip
 }
 
-func applySourceDevice(srcDev string, dstIP net.IP, srcAddr *string) {
-	if srcDev == "" {
-		return
+func resolveSourceDevice(srcDev string) (*net.Interface, error) {
+	trimmed := strings.TrimSpace(srcDev)
+	if trimmed == "" {
+		return nil, nil
 	}
-	dev, devErr := net.InterfaceByName(srcDev)
-	if devErr != nil || dev == nil {
-		fmt.Printf("无法找到网卡 %q: %v\n", srcDev, devErr)
-		os.Exit(1)
+	dev, err := net.InterfaceByName(trimmed)
+	if err != nil || dev == nil {
+		return nil, fmt.Errorf("无法找到网卡 %q: %v", trimmed, err)
 	}
-	util.SrcDev = dev.Name
+	return dev, nil
+}
+
+func resolveSourceDeviceAddr(dev *net.Interface, dstIP net.IP) string {
+	if dev == nil || dstIP == nil {
+		return ""
+	}
 	addrs, err := dev.Addrs()
 	if err != nil {
-		return
+		return ""
 	}
+	var candidate string
 	for _, addr := range addrs {
 		ipNet, ok := addr.(*net.IPNet)
 		if !ok {
@@ -833,14 +840,65 @@ func applySourceDevice(srcDev string, dstIP net.IP, srcAddr *string) {
 		if (ipNet.IP.To4() == nil) != (dstIP.To4() == nil) {
 			continue
 		}
-		*srcAddr = ipNet.IP.String()
-		parsed := net.ParseIP(*srcAddr)
+		candidate = ipNet.IP.String()
+		parsed := net.ParseIP(candidate)
 		if parsed != nil && !(parsed.IsPrivate() ||
 			parsed.IsLoopback() ||
 			parsed.IsLinkLocalUnicast() ||
 			parsed.IsLinkLocalMulticast()) {
-			break
+			return candidate
 		}
+	}
+	return candidate
+}
+
+func resolveFallbackSrcAddr(dstIP net.IP) string {
+	if dstIP == nil {
+		return ""
+	}
+	if util.IsIPv6(dstIP) {
+		resolved, _ := util.LocalIPPortv6(dstIP, nil, "udp6")
+		if resolved != nil {
+			return resolved.String()
+		}
+		return ""
+	}
+	resolved, _ := util.LocalIPPort(dstIP, nil, "udp")
+	if resolved != nil {
+		return resolved.String()
+	}
+	return ""
+}
+
+func resolveConfiguredSrcAddr(dstIP net.IP, srcAddr, srcDev string) (resolved string, explicit bool, err error) {
+	if trimmed := strings.TrimSpace(srcAddr); trimmed != "" {
+		return trimmed, true, nil
+	}
+	dev, err := resolveSourceDevice(srcDev)
+	if err != nil {
+		return "", false, err
+	}
+	if resolved := resolveSourceDeviceAddr(dev, dstIP); resolved != "" {
+		return resolved, false, nil
+	}
+	return resolveFallbackSrcAddr(dstIP), false, nil
+}
+
+func applySourceDevice(srcDev string, dstIP net.IP, srcAddr *string) {
+	dev, err := resolveSourceDevice(srcDev)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	if dev == nil {
+		return
+	}
+	util.SrcDev = dev.Name
+	if srcAddr == nil || strings.TrimSpace(*srcAddr) != "" {
+		return
+	}
+	if resolved := resolveSourceDeviceAddr(dev, dstIP); resolved != "" {
+		*srcAddr = resolved
 	}
 }
 
@@ -854,6 +912,7 @@ func buildTraceConfig(
 	osType, icmpMode int,
 	dn42 bool,
 	srcAddr string,
+	sourceDevice string,
 	srcPort int,
 	beginHop int,
 	ip net.IP,
@@ -880,7 +939,7 @@ func buildTraceConfig(
 		DN42:             dn42,
 		SrcAddr:          srcAddr,
 		SrcPort:          srcPort,
-		SourceDevice:     util.SrcDev,
+		SourceDevice:     strings.TrimSpace(sourceDevice),
 		BeginHop:         beginHop,
 		DstIP:            ip,
 		DstPort:          port,
@@ -953,6 +1012,13 @@ func resolveOutputPath(outputPath string, outputDefault bool) (string, error) {
 		return tracelog.DefaultPath, nil
 	}
 	return "", nil
+}
+
+func validateJSONRealtimeOutput(jsonPrint bool, outputPath string) error {
+	if jsonPrint && strings.TrimSpace(outputPath) != "" {
+		return errors.New("--json 不能与 --output/--output-default 同时使用")
+	}
+	return nil
 }
 
 func setFastIPOutputSuppression(suppress bool) func() {
@@ -1134,11 +1200,16 @@ func Execute() {
 		fmt.Print(sanitizeUsagePositionalArgs(parser.Usage(err)))
 		return
 	}
+	util.SrcDev = ""
 
 	mtrModes := deriveEffectiveMTRModes(*mtrMode, *reportMode, *wideMode, *rawPrint)
 	resolvedOutputPath, outputErr := resolveOutputPath(*outputPath, *outputDefault)
 	if outputErr != nil {
 		fmt.Println(outputErr)
+		os.Exit(1)
+	}
+	if err := validateJSONRealtimeOutput(*jsonPrint, resolvedOutputPath); err != nil {
+		fmt.Println(err)
 		os.Exit(1)
 	}
 	if *mtuMode {
@@ -1224,8 +1295,18 @@ func Execute() {
 			return
 		}
 		ip := lookupTargetIPOrExit(domain, *ipv4Only, *ipv6Only, *dot, *jsonPrint)
-		applySourceDevice(*srcDev, ip, srcAddr)
-		srcIP, srcErr := resolveMTUSourceIP(ip, *srcAddr)
+		resolvedSrcAddr, explicitSrc, srcResolveErr := resolveConfiguredSrcAddr(ip, *srcAddr, *srcDev)
+		if srcResolveErr != nil {
+			fmt.Println(srcResolveErr)
+			os.Exit(1)
+		}
+		if !explicitSrc {
+			applySourceDevice(*srcDev, ip, srcAddr)
+		}
+		if strings.TrimSpace(*srcAddr) == "" {
+			*srcAddr = resolvedSrcAddr
+		}
+		srcIP, srcErr := resolveMTUSourceIP(ip, resolvedSrcAddr)
 		if srcErr != nil {
 			fmt.Println(srcErr)
 			os.Exit(1)
@@ -1339,9 +1420,19 @@ func Execute() {
 
 	ip := lookupTargetIPOrExit(domain, *ipv4Only, *ipv6Only, *dot, *jsonPrint)
 
-	applySourceDevice(*srcDev, ip, srcAddr)
+	resolvedSrcAddr, explicitSrc, srcResolveErr := resolveConfiguredSrcAddr(ip, *srcAddr, *srcDev)
+	if srcResolveErr != nil {
+		fmt.Println(srcResolveErr)
+		os.Exit(1)
+	}
+	if !explicitSrc {
+		applySourceDevice(*srcDev, ip, srcAddr)
+	}
+	if strings.TrimSpace(*srcAddr) == "" {
+		*srcAddr = resolvedSrcAddr
+	}
 	effectivePacketSize := resolvePacketSizeArg(*packetSize, packetSizeExplicit, method, ip)
-	printTraceNav(*jsonPrint, mtrModes.mtr, ip, domain, *dataOrigin, *maxHops, effectivePacketSize, *srcAddr, method)
+	printTraceNav(*jsonPrint, mtrModes.mtr, ip, domain, *dataOrigin, *maxHops, effectivePacketSize, resolvedSrcAddr, method)
 
 	packetSizeSpec, packetSizeErr := trace.NormalizePacketSize(method, ip, effectivePacketSize)
 	if packetSizeErr != nil {
@@ -1355,7 +1446,8 @@ func Execute() {
 		osType,
 		*icmpMode,
 		*dn42,
-		*srcAddr,
+		resolvedSrcAddr,
+		*srcDev,
 		*srcPort,
 		*beginHop,
 		ip,

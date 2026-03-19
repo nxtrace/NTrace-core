@@ -89,14 +89,20 @@ func (f *fakeWSConn) NextReader() (messageType int, r io.Reader, err error) {
 }
 
 type fakeWSInitConn struct {
-	deadlines []time.Time
-	readLimit int64
-	message   []byte
-	err       error
+	deadlines    []time.Time
+	readLimit    int64
+	message      []byte
+	err          error
+	deadlineErrs []error
 }
 
 func (f *fakeWSInitConn) SetReadDeadline(t time.Time) error {
 	f.deadlines = append(f.deadlines, t)
+	if len(f.deadlineErrs) > 0 {
+		err := f.deadlineErrs[0]
+		f.deadlineErrs = f.deadlineErrs[1:]
+		return err
+	}
 	return nil
 }
 
@@ -132,6 +138,28 @@ func TestReadWSInitMessage_ClearsDeadlineAfterSuccessfulRead(t *testing.T) {
 	}
 	if !conn.deadlines[1].IsZero() {
 		t.Fatalf("final read deadline=%v, want zero time", conn.deadlines[1])
+	}
+}
+
+func TestReadWSInitMessage_ReturnsInitialDeadlineError(t *testing.T) {
+	conn := &fakeWSInitConn{
+		message:      []byte(`{"target":"example.com"}`),
+		deadlineErrs: []error{errors.New("set deadline failed")},
+	}
+
+	if _, err := readWSInitMessage(conn); err == nil || err.Error() != "set deadline failed" {
+		t.Fatalf("readWSInitMessage error = %v, want initial deadline error", err)
+	}
+}
+
+func TestReadWSInitMessage_ReturnsClearDeadlineError(t *testing.T) {
+	conn := &fakeWSInitConn{
+		message:      []byte(`{"target":"example.com"}`),
+		deadlineErrs: []error{nil, errors.New("clear deadline failed")},
+	}
+
+	if _, err := readWSInitMessage(conn); err == nil || err.Error() != "clear deadline failed" {
+		t.Fatalf("readWSInitMessage error = %v, want clear deadline error", err)
 	}
 }
 

@@ -259,6 +259,29 @@ func TestSetFastIPOutputSuppressionRestoresPreviousValue(t *testing.T) {
 	util.SuppressFastIPOutput = orig
 }
 
+func TestResolveConfiguredSrcAddrPrefersExplicitSource(t *testing.T) {
+	dstIP := net.ParseIP("1.1.1.1")
+	resolved, explicit, err := resolveConfiguredSrcAddr(dstIP, "192.0.2.10", "codex-nonexistent-dev0")
+	if err != nil {
+		t.Fatalf("resolveConfiguredSrcAddr returned error: %v", err)
+	}
+	if !explicit {
+		t.Fatal("explicit source should be reported as explicit")
+	}
+	if resolved != "192.0.2.10" {
+		t.Fatalf("resolved source = %q, want %q", resolved, "192.0.2.10")
+	}
+}
+
+func TestValidateJSONRealtimeOutput(t *testing.T) {
+	if err := validateJSONRealtimeOutput(true, "trace.log"); err == nil || err.Error() != "--json 不能与 --output/--output-default 同时使用" {
+		t.Fatalf("err = %v, want json/output conflict", err)
+	}
+	if err := validateJSONRealtimeOutput(true, ""); err != nil {
+		t.Fatalf("unexpected error without output path: %v", err)
+	}
+}
+
 func TestShouldForceNoColorForMTUNonTTY(t *testing.T) {
 	tests := []struct {
 		name        string

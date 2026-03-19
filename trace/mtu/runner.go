@@ -196,6 +196,9 @@ func normalizeConfig(cfg Config) (Config, error) {
 	if cfg.SrcIP == nil {
 		return cfg, errors.New("source IP is required")
 	}
+	if (cfg.SrcIP.To4() == nil) != (cfg.DstIP.To4() == nil) {
+		return cfg, errors.New("source and destination IP address families do not match")
+	}
 	return cfg, nil
 }
 

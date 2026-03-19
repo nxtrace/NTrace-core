@@ -65,6 +65,26 @@ func TestEnrichHopMetadataRDNSOnly(t *testing.T) {
 	}
 }
 
+func TestEnrichHopMetadataRDNSOnlyWithoutAlwaysWaitStillSetsHostname(t *testing.T) {
+	origLookup := mtuLookupAddr
+	mtuLookupAddr = func(ip string) ([]string, error) {
+		return []string{"resolver.example.com."}, nil
+	}
+	defer func() { mtuLookupAddr = origLookup }()
+
+	cfg := Config{
+		RDNS: true,
+	}
+
+	hop, changed := enrichHopMetadata(cfg, Hop{TTL: 1, Event: EventTimeExceeded, IP: "1.1.1.1"})
+	if !changed {
+		t.Fatal("expected hostname metadata change")
+	}
+	if hop.Hostname != "resolver.example.com" {
+		t.Fatalf("hostname = %q, want %q", hop.Hostname, "resolver.example.com")
+	}
+}
+
 func TestEnrichHopMetadataAlwaysWaitRDNSWaitsForPTR(t *testing.T) {
 	origLookup := mtuLookupAddr
 	mtuLookupAddr = func(ip string) ([]string, error) {

@@ -25,6 +25,8 @@ type socketProber struct {
 	sendMu    sync.Mutex
 }
 
+var ErrWinDivertUnavailable = errors.New("windivert capture unavailable")
+
 func newSocketProber(cfg Config) (*socketProber, error) {
 	network := "udp4"
 	icmpNetwork := "ip4:icmp"
@@ -85,16 +87,19 @@ func (p *socketProber) Probe(ctx context.Context, plan probePlan) (probeResponse
 		return probeResponse{}, err
 	}
 
-	start := time.Now()
 	dstPort := probeDstPort(p.dstPort, plan.Token)
 	payload := buildProbePayload(plan.PayloadSize)
-	capture, err := p.beginICMPResponseCapture(ctx, deadlineFromStart(ctx, start, plan.Timeout))
+	captureDeadline := deadlineFromStart(ctx, time.Now(), plan.Timeout)
+	capture, err := p.beginICMPResponseCapture(ctx, captureDeadline)
 	if err != nil {
-		return probeResponse{}, err
+		if !errors.Is(err, ErrWinDivertUnavailable) {
+			return probeResponse{}, err
+		}
 	}
 	if capture != nil {
 		defer capture.Close()
 	}
+	startSend := time.Now()
 	if err := p.send(plan.TTL, payload, dstPort); err != nil {
 		if isSendSizeErr(err) {
 			return probeResponse{}, &localMTUError{MTU: socketPathMTU(p.udp, p.ipVersion)}
@@ -103,12 +108,12 @@ func (p *socketProber) Probe(ctx context.Context, plan probePlan) (probeResponse
 	}
 
 	buf := make([]byte, 4096)
-	deadline := deadlineFromStart(ctx, start, plan.Timeout)
+	deadline := deadlineFromStart(ctx, startSend, plan.Timeout)
 	resp, err := p.readICMPResponse(ctx, capture, deadline, dstPort, buf)
 	if err != nil {
 		return probeResponse{}, err
 	}
-	resp.RTT = time.Since(start)
+	resp.RTT = time.Since(startSend)
 	return resp, nil
 }
 
@@ -132,6 +137,9 @@ func (p *socketProber) send(ttl int, payload []byte, dstPort int) error {
 func probeDstPort(base int, token uint32) int {
 	if base <= 0 || base > 65535 {
 		base = 33494
+	}
+	if token == 0 {
+		token = 1
 	}
 	maxOffset := 65535 - base
 	if maxOffset <= 0 {

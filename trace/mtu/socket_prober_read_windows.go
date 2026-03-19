@@ -4,6 +4,7 @@ package mtu
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"time"
 
@@ -30,7 +31,7 @@ func (c *winDivertCapture) Close() error {
 func (p *socketProber) beginICMPResponseCapture(ctx context.Context, deadline time.Time) (icmpResponseCapture, error) {
 	handle, err := wd.Open(winDivertMTUFilter(p.ipVersion, p.udp.LocalAddr()), wd.LayerNetwork, 0, wd.FlagSniff|wd.FlagRecvOnly)
 	if err != nil {
-		return nil, nil
+		return nil, fmt.Errorf("%w: %v", ErrWinDivertUnavailable, err)
 	}
 	probeCtx, cancel := context.WithDeadline(ctx, deadline)
 	go func() {
