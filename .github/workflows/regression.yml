@@ -64,12 +64,14 @@ jobs:
         if: ${{ matrix.name == 'linux' }}
         env:
           ART_ROOT: ${{ github.workspace }}/.regression/linux
+          NTRACE_SKIP_IPV6: "1"
         run: bash scripts/regression/linux.sh
 
       - name: Run regression on macOS
         if: ${{ matrix.name == 'macos' }}
         env:
           ART_ROOT: ${{ github.workspace }}/.regression/macos
+          NTRACE_SKIP_IPV6: "1"
         run: bash scripts/regression/macos.sh
 
       - name: Run regression on Windows

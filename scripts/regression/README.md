@@ -70,6 +70,7 @@ Linux / macOS：
 - 如果要跑抓包校验，需要 `tcpdump`
 - 如果要验证 MTU TTY 彩色输出，需要 `script`
 - 如果机器没有 IPv6，脚本会把 IPv6 相关检查记为 `SKIP`
+- GitHub Actions 里的 runtime regression 默认通过 `NTRACE_SKIP_IPV6=1` 强制跳过 IPv6 检查，避免 hosted runner 的 IPv6 环境波动影响结果
 
 Windows：
 

@@ -70,7 +70,7 @@ record() {
 }
 
 record_ipv6_skip() {
-  record "$1" SKIP "$2; IPv6 not available on this machine"
+  record "$1" SKIP "$2; ${IPV6_SKIP_REASON}"
 }
 
 display_path() {
@@ -324,7 +324,10 @@ echo "running unit tests..."
 (cd "${REPO_ROOT}" && go test ./...)
 
 IPV6_AVAILABLE=0
-if detect_ipv6_available; then
+IPV6_SKIP_REASON='IPv6 not available on this machine'
+if [[ "${NTRACE_SKIP_IPV6:-0}" == "1" ]]; then
+  IPV6_SKIP_REASON='IPv6 checks disabled by NTRACE_SKIP_IPV6'
+elif detect_ipv6_available; then
   IPV6_AVAILABLE=1
 fi
 {
@@ -334,6 +337,9 @@ fi
   fi
 } > "${TARGETS}"
 echo "ipv6_available=${IPV6_AVAILABLE}"
+if (( ! IPV6_AVAILABLE )); then
+  echo "ipv6_skip_reason=${IPV6_SKIP_REASON}"
+fi
 
 run_cmd icmp4_basic 'ICMP IPv4 basic trace' "\"${BIN}\" --no-color -q 1 -m 3 --timeout 1000 1.1.1.1"
 run_cmd tcp4_basic 'TCP IPv4 basic trace' "\"${BIN}\" --no-color -T -q 1 -m 3 --timeout 1000 1.1.1.1"
