@@ -54,21 +54,22 @@ var (
 		}
 		return dll.Release()
 	}
-	openWinDivertCall = func(filter string, flags uint64) (handle wd.Handle, err error) {
-		defer func() {
-			if r := recover(); r != nil {
-				err = normalizeWinDivertPanic(r)
-			}
-		}()
+	openWinDivertCall = func(filter string, flags uint64) (wd.Handle, error) {
 		return wd.Open(filter, wd.LayerNetwork, 0, flags)
 	}
 )
 
-func OpenWinDivertHandle(filter string, flags uint64) (wd.Handle, error) {
+func OpenWinDivertHandle(filter string, flags uint64) (handle wd.Handle, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			handle = 0
+			err = classifyWinDivertError(normalizeWinDivertPanic(r))
+		}
+	}()
 	if err := checkWinDivertDLL(); err != nil {
 		return 0, classifyWinDivertError(err)
 	}
-	handle, err := openWinDivertCall(filter, flags)
+	handle, err = openWinDivertCall(filter, flags)
 	if err != nil {
 		return 0, classifyWinDivertError(err)
 	}
