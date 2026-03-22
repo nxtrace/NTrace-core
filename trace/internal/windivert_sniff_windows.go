@@ -13,8 +13,6 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	wd "github.com/xjasonlyu/windivert-go"
-
-	"github.com/nxtrace/NTrace-core/util"
 )
 
 type winDivertICMPPacket struct {
@@ -48,12 +46,9 @@ func winDivertTCPFilter(ipVersion int, dstIP, srcIP net.IP, dstPort int) string 
 }
 
 func openWinDivertSniffHandle(ctx context.Context, filter, action string) (wd.Handle, func()) {
-	handle, err := wd.Open(filter, wd.LayerNetwork, 0, wd.FlagSniff|wd.FlagRecvOnly)
+	handle, err := OpenWinDivertHandle(filter, wd.FlagSniff|wd.FlagRecvOnly)
 	if err != nil {
-		if util.EnvDevMode {
-			panic(fmt.Errorf("(%s) WinDivert open failed: %v (filter=%q)", action, err, filter))
-		}
-		log.Fatalf("(%s) WinDivert open failed: %v (filter=%q)", action, err, filter)
+		log.Fatal(formatWinDivertRequiredError(fmt.Sprintf("Windows WinDivert 嗅探 (%s)", action), err))
 	}
 
 	var closeOnce sync.Once

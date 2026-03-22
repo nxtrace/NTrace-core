@@ -313,9 +313,11 @@ type mtrCLIFlags struct {
 	ipInfoMode *int
 }
 
+const windowsInitHelpText = "Extract WinDivert runtime to executable directory"
+
 func registerInitFlag(parser *argparse.Parser) *bool {
 	if runtime.GOOS == "windows" {
-		return parser.Flag("", "init", &argparse.Options{Help: "Extract WinDivert runtime to current directory"})
+		return parser.Flag("", "init", &argparse.Options{Help: windowsInitHelpText})
 	}
 	return ptrBool(false)
 }

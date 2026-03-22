@@ -12,8 +12,6 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	wd "github.com/xjasonlyu/windivert-go"
-
-	"github.com/nxtrace/NTrace-core/util"
 )
 
 type UDPSpec struct {
@@ -29,12 +27,9 @@ type UDPSpec struct {
 }
 
 func (s *UDPSpec) InitUDP() {
-	handle, err := wd.Open("false", wd.LayerNetwork, 0, 0)
+	handle, err := OpenWinDivertHandle("false", 0)
 	if err != nil {
-		if util.EnvDevMode {
-			panic(fmt.Errorf("(InitUDP) WinDivert open failed: %v", err))
-		}
-		log.Fatalf("(InitUDP) WinDivert open failed: %v", err)
+		log.Fatal(formatWinDivertRequiredError("Windows UDP 探测", err))
 	}
 	s.handle = handle
 
@@ -65,10 +60,10 @@ func (s *UDPSpec) resolveICMPMode() int {
 	}
 
 	// Auto(0) 或强制 Sniff(2) → 尝试 WinDivert
-	ok, err := winDivertAvailable()
+	ok, err := detectWinDivertAvailability()
 	if !ok {
 		if icmpMode == 2 {
-			log.Printf("请求使用 WinDivert 嗅探模式，但 WinDivert 不可用: %v；已回退到 Socket 模式。", err)
+			log.Printf("%s", formatWinDivertFallbackMessage("WinDivert 嗅探模式", err))
 		}
 		return 1
 	}

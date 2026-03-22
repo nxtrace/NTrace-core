@@ -283,7 +283,7 @@ PS: 路由可视化的绘制模块为独立模块，具体代码可在 [nxtrace/
   **TCP/UDP mode** 依赖 `WinDivert`。  
   **ICMP mode** 支持 `1=Socket` 与 `2=WinDivert`（`0=Auto`）。使用 Socket 模式时，需防火墙配置允许`ICMP/ICMPv6`。  
   在 `Windows` 上，`ICMPv6` 未传 `--tos` 或显式 `--tos 0` 时继续走原生 Socket 发送路径；只有非零 `ICMPv6 --tos` 才额外依赖 `WinDivert` 发送能力，并要求管理员权限。  
-  `WinDivert` 可使用 `--init` 参数自动配置环境。
+  `WinDivert` 可使用 `--init` 参数自动配置环境；该命令会将运行时解压到可执行文件目录。
 
 #### `NextTrace` 现已经支持快速测试，有一次性测试回程路由需求的朋友可以使用
 
@@ -656,7 +656,7 @@ Arguments:
 
   -h  --help                         Print help information
       --init                         Windows ONLY: Extract WinDivert runtime to
-                                     current directory
+                                     executable directory
   -4  --ipv4                         Use IPv4 only
   -6  --ipv6                         Use IPv6 only
   -T  --tcp                          Use TCP SYN for tracerouting (default

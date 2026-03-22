@@ -281,7 +281,7 @@ The routing visualization function requires the geographical coordinates of each
   **TCP/UDP mode** requires `WinDivert`.  
   **ICMP mode** supports `1=Socket` and `2=WinDivert` (`0=Auto`). If running in Socket mode, the firewall must allow `ICMP/ICMPv6`.  
   On `Windows`, `ICMPv6` without `--tos` (or with `--tos 0`) keeps using the native Socket send path. A non-zero `ICMPv6 --tos` requires `WinDivert` send support in addition to administrator privilege.  
-  `WinDivert` can be automatically configured using the `--init` parameter.
+  `WinDivert` can be automatically configured using the `--init` parameter, which extracts the runtime to the executable directory.
 
 #### `NextTrace` now supports quick testing, and friends who have a one-time backhaul routing test requirement can use it
 
@@ -676,7 +676,7 @@ Arguments:
 
   -h  --help                         Print help information
       --init                         Windows ONLY: Extract WinDivert runtime to
-                                     current directory
+                                     executable directory
   -4  --ipv4                         Use IPv4 only
   -6  --ipv6                         Use IPv6 only
   -T  --tcp                          Use TCP SYN for tracerouting (default

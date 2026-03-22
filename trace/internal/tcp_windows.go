@@ -12,8 +12,6 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	wd "github.com/xjasonlyu/windivert-go"
-
-	"github.com/nxtrace/NTrace-core/util"
 )
 
 type TCPSpec struct {
@@ -38,18 +36,12 @@ func (s *TCPSpec) sourceDeviceUnsupportedErr() error {
 
 func (s *TCPSpec) InitTCP() {
 	if err := s.sourceDeviceUnsupportedErr(); err != nil {
-		if util.EnvDevMode {
-			panic(err)
-		}
 		log.Fatal(err)
 	}
 
-	handle, err := wd.Open("false", wd.LayerNetwork, 0, 0)
+	handle, err := OpenWinDivertHandle("false", 0)
 	if err != nil {
-		if util.EnvDevMode {
-			panic(fmt.Errorf("(InitTCP) WinDivert open failed: %v", err))
-		}
-		log.Fatalf("(InitTCP) WinDivert open failed: %v", err)
+		log.Fatal(formatWinDivertRequiredError("Windows TCP 探测", err))
 	}
 	s.handle = handle
 
@@ -77,10 +69,10 @@ func (s *TCPSpec) resolveICMPMode() int {
 	}
 
 	// Auto(0) 或强制 Sniff(2) → 尝试 WinDivert
-	ok, err := winDivertAvailable()
+	ok, err := detectWinDivertAvailability()
 	if !ok {
 		if icmpMode == 2 {
-			log.Printf("请求使用 WinDivert 嗅探模式，但 WinDivert 不可用: %v；已回退到 Socket 模式。", err)
+			log.Printf("%s", formatWinDivertFallbackMessage("WinDivert 嗅探模式", err))
 		}
 		return 1
 	}
@@ -98,9 +90,6 @@ func (s *TCPSpec) ListenICMP(ctx context.Context, ready chan struct{}, onICMP fu
 
 func (s *TCPSpec) listenICMPWinDivert(ctx context.Context, ready chan struct{}, onICMP func(msg ReceivedMessage, finish time.Time, data []byte)) {
 	if err := s.sourceDeviceUnsupportedErr(); err != nil {
-		if util.EnvDevMode {
-			panic(err)
-		}
 		log.Fatal(err)
 	}
 
@@ -134,9 +123,6 @@ func (s *TCPSpec) listenICMPWinDivert(ctx context.Context, ready chan struct{}, 
 
 func (s *TCPSpec) ListenTCP(ctx context.Context, ready chan struct{}, onTCP func(srcPort, seq, ack int, peer net.Addr, finish time.Time)) {
 	if err := s.sourceDeviceUnsupportedErr(); err != nil {
-		if util.EnvDevMode {
-			panic(err)
-		}
 		log.Fatal(err)
 	}
 
