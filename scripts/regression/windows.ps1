@@ -63,6 +63,13 @@ function Test-EnvFlag {
     }
 }
 
+function Ensure-LastExitCodeSuccess {
+    param([string]$Label)
+    if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) {
+        throw "$Label failed with exit code $LASTEXITCODE"
+    }
+}
+
 function Test-IsAdmin {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = [Security.Principal.WindowsPrincipal]::new($identity)
@@ -134,7 +141,11 @@ function Invoke-CommandWithTimeout {
     )
     $proc = Start-Process -FilePath "cmd.exe" -ArgumentList "/d", "/c", "`"$scriptFile`"" -RedirectStandardOutput $stdoutFile -RedirectStandardError $stderrFile -PassThru -WindowStyle Hidden
     if (-not $proc.WaitForExit($Seconds * 1000)) {
-        Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+        try {
+            Start-Process -FilePath "taskkill.exe" -ArgumentList "/PID", "$($proc.Id)", "/T", "/F" -Wait -WindowStyle Hidden -ErrorAction Stop | Out-Null
+        }
+        catch {
+        }
         $exitCode = 124
     }
     else {
@@ -593,15 +604,21 @@ Write-Host ("ipv6_available={0}" -f $(if ($IPv6Available) { 1 } else { 0 }))
 Push-Location $RepoRoot
 try {
     go build -trimpath -o $Bin .
+    Ensure-LastExitCodeSuccess "go build nexttrace-current"
     go build -trimpath -tags flavor_tiny -o $Tiny .
+    Ensure-LastExitCodeSuccess "go build nexttrace-tiny-current"
     go build -trimpath -tags flavor_ntr -o $Ntr .
+    Ensure-LastExitCodeSuccess "go build ntr-current"
     go test ./...
+    Ensure-LastExitCodeSuccess "go test"
     $windivertInitLog = Join-Path $ArtifactsDir "_windivert_init.txt"
     try {
         & $Bin --init *> $windivertInitLog
+        Ensure-LastExitCodeSuccess "nexttrace --init"
     }
     catch {
         $_ | Out-File -FilePath $windivertInitLog -Encoding utf8
+        throw
     }
 }
 finally {

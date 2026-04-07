@@ -26,8 +26,11 @@ func bindPacketConnToSourceDevice(conn net.PacketConn, ipVersion int, device str
 	}
 
 	iface, err := net.InterfaceByName(device)
-	if err != nil || iface == nil {
+	if err != nil {
 		return fmt.Errorf("lookup source device %q: %w", device, err)
+	}
+	if iface == nil {
+		return fmt.Errorf("source device %q not found", device)
 	}
 
 	level := syscall.IPPROTO_IP

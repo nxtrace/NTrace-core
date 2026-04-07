@@ -1,6 +1,7 @@
 package trace
 
 import (
+	"fmt"
 	"net"
 	"strings"
 	"testing"
@@ -106,6 +107,46 @@ func TestNormalizeExplicitSourceConfigRejectsDeviceWithoutMatchingFamily(t *test
 	_, _, err := NormalizeExplicitSourceConfig(UDPTrace, cfg)
 	if err == nil || err.Error() != `source device "eth0" has no usable IPv6 address` {
 		t.Fatalf("err = %v, want IPv6 family error", err)
+	}
+}
+
+func TestResolveConfiguredSrcAddrPropagatesSourceDeviceAddrLoadError(t *testing.T) {
+	restore := stubSourceDeviceResolver(t, func(device string) (*net.Interface, error) {
+		return &net.Interface{Name: device}, nil
+	}, func(_ *net.Interface) ([]net.Addr, error) {
+		return nil, fmt.Errorf("boom")
+	})
+	defer restore()
+
+	_, _, err := ResolveConfiguredSrcAddr(net.ParseIP("1.1.1.1"), "", "eth0")
+	if err == nil {
+		t.Fatal("ResolveConfiguredSrcAddr() error = nil, want propagated addrs error")
+	}
+	if err.Error() != `load source device "eth0" addresses: boom` {
+		t.Fatalf("err = %q, want propagated addrs error", err.Error())
+	}
+}
+
+func TestNormalizeExplicitSourceConfigPropagatesSourceDeviceAddrLoadError(t *testing.T) {
+	restore := stubSourceDeviceResolver(t, func(device string) (*net.Interface, error) {
+		return &net.Interface{Name: device}, nil
+	}, func(_ *net.Interface) ([]net.Addr, error) {
+		return nil, fmt.Errorf("boom")
+	})
+	defer restore()
+
+	cfg := Config{
+		OSType:       3,
+		DstIP:        net.ParseIP("1.1.1.1"),
+		SourceDevice: "eth0",
+	}
+
+	_, _, err := NormalizeExplicitSourceConfig(UDPTrace, cfg)
+	if err == nil {
+		t.Fatal("NormalizeExplicitSourceConfig() error = nil, want propagated addrs error")
+	}
+	if err.Error() != `load source device "eth0" addresses: boom` {
+		t.Fatalf("err = %q, want propagated addrs error", err.Error())
 	}
 }
 

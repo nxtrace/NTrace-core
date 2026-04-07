@@ -28,13 +28,13 @@ func ResolveSourceDevice(device string) (*net.Interface, error) {
 	return dev, nil
 }
 
-func ResolveSourceDeviceAddr(dev *net.Interface, dstIP net.IP) string {
+func ResolveSourceDeviceAddr(dev *net.Interface, dstIP net.IP) (string, error) {
 	if dev == nil || dstIP == nil {
-		return ""
+		return "", nil
 	}
 	addrs, err := loadSourceDeviceAddrs(dev)
 	if err != nil {
-		return ""
+		return "", fmt.Errorf("load source device %q addresses: %w", dev.Name, err)
 	}
 	var candidate string
 	for _, addr := range addrs {
@@ -51,10 +51,10 @@ func ResolveSourceDeviceAddr(dev *net.Interface, dstIP net.IP) string {
 			parsed.IsLoopback() ||
 			parsed.IsLinkLocalUnicast() ||
 			parsed.IsLinkLocalMulticast()) {
-			return candidate
+			return candidate, nil
 		}
 	}
-	return candidate
+	return candidate, nil
 }
 
 func ResolveFallbackSrcAddr(dstIP net.IP) string {
@@ -83,7 +83,11 @@ func ResolveConfiguredSrcAddr(dstIP net.IP, srcAddr, srcDev string) (resolved st
 	if err != nil {
 		return "", false, err
 	}
-	if resolved := ResolveSourceDeviceAddr(dev, dstIP); resolved != "" {
+	resolved, err = ResolveSourceDeviceAddr(dev, dstIP)
+	if err != nil {
+		return "", false, err
+	}
+	if resolved != "" {
 		return resolved, false, nil
 	}
 	return ResolveFallbackSrcAddr(dstIP), false, nil
@@ -112,7 +116,10 @@ func NormalizeExplicitSourceConfig(method Method, config Config) (Config, string
 		return config, "", err
 	}
 	if !explicitSource {
-		resolved := ResolveSourceDeviceAddr(dev, config.DstIP)
+		resolved, err := ResolveSourceDeviceAddr(dev, config.DstIP)
+		if err != nil {
+			return config, "", err
+		}
 		if resolved == "" {
 			return config, "", fmt.Errorf("source device %q has no usable %s address", config.SourceDevice, sourceFamilyLabel(config.DstIP))
 		}
