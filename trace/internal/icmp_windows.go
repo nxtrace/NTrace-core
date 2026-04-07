@@ -150,10 +150,6 @@ func (s *ICMPSpec) SendICMP(ctx context.Context, ipHdr gopacket.NetworkLayer, ic
 		}
 		ttl := int(ip4.TTL)
 
-		if shouldUseICMPv4RawSend(ip4) {
-			return s.sendICMPv4WithWinDivert(ip4, icmpHdr, payload)
-		}
-
 		buf := gopacket.NewSerializeBuffer()
 		opts := gopacket.SerializeOptions{
 			ComputeChecksums: true,
@@ -231,35 +227,11 @@ func (s *ICMPSpec) SendICMP(ctx context.Context, ipHdr gopacket.NetworkLayer, ic
 }
 
 func shouldUseICMPv4RawSend(ip4 *layers.IPv4) bool {
-	return ip4 != nil && ip4.TOS != 0
+	return false
 }
 
 func shouldUseICMPv6RawSend(ip6 *layers.IPv6) bool {
 	return ip6 != nil && ip6.TrafficClass != 0
-}
-
-func (s *ICMPSpec) sendICMPv4WithWinDivert(ip4 *layers.IPv4, icmpHdr gopacket.SerializableLayer, payload []byte) (time.Time, error) {
-	s.hopLimitLock.Lock()
-	defer s.hopLimitLock.Unlock()
-
-	if err := s.ensureICMPSendHandle(false); err != nil {
-		return time.Time{}, fmt.Errorf("ICMPv4 --tos on Windows requires WinDivert send support: %w", err)
-	}
-
-	buf := gopacket.NewSerializeBuffer()
-	opts := gopacket.SerializeOptions{
-		ComputeChecksums: true,
-		FixLengths:       true,
-	}
-	if err := gopacket.SerializeLayers(buf, opts, ip4, icmpHdr, gopacket.Payload(payload)); err != nil {
-		return time.Time{}, err
-	}
-
-	start := time.Now()
-	if _, err := s.sendHandle.Send(buf.Bytes(), &s.sendAddr); err != nil {
-		return time.Time{}, err
-	}
-	return start, nil
 }
 
 func (s *ICMPSpec) sendICMPv6WithWinDivert(ip6 *layers.IPv6, icmpHdr, icmpEcho gopacket.SerializableLayer, payload []byte) (time.Time, error) {

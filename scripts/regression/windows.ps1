@@ -113,13 +113,8 @@ function Invoke-CommandWithTimeout {
     )
     $stdoutFile = "$OutFile.stdout"
     $stderrFile = "$OutFile.stderr"
-    $scriptFile = "$OutFile.cmd"
-    Remove-Item -Force -ErrorAction Ignore $OutFile, $stdoutFile, $stderrFile, $scriptFile
-    Set-Content -Path $scriptFile -Encoding ascii -Value @(
-        "@echo off"
-        $Command
-    )
-    $proc = Start-Process -FilePath "cmd.exe" -ArgumentList "/d", "/c", "`"$scriptFile`"" -RedirectStandardOutput $stdoutFile -RedirectStandardError $stderrFile -PassThru -WindowStyle Hidden
+    Remove-Item -Force -ErrorAction Ignore $OutFile, $stdoutFile, $stderrFile
+    $proc = Start-Process -FilePath "cmd.exe" -ArgumentList @("/d", "/c", $Command) -RedirectStandardOutput $stdoutFile -RedirectStandardError $stderrFile -PassThru -WindowStyle Hidden
     if (-not $proc.WaitForExit($Seconds * 1000)) {
         Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
         $exitCode = 124
@@ -137,7 +132,6 @@ function Invoke-CommandWithTimeout {
         Set-Content -Path $OutFile -Value $stdoutText
         Set-Content -Path $stderrFile -Value $stderrText
     }
-    Remove-Item -Force -ErrorAction Ignore $scriptFile
     return $exitCode
 }
 
@@ -152,7 +146,8 @@ function Run-Cmd {
     $out = Join-Path $ArtifactsDir "$Name.txt"
     $rc = Invoke-CommandWithTimeout -Command $Command -OutFile $out -Seconds $Seconds
     $content = if (Test-Path $out) { Get-Content -Raw -Path $out } else { "" }
-    if ($rc -eq 0 -or (-not [string]::IsNullOrWhiteSpace($SuccessPattern) -and $content -match $SuccessPattern)) {
+    $patternMatched = [string]::IsNullOrWhiteSpace($SuccessPattern) -or $content -match $SuccessPattern
+    if ($rc -eq 0 -and $patternMatched) {
         Write-Record $Name PASS $Note
     }
     else {

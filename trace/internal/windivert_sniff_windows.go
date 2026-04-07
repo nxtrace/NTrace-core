@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
+	"github.com/nxtrace/NTrace-core/util"
 	wd "github.com/xjasonlyu/windivert-go"
 )
 
@@ -24,6 +25,12 @@ type winDivertICMPPacket struct {
 	echoSeq   int
 	echoReply bool
 }
+
+var (
+	openWinDivertSniffCall = OpenWinDivertHandle
+	winDivertSniffFatal    = func(msg string) { log.Fatal(msg) }
+	winDivertSniffDevMode  = func() bool { return util.EnvDevMode }
+)
 
 func winDivertICMPFilter(ipVersion int, srcIP net.IP) string {
 	if ipVersion == 4 {
@@ -46,9 +53,14 @@ func winDivertTCPFilter(ipVersion int, dstIP, srcIP net.IP, dstPort int) string 
 }
 
 func openWinDivertSniffHandle(ctx context.Context, filter, action string) (wd.Handle, func()) {
-	handle, err := OpenWinDivertHandle(filter, wd.FlagSniff|wd.FlagRecvOnly)
+	handle, err := openWinDivertSniffCall(filter, wd.FlagSniff|wd.FlagRecvOnly)
 	if err != nil {
-		log.Fatal(formatWinDivertRequiredError(fmt.Sprintf("Windows WinDivert 嗅探 (%s)", action), err))
+		msg := formatWinDivertRequiredError(fmt.Sprintf("Windows WinDivert 嗅探 (%s)", action), err)
+		if winDivertSniffDevMode() {
+			panic(msg)
+		}
+		winDivertSniffFatal(msg)
+		return 0, func() {}
 	}
 
 	var closeOnce sync.Once

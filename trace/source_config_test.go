@@ -2,6 +2,7 @@ package trace
 
 import (
 	"net"
+	"strings"
 	"testing"
 )
 
@@ -140,7 +141,8 @@ func TestNormalizeExplicitSourceConfigWindowsWarnsAndClearsDevice(t *testing.T) 
 
 func TestNormalizeExplicitSourceConfigWindowsIgnoresDeviceWhenSourceExplicit(t *testing.T) {
 	restore := stubSourceDeviceResolver(t, func(device string) (*net.Interface, error) {
-		return &net.Interface{Name: device}, nil
+		t.Fatalf("ResolveSourceDevice should not be called when Windows explicit source is set")
+		return nil, nil
 	}, func(_ *net.Interface) ([]net.Addr, error) {
 		return nil, nil
 	})
@@ -166,6 +168,26 @@ func TestNormalizeExplicitSourceConfigWindowsIgnoresDeviceWhenSourceExplicit(t *
 	wantWarning := "Windows 当前不支持按 --dev 绑定真实出接口；已忽略 --dev，继续使用 --source"
 	if warning != wantWarning {
 		t.Fatalf("warning = %q, want %q", warning, wantWarning)
+	}
+}
+
+func TestResolveSourceDeviceNotFoundWithoutNilError(t *testing.T) {
+	restore := stubSourceDeviceResolver(t, func(device string) (*net.Interface, error) {
+		return nil, nil
+	}, func(_ *net.Interface) ([]net.Addr, error) {
+		return nil, nil
+	})
+	defer restore()
+
+	_, err := ResolveSourceDevice("missing0")
+	if err == nil {
+		t.Fatal("ResolveSourceDevice() error = nil, want not-found error")
+	}
+	if err.Error() != `source device "missing0" not found` {
+		t.Fatalf("err = %q, want clean not-found error", err.Error())
+	}
+	if strings.Contains(err.Error(), "<nil>") {
+		t.Fatalf("err = %q, should not contain <nil>", err.Error())
 	}
 }
 

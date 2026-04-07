@@ -247,10 +247,19 @@ check_mtu_non_tty_plain() {
 }
 
 detect_capture_iface() {
+  local dest="${1:-1.1.1.1}"
   if [[ "${PLATFORM}" == "macos" ]]; then
-    route -n get 1.1.1.1 2>/dev/null | awk '/interface:/{print $2; exit}'
+    if [[ "${dest}" == *:* ]]; then
+      route -n get -inet6 "${dest}" 2>/dev/null | awk '/interface:/{print $2; exit}'
+    else
+      route -n get "${dest}" 2>/dev/null | awk '/interface:/{print $2; exit}'
+    fi
   else
-    ip route get 1.1.1.1 2>/dev/null | sed -n 's/.* dev \([^ ]*\).*/\1/p' | head -n1
+    if [[ "${dest}" == *:* ]]; then
+      ip -6 route get "${dest}" 2>/dev/null | sed -n 's/.* dev \([^ ]*\).*/\1/p' | head -n1
+    else
+      ip route get "${dest}" 2>/dev/null | sed -n 's/.* dev \([^ ]*\).*/\1/p' | head -n1
+    fi
   fi
 }
 
@@ -276,7 +285,7 @@ capture_psize_tos() {
     return
   fi
   local iface
-  iface="$(detect_capture_iface)"
+  iface="$(detect_capture_iface "${filter_host}")"
   if [[ -z "${iface}" ]]; then
     record "${name}" SKIP "${note}; capture interface not detected"
     return

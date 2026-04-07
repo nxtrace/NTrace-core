@@ -19,8 +19,11 @@ func ResolveSourceDevice(device string) (*net.Interface, error) {
 		return nil, nil
 	}
 	dev, err := lookupSourceDeviceByName(trimmed)
-	if err != nil || dev == nil {
-		return nil, fmt.Errorf("unable to find source device %q: %v", trimmed, err)
+	if err != nil {
+		return nil, fmt.Errorf("unable to resolve source device %q: %w", trimmed, err)
+	}
+	if dev == nil {
+		return nil, fmt.Errorf("source device %q not found", trimmed)
 	}
 	return dev, nil
 }
@@ -98,6 +101,10 @@ func NormalizeExplicitSourceConfig(method Method, config Config) (Config, string
 	}
 	if config.SourceDevice == "" {
 		return config, "", nil
+	}
+	if config.OSType == 2 && explicitSource {
+		config.SourceDevice = ""
+		return config, windowsSourceDeviceWarning(true), nil
 	}
 
 	dev, err := ResolveSourceDevice(config.SourceDevice)

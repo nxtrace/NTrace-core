@@ -6,7 +6,9 @@ import (
 	"bytes"
 	"errors"
 	"log"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	wd "github.com/xjasonlyu/windivert-go"
@@ -42,6 +44,50 @@ func TestOpenWinDivertHandle_CatchesDLLLoadPanic(t *testing.T) {
 	}
 }
 
+func TestCheckWinDivertDLLPreloadsExecutableDirectoryDLL(t *testing.T) {
+	oldResolve := resolveWinDivertExecutablePath
+	oldLoad := loadWinDivertDLLEx
+	oldHandle := preloadedWinDivertDLL
+	oldErr := preloadWinDivertDLLErr
+	oldOnce := preloadWinDivertDLLOnce
+	resolveWinDivertExecutablePath = func() (string, error) {
+		return `C:\nexttrace\bin\nexttrace.exe`, nil
+	}
+	var gotPath string
+	var gotFlags uintptr
+	loadWinDivertDLLEx = func(path string, flags uintptr) (windows.Handle, error) {
+		gotPath = path
+		gotFlags = flags
+		return windows.Handle(1234), nil
+	}
+	preloadedWinDivertDLL = 0
+	preloadWinDivertDLLErr = nil
+	preloadWinDivertDLLOnce = sync.Once{}
+	defer func() {
+		resolveWinDivertExecutablePath = oldResolve
+		loadWinDivertDLLEx = oldLoad
+		preloadedWinDivertDLL = oldHandle
+		preloadWinDivertDLLErr = oldErr
+		preloadWinDivertDLLOnce = oldOnce
+	}()
+
+	if err := checkWinDivertDLL(); err != nil {
+		t.Fatalf("checkWinDivertDLL() error = %v", err)
+	}
+
+	wantPath := filepath.Join(`C:\nexttrace\bin`, winDivertDLLName)
+	if gotPath != wantPath {
+		t.Fatalf("preload path = %q, want %q", gotPath, wantPath)
+	}
+	wantFlags := uintptr(windows.LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | windows.LOAD_LIBRARY_SEARCH_APPLICATION_DIR)
+	if gotFlags != wantFlags {
+		t.Fatalf("preload flags = %#x, want %#x", gotFlags, wantFlags)
+	}
+	if preloadedWinDivertDLL != windows.Handle(1234) {
+		t.Fatalf("preloadedWinDivertDLL = %v, want 1234", preloadedWinDivertDLL)
+	}
+}
+
 func TestDetectWinDivertErrorKind(t *testing.T) {
 	tests := []struct {
 		name string
@@ -53,6 +99,15 @@ func TestDetectWinDivertErrorKind(t *testing.T) {
 			err: &windows.DLLError{
 				Err:     windows.ERROR_MOD_NOT_FOUND,
 				ObjName: winDivertDLLName,
+				Msg:     "Failed to load WinDivert.dll",
+			},
+			want: winDivertErrorDLLMissing,
+		},
+		{
+			name: "dll missing absolute path",
+			err: &windows.DLLError{
+				Err:     windows.ERROR_MOD_NOT_FOUND,
+				ObjName: `C:\nexttrace\bin\WinDivert.dll`,
 				Msg:     "Failed to load WinDivert.dll",
 			},
 			want: winDivertErrorDLLMissing,
@@ -79,6 +134,19 @@ func TestFormatWinDivertRequiredError_IncludesInitHint(t *testing.T) {
 	}
 	if !strings.Contains(msg, "可执行文件目录") {
 		t.Fatalf("message missing executable-directory hint: %q", msg)
+	}
+}
+
+func TestFormatWinDivertIssuePrefersWrappedKind(t *testing.T) {
+	msg := formatWinDivertIssue(&winDivertError{
+		Kind:  winDivertErrorDriverBlocked,
+		Cause: wd.Error(windows.ERROR_ACCESS_DENIED),
+	})
+	if !strings.Contains(msg, "被系统、安全软件或虚拟化环境拦截") {
+		t.Fatalf("message = %q, want driver-blocked wording", msg)
+	}
+	if strings.Contains(msg, "管理员权限") {
+		t.Fatalf("message = %q, should not fall back to access-denied classification", msg)
 	}
 }
 
