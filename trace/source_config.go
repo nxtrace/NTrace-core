@@ -104,7 +104,7 @@ func NormalizeExplicitSourceConfig(method Method, config Config) (Config, string
 	}
 	if config.OSType == 2 && explicitSource {
 		config.SourceDevice = ""
-		return config, windowsSourceDeviceWarning(true), nil
+		return config, "", nil
 	}
 
 	dev, err := ResolveSourceDevice(config.SourceDevice)
@@ -121,7 +121,7 @@ func NormalizeExplicitSourceConfig(method Method, config Config) (Config, string
 
 	if config.OSType == 2 {
 		config.SourceDevice = ""
-		return config, windowsSourceDeviceWarning(explicitSource), nil
+		return config, "", nil
 	}
 	return config, "", nil
 }
@@ -131,11 +131,4 @@ func sourceFamilyLabel(dstIP net.IP) string {
 		return "IPv6"
 	}
 	return "IPv4"
-}
-
-func windowsSourceDeviceWarning(explicitSource bool) string {
-	if explicitSource {
-		return "Windows 当前不支持按 --dev 绑定真实出接口；已忽略 --dev，继续使用 --source"
-	}
-	return "Windows 当前不支持按 --dev 绑定真实出接口；已使用该设备地址作为 source address，实际出口仍由系统路由决定"
 }

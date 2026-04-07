@@ -109,7 +109,7 @@ func TestNormalizeExplicitSourceConfigRejectsDeviceWithoutMatchingFamily(t *test
 	}
 }
 
-func TestNormalizeExplicitSourceConfigWindowsWarnsAndClearsDevice(t *testing.T) {
+func TestNormalizeExplicitSourceConfigWindowsClearsDeviceWithoutWarning(t *testing.T) {
 	restore := stubSourceDeviceResolver(t, func(device string) (*net.Interface, error) {
 		return &net.Interface{Name: device}, nil
 	}, func(_ *net.Interface) ([]net.Addr, error) {
@@ -133,13 +133,12 @@ func TestNormalizeExplicitSourceConfigWindowsWarnsAndClearsDevice(t *testing.T) 
 	if got.SourceDevice != "" {
 		t.Fatalf("SourceDevice = %q, want empty", got.SourceDevice)
 	}
-	wantWarning := "Windows 当前不支持按 --dev 绑定真实出接口；已使用该设备地址作为 source address，实际出口仍由系统路由决定"
-	if warning != wantWarning {
-		t.Fatalf("warning = %q, want %q", warning, wantWarning)
+	if warning != "" {
+		t.Fatalf("warning = %q, want empty", warning)
 	}
 }
 
-func TestNormalizeExplicitSourceConfigWindowsIgnoresDeviceWhenSourceExplicit(t *testing.T) {
+func TestNormalizeExplicitSourceConfigWindowsIgnoresDeviceWhenSourceExplicitWithoutWarning(t *testing.T) {
 	restore := stubSourceDeviceResolver(t, func(device string) (*net.Interface, error) {
 		t.Fatalf("ResolveSourceDevice should not be called when Windows explicit source is set")
 		return nil, nil
@@ -165,9 +164,8 @@ func TestNormalizeExplicitSourceConfigWindowsIgnoresDeviceWhenSourceExplicit(t *
 	if got.SourceDevice != "" {
 		t.Fatalf("SourceDevice = %q, want empty", got.SourceDevice)
 	}
-	wantWarning := "Windows 当前不支持按 --dev 绑定真实出接口；已忽略 --dev，继续使用 --source"
-	if warning != wantWarning {
-		t.Fatalf("warning = %q, want %q", warning, wantWarning)
+	if warning != "" {
+		t.Fatalf("warning = %q, want empty", warning)
 	}
 }
 
