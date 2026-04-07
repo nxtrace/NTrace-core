@@ -150,7 +150,12 @@ check_json_pure() {
   local note="$2"
   local command_string="$3"
   local out="${ART_DIR}/${name}.txt"
+  local service_err='request failed - please try again later'
   if ! run_timeout_cmd 180 "${command_string}" >"${out}" 2>&1; then
+    if grep -Fq "${service_err}" "${out}"; then
+      record "${name}" SKIP "${note}; external service unavailable"
+      return
+    fi
     record "${name}" FAIL "${note}; command failed"
     return
   fi
@@ -161,6 +166,10 @@ data = open(sys.argv[1], 'rb').read().lstrip()
 print(chr(data[0]) if data else '')
 PY
 )"
+  if grep -Fq "${service_err}" "${out}"; then
+    record "${name}" SKIP "${note}; external service unavailable"
+    return
+  fi
   if [[ "${first}" == "{" ]] && ! grep -Fq 'preferred API IP' "${out}"; then
     record "${name}" PASS "${note}"
   else
