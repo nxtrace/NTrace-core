@@ -74,6 +74,7 @@ function Resolve-TsharkPath {
         }
     }
     catch {
+        # Intentionally ignore Get-Command failures while probing optional tshark locations.
     }
     foreach ($root in @($env:ProgramFiles, $env:ProgramW6432, ${env:ProgramFiles(x86)})) {
         if (-not [string]::IsNullOrWhiteSpace($root)) {
@@ -113,8 +114,13 @@ function Invoke-CommandWithTimeout {
     )
     $stdoutFile = "$OutFile.stdout"
     $stderrFile = "$OutFile.stderr"
-    Remove-Item -Force -ErrorAction Ignore $OutFile, $stdoutFile, $stderrFile
-    $proc = Start-Process -FilePath "cmd.exe" -ArgumentList @("/d", "/c", $Command) -RedirectStandardOutput $stdoutFile -RedirectStandardError $stderrFile -PassThru -WindowStyle Hidden
+    $scriptFile = "$OutFile.cmd"
+    Remove-Item -Force -ErrorAction Ignore $OutFile, $stdoutFile, $stderrFile, $scriptFile
+    Set-Content -Path $scriptFile -Encoding Unicode -Value @(
+        "@echo off"
+        $Command
+    )
+    $proc = Start-Process -FilePath "cmd.exe" -ArgumentList "/d", "/c", "`"$scriptFile`"" -RedirectStandardOutput $stdoutFile -RedirectStandardError $stderrFile -PassThru -WindowStyle Hidden
     if (-not $proc.WaitForExit($Seconds * 1000)) {
         Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
         $exitCode = 124
@@ -132,6 +138,7 @@ function Invoke-CommandWithTimeout {
         Set-Content -Path $OutFile -Value $stdoutText
         Set-Content -Path $stderrFile -Value $stderrText
     }
+    Remove-Item -Force -ErrorAction Ignore $scriptFile
     return $exitCode
 }
 

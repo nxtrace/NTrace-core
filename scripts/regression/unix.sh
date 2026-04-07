@@ -76,7 +76,7 @@ record_ipv6_skip() {
 display_path() {
   local path="$1"
   if [[ -n "${HOME:-}" && "${path}" == "${HOME}"* ]]; then
-    printf '~%s\n' "${path#${HOME}}"
+    printf '~%s\n' "${path#"$HOME"}"
     return
   fi
   printf '%s\n' "${path}"
@@ -292,7 +292,7 @@ capture_psize_tos() {
   fi
   rm -f "${dump}" "${out}"
   if (( NEED_SUDO )); then
-    sudo -E tcpdump -i "${iface}" -nn -vvv -c 1 "dst host ${filter_host}" >"${dump}" 2>&1 &
+    sudo -E bash -lc 'exec tcpdump -i "$1" -nn -vvv -c 1 "dst host $2" >"$3" 2>&1' _ "${iface}" "${filter_host}" "${dump}" &
   else
     tcpdump -i "${iface}" -nn -vvv -c 1 "dst host ${filter_host}" >"${dump}" 2>&1 &
   fi
