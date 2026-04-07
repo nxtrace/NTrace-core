@@ -35,6 +35,8 @@ func TestNormalizeExplicitSourceConfigPrefersExplicitSource(t *testing.T) {
 		return []net.Addr{&net.IPNet{IP: net.ParseIP("198.51.100.10"), Mask: net.CIDRMask(24, 32)}}, nil
 	})
 	defer restore()
+	restoreGOOS := stubCurrentGOOS(t, "darwin")
+	defer restoreGOOS()
 
 	cfg := Config{
 		OSType:       1,
