@@ -127,9 +127,6 @@ func normalizeTraceRequest(req *traceRequest) (int, error) {
 	if req.IPv4Only && req.IPv6Only {
 		return http.StatusBadRequest, errors.New("ipv4_only and ipv6_only cannot be true at the same time")
 	}
-	if err := validateSourceDevice(req.SourceDevice); err != nil {
-		return http.StatusBadRequest, err
-	}
 	if req.IntervalMs <= 0 {
 		req.IntervalMs = 0
 	}
@@ -246,6 +243,14 @@ func prepareTrace(ctx context.Context, req traceRequest) (*traceExecution, int, 
 	exec.Config, err = buildTraceConfig(exec.Req, exec.Method, ip, dataProvider, protocol.dstPort)
 	if err != nil {
 		return nil, http.StatusBadRequest, err
+	}
+	var warning string
+	exec.Config, warning, err = trace.NormalizeExplicitSourceConfig(exec.Method, exec.Config)
+	if err != nil {
+		return nil, http.StatusBadRequest, err
+	}
+	if warning != "" {
+		log.Printf("[trace] %s", warning)
 	}
 	exec.Config.Context = ctx
 
@@ -668,25 +673,6 @@ func shouldGenerateMap(provider string) bool {
 		}
 	}
 	return false
-}
-
-func validateSourceDevice(device string) error {
-	device = strings.TrimSpace(device)
-	if device == "" {
-		return nil
-	}
-
-	ifaces, err := net.Interfaces()
-	if err != nil {
-		return fmt.Errorf("list network interfaces: %w", err)
-	}
-	for _, iface := range ifaces {
-		if iface.Name == device {
-			return nil
-		}
-	}
-
-	return fmt.Errorf("unknown source_device %q", device)
 }
 
 func ensureLeoMoeConnection() {

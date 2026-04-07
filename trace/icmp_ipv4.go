@@ -281,6 +281,7 @@ func (t *ICMPTracer) Execute() (res *Result, err error) {
 		t.SrcIP,
 		t.DstIP,
 	)
+	applyICMPSourceDevice(s, t.OSType, t.SourceDevice)
 
 	s.InitICMP()
 	defer s.Close()

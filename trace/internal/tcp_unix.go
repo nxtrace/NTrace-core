@@ -47,6 +47,15 @@ func (s *TCPSpec) InitTCP() {
 		}
 		log.Fatalf("(InitTCP) ListenPacket(%s, %s) failed: %v", network, s.SrcIP, err)
 	}
+	if s.SourceDevice != "" {
+		if err := bindPacketConnToSourceDevice(tcp, s.IPVersion, s.SourceDevice); err != nil {
+			_ = tcp.Close()
+			if util.EnvDevMode {
+				panic(fmt.Errorf("(InitTCP) bind source device %q failed: %v", s.SourceDevice, err))
+			}
+			log.Fatalf("(InitTCP) bind source device %q failed: %v", s.SourceDevice, err)
+		}
+	}
 	s.tcp = tcp
 
 	if s.IPVersion == 4 {

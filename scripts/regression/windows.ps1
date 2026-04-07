@@ -51,6 +51,25 @@ function Format-DisplayPath {
     return $Path
 }
 
+function Test-EnvFlag {
+    param([string]$Value)
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return $false
+    }
+    switch ($Value.Trim().ToLowerInvariant()) {
+        "1" { return $true }
+        "true" { return $true }
+        default { return $false }
+    }
+}
+
+function Ensure-LastExitCodeSuccess {
+    param([string]$Label)
+    if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) {
+        throw "$Label failed with exit code $LASTEXITCODE"
+    }
+}
+
 function Test-IsAdmin {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = [Security.Principal.WindowsPrincipal]::new($identity)
@@ -74,6 +93,7 @@ function Resolve-TsharkPath {
         }
     }
     catch {
+        # Intentionally ignore Get-Command failures while probing optional tshark locations.
     }
     foreach ($root in @($env:ProgramFiles, $env:ProgramW6432, ${env:ProgramFiles(x86)})) {
         if (-not [string]::IsNullOrWhiteSpace($root)) {
@@ -115,13 +135,17 @@ function Invoke-CommandWithTimeout {
     $stderrFile = "$OutFile.stderr"
     $scriptFile = "$OutFile.cmd"
     Remove-Item -Force -ErrorAction Ignore $OutFile, $stdoutFile, $stderrFile, $scriptFile
-    Set-Content -Path $scriptFile -Encoding ascii -Value @(
+    Set-Content -Path $scriptFile -Encoding Unicode -Value @(
         "@echo off"
         $Command
     )
     $proc = Start-Process -FilePath "cmd.exe" -ArgumentList "/d", "/c", "`"$scriptFile`"" -RedirectStandardOutput $stdoutFile -RedirectStandardError $stderrFile -PassThru -WindowStyle Hidden
     if (-not $proc.WaitForExit($Seconds * 1000)) {
-        Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+        try {
+            Start-Process -FilePath "taskkill.exe" -ArgumentList "/PID", "$($proc.Id)", "/T", "/F" -Wait -WindowStyle Hidden -ErrorAction Stop | Out-Null
+        }
+        catch {
+        }
         $exitCode = 124
     }
     else {
@@ -152,7 +176,8 @@ function Run-Cmd {
     $out = Join-Path $ArtifactsDir "$Name.txt"
     $rc = Invoke-CommandWithTimeout -Command $Command -OutFile $out -Seconds $Seconds
     $content = if (Test-Path $out) { Get-Content -Raw -Path $out } else { "" }
-    if ($rc -eq 0 -or (-not [string]::IsNullOrWhiteSpace($SuccessPattern) -and $content -match $SuccessPattern)) {
+    $patternMatched = [string]::IsNullOrWhiteSpace($SuccessPattern) -or $content -match $SuccessPattern
+    if ($rc -eq 0 -and $patternMatched) {
         Write-Record $Name PASS $Note
     }
     else {
@@ -249,6 +274,7 @@ function Check-PacketCaptureIfSupported {
         [string]$Name,
         [string]$Note,
         [string]$Command,
+        [string]$TargetAddress,
         [string]$DisplayFilter,
         [string]$Expect1,
         [string]$Expect2
@@ -257,7 +283,7 @@ function Check-PacketCaptureIfSupported {
         Write-SkipRecord $Name $Note $Reason
         return
     }
-    Check-PacketCapture -Name $Name -Note $Note -Command $Command -DisplayFilter $DisplayFilter -Expect1 $Expect1 -Expect2 $Expect2
+    Check-PacketCapture -Name $Name -Note $Note -Command $Command -TargetAddress $TargetAddress -DisplayFilter $DisplayFilter -Expect1 $Expect1 -Expect2 $Expect2
 }
 
 function Wait-FileContains {
@@ -382,10 +408,6 @@ function Check-OutputFile {
     $out = Join-Path $ArtifactsDir "$Name.txt"
     Remove-Item -Force -ErrorAction Ignore $Path, $DefaultLog
     $rc = Invoke-CommandWithTimeout -Command $Command -OutFile $out -Seconds 150
-    if ((Test-Path $Path) -and (Get-Item $Path).Length -gt 0) {
-        Write-Record $Name PASS $Note
-        return
-    }
     if ($rc -ne 0) {
         Write-Record $Name FAIL "$Note; command failed"
         return
@@ -402,11 +424,12 @@ function Check-PacketCapture {
         [string]$Name,
         [string]$Note,
         [string]$Command,
+        [string]$TargetAddress,
         [string]$DisplayFilter,
         [string]$Expect1,
         [string]$Expect2
     )
-    $captureFamily = if ($DisplayFilter -match ":") { "IPv6" } else { "IPv4" }
+    $captureFamily = if ((-not [string]::IsNullOrWhiteSpace($TargetAddress) -and $TargetAddress -match ":") -or $DisplayFilter -match ":") { "IPv6" } else { "IPv4" }
     $tsharkExe = Resolve-TsharkPath -ExplicitPath $TsharkPath
     $probeLog = Join-Path $ArtifactsDir "_tshark_probe.txt"
     if (-not $tsharkExe) {
@@ -424,7 +447,7 @@ function Check-PacketCapture {
     $dump = Join-Path $ArtifactsDir "$Name.tshark.txt"
     $out = Join-Path $ArtifactsDir "$Name.cmd.txt"
     Remove-Item -Force -ErrorAction Ignore $dump, $out
-    $iface = Get-CaptureInterface -AddressFamily $captureFamily
+    $iface = Get-CaptureInterface -AddressFamily $captureFamily -TargetAddress $TargetAddress
     Set-Content -Path $probeLog -Value @(
         "explicit=$TsharkPath"
         "resolved=$tsharkExe"
@@ -432,6 +455,7 @@ function Check-PacketCapture {
         "programw6432=$env:ProgramW6432"
         "programfiles_x86=${env:ProgramFiles(x86)}"
         "capture_family=$captureFamily"
+        "target_address=$TargetAddress"
         "route_interface_index=$($iface.InterfaceIndex)"
         "route_interface_alias=$($iface.InterfaceAlias)"
         "route_interface_guid=$($iface.InterfaceGuid)"
@@ -498,15 +522,30 @@ function Wait-HttpReady {
 
 function Get-CaptureInterface {
     param(
+        [string]$TargetAddress = "",
         [ValidateSet("IPv4", "IPv6")]
         [string]$AddressFamily = "IPv4"
     )
     try {
-        $family = if ($AddressFamily -eq "IPv6") { "IPv6" } else { "IPv4" }
-        $prefix = if ($family -eq "IPv6") { "::/0" } else { "0.0.0.0/0" }
-        $route = Get-NetRoute -AddressFamily $family -DestinationPrefix $prefix |
-            Sort-Object -Property RouteMetric, InterfaceMetric |
-            Select-Object -First 1
+        $family = if ((-not [string]::IsNullOrWhiteSpace($TargetAddress) -and $TargetAddress -match ":") -or $AddressFamily -eq "IPv6") { "IPv6" } else { "IPv4" }
+        $route = $null
+        $findNetRoute = Get-Command Find-NetRoute -ErrorAction SilentlyContinue
+        if (-not [string]::IsNullOrWhiteSpace($TargetAddress) -and $findNetRoute) {
+            try {
+                $route = Find-NetRoute -RemoteIPAddress $TargetAddress -ErrorAction Stop |
+                    Sort-Object -Property RouteMetric, InterfaceMetric |
+                    Select-Object -First 1
+            }
+            catch {
+                $route = $null
+            }
+        }
+        if (-not $route) {
+            $prefix = if ($family -eq "IPv6") { "::/0" } else { "0.0.0.0/0" }
+            $route = Get-NetRoute -AddressFamily $family -DestinationPrefix $prefix |
+                Sort-Object -Property RouteMetric, InterfaceMetric |
+                Select-Object -First 1
+        }
         if (-not $route -or -not $route.InterfaceIndex) {
             return $null
         }
@@ -548,7 +587,14 @@ if (-not (Test-IsAdmin)) {
     throw "Please run this script in an elevated PowerShell session."
 }
 
-$IPv6Available = Test-IPv6Available
+$IPv6Reason = "IPv6 not available on this machine"
+if (Test-EnvFlag $env:NTRACE_SKIP_IPV6) {
+    $IPv6Available = $false
+    $IPv6Reason = "IPv6 checks disabled by NTRACE_SKIP_IPV6"
+}
+else {
+    $IPv6Available = Test-IPv6Available
+}
 @(
     "1.1.1.1 Cloudflare-v4"
 ) + $(if ($IPv6Available) { "2606:4700:4700::1111 Cloudflare-v6" }) | Set-Content -Path $Targets
@@ -558,15 +604,21 @@ Write-Host ("ipv6_available={0}" -f $(if ($IPv6Available) { 1 } else { 0 }))
 Push-Location $RepoRoot
 try {
     go build -trimpath -o $Bin .
+    Ensure-LastExitCodeSuccess "go build nexttrace-current"
     go build -trimpath -tags flavor_tiny -o $Tiny .
+    Ensure-LastExitCodeSuccess "go build nexttrace-tiny-current"
     go build -trimpath -tags flavor_ntr -o $Ntr .
+    Ensure-LastExitCodeSuccess "go build ntr-current"
     go test ./...
+    Ensure-LastExitCodeSuccess "go test"
     $windivertInitLog = Join-Path $ArtifactsDir "_windivert_init.txt"
     try {
         & $Bin --init *> $windivertInitLog
+        Ensure-LastExitCodeSuccess "nexttrace --init"
     }
     catch {
         $_ | Out-File -FilePath $windivertInitLog -Encoding utf8
+        throw
     }
 }
 finally {
@@ -586,9 +638,9 @@ if ($IPv6Available) {
     $udp6Capability = Get-CapabilityStatus -Name "udp6" -Label "UDPv6 tracing" -Command "`"$Bin`" --no-color -6 -U -q 1 -m 1 --timeout 1000 2606:4700:4700::1111" -SuccessPattern "hops max, .*UDP mode"
 }
 else {
-    $icmp6Capability = [pscustomobject]@{ Supported = $false; Reason = "IPv6 not available on this machine" }
-    $tcp6Capability = [pscustomobject]@{ Supported = $false; Reason = "IPv6 not available on this machine" }
-    $udp6Capability = [pscustomobject]@{ Supported = $false; Reason = "IPv6 not available on this machine" }
+    $icmp6Capability = [pscustomobject]@{ Supported = $false; Reason = $IPv6Reason }
+    $tcp6Capability = [pscustomobject]@{ Supported = $false; Reason = $IPv6Reason }
+    $udp6Capability = [pscustomobject]@{ Supported = $false; Reason = $IPv6Reason }
 }
 
 Run-CmdIfSupported $icmp4Capability.Supported $icmp4Capability.Reason "icmp4_basic" "ICMP IPv4 basic trace" "`"$Bin`" --no-color -q 1 -m 3 --timeout 1000 1.1.1.1" "hops max, .*ICMP mode"
@@ -620,12 +672,12 @@ Run-CmdIfSupported $icmp4Capability.Supported $icmp4Capability.Reason "fast_trac
 Run-CmdIfSupported $icmp4Capability.Supported $icmp4Capability.Reason "tiny_smoke" "nexttrace-tiny smoke" "`"$Tiny`" --no-color -q 1 -m 2 --timeout 1000 1.1.1.1" "hops max, .*ICMP mode"
 Run-CmdIfSupported $mtrCapability.Supported $mtrCapability.Reason "ntr_report" "ntr report smoke" "`"$Ntr`" --no-color -r -q 2 -i 300 --timeout 1000 -m 4 1.1.1.1" "(?m)^HOST:"
 
-Check-PacketCaptureIfSupported $icmp4Capability.Supported $icmp4Capability.Reason "psize_tos_icmp4" "ICMPv4 psize/tos packet capture" "`"$Bin`" --no-color -q 1 -m 1 --timeout 1000 --psize 84 -Q 46 1.1.1.1" "host 1.1.1.1" "Differentiated Services Field: 0x2e" "Total Length: 84"
-Check-PacketCaptureIfSupported $udp4Capability.Supported $udp4Capability.Reason "psize_tos_udp4" "UDPv4 psize/tos packet capture" "`"$Bin`" --no-color -U -q 1 -m 1 --timeout 1000 --psize 84 -Q 46 1.1.1.1" "host 1.1.1.1" "Differentiated Services Field: 0x2e" "Total Length: 84"
-Check-PacketCaptureIfSupported $tcp4Capability.Supported $tcp4Capability.Reason "psize_tos_tcp4" "TCPv4 psize/tos packet capture" "`"$Bin`" --no-color -T -q 1 -m 1 --timeout 1000 --psize 84 -Q 46 1.1.1.1" "host 1.1.1.1" "Differentiated Services Field: 0x2e" "Total Length: 84"
-Check-PacketCaptureIfSupported $icmp6Capability.Supported $icmp6Capability.Reason "psize_tos_icmp6" "ICMPv6 psize/tos packet capture" "`"$Bin`" --no-color -6 -q 1 -m 1 --timeout 1000 --psize 84 -Q 46 2606:4700:4700::1111" "host 2606:4700:4700::1111" "Traffic Class: 0x2e" "Payload Length: 44"
-Check-PacketCaptureIfSupported $udp6Capability.Supported $udp6Capability.Reason "psize_tos_udp6" "UDPv6 psize/tos packet capture" "`"$Bin`" --no-color -6 -U -q 1 -m 1 --timeout 1000 --psize 84 -Q 46 2606:4700:4700::1111" "host 2606:4700:4700::1111" "Traffic Class: 0x2e" "Payload Length: 44"
-Check-PacketCaptureIfSupported $tcp6Capability.Supported $tcp6Capability.Reason "psize_tos_tcp6" "TCPv6 psize/tos packet capture" "`"$Bin`" --no-color -6 -T -q 1 -m 1 --timeout 1000 --psize 84 -Q 46 2606:4700:4700::1111" "host 2606:4700:4700::1111" "Traffic Class: 0x2e" "Payload Length: 44"
+Check-PacketCaptureIfSupported $icmp4Capability.Supported $icmp4Capability.Reason "psize_tos_icmp4" "ICMPv4 psize/tos packet capture" "`"$Bin`" --no-color -q 1 -m 1 --timeout 1000 --psize 84 -Q 46 1.1.1.1" "1.1.1.1" "host 1.1.1.1" "Differentiated Services Field: 0x2e" "Total Length: 84"
+Check-PacketCaptureIfSupported $udp4Capability.Supported $udp4Capability.Reason "psize_tos_udp4" "UDPv4 psize/tos packet capture" "`"$Bin`" --no-color -U -q 1 -m 1 --timeout 1000 --psize 84 -Q 46 1.1.1.1" "1.1.1.1" "host 1.1.1.1" "Differentiated Services Field: 0x2e" "Total Length: 84"
+Check-PacketCaptureIfSupported $tcp4Capability.Supported $tcp4Capability.Reason "psize_tos_tcp4" "TCPv4 psize/tos packet capture" "`"$Bin`" --no-color -T -q 1 -m 1 --timeout 1000 --psize 84 -Q 46 1.1.1.1" "1.1.1.1" "host 1.1.1.1" "Differentiated Services Field: 0x2e" "Total Length: 84"
+Check-PacketCaptureIfSupported $icmp6Capability.Supported $icmp6Capability.Reason "psize_tos_icmp6" "ICMPv6 psize/tos packet capture" "`"$Bin`" --no-color -6 -q 1 -m 1 --timeout 1000 --psize 84 -Q 46 2606:4700:4700::1111" "2606:4700:4700::1111" "host 2606:4700:4700::1111" "Traffic Class: 0x2e" "Payload Length: 44"
+Check-PacketCaptureIfSupported $udp6Capability.Supported $udp6Capability.Reason "psize_tos_udp6" "UDPv6 psize/tos packet capture" "`"$Bin`" --no-color -6 -U -q 1 -m 1 --timeout 1000 --psize 84 -Q 46 2606:4700:4700::1111" "2606:4700:4700::1111" "host 2606:4700:4700::1111" "Traffic Class: 0x2e" "Payload Length: 44"
+Check-PacketCaptureIfSupported $tcp6Capability.Supported $tcp6Capability.Reason "psize_tos_tcp6" "TCPv6 psize/tos packet capture" "`"$Bin`" --no-color -6 -T -q 1 -m 1 --timeout 1000 --psize 84 -Q 46 2606:4700:4700::1111" "2606:4700:4700::1111" "host 2606:4700:4700::1111" "Traffic Class: 0x2e" "Payload Length: 44"
 
 $deployLog = Join-Path $ArtifactsDir "deploy_server.txt"
 $deployStdout = "$deployLog.stdout"

@@ -46,6 +46,15 @@ func (s *UDPSpec) InitUDP() {
 		}
 		log.Fatalf("(InitUDP) ListenPacket(%s, %s) failed: %v", network, s.SrcIP, err)
 	}
+	if s.SourceDevice != "" {
+		if err := bindPacketConnToSourceDevice(udp, s.IPVersion, s.SourceDevice); err != nil {
+			_ = udp.Close()
+			if util.EnvDevMode {
+				panic(fmt.Errorf("(InitUDP) bind source device %q failed: %v", s.SourceDevice, err))
+			}
+			log.Fatalf("(InitUDP) bind source device %q failed: %v", s.SourceDevice, err)
+		}
+	}
 	s.udp = udp
 
 	if s.IPVersion == 4 {

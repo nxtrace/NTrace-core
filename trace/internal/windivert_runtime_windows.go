@@ -5,7 +5,10 @@ package internal
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 
 	wd "github.com/xjasonlyu/windivert-go"
 	"golang.org/x/sys/windows"
@@ -47,17 +50,36 @@ func (e *winDivertError) Unwrap() error {
 }
 
 var (
-	checkWinDivertDLL = func() error {
-		dll, err := windows.LoadDLL(winDivertDLLName)
-		if err != nil {
-			return err
-		}
-		return dll.Release()
+	resolveWinDivertExecutablePath = os.Executable
+	loadWinDivertDLLEx             = func(path string, flags uintptr) (windows.Handle, error) { return windows.LoadLibraryEx(path, 0, flags) }
+	preloadedWinDivertDLL          windows.Handle
+	preloadWinDivertDLLErr         error
+	preloadWinDivertDLLOnce        sync.Once
+	checkWinDivertDLL              = func() error {
+		preloadWinDivertDLLOnce.Do(func() {
+			preloadWinDivertDLLErr = preloadWinDivertDLLFromExecutableDir()
+		})
+		return preloadWinDivertDLLErr
 	}
 	openWinDivertCall = func(filter string, flags uint64) (wd.Handle, error) {
 		return wd.Open(filter, wd.LayerNetwork, 0, flags)
 	}
 )
+
+func preloadWinDivertDLLFromExecutableDir() error {
+	exePath, err := resolveWinDivertExecutablePath()
+	if err != nil {
+		return fmt.Errorf("resolve executable path: %w", err)
+	}
+	dllPath := filepath.Join(filepath.Dir(exePath), winDivertDLLName)
+	flags := uintptr(windows.LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | windows.LOAD_LIBRARY_SEARCH_APPLICATION_DIR)
+	handle, err := loadWinDivertDLLEx(dllPath, flags)
+	if err != nil {
+		return err
+	}
+	preloadedWinDivertDLL = handle
+	return nil
+}
 
 func OpenWinDivertHandle(filter string, flags uint64) (handle wd.Handle, err error) {
 	defer func() {
@@ -103,9 +125,13 @@ func classifyWinDivertError(err error) error {
 }
 
 func detectWinDivertErrorKind(err error) winDivertErrorKind {
+	if err == nil {
+		return winDivertErrorUnknown
+	}
 	var dllErr *windows.DLLError
 	if errors.As(err, &dllErr) {
-		if strings.EqualFold(dllErr.ObjName, winDivertDLLName) {
+		objName := dllErr.ObjName
+		if strings.EqualFold(objName, winDivertDLLName) || strings.EqualFold(filepath.Base(objName), winDivertDLLName) {
 			if errors.Is(dllErr.Err, windows.ERROR_MOD_NOT_FOUND) || errors.Is(dllErr.Err, windows.ERROR_FILE_NOT_FOUND) {
 				return winDivertErrorDLLMissing
 			}
@@ -156,7 +182,17 @@ func winDivertInitHint() string {
 
 func formatWinDivertIssue(err error) string {
 	wrapped := classifyWinDivertError(err)
-	kind := detectWinDivertErrorKind(wrapped)
+	kind := winDivertErrorUnknown
+	var winErr *winDivertError
+	if errors.As(wrapped, &winErr) && winErr != nil {
+		kind = winErr.Kind
+		if kind == winDivertErrorUnknown && winErr.Cause != nil {
+			kind = detectWinDivertErrorKind(winErr.Cause)
+		}
+	}
+	if kind == winDivertErrorUnknown {
+		kind = detectWinDivertErrorKind(wrapped)
+	}
 	switch kind {
 	case winDivertErrorDLLMissing:
 		return fmt.Sprintf("当前缺少 %s。%s", winDivertDLLName, winDivertInitHint())

@@ -231,7 +231,7 @@ func resolveSrcIP(conf trace.Config) string {
 	if sourceDevice == "" {
 		sourceDevice = util.SrcDev
 	}
-	resolved, _, err := resolveConfiguredSrcAddr(conf.DstIP, conf.SrcAddr, sourceDevice)
+	resolved, _, err := trace.ResolveConfiguredSrcAddr(conf.DstIP, conf.SrcAddr, sourceDevice)
 	if err == nil && strings.TrimSpace(resolved) != "" {
 		return resolved
 	}

@@ -306,6 +306,9 @@ nexttrace --file /path/to/your/iplist.txt
 
 #### `NextTrace` already supports route tracing for specified Network Devices
 
+On macOS and Linux, `--dev` binds the requested source interface.
+On Windows, `--dev` only selects the source address and does not guarantee the actual egress interface.
+
 ```bash
 # Use eth0 network interface
 nexttrace --dev eth0 2606:4700:4700::1111
@@ -737,8 +740,10 @@ Arguments:
                                      packets
       --source-port                  Use source port src_port for outgoing
                                      packets
-  -D  --dev                          Use the following Network Devices as the
-                                     source address in outgoing packets
+  -D  --dev                          Use the specified network device for
+                                     explicit source selection. On Windows,
+                                     this only chooses the source address and
+                                     does not guarantee the egress interface
       --listen                       Set listen address for web console (e.g.
                                      127.0.0.1:30080)
       --deploy                       Start the Gin powered web console

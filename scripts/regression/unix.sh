@@ -76,7 +76,7 @@ record_ipv6_skip() {
 display_path() {
   local path="$1"
   if [[ -n "${HOME:-}" && "${path}" == "${HOME}"* ]]; then
-    printf '~%s\n' "${path#${HOME}}"
+    printf '~%s\n' "${path#"$HOME"}"
     return
   fi
   printf '%s\n' "${path}"
@@ -95,15 +95,29 @@ run_timeout_plain() {
   local seconds="$1"
   local command_string="$2"
   python3 - "$seconds" "$command_string" <<'PY'
+import os
+import signal
 import subprocess
 import sys
 
 timeout = float(sys.argv[1])
 command = sys.argv[2]
+proc = subprocess.Popen(command, shell=True, start_new_session=True)
 try:
-    proc = subprocess.run(command, shell=True, timeout=timeout)
-    raise SystemExit(proc.returncode)
+    raise SystemExit(proc.wait(timeout=timeout))
 except subprocess.TimeoutExpired:
+    try:
+        os.killpg(proc.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    try:
+        proc.wait(timeout=2)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        proc.wait()
     raise SystemExit(124)
 PY
 }
@@ -150,7 +164,12 @@ check_json_pure() {
   local note="$2"
   local command_string="$3"
   local out="${ART_DIR}/${name}.txt"
+  local service_err='request failed - please try again later'
   if ! run_timeout_cmd 180 "${command_string}" >"${out}" 2>&1; then
+    if grep -Fq "${service_err}" "${out}"; then
+      record "${name}" SKIP "${note}; external service unavailable"
+      return
+    fi
     record "${name}" FAIL "${note}; command failed"
     return
   fi
@@ -161,6 +180,10 @@ data = open(sys.argv[1], 'rb').read().lstrip()
 print(chr(data[0]) if data else '')
 PY
 )"
+  if grep -Fq "${service_err}" "${out}"; then
+    record "${name}" SKIP "${note}; external service unavailable"
+    return
+  fi
   if [[ "${first}" == "{" ]] && ! grep -Fq 'preferred API IP' "${out}"; then
     record "${name}" PASS "${note}"
   else
@@ -247,10 +270,19 @@ check_mtu_non_tty_plain() {
 }
 
 detect_capture_iface() {
+  local dest="${1:-1.1.1.1}"
   if [[ "${PLATFORM}" == "macos" ]]; then
-    route -n get 1.1.1.1 2>/dev/null | awk '/interface:/{print $2; exit}'
+    if [[ "${dest}" == *:* ]]; then
+      route -n get -inet6 "${dest}" 2>/dev/null | awk '/interface:/{print $2; exit}' || true
+    else
+      route -n get "${dest}" 2>/dev/null | awk '/interface:/{print $2; exit}' || true
+    fi
   else
-    ip route get 1.1.1.1 2>/dev/null | sed -n 's/.* dev \([^ ]*\).*/\1/p' | head -n1
+    if [[ "${dest}" == *:* ]]; then
+      ip -6 route get "${dest}" 2>/dev/null | sed -n 's/.* dev \([^ ]*\).*/\1/p' | head -n1 || true
+    else
+      ip route get "${dest}" 2>/dev/null | sed -n 's/.* dev \([^ ]*\).*/\1/p' | head -n1 || true
+    fi
   fi
 }
 
@@ -276,14 +308,14 @@ capture_psize_tos() {
     return
   fi
   local iface
-  iface="$(detect_capture_iface)"
+  iface="$(detect_capture_iface "${filter_host}")"
   if [[ -z "${iface}" ]]; then
     record "${name}" SKIP "${note}; capture interface not detected"
     return
   fi
   rm -f "${dump}" "${out}"
   if (( NEED_SUDO )); then
-    sudo -E tcpdump -i "${iface}" -nn -vvv -c 1 "dst host ${filter_host}" >"${dump}" 2>&1 &
+    sudo -E bash -lc 'exec tcpdump -i "$1" -nn -vvv -c 1 "dst host $2" >"$3" 2>&1' _ "${iface}" "${filter_host}" "${dump}" &
   else
     tcpdump -i "${iface}" -nn -vvv -c 1 "dst host ${filter_host}" >"${dump}" 2>&1 &
   fi

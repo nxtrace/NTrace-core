@@ -27,7 +27,7 @@ func TestShouldUseICMPv4RawSend(t *testing.T) {
 	if shouldUseICMPv4RawSend(&layers.IPv4{}) {
 		t.Fatal("zero tos should keep socket send")
 	}
-	if !shouldUseICMPv4RawSend(&layers.IPv4{TOS: 46}) {
-		t.Fatal("non-zero tos should use raw send")
+	if shouldUseICMPv4RawSend(&layers.IPv4{TOS: 46}) {
+		t.Fatal("non-zero tos should keep socket send on Windows ICMPv4")
 	}
 }
