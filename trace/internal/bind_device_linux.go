@@ -10,8 +10,11 @@ import (
 
 func bindPacketConnToSourceDevice(conn net.PacketConn, ipVersion int, device string) error {
 	_ = ipVersion
-	if conn == nil || device == "" {
+	if device == "" {
 		return nil
+	}
+	if conn == nil {
+		return fmt.Errorf("nil PacketConn while binding to device %q", device)
 	}
 
 	sysconn, ok := conn.(syscall.Conn)

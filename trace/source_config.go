@@ -3,6 +3,7 @@ package trace
 import (
 	"fmt"
 	"net"
+	"runtime"
 	"strings"
 
 	"github.com/nxtrace/NTrace-core/util"
@@ -11,6 +12,7 @@ import (
 var (
 	lookupSourceDeviceByName = net.InterfaceByName
 	loadSourceDeviceAddrs    = func(dev *net.Interface) ([]net.Addr, error) { return dev.Addrs() }
+	currentGOOS              = runtime.GOOS
 )
 
 func ResolveSourceDevice(device string) (*net.Interface, error) {
@@ -130,6 +132,9 @@ func NormalizeExplicitSourceConfig(method Method, config Config) (Config, string
 		config.SourceDevice = ""
 		return config, "", nil
 	}
+	if !supportsSourceDeviceBinding(currentGOOS) {
+		config.SourceDevice = ""
+	}
 	return config, "", nil
 }
 
@@ -138,4 +143,13 @@ func sourceFamilyLabel(dstIP net.IP) string {
 		return "IPv6"
 	}
 	return "IPv4"
+}
+
+func supportsSourceDeviceBinding(goos string) bool {
+	switch goos {
+	case "darwin", "linux":
+		return true
+	default:
+		return false
+	}
 }

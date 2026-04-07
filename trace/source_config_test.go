@@ -68,6 +68,8 @@ func TestNormalizeExplicitSourceConfigResolvesSourceFromDevice(t *testing.T) {
 		}, nil
 	})
 	defer restore()
+	restoreGOOS := stubCurrentGOOS(t, "linux")
+	defer restoreGOOS()
 
 	cfg := Config{
 		OSType:       3,
@@ -90,6 +92,37 @@ func TestNormalizeExplicitSourceConfigResolvesSourceFromDevice(t *testing.T) {
 	}
 }
 
+func TestNormalizeExplicitSourceConfigClearsSourceDeviceOnUnsupportedUnix(t *testing.T) {
+	restore := stubSourceDeviceResolver(t, func(device string) (*net.Interface, error) {
+		return &net.Interface{Name: device}, nil
+	}, func(_ *net.Interface) ([]net.Addr, error) {
+		return []net.Addr{&net.IPNet{IP: net.ParseIP("203.0.113.8"), Mask: net.CIDRMask(24, 32)}}, nil
+	})
+	defer restore()
+	restoreGOOS := stubCurrentGOOS(t, "freebsd")
+	defer restoreGOOS()
+
+	cfg := Config{
+		OSType:       3,
+		DstIP:        net.ParseIP("1.1.1.1"),
+		SourceDevice: "em0",
+	}
+
+	got, warning, err := NormalizeExplicitSourceConfig(UDPTrace, cfg)
+	if err != nil {
+		t.Fatalf("NormalizeExplicitSourceConfig() error = %v", err)
+	}
+	if warning != "" {
+		t.Fatalf("warning = %q, want empty", warning)
+	}
+	if got.SrcAddr != "203.0.113.8" {
+		t.Fatalf("SrcAddr = %q, want 203.0.113.8", got.SrcAddr)
+	}
+	if got.SourceDevice != "" {
+		t.Fatalf("SourceDevice = %q, want empty on unsupported unix", got.SourceDevice)
+	}
+}
+
 func TestNormalizeExplicitSourceConfigRejectsDeviceWithoutMatchingFamily(t *testing.T) {
 	restore := stubSourceDeviceResolver(t, func(device string) (*net.Interface, error) {
 		return &net.Interface{Name: device}, nil
@@ -97,6 +130,8 @@ func TestNormalizeExplicitSourceConfigRejectsDeviceWithoutMatchingFamily(t *test
 		return []net.Addr{&net.IPNet{IP: net.ParseIP("203.0.113.8"), Mask: net.CIDRMask(24, 32)}}, nil
 	})
 	defer restore()
+	restoreGOOS := stubCurrentGOOS(t, "linux")
+	defer restoreGOOS()
 
 	cfg := Config{
 		OSType:       3,
@@ -134,6 +169,8 @@ func TestNormalizeExplicitSourceConfigPropagatesSourceDeviceAddrLoadError(t *tes
 		return nil, fmt.Errorf("boom")
 	})
 	defer restore()
+	restoreGOOS := stubCurrentGOOS(t, "linux")
+	defer restoreGOOS()
 
 	cfg := Config{
 		OSType:       3,
@@ -239,5 +276,14 @@ func stubSourceDeviceResolver(t *testing.T, lookup func(string) (*net.Interface,
 	return func() {
 		lookupSourceDeviceByName = prevLookup
 		loadSourceDeviceAddrs = prevAddrs
+	}
+}
+
+func stubCurrentGOOS(t *testing.T, goos string) func() {
+	t.Helper()
+	prev := currentGOOS
+	currentGOOS = goos
+	return func() {
+		currentGOOS = prev
 	}
 }

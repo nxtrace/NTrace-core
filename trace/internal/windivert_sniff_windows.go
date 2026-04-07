@@ -60,7 +60,7 @@ func openWinDivertSniffHandle(ctx context.Context, filter, action string) (wd.Ha
 			panic(msg)
 		}
 		winDivertSniffFatal(msg)
-		return 0, func() {}
+		panic(msg)
 	}
 
 	var closeOnce sync.Once

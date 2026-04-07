@@ -40,7 +40,7 @@ func TestOpenWinDivertSniffHandlePanicsInDevMode(t *testing.T) {
 	openWinDivertSniffHandle(context.Background(), "false", "test")
 }
 
-func TestOpenWinDivertSniffHandleCallsFatalOutsideDevMode(t *testing.T) {
+func TestOpenWinDivertSniffHandleCallsFatalOutsideDevModeThenPanics(t *testing.T) {
 	oldOpen := openWinDivertSniffCall
 	oldFatal := winDivertSniffFatal
 	oldDevMode := winDivertSniffDevMode
@@ -58,15 +58,19 @@ func TestOpenWinDivertSniffHandleCallsFatalOutsideDevMode(t *testing.T) {
 		winDivertSniffDevMode = oldDevMode
 	}()
 
-	handle, closeHandle := openWinDivertSniffHandle(context.Background(), "false", "test")
-	if handle != 0 {
-		t.Fatalf("handle = %v, want zero on fatal path", handle)
-	}
-	closeHandle()
-	if gotFatal == "" {
-		t.Fatal("fatal hook was not called")
-	}
-	if !strings.Contains(gotFatal, "Windows WinDivert 嗅探 (test)") {
-		t.Fatalf("fatal message = %q, want action context", gotFatal)
-	}
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("openWinDivertSniffHandle() did not panic after fatal hook")
+		} else if !strings.Contains(r.(string), "Windows WinDivert 嗅探 (test)") {
+			t.Fatalf("panic = %q, want action context", r.(string))
+		}
+		if gotFatal == "" {
+			t.Fatal("fatal hook was not called")
+		}
+		if !strings.Contains(gotFatal, "Windows WinDivert 嗅探 (test)") {
+			t.Fatalf("fatal message = %q, want action context", gotFatal)
+		}
+	}()
+
+	openWinDivertSniffHandle(context.Background(), "false", "test")
 }
