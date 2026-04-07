@@ -308,6 +308,9 @@ nexttrace --file /path/to/your/iplist.txt
 
 #### `NextTrace` 已支持指定网卡进行路由跟踪
 
+在 macOS 和 Linux 上，`--dev` 会绑定到指定源网卡。
+在 Windows 上，`--dev` 只用于选择 source address，不保证真实出接口。
+
 ```bash
 # 请注意 Lite 版本此参数不能和快速测试联用，如有需要请使用 enhanced 版本
 # 使用 eth0 网卡
@@ -717,8 +720,10 @@ Arguments:
                                      packets
       --source-port                  Use source port src_port for outgoing
                                      packets
-  -D  --dev                          Use the following Network Devices as the
-                                     source address in outgoing packets
+  -D  --dev                          Use the specified network device for
+                                     explicit source selection. On Windows,
+                                     this only chooses the source address and
+                                     does not guarantee the egress interface
       --listen                       Set listen address for web console (e.g.
                                      127.0.0.1:30080)
       --deploy                       Start the Gin powered web console

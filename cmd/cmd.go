@@ -818,95 +818,15 @@ func lookupTargetIPOrExit(ctx context.Context, domain string, ipv4Only, ipv6Only
 	return ip
 }
 
-func resolveSourceDevice(srcDev string) (*net.Interface, error) {
-	trimmed := strings.TrimSpace(srcDev)
-	if trimmed == "" {
-		return nil, nil
-	}
-	dev, err := net.InterfaceByName(trimmed)
-	if err != nil || dev == nil {
-		return nil, fmt.Errorf("无法找到网卡 %q: %v", trimmed, err)
-	}
-	return dev, nil
-}
-
-func resolveSourceDeviceAddr(dev *net.Interface, dstIP net.IP) string {
-	if dev == nil || dstIP == nil {
-		return ""
-	}
-	addrs, err := dev.Addrs()
-	if err != nil {
-		return ""
-	}
-	var candidate string
-	for _, addr := range addrs {
-		ipNet, ok := addr.(*net.IPNet)
-		if !ok {
-			continue
-		}
-		if (ipNet.IP.To4() == nil) != (dstIP.To4() == nil) {
-			continue
-		}
-		candidate = ipNet.IP.String()
-		parsed := net.ParseIP(candidate)
-		if parsed != nil && !(parsed.IsPrivate() ||
-			parsed.IsLoopback() ||
-			parsed.IsLinkLocalUnicast() ||
-			parsed.IsLinkLocalMulticast()) {
-			return candidate
-		}
-	}
-	return candidate
-}
-
-func resolveFallbackSrcAddr(dstIP net.IP) string {
-	if dstIP == nil {
-		return ""
-	}
-	if util.IsIPv6(dstIP) {
-		resolved, _ := util.LocalIPPortv6(dstIP, nil, "udp6")
-		if resolved != nil {
-			return resolved.String()
-		}
-		return ""
-	}
-	resolved, _ := util.LocalIPPort(dstIP, nil, "udp")
-	if resolved != nil {
-		return resolved.String()
-	}
-	return ""
-}
-
 func resolveConfiguredSrcAddr(dstIP net.IP, srcAddr, srcDev string) (resolved string, explicit bool, err error) {
-	if trimmed := strings.TrimSpace(srcAddr); trimmed != "" {
-		return trimmed, true, nil
-	}
-	dev, err := resolveSourceDevice(srcDev)
-	if err != nil {
-		return "", false, err
-	}
-	if resolved := resolveSourceDeviceAddr(dev, dstIP); resolved != "" {
-		return resolved, false, nil
-	}
-	return resolveFallbackSrcAddr(dstIP), false, nil
+	return trace.ResolveConfiguredSrcAddr(dstIP, srcAddr, srcDev)
 }
 
-func applySourceDevice(srcDev string, dstIP net.IP, srcAddr *string) {
-	dev, err := resolveSourceDevice(srcDev)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-	if dev == nil {
+func writeSourceSelectionWarning(warning string) {
+	if strings.TrimSpace(warning) == "" {
 		return
 	}
-	util.SrcDev = dev.Name
-	if srcAddr == nil || strings.TrimSpace(*srcAddr) != "" {
-		return
-	}
-	if resolved := resolveSourceDeviceAddr(dev, dstIP); resolved != "" {
-		*srcAddr = resolved
-	}
+	_, _ = fmt.Fprintln(os.Stderr, warning)
 }
 
 func printTraceNav(jsonPrint bool, effectiveMTR bool, ip net.IP, domain, dataOrigin string, maxHops, packetSize int, srcAddr string, method trace.Method) {
@@ -1166,7 +1086,7 @@ func Execute() {
 	ver := parser.Flag("V", "version", &argparse.Options{Help: "Print version info and exit"})
 	srcAddr := parser.String("s", "source", &argparse.Options{Help: "Use source address src_addr for outgoing packets"})
 	srcPort := parser.Int("", "source-port", &argparse.Options{Help: "Use source port src_port for outgoing packets"})
-	srcDev := parser.String("D", "dev", &argparse.Options{Help: "Use the following Network Devices as the source address in outgoing packets"})
+	srcDev := parser.String("D", "dev", &argparse.Options{Help: "Use the specified network device for explicit source selection. On Windows, this only chooses the source address and does not guarantee the egress interface"})
 
 	webFlags := registerWebUIFlags(parser)
 	deployListen := webFlags.deployListen
@@ -1304,17 +1224,26 @@ func Execute() {
 			return
 		}
 		ip := lookupTargetIPOrExit(rootCtx, domain, *ipv4Only, *ipv6Only, *dot, *jsonPrint)
-		resolvedSrcAddr, explicitSrc, srcResolveErr := resolveConfiguredSrcAddr(ip, *srcAddr, *srcDev)
+		resolvedSrcAddr, _, srcResolveErr := trace.ResolveConfiguredSrcAddr(ip, *srcAddr, *srcDev)
 		if srcResolveErr != nil {
 			fmt.Println(srcResolveErr)
 			os.Exit(1)
 		}
-		if !explicitSrc {
-			applySourceDevice(*srcDev, ip, srcAddr)
+		sourceCfg, warning, srcResolveErr := trace.NormalizeExplicitSourceConfig(trace.UDPTrace, trace.Config{
+			OSType:       osType,
+			DstIP:        ip,
+			SrcAddr:      *srcAddr,
+			SourceDevice: *srcDev,
+		})
+		if srcResolveErr != nil {
+			fmt.Println(srcResolveErr)
+			os.Exit(1)
 		}
-		if strings.TrimSpace(*srcAddr) == "" {
-			*srcAddr = resolvedSrcAddr
+		writeSourceSelectionWarning(warning)
+		if sourceCfg.SrcAddr != "" {
+			resolvedSrcAddr = sourceCfg.SrcAddr
 		}
+		resolvedSrcDev := sourceCfg.SourceDevice
 		srcIP, srcErr := resolveMTUSourceIP(ip, resolvedSrcAddr)
 		if srcErr != nil {
 			fmt.Println(srcErr)
@@ -1326,7 +1255,7 @@ func Execute() {
 			domain,
 			ip,
 			srcIP,
-			*srcDev,
+			resolvedSrcDev,
 			*srcPort,
 			*port,
 			*beginHop,
@@ -1431,17 +1360,26 @@ func Execute() {
 
 	ip := lookupTargetIPOrExit(rootCtx, domain, *ipv4Only, *ipv6Only, *dot, *jsonPrint)
 
-	resolvedSrcAddr, explicitSrc, srcResolveErr := resolveConfiguredSrcAddr(ip, *srcAddr, *srcDev)
+	resolvedSrcAddr, _, srcResolveErr := trace.ResolveConfiguredSrcAddr(ip, *srcAddr, *srcDev)
 	if srcResolveErr != nil {
 		fmt.Println(srcResolveErr)
 		os.Exit(1)
 	}
-	if !explicitSrc {
-		applySourceDevice(*srcDev, ip, srcAddr)
+	sourceCfg, warning, srcResolveErr := trace.NormalizeExplicitSourceConfig(method, trace.Config{
+		OSType:       osType,
+		DstIP:        ip,
+		SrcAddr:      *srcAddr,
+		SourceDevice: *srcDev,
+	})
+	if srcResolveErr != nil {
+		fmt.Println(srcResolveErr)
+		os.Exit(1)
 	}
-	if strings.TrimSpace(*srcAddr) == "" {
-		*srcAddr = resolvedSrcAddr
+	writeSourceSelectionWarning(warning)
+	if sourceCfg.SrcAddr != "" {
+		resolvedSrcAddr = sourceCfg.SrcAddr
 	}
+	resolvedSrcDev := sourceCfg.SourceDevice
 	effectivePacketSize := resolvePacketSizeArg(*packetSize, packetSizeExplicit, method, ip)
 	printTraceNav(*jsonPrint, mtrModes.mtr, ip, domain, *dataOrigin, *maxHops, effectivePacketSize, resolvedSrcAddr, method)
 
@@ -1458,7 +1396,7 @@ func Execute() {
 		*icmpMode,
 		*dn42,
 		resolvedSrcAddr,
-		*srcDev,
+		resolvedSrcDev,
 		*srcPort,
 		*beginHop,
 		ip,

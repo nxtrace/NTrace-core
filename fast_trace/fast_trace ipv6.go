@@ -57,10 +57,16 @@ func (f *FastTracer) tracert_v6(location string, ispCollection ISPCollection) {
 		IPGeoSource:      ipgeo.GetSource("LeoMoeAPI"),
 		Timeout:          f.ParamsFastTrace.Timeout,
 		SrcAddr:          f.ParamsFastTrace.SrcAddr,
+		SourceDevice:     f.ParamsFastTrace.SrcDev,
 		PktSize:          packetSizeSpec.PayloadSize,
 		RandomPacketSize: packetSizeSpec.Random,
 		TOS:              f.ParamsFastTrace.TOS,
 		Lang:             f.ParamsFastTrace.Lang,
+	}
+	conf, err = normalizeFastTraceConfig(f.TracerouteMethod, conf)
+	if err != nil {
+		log.Println(err)
+		return
 	}
 
 	header := fmt.Sprintf("『%s %s 』\ntraceroute to %s, %d hops max, %s, %s mode\n",

@@ -28,6 +28,7 @@ type ICMPSpec struct {
 	EchoID       int
 	SrcIP        net.IP
 	DstIP        net.IP
+	SourceDevice string
 	icmp         net.PacketConn
 	icmp4        *ipv4.PacketConn
 	icmp6        *ipv6.PacketConn
