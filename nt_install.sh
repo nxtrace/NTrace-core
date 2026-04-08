@@ -7,6 +7,7 @@ set -eu
 
 API_HOST="www.nxtrace.org"
 API_PATH="/api/dist/core"
+# Fallback deliberately targets the stable NTrace-core release channel.
 GITHUB_RELEASE_BASE="https://github.com/nxtrace/NTrace-core/releases/latest/download"
 DEFAULT_PROTOCOL="https"
 DEFAULT_FLAVOR="full"

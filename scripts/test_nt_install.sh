@@ -5,11 +5,24 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 INSTALLER="${ROOT_DIR}/nt_install.sh"
 REAL_UNAME="$(command -v uname)"
+GITHUB_RELEASE_BASE="$(python3 - "${INSTALLER}" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+text = Path(sys.argv[1]).read_text()
+match = re.search(r'^GITHUB_RELEASE_BASE="([^"]+)"$', text, re.M)
+if match:
+    print(match.group(1))
+PY
+)"
 
 fail() {
   printf '%s\n' "FAIL: $*" >&2
   exit 1
 }
+
+[ -n "${GITHUB_RELEASE_BASE}" ] || fail "unable to read GITHUB_RELEASE_BASE from ${INSTALLER}"
 
 assert_file_exists() {
   [ -f "$1" ] || fail "missing file: $1"
@@ -192,7 +205,7 @@ test_github_fallback() {
   export MOCK_API_FAIL=1
   run_installer "${case_dir}" ""
   assert_file_exists "${case_dir}/system-bin/nexttrace"
-  assert_contains "${case_dir}/curl.log" "https://github.com/nxtrace/NTrace-dev/releases/latest/download/nexttrace_linux_amd64"
+  assert_contains "${case_dir}/curl.log" "${GITHUB_RELEASE_BASE}/nexttrace_linux_amd64"
   rm -rf "${case_dir}"
   unset MOCK_API_FAIL
 }
