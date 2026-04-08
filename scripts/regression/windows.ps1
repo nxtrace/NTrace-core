@@ -752,7 +752,11 @@ try {
             Invoke-WebRequest -UseBasicParsing -Uri "$deployBaseUrl/api/options" -TimeoutSec 5 | Select-Object -ExpandProperty Content | Tee-Object -FilePath (Join-Path $ArtifactsDir "deploy_options.txt") | Out-Null
             try {
                 $options = Get-Content -Raw -Path (Join-Path $ArtifactsDir "deploy_options.txt") | ConvertFrom-Json -ErrorAction Stop
-                if ($null -eq $options.packet_size -and $options.tos -eq 0) {
+                $optionDefaults = $options.defaultOptions
+                if ($null -eq $optionDefaults) {
+                    $optionDefaults = $options
+                }
+                if ($null -eq $optionDefaults.packet_size -and $optionDefaults.tos -eq 0) {
                     Write-Record deploy_options PASS "Options API exposes packet_size=null and tos=0"
                 }
                 else {
