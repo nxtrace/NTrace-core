@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"net"
 	"strings"
 	"testing"
 
@@ -52,6 +53,43 @@ func TestBuildMTUConflictFlagsIncludesOutputDefault(t *testing.T) {
 	}
 	if conflict != "--output-default" {
 		t.Fatalf("conflict = %q, want --output-default", conflict)
+	}
+}
+
+func TestResolveMTUSourceDevicePreservesWindowsDeviceWithoutExplicitSource(t *testing.T) {
+	got := resolveMTUSourceDevice(mtuWindowsOSType, "", "Ethernet0", "")
+	if got != "Ethernet0" {
+		t.Fatalf("resolveMTUSourceDevice() = %q, want Ethernet0", got)
+	}
+}
+
+func TestResolveMTUSourceDeviceIgnoresWindowsDeviceWithExplicitSource(t *testing.T) {
+	got := resolveMTUSourceDevice(mtuWindowsOSType, "192.0.2.30", "Ethernet0", "")
+	if got != "" {
+		t.Fatalf("resolveMTUSourceDevice() = %q, want empty", got)
+	}
+}
+
+func TestBuildMTUTraceConfigCarriesResolvedSourceDevice(t *testing.T) {
+	conf := buildMTUTraceConfig(
+		"example.com",
+		net.ParseIP("1.1.1.1"),
+		net.ParseIP("192.0.2.20"),
+		resolveMTUSourceDevice(mtuWindowsOSType, "", "Ethernet0", ""),
+		33434,
+		33435,
+		1,
+		30,
+		3,
+		1000,
+		300,
+		true,
+		false,
+		ipgeo.IPInfo,
+		"en",
+	)
+	if conf.SourceDevice != "Ethernet0" {
+		t.Fatalf("buildMTUTraceConfig().SourceDevice = %q, want Ethernet0", conf.SourceDevice)
 	}
 }
 

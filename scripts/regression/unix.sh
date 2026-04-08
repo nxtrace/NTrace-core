@@ -26,7 +26,7 @@ case "${PLATFORM}" in
     ;;
 esac
 
-ART_ROOT="${ART_ROOT:-/tmp/ntrace-regression-${PLATFORM}-$(date +%Y%m%d-%H%M%S)}"
+ART_ROOT="${ART_ROOT:-${REPO_ROOT}/.tmp/ntrace-regression-${PLATFORM}-$(date +%Y%m%d-%H%M%S)}"
 BIN_DIR="${ART_ROOT}/bin"
 ART_DIR="${ART_ROOT}/artifacts"
 SUMMARY="${ART_ROOT}/summary.tsv"
@@ -295,9 +295,13 @@ check_mtu_non_tty_plain() {
   fi
   if grep -q $'\033\[' "${out}"; then
     record "${name}" FAIL "${note}; unexpected ANSI"
-  else
-    record "${name}" PASS "${note}"
+    return
   fi
+  if ! grep -Fq 'Path MTU:' "${out}"; then
+    record "${name}" FAIL "${note}; missing expected MTU"
+    return
+  fi
+  record "${name}" PASS "${note}"
 }
 
 detect_capture_iface() {

@@ -1239,7 +1239,7 @@ func Execute() {
 		if sourceCfg.SrcAddr != "" {
 			resolvedSrcAddr = sourceCfg.SrcAddr
 		}
-		resolvedSrcDev := sourceCfg.SourceDevice
+		resolvedSrcDev := resolveMTUSourceDevice(osType, *srcAddr, *srcDev, sourceCfg.SourceDevice)
 		srcIP, srcErr := resolveMTUSourceIP(ip, resolvedSrcAddr)
 		if srcErr != nil {
 			fmt.Println(srcErr)

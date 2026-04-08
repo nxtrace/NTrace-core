@@ -20,6 +20,8 @@ import (
 	"github.com/nxtrace/NTrace-core/util"
 )
 
+const mtuWindowsOSType = 2
+
 type mtuConflictFlag struct {
 	flag    string
 	enabled bool
@@ -99,6 +101,19 @@ func resolveMTUSourceIP(dstIP net.IP, srcAddr string) (net.IP, error) {
 		return nil, fmt.Errorf("unable to determine IPv4 source address for %s", dstIP)
 	}
 	return resolved, nil
+}
+
+func resolveMTUSourceDevice(osType int, requestedSrcAddr, requestedSrcDev, normalizedSrcDev string) string {
+	if normalizedSrcDev != "" {
+		return normalizedSrcDev
+	}
+	if osType != mtuWindowsOSType {
+		return ""
+	}
+	if strings.TrimSpace(requestedSrcAddr) != "" {
+		return ""
+	}
+	return strings.TrimSpace(requestedSrcDev)
 }
 
 func runStandaloneMTUMode(cfg mtutrace.Config, jsonPrint bool) error {
