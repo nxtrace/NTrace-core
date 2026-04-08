@@ -48,6 +48,15 @@ func (s *TCPSpec) InitTCP() {
 		}
 		log.Fatalf("(InitTCP) ListenPacket(%s, %s) failed: %v", network, s.SrcIP, err)
 	}
+	if s.SourceDevice != "" {
+		if err := bindPacketConnToSourceDevice(tcp, s.IPVersion, s.SourceDevice); err != nil {
+			_ = tcp.Close()
+			if util.EnvDevMode {
+				panic(fmt.Errorf("(InitTCP) bind source device %q failed: %v", s.SourceDevice, err))
+			}
+			log.Fatalf("(InitTCP) bind source device %q failed: %v", s.SourceDevice, err)
+		}
+	}
 	s.tcp = tcp
 
 	if s.IPVersion == 4 {
@@ -84,7 +93,10 @@ func (s *TCPSpec) tcpCaptureFilter() string {
 }
 
 func mustOpenDarwinTCPSniffHandle(dev string) *pcap.Handle {
-	handle, err := util.OpenLiveImmediate(dev, 65535, true, 4<<20)
+	// TCP traceroute only needs packets destined to or sourced from this host.
+	// Some macOS interfaces refuse promiscuous mode even under sudo, so avoid
+	// requesting it for this narrowly filtered capture.
+	handle, err := util.OpenLiveImmediate(dev, 65535, false, 4<<20)
 	if err != nil {
 		if util.EnvDevMode {
 			panic(fmt.Errorf("(ListenTCP) pcap open failed on %s: %v", dev, err))

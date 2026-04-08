@@ -19,12 +19,16 @@ import (
 	"golang.org/x/net/ipv6"
 )
 
+var hasWindowsAdminPrivileges = util.HasAdminPrivileges
+var detectWinDivertAvailability = winDivertAvailable
+
 type ICMPSpec struct {
 	IPVersion    int
 	ICMPMode     int
 	EchoID       int
 	SrcIP        net.IP
 	DstIP        net.IP
+	SourceDevice string
 	icmp         net.PacketConn
 	icmp4        *ipv4.PacketConn
 	icmp6        *ipv6.PacketConn
@@ -46,9 +50,9 @@ func (s *ICMPSpec) Close() {
 
 // winDivertAvailable 通过尝试打开一个 WinDivert 嗅探 handle 来判断 WinDivert 是否可用
 func winDivertAvailable() (bool, error) {
-	h, err := wd.Open("false", wd.LayerNetwork, 0, wd.FlagSniff|wd.FlagRecvOnly)
+	h, err := OpenWinDivertHandle("false", wd.FlagSniff|wd.FlagRecvOnly)
 	if err != nil {
-		return false, fmt.Errorf("WinDivert 不可用: %v", err)
+		return false, err
 	}
 	_ = h.Close()
 	return true, nil
@@ -68,17 +72,17 @@ func (s *ICMPSpec) resolveICMPMode() int {
 	}
 
 	// Auto(0) 或强制 Sniff(2) → 尝试 WinDivert
-	if !util.HasAdminPrivileges() {
+	if !hasWindowsAdminPrivileges() {
 		if icmpMode == 2 {
 			log.Printf("请求使用 WinDivert 嗅探模式，但当前缺少管理员权限；已回退到 Socket 模式。")
 		}
 		return 1
 	}
 
-	ok, err := winDivertAvailable()
+	ok, err := detectWinDivertAvailability()
 	if !ok {
 		if icmpMode == 2 {
-			log.Printf("请求使用 WinDivert 嗅探模式，但 WinDivert 不可用: %v；已回退到 Socket 模式。", err)
+			log.Printf("%s", formatWinDivertFallbackMessage("WinDivert 嗅探模式", err))
 		}
 		return 1
 	}
@@ -222,6 +226,10 @@ func (s *ICMPSpec) SendICMP(ctx context.Context, ipHdr gopacket.NetworkLayer, ic
 	return start, nil
 }
 
+func shouldUseICMPv4RawSend(ip4 *layers.IPv4) bool {
+	return false
+}
+
 func shouldUseICMPv6RawSend(ip6 *layers.IPv6) bool {
 	return ip6 != nil && ip6.TrafficClass != 0
 }
@@ -255,12 +263,12 @@ func (s *ICMPSpec) ensureICMPSendHandle(ipv6 bool) error {
 		return nil
 	}
 
-	handle, err := wd.Open("false", wd.LayerNetwork, 0, 0)
+	handle, err := OpenWinDivertHandle("false", 0)
 	if err != nil {
 		if ipv6 {
-			return fmt.Errorf("ICMPv6 --tos on Windows requires WinDivert send support: %w", err)
+			return fmt.Errorf("%s: %w", formatWinDivertRequiredError("Windows ICMPv6 --tos", err), err)
 		}
-		return err
+		return fmt.Errorf("%s: %w", formatWinDivertRequiredError("Windows ICMPv4 --tos", err), err)
 	}
 
 	s.sendHandle = handle

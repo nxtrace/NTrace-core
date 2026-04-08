@@ -324,6 +324,7 @@ func newMTRICMPEngine(config Config) (*mtrICMPEngine, error) {
 // start 创建持久 ICMP 套接字及监听协程。ctx 生命周期控制整个引擎。
 func (e *mtrICMPEngine) start(ctx context.Context) error {
 	e.spec = internal.NewICMPSpec(e.ipVer, e.config.ICMPMode, e.echoID, e.srcIP, e.config.DstIP)
+	applyICMPSourceDevice(e.spec, e.config.OSType, e.config.SourceDevice)
 	e.spec.InitICMP()
 
 	e.notifyCh = make(chan struct{}, 1)
@@ -425,6 +426,7 @@ func (e *mtrICMPEngine) rotateEngine(ctx context.Context) error {
 	atomic.StoreUint32(&e.seqCounter, 0)
 
 	e.spec = internal.NewICMPSpec(e.ipVer, e.config.ICMPMode, e.echoID, e.srcIP, e.config.DstIP)
+	applyICMPSourceDevice(e.spec, e.config.OSType, e.config.SourceDevice)
 	e.spec.InitICMP()
 
 	e.mu.Lock()

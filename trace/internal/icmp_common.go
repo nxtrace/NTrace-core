@@ -36,6 +36,15 @@ func (s *ICMPSpec) InitICMP() {
 		}
 		log.Fatalf("(InitICMP) ListenPacket(%s, %s) failed: %v", network, s.SrcIP, err)
 	}
+	if s.SourceDevice != "" {
+		if err := bindPacketConnToSourceDevice(icmpConn, s.IPVersion, s.SourceDevice); err != nil {
+			_ = icmpConn.Close()
+			if util.EnvDevMode {
+				panic(fmt.Errorf("(InitICMP) bind source device %q failed: %v", s.SourceDevice, err))
+			}
+			log.Fatalf("(InitICMP) bind source device %q failed: %v", s.SourceDevice, err)
+		}
+	}
 	s.icmp = icmpConn
 
 	if s.IPVersion == 4 {

@@ -34,6 +34,12 @@ func TestAddrIP_IPAddr(t *testing.T) {
 	assert.Equal(t, ip, got)
 }
 
+func TestAddrIP_IPNet(t *testing.T) {
+	ip := net.ParseIP("203.0.113.8")
+	got := AddrIP(&net.IPNet{IP: ip, Mask: net.CIDRMask(24, 32)})
+	assert.Equal(t, ip, got)
+}
+
 func TestAddrIP_TCPAddr(t *testing.T) {
 	ip := net.ParseIP("1.1.1.1")
 	got := AddrIP(&net.TCPAddr{IP: ip, Port: 80})

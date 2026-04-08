@@ -72,6 +72,12 @@ func TestRegisterTTLIntervalFlagWithMTRSupport_HelpOmitsTracerouteDefault(t *tes
 	}
 }
 
+func TestWindowsInitHelpTextMentionsExecutableDirectory(t *testing.T) {
+	if got := windowsInitHelpText; !strings.Contains(got, "executable directory") {
+		t.Fatalf("init help text = %q, want executable directory", got)
+	}
+}
+
 func TestApplyTTLIntervalDefault(t *testing.T) {
 	ttlInterval := 0
 	applyTTLIntervalDefault(&ttlInterval, false, false)

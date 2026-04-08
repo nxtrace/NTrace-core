@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	traceinternal "github.com/nxtrace/NTrace-core/trace/internal"
 	"github.com/nxtrace/NTrace-core/util"
 	wd "github.com/xjasonlyu/windivert-go"
 )
@@ -37,7 +38,7 @@ func (c *winDivertCapture) Close() error {
 }
 
 func (p *socketProber) beginICMPResponseCapture(ctx context.Context, _ time.Time) (icmpResponseCapture, error) {
-	handle, err := wd.Open(winDivertMTUFilter(p.ipVersion, p.udp.LocalAddr()), wd.LayerNetwork, 0, wd.FlagSniff|wd.FlagRecvOnly)
+	handle, err := traceinternal.OpenWinDivertHandle(winDivertMTUFilter(p.ipVersion, p.udp.LocalAddr()), wd.FlagSniff|wd.FlagRecvOnly)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrWinDivertUnavailable, err)
 	}

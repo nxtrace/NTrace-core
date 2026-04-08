@@ -313,9 +313,11 @@ type mtrCLIFlags struct {
 	ipInfoMode *int
 }
 
+const windowsInitHelpText = "Extract WinDivert runtime to executable directory"
+
 func registerInitFlag(parser *argparse.Parser) *bool {
 	if runtime.GOOS == "windows" {
-		return parser.Flag("", "init", &argparse.Options{Help: "Extract WinDivert runtime to current directory"})
+		return parser.Flag("", "init", &argparse.Options{Help: windowsInitHelpText})
 	}
 	return ptrBool(false)
 }
@@ -574,7 +576,7 @@ func maybeRunDeployMode(deploy bool, deployListen string) bool {
 		return false
 	}
 	if !enableWebUI {
-		if err := runDeploy(""); err != nil {
+		if err := runDeploy("", nil); err != nil {
 			if util.EnvDevMode {
 				panic(err)
 			}
@@ -594,16 +596,18 @@ func maybeRunDeployMode(deploy bool, deployListen string) bool {
 		listenAddr = defaultLocalListenAddr()
 	}
 
-	info := buildListenInfo(listenAddr)
-	fmt.Printf("启动 NextTrace Web 控制台，监听地址: %s\n", info.Binding)
-	if !userProvided {
-		fmt.Println("远程访问请显式设置 --listen（例如 --listen 0.0.0.0:1080）。")
+	onReady := func(addr net.Addr) {
+		info := buildListenInfo(addr.String())
+		fmt.Printf("启动 NextTrace Web 控制台，监听地址: %s\n", info.Binding)
+		if !userProvided {
+			fmt.Println("远程访问请显式设置 --listen（例如 --listen 0.0.0.0:1080）。")
+		}
+		if info.Access != "" && info.Access != info.Binding {
+			fmt.Printf("如需远程访问，请尝试: %s\n", info.Access)
+		}
+		fmt.Println("注意：Web 控制台的安全性有限，请在确保安全的前提下使用，如有必要请使用ACL等方式加强安全性")
 	}
-	if info.Access != "" && info.Access != info.Binding {
-		fmt.Printf("如需远程访问，请尝试: %s\n", info.Access)
-	}
-	fmt.Println("注意：Web 控制台的安全性有限，请在确保安全的前提下使用，如有必要请使用ACL等方式加强安全性")
-	if err := runDeploy(listenAddr); err != nil {
+	if err := runDeploy(listenAddr, onReady); err != nil {
 		if util.EnvDevMode {
 			panic(err)
 		}
@@ -816,95 +820,8 @@ func lookupTargetIPOrExit(ctx context.Context, domain string, ipv4Only, ipv6Only
 	return ip
 }
 
-func resolveSourceDevice(srcDev string) (*net.Interface, error) {
-	trimmed := strings.TrimSpace(srcDev)
-	if trimmed == "" {
-		return nil, nil
-	}
-	dev, err := net.InterfaceByName(trimmed)
-	if err != nil || dev == nil {
-		return nil, fmt.Errorf("无法找到网卡 %q: %v", trimmed, err)
-	}
-	return dev, nil
-}
-
-func resolveSourceDeviceAddr(dev *net.Interface, dstIP net.IP) string {
-	if dev == nil || dstIP == nil {
-		return ""
-	}
-	addrs, err := dev.Addrs()
-	if err != nil {
-		return ""
-	}
-	var candidate string
-	for _, addr := range addrs {
-		ipNet, ok := addr.(*net.IPNet)
-		if !ok {
-			continue
-		}
-		if (ipNet.IP.To4() == nil) != (dstIP.To4() == nil) {
-			continue
-		}
-		candidate = ipNet.IP.String()
-		parsed := net.ParseIP(candidate)
-		if parsed != nil && !(parsed.IsPrivate() ||
-			parsed.IsLoopback() ||
-			parsed.IsLinkLocalUnicast() ||
-			parsed.IsLinkLocalMulticast()) {
-			return candidate
-		}
-	}
-	return candidate
-}
-
-func resolveFallbackSrcAddr(dstIP net.IP) string {
-	if dstIP == nil {
-		return ""
-	}
-	if util.IsIPv6(dstIP) {
-		resolved, _ := util.LocalIPPortv6(dstIP, nil, "udp6")
-		if resolved != nil {
-			return resolved.String()
-		}
-		return ""
-	}
-	resolved, _ := util.LocalIPPort(dstIP, nil, "udp")
-	if resolved != nil {
-		return resolved.String()
-	}
-	return ""
-}
-
 func resolveConfiguredSrcAddr(dstIP net.IP, srcAddr, srcDev string) (resolved string, explicit bool, err error) {
-	if trimmed := strings.TrimSpace(srcAddr); trimmed != "" {
-		return trimmed, true, nil
-	}
-	dev, err := resolveSourceDevice(srcDev)
-	if err != nil {
-		return "", false, err
-	}
-	if resolved := resolveSourceDeviceAddr(dev, dstIP); resolved != "" {
-		return resolved, false, nil
-	}
-	return resolveFallbackSrcAddr(dstIP), false, nil
-}
-
-func applySourceDevice(srcDev string, dstIP net.IP, srcAddr *string) {
-	dev, err := resolveSourceDevice(srcDev)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-	if dev == nil {
-		return
-	}
-	util.SrcDev = dev.Name
-	if srcAddr == nil || strings.TrimSpace(*srcAddr) != "" {
-		return
-	}
-	if resolved := resolveSourceDeviceAddr(dev, dstIP); resolved != "" {
-		*srcAddr = resolved
-	}
+	return trace.ResolveConfiguredSrcAddr(dstIP, srcAddr, srcDev)
 }
 
 func printTraceNav(jsonPrint bool, effectiveMTR bool, ip net.IP, domain, dataOrigin string, maxHops, packetSize int, srcAddr string, method trace.Method) {
@@ -1164,7 +1081,7 @@ func Execute() {
 	ver := parser.Flag("V", "version", &argparse.Options{Help: "Print version info and exit"})
 	srcAddr := parser.String("s", "source", &argparse.Options{Help: "Use source address src_addr for outgoing packets"})
 	srcPort := parser.Int("", "source-port", &argparse.Options{Help: "Use source port src_port for outgoing packets"})
-	srcDev := parser.String("D", "dev", &argparse.Options{Help: "Use the following Network Devices as the source address in outgoing packets"})
+	srcDev := parser.String("D", "dev", &argparse.Options{Help: "Use the specified network device for explicit source selection. On Windows, this only chooses the source address and does not guarantee the egress interface; TCP + --dev is not supported"})
 
 	webFlags := registerWebUIFlags(parser)
 	deployListen := webFlags.deployListen
@@ -1302,17 +1219,27 @@ func Execute() {
 			return
 		}
 		ip := lookupTargetIPOrExit(rootCtx, domain, *ipv4Only, *ipv6Only, *dot, *jsonPrint)
-		resolvedSrcAddr, explicitSrc, srcResolveErr := resolveConfiguredSrcAddr(ip, *srcAddr, *srcDev)
+		// ResolveConfiguredSrcAddr is used for display/source-IP fallback before MTU-specific source normalization.
+		resolvedSrcAddr, _, srcResolveErr := trace.ResolveConfiguredSrcAddr(ip, *srcAddr, *srcDev)
 		if srcResolveErr != nil {
 			fmt.Println(srcResolveErr)
 			os.Exit(1)
 		}
-		if !explicitSrc {
-			applySourceDevice(*srcDev, ip, srcAddr)
+		// NormalizeExplicitSourceConfig enforces explicit --source/--dev rules and unsupported combinations.
+		sourceCfg, srcResolveErr := trace.NormalizeExplicitSourceConfig(trace.UDPTrace, trace.Config{
+			OSType:       osType,
+			DstIP:        ip,
+			SrcAddr:      *srcAddr,
+			SourceDevice: *srcDev,
+		})
+		if srcResolveErr != nil {
+			fmt.Println(srcResolveErr)
+			os.Exit(1)
 		}
-		if strings.TrimSpace(*srcAddr) == "" {
-			*srcAddr = resolvedSrcAddr
+		if sourceCfg.SrcAddr != "" {
+			resolvedSrcAddr = sourceCfg.SrcAddr
 		}
+		resolvedSrcDev := resolveMTUSourceDevice(osType, *srcAddr, *srcDev, sourceCfg.SourceDevice)
 		srcIP, srcErr := resolveMTUSourceIP(ip, resolvedSrcAddr)
 		if srcErr != nil {
 			fmt.Println(srcErr)
@@ -1324,7 +1251,7 @@ func Execute() {
 			domain,
 			ip,
 			srcIP,
-			*srcDev,
+			resolvedSrcDev,
 			*srcPort,
 			*port,
 			*beginHop,
@@ -1429,17 +1356,27 @@ func Execute() {
 
 	ip := lookupTargetIPOrExit(rootCtx, domain, *ipv4Only, *ipv6Only, *dot, *jsonPrint)
 
-	resolvedSrcAddr, explicitSrc, srcResolveErr := resolveConfiguredSrcAddr(ip, *srcAddr, *srcDev)
+	// ResolveConfiguredSrcAddr is used for display/source-IP fallback before tracer runtime normalization.
+	resolvedSrcAddr, _, srcResolveErr := trace.ResolveConfiguredSrcAddr(ip, *srcAddr, *srcDev)
 	if srcResolveErr != nil {
 		fmt.Println(srcResolveErr)
 		os.Exit(1)
 	}
-	if !explicitSrc {
-		applySourceDevice(*srcDev, ip, srcAddr)
+	// NormalizeExplicitSourceConfig enforces explicit --source/--dev rules and unsupported combinations.
+	sourceCfg, srcResolveErr := trace.NormalizeExplicitSourceConfig(method, trace.Config{
+		OSType:       osType,
+		DstIP:        ip,
+		SrcAddr:      *srcAddr,
+		SourceDevice: *srcDev,
+	})
+	if srcResolveErr != nil {
+		fmt.Println(srcResolveErr)
+		os.Exit(1)
 	}
-	if strings.TrimSpace(*srcAddr) == "" {
-		*srcAddr = resolvedSrcAddr
+	if sourceCfg.SrcAddr != "" {
+		resolvedSrcAddr = sourceCfg.SrcAddr
 	}
+	resolvedSrcDev := sourceCfg.SourceDevice
 	effectivePacketSize := resolvePacketSizeArg(*packetSize, packetSizeExplicit, method, ip)
 	printTraceNav(*jsonPrint, mtrModes.mtr, ip, domain, *dataOrigin, *maxHops, effectivePacketSize, resolvedSrcAddr, method)
 
@@ -1456,7 +1393,7 @@ func Execute() {
 		*icmpMode,
 		*dn42,
 		resolvedSrcAddr,
-		*srcDev,
+		resolvedSrcDev,
 		*srcPort,
 		*beginHop,
 		ip,

@@ -66,44 +66,6 @@ func resolveTraceMethod(traceMode trace.Method) trace.Method {
 	}
 }
 
-func resolveFastTraceSourceAddr(srcDev string, wantV4 bool) string {
-	dev, devErr := net.InterfaceByName(srcDev)
-	if devErr != nil || dev == nil {
-		return ""
-	}
-	addrs, err := dev.Addrs()
-	if err != nil {
-		return ""
-	}
-	var candidate string
-	for _, addr := range addrs {
-		ipNet, ok := addr.(*net.IPNet)
-		if !ok {
-			continue
-		}
-		isV4 := ipNet.IP.To4() != nil
-		if isV4 != wantV4 {
-			continue
-		}
-		candidate = ipNet.IP.String()
-		parsed := net.ParseIP(candidate)
-		if parsed != nil && !(parsed.IsPrivate() || parsed.IsLoopback() ||
-			parsed.IsLinkLocalUnicast() || parsed.IsLinkLocalMulticast()) {
-			return candidate
-		}
-	}
-	return candidate
-}
-
-func withFastTraceSourceAddr(params ParamsFastTrace, wantV4 bool) ParamsFastTrace {
-	if params.SrcDev != "" {
-		if srcAddr := resolveFastTraceSourceAddr(params.SrcDev, wantV4); srcAddr != "" {
-			params.SrcAddr = srcAddr
-		}
-	}
-	return params
-}
-
 func promptFastTraceChoice(prompt, defaultChoice string) string {
 	fmt.Print(prompt)
 	var choice string
@@ -252,12 +214,17 @@ func buildFileTraceConfig(params ParamsFastTrace, tracerouteMethod trace.Method,
 		TTLInterval:      500,
 		IPGeoSource:      ipgeo.GetSource("LeoMoeAPI"),
 		Timeout:          params.Timeout,
-		SrcAddr:          resolveFastTraceSourceAddr(params.SrcDev, ip.Version4),
+		SrcAddr:          params.SrcAddr,
+		SourceDevice:     params.SrcDev,
 		PktSize:          packetSizeSpec.PayloadSize,
 		RandomPacketSize: packetSizeSpec.Random,
 		TOS:              params.TOS,
 		Lang:             params.Lang,
 	}
+}
+
+func normalizeFastTraceConfig(method trace.Method, conf trace.Config) (trace.Config, error) {
+	return trace.NormalizeExplicitSourceConfig(method, conf)
 }
 
 func configureFastTraceRealtimePrinter(conf *trace.Config, outputPath, header string) (func() error, error) {
@@ -286,6 +253,11 @@ func runFileTraceTarget(params ParamsFastTrace, tracerouteMethod trace.Method, i
 	printFileTraceHeader(ip, params, tracerouteMethod)
 
 	conf := buildFileTraceConfig(params, tracerouteMethod, ip)
+	conf, err := normalizeFastTraceConfig(tracerouteMethod, conf)
+	if err != nil {
+		log.Println(err)
+		return
+	}
 	displayPacketSize := params.PktSize
 	if !params.PacketSizeSet {
 		displayPacketSize = trace.DefaultPacketSize(tracerouteMethod, net.ParseIP(ip.Ip))
@@ -350,10 +322,16 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 		IPGeoSource:      ipgeo.GetSource("LeoMoeAPI"),
 		Timeout:          f.ParamsFastTrace.Timeout,
 		SrcAddr:          f.ParamsFastTrace.SrcAddr,
+		SourceDevice:     f.ParamsFastTrace.SrcDev,
 		PktSize:          packetSizeSpec.PayloadSize,
 		RandomPacketSize: packetSizeSpec.Random,
 		TOS:              f.ParamsFastTrace.TOS,
 		Lang:             f.ParamsFastTrace.Lang,
+	}
+	conf, err = normalizeFastTraceConfig(f.TracerouteMethod, conf)
+	if err != nil {
+		log.Println(err)
+		return
 	}
 
 	header := fmt.Sprintf("『%s %s 』\ntraceroute to %s, %d hops max, %s, %s mode\n",
@@ -389,11 +367,9 @@ func FastTest(traceMode trace.Method, paramsFastTrace ParamsFastTrace) {
 	fmt.Println("Hi，欢迎使用 Fast Trace 功能，请注意 Fast Trace 功能只适合新手使用\n因为国内网络复杂，我们设置的测试目标有限，建议普通用户自测以获得更加精准的路由情况")
 	fmt.Println("请您选择要测试的 IP 类型\n1. IPv4\n2. IPv6")
 	if promptFastTraceChoice("请选择选项：", "1") == "2" {
-		paramsFastTrace = withFastTraceSourceAddr(paramsFastTrace, false)
 		FastTestv6(traceMode, paramsFastTrace)
 		return
 	}
-	paramsFastTrace = withFastTraceSourceAddr(paramsFastTrace, true)
 
 	fmt.Println("您想测试哪些ISP的路由？\n1. 北京三网快速测试\n2. 上海三网快速测试\n3. 广州三网快速测试\n4. 全国电信\n5. 全国联通\n6. 全国移动\n7. 全国教育网\n8. 全国五网")
 	choice := promptFastTraceChoice("请选择选项：", "1")

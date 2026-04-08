@@ -59,11 +59,23 @@ Document Language: [English](README.md) | 简体中文
 
 ### Automated Install
 
-- Linux
-  - 一键安装脚本
+- Linux / macOS / BSD
+  - 一键安装脚本（完整版，默认）
     ```shell
     curl -sL https://nxtrace.org/nt | bash
     ```
+  - 一键安装脚本（Tiny）
+    ```shell
+    curl -sL https://nxtrace.org/nt | bash -s -- --flavor tiny
+    ```
+  - 一键安装脚本（NTR）
+    ```shell
+    curl -sL https://nxtrace.org/nt | bash -s -- --flavor ntr
+    ```
+  - 安装后的命令名：
+    - Full：`nexttrace`
+    - Tiny：`nexttrace-tiny`
+    - NTR：`ntr`
   - 从 nxtrace的APT源安装
     - 支持 AMD64/ARM64 架构
       ```shell
@@ -283,7 +295,7 @@ PS: 路由可视化的绘制模块为独立模块，具体代码可在 [nxtrace/
   **TCP/UDP mode** 依赖 `WinDivert`。  
   **ICMP mode** 支持 `1=Socket` 与 `2=WinDivert`（`0=Auto`）。使用 Socket 模式时，需防火墙配置允许`ICMP/ICMPv6`。  
   在 `Windows` 上，`ICMPv6` 未传 `--tos` 或显式 `--tos 0` 时继续走原生 Socket 发送路径；只有非零 `ICMPv6 --tos` 才额外依赖 `WinDivert` 发送能力，并要求管理员权限。  
-  `WinDivert` 可使用 `--init` 参数自动配置环境。
+  `WinDivert` 可使用 `--init` 参数自动配置环境；该命令会将运行时解压到可执行文件目录。
 
 #### `NextTrace` 现已经支持快速测试，有一次性测试回程路由需求的朋友可以使用
 
@@ -307,6 +319,10 @@ nexttrace --file /path/to/your/iplist.txt
 ```
 
 #### `NextTrace` 已支持指定网卡进行路由跟踪
+
+在 macOS 和 Linux 上，`--dev` 会绑定到指定源网卡。
+在 Windows 上，`--dev` 只用于选择 source address，不保证真实出接口。
+`TCP + --dev` 在 Windows 上仍然是显式不支持的，会直接报错。
 
 ```bash
 # 请注意 Lite 版本此参数不能和快速测试联用，如有需要请使用 enhanced 版本
@@ -656,7 +672,7 @@ Arguments:
 
   -h  --help                         Print help information
       --init                         Windows ONLY: Extract WinDivert runtime to
-                                     current directory
+                                     executable directory
   -4  --ipv4                         Use IPv4 only
   -6  --ipv6                         Use IPv6 only
   -T  --tcp                          Use TCP SYN for tracerouting (default
@@ -717,8 +733,10 @@ Arguments:
                                      packets
       --source-port                  Use source port src_port for outgoing
                                      packets
-  -D  --dev                          Use the following Network Devices as the
-                                     source address in outgoing packets
+  -D  --dev                          Use the specified network device for
+                                     explicit source selection. On Windows,
+                                     this only chooses the source address and
+                                     does not guarantee the egress interface
       --listen                       Set listen address for web console (e.g.
                                      127.0.0.1:30080)
       --deploy                       Start the Gin powered web console

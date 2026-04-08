@@ -96,6 +96,7 @@ gen
 *.exe
 *.exe~
 *.dll
+WinDivert*.sys
 *.so
 *.dylib
 

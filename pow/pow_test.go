@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
+	"os"
 	"testing"
 	"time"
 
@@ -13,21 +15,64 @@ import (
 )
 
 func TestGetToken(t *testing.T) {
-	// 网络可达性前置检查：尝试 TCP 连接目标服务器
-	conn, err := net.DialTimeout("tcp", "origin-fallback.nxtrace.org:443", 3*time.Second)
-	if err != nil {
-		t.Skipf("skipping: network unreachable (origin-fallback.nxtrace.org:443): %v", err)
+	oldRetTokenFn := retTokenFn
+	defer func() { retTokenFn = oldRetTokenFn }()
+
+	const (
+		fastIP    = "origin-fallback.nxtrace.org"
+		host      = "origin-fallback.nxtrace.org"
+		port      = "443"
+		wantToken = "test-token"
+	)
+
+	retTokenFn = func(params *powclient.GetTokenParams) (string, error) {
+		if params == nil {
+			t.Fatal("retToken params = nil")
+		}
+		wantURL := (&url.URL{Scheme: "https", Host: fastIP + ":" + port, Path: baseURL}).String()
+		if params.BaseUrl != wantURL {
+			t.Fatalf("BaseUrl = %q, want %q", params.BaseUrl, wantURL)
+		}
+		if params.SNI != host {
+			t.Fatalf("SNI = %q, want %q", params.SNI, host)
+		}
+		if params.Host != host {
+			t.Fatalf("Host = %q, want %q", params.Host, host)
+		}
+		if params.UserAgent == "" {
+			t.Fatal("UserAgent should not be empty")
+		}
+		if params.TimeoutSec <= 0 {
+			t.Fatalf("TimeoutSec = %v, want > 0", params.TimeoutSec)
+		}
+		return wantToken, nil
 	}
-	conn.Close()
 
 	// 计时开始
 	start := time.Now()
-	token, err := GetToken("origin-fallback.nxtrace.org", "origin-fallback.nxtrace.org", "443")
+	token, err := GetToken(fastIP, host, port)
 	// 计时结束
 	end := time.Now()
 	fmt.Println("耗时：", end.Sub(start))
 	fmt.Println("token:", token)
 	assert.NoError(t, err, "GetToken() returned an error")
+	assert.Equal(t, wantToken, token)
+}
+
+func TestGetTokenIntegration(t *testing.T) {
+	if os.Getenv("NTRACE_RUN_POW_INTEGRATION") != "1" {
+		t.Skip("set NTRACE_RUN_POW_INTEGRATION=1 to run live PoW integration test")
+	}
+
+	conn, err := net.DialTimeout("tcp", "origin-fallback.nxtrace.org:443", 3*time.Second)
+	if err != nil {
+		t.Fatalf("network unreachable (origin-fallback.nxtrace.org:443): %v", err)
+	}
+	conn.Close()
+
+	token, err := GetToken("origin-fallback.nxtrace.org", "origin-fallback.nxtrace.org", "443")
+	assert.NoError(t, err, "GetToken() returned an error")
+	assert.NotEmpty(t, token, "GetToken() returned empty token")
 }
 
 func TestGetTokenWithContextReturnsCanceled(t *testing.T) {

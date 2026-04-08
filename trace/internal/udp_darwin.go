@@ -46,6 +46,15 @@ func (s *UDPSpec) InitUDP() {
 		}
 		log.Fatalf("(InitUDP) ListenPacket(%s, %s) failed: %v", network, s.SrcIP, err)
 	}
+	if s.SourceDevice != "" {
+		if err := bindPacketConnToSourceDevice(udp, s.IPVersion, s.SourceDevice); err != nil {
+			_ = udp.Close()
+			if util.EnvDevMode {
+				panic(fmt.Errorf("(InitUDP) bind source device %q failed: %v", s.SourceDevice, err))
+			}
+			log.Fatalf("(InitUDP) bind source device %q failed: %v", s.SourceDevice, err)
+		}
+	}
 	s.udp = udp
 
 	if s.IPVersion == 4 {
@@ -69,8 +78,9 @@ func (s *UDPSpec) ListenOut(ctx context.Context, ready chan struct{}, onOut func
 		dev = d
 	}
 
-	// 以“立即模式”打开 pcap，降低首包丢失概率
-	handle, err := util.OpenLiveImmediate(dev, 65535, true, 4<<20)
+	// 这里只抓本机发出的定向 UDP 探测包，不需要混杂模式；部分 macOS
+	// 接口即使在 sudo 下也会拒绝 promisc，继续请求只会让探测直接失败。
+	handle, err := util.OpenLiveImmediate(dev, 65535, false, 4<<20)
 	if err != nil {
 		if util.EnvDevMode {
 			panic(fmt.Errorf("(ListenOut) pcap open failed on %s: %v", dev, err))

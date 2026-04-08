@@ -15,6 +15,8 @@ on:
       - "**/*.go"
       - "go.mod"
       - "go.sum"
+      - "nt_install.sh"
+      - "scripts/test_nt_install.sh"
       - ".github/workflows/*.yml"
   pull_request:
     types: [opened, synchronize, reopened]
@@ -22,6 +24,8 @@ on:
       - "**/*.go"
       - "go.mod"
       - "go.sum"
+      - "nt_install.sh"
+      - "scripts/test_nt_install.sh"
       - ".github/workflows/*.yml"
   workflow_dispatch:
 
@@ -52,6 +56,14 @@ jobs:
         run: |
           sudo go env -w GOTOOLCHAIN=go1.26.0+auto
           sudo go test -v -covermode=count -coverprofile='coverage.out' ./...
+
+      - name: Smoke test nt_install.sh
+        if: ${{ matrix.os != 'windows-latest' }}
+        shell: bash
+        run: |
+          bash -n nt_install.sh
+          sh -n nt_install.sh
+          bash scripts/test_nt_install.sh
 
       - name: Test with windows
         if: ${{ matrix.os == 'windows-latest' }}

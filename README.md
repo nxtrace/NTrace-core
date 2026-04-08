@@ -55,12 +55,29 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
 
 ### Automated Install
 
-- Linux
-  - One-click installation script
+- Linux / macOS / BSD
+  - One-click installation script (Full, default)
 
     ```shell
     curl -sL https://nxtrace.org/nt | bash
     ```
+
+  - One-click installation script (Tiny)
+
+    ```shell
+    curl -sL https://nxtrace.org/nt | bash -s -- --flavor tiny
+    ```
+
+  - One-click installation script (NTR)
+
+    ```shell
+    curl -sL https://nxtrace.org/nt | bash -s -- --flavor ntr
+    ```
+
+  - Installed command names:
+    - Full: `nexttrace`
+    - Tiny: `nexttrace-tiny`
+    - NTR: `ntr`
 
   - Install nxtrace from the APT repository
     - Supports AMD64/ARM64 architectures
@@ -281,7 +298,7 @@ The routing visualization function requires the geographical coordinates of each
   **TCP/UDP mode** requires `WinDivert`.  
   **ICMP mode** supports `1=Socket` and `2=WinDivert` (`0=Auto`). If running in Socket mode, the firewall must allow `ICMP/ICMPv6`.  
   On `Windows`, `ICMPv6` without `--tos` (or with `--tos 0`) keeps using the native Socket send path. A non-zero `ICMPv6 --tos` requires `WinDivert` send support in addition to administrator privilege.  
-  `WinDivert` can be automatically configured using the `--init` parameter.
+  `WinDivert` can be automatically configured using the `--init` parameter, which extracts the runtime to the executable directory.
 
 #### `NextTrace` now supports quick testing, and friends who have a one-time backhaul routing test requirement can use it
 
@@ -305,6 +322,10 @@ nexttrace --file /path/to/your/iplist.txt
 ```
 
 #### `NextTrace` already supports route tracing for specified Network Devices
+
+On macOS and Linux, `--dev` binds the requested source interface.
+On Windows, `--dev` only selects the source address and does not guarantee the actual egress interface.
+`TCP + --dev` remains explicitly unsupported on Windows and returns an error.
 
 ```bash
 # Use eth0 network interface
@@ -676,7 +697,7 @@ Arguments:
 
   -h  --help                         Print help information
       --init                         Windows ONLY: Extract WinDivert runtime to
-                                     current directory
+                                     executable directory
   -4  --ipv4                         Use IPv4 only
   -6  --ipv6                         Use IPv6 only
   -T  --tcp                          Use TCP SYN for tracerouting (default
@@ -737,8 +758,10 @@ Arguments:
                                      packets
       --source-port                  Use source port src_port for outgoing
                                      packets
-  -D  --dev                          Use the following Network Devices as the
-                                     source address in outgoing packets
+  -D  --dev                          Use the specified network device for
+                                     explicit source selection. On Windows,
+                                     this only chooses the source address and
+                                     does not guarantee the egress interface
       --listen                       Set listen address for web console (e.g.
                                      127.0.0.1:30080)
       --deploy                       Start the Gin powered web console
