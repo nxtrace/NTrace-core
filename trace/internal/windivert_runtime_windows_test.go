@@ -8,12 +8,23 @@ import (
 	"log"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 
 	wd "github.com/xjasonlyu/windivert-go"
 	"golang.org/x/sys/windows"
 )
+
+func resetWinDivertPreloadTestState() func() {
+	oldResolve := resolveWinDivertExecutablePath
+	oldLoad := loadWinDivertDLLEx
+	oldHandle := preloadedWinDivertDLL
+	preloadedWinDivertDLL = 0
+	return func() {
+		resolveWinDivertExecutablePath = oldResolve
+		loadWinDivertDLLEx = oldLoad
+		preloadedWinDivertDLL = oldHandle
+	}
+}
 
 func TestOpenWinDivertHandle_CatchesDLLLoadPanic(t *testing.T) {
 	oldCheck := checkWinDivertDLL
@@ -45,10 +56,8 @@ func TestOpenWinDivertHandle_CatchesDLLLoadPanic(t *testing.T) {
 }
 
 func TestCheckWinDivertDLLPreloadsExecutableDirectoryDLL(t *testing.T) {
-	oldResolve := resolveWinDivertExecutablePath
-	oldLoad := loadWinDivertDLLEx
-	oldHandle := preloadedWinDivertDLL
-	oldMu := preloadWinDivertDLLMu
+	restore := resetWinDivertPreloadTestState()
+	defer restore()
 	resolveWinDivertExecutablePath = func() (string, error) {
 		return `C:\nexttrace\bin\nexttrace.exe`, nil
 	}
@@ -59,14 +68,6 @@ func TestCheckWinDivertDLLPreloadsExecutableDirectoryDLL(t *testing.T) {
 		gotFlags = flags
 		return windows.Handle(1234), nil
 	}
-	preloadedWinDivertDLL = 0
-	preloadWinDivertDLLMu = sync.Mutex{}
-	defer func() {
-		resolveWinDivertExecutablePath = oldResolve
-		loadWinDivertDLLEx = oldLoad
-		preloadedWinDivertDLL = oldHandle
-		preloadWinDivertDLLMu = oldMu
-	}()
 
 	if err := checkWinDivertDLL(); err != nil {
 		t.Fatalf("checkWinDivertDLL() error = %v", err)
@@ -86,10 +87,8 @@ func TestCheckWinDivertDLLPreloadsExecutableDirectoryDLL(t *testing.T) {
 }
 
 func TestCheckWinDivertDLLRetriesAfterFailure(t *testing.T) {
-	oldResolve := resolveWinDivertExecutablePath
-	oldLoad := loadWinDivertDLLEx
-	oldHandle := preloadedWinDivertDLL
-	oldMu := preloadWinDivertDLLMu
+	restore := resetWinDivertPreloadTestState()
+	defer restore()
 	resolveWinDivertExecutablePath = func() (string, error) {
 		return `C:\nexttrace\bin\nexttrace.exe`, nil
 	}
@@ -101,14 +100,6 @@ func TestCheckWinDivertDLLRetriesAfterFailure(t *testing.T) {
 		}
 		return windows.Handle(5678), nil
 	}
-	preloadedWinDivertDLL = 0
-	preloadWinDivertDLLMu = sync.Mutex{}
-	defer func() {
-		resolveWinDivertExecutablePath = oldResolve
-		loadWinDivertDLLEx = oldLoad
-		preloadedWinDivertDLL = oldHandle
-		preloadWinDivertDLLMu = oldMu
-	}()
 
 	if err := checkWinDivertDLL(); err == nil {
 		t.Fatal("checkWinDivertDLL() error = nil, want preload failure")

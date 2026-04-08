@@ -210,6 +210,20 @@ test_github_fallback() {
   unset MOCK_API_FAIL
 }
 
+test_candidate_file_cleanup_on_failure() {
+  case_dir="$(setup_case_dir)"
+  export MOCK_API_RESPONSE="https://mirror.invalid/nexttrace_linux_amd64"
+  export MOCK_DOWNLOAD_FAIL=1
+  if run_installer "${case_dir}" ""; then
+    fail "installer should fail when all downloads fail"
+  fi
+  if find "${case_dir}/system-bin" -maxdepth 1 -name '.nexttrace.urls.*' -print -quit | grep -q .; then
+    fail "candidate url temp file was not cleaned up"
+  fi
+  rm -rf "${case_dir}"
+  unset MOCK_DOWNLOAD_FAIL
+}
+
 test_existing_unwritable_binary_rejected() {
   case_dir="$(setup_case_dir)"
   existing_dir="${case_dir}/existing-bin"
@@ -241,6 +255,7 @@ main() {
   test_system_mode
   test_bin_dir_mode
   test_github_fallback
+  test_candidate_file_cleanup_on_failure
   test_existing_unwritable_binary_rejected
   printf '%s\n' "nt_install smoke tests passed"
 }

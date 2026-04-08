@@ -148,6 +148,27 @@ make_runner_script() {
   printf '%s\n' "${script_path}"
 }
 
+make_deploy_runner_script() {
+  local bin_path="$1"
+  local pid_file="$2"
+  local inner_cmd
+  local script_path
+  script_path="$(mktemp "${ART_ROOT}/deploy-runner.XXXXXX")"
+  inner_cmd="$(printf "printf '%%s\\n' \"\\\$\\\$\" > %q; exec %q --listen 127.0.0.1:0 --deploy" "${pid_file}" "${bin_path}")"
+  {
+    printf '%s\n' '#!/usr/bin/env bash'
+    printf '%s\n' 'set -euo pipefail'
+    printf '%s\n' 'trap '\''rm -f -- "$0"'\'' EXIT'
+    if (( NEED_SUDO )); then
+      printf 'sudo -E bash -lc %q\n' "${inner_cmd}"
+    else
+      printf 'bash -lc %q\n' "${inner_cmd}"
+    fi
+  } > "${script_path}"
+  chmod +x "${script_path}"
+  printf '%s\n' "${script_path}"
+}
+
 run_cmd() {
   local name="$1"
   local note="$2"
@@ -175,18 +196,26 @@ check_json_pure() {
     record "${name}" FAIL "${note}; command failed"
     return
   fi
-  local first
-  first="$(python3 - <<'PY' "${out}"
-import sys
-data = open(sys.argv[1], 'rb').read().lstrip()
-print(chr(data[0]) if data else '')
-PY
-)"
   if grep -Fq "${service_err}" "${out}"; then
     record "${name}" SKIP "${note}; external service unavailable"
     return
   fi
-  if [[ "${first}" == "{" ]] && ! grep -Fq 'preferred API IP' "${out}"; then
+  if python3 - <<'PY' "${out}" && ! grep -Fq 'preferred API IP' "${out}"; then
+import json
+import sys
+
+text = open(sys.argv[1], 'r', encoding='utf-8', errors='replace').read()
+decoder = json.JSONDecoder()
+idx = 0
+length = len(text)
+while idx < length and text[idx].isspace():
+    idx += 1
+if idx >= length:
+    raise SystemExit(1)
+_, end = decoder.raw_decode(text, idx)
+if text[end:].strip():
+    raise SystemExit(1)
+PY
     record "${name}" PASS "${note}"
   else
     record "${name}" FAIL "${note}; stdout not pure JSON"
@@ -339,7 +368,7 @@ capture_psize_tos() {
 wait_http_ready() {
   local url="$1"
   for _ in $(seq 1 30); do
-    if curl -fsS "${url}" >/dev/null 2>&1; then
+    if curl -fsS --connect-timeout 2 --max-time 5 "${url}" >/dev/null 2>&1; then
       return 0
     fi
     sleep 1
@@ -367,10 +396,29 @@ wait_deploy_base_url() {
 }
 
 cleanup_deploy_process() {
+  local child_pid=""
+  if [[ -n "${DEPLOY_CHILD_PID_FILE:-}" && -f "${DEPLOY_CHILD_PID_FILE}" ]]; then
+    child_pid="$(tr -d '[:space:]' < "${DEPLOY_CHILD_PID_FILE}")"
+    if [[ "${child_pid}" =~ ^[0-9]+$ ]]; then
+      if (( NEED_SUDO )); then
+        sudo kill "${child_pid}" >/dev/null 2>&1 || true
+      else
+        kill "${child_pid}" >/dev/null 2>&1 || true
+      fi
+    fi
+  fi
   if [[ -n "${DEPLOY_PID:-}" ]]; then
     kill "${DEPLOY_PID}" >/dev/null 2>&1 || true
     wait "${DEPLOY_PID}" >/dev/null 2>&1 || true
     DEPLOY_PID=""
+  fi
+  if [[ -n "${DEPLOY_CHILD_PID_FILE:-}" ]]; then
+    rm -f "${DEPLOY_CHILD_PID_FILE}" >/dev/null 2>&1 || true
+    DEPLOY_CHILD_PID_FILE=""
+  fi
+  if [[ -n "${DEPLOY_RUNNER:-}" ]]; then
+    rm -f "${DEPLOY_RUNNER}" >/dev/null 2>&1 || true
+    DEPLOY_RUNNER=""
   fi
 }
 
@@ -451,22 +499,24 @@ fi
 
 DEPLOY_BASE_URL=""
 DEPLOY_LOG="${ART_DIR}/deploy_server.txt"
-DEPLOY_RUNNER="$(make_runner_script "\"${BIN}\" --listen 127.0.0.1:0 --deploy")"
+DEPLOY_CHILD_PID_FILE="${ART_DIR}/deploy_server.pid"
+rm -f "${DEPLOY_CHILD_PID_FILE}"
+DEPLOY_RUNNER="$(make_deploy_runner_script "${BIN}" "${DEPLOY_CHILD_PID_FILE}")"
 "${DEPLOY_RUNNER}" >"${DEPLOY_LOG}" 2>&1 &
 DEPLOY_PID=$!
 trap cleanup_deploy_process INT TERM EXIT
 if DEPLOY_BASE_URL="$(wait_deploy_base_url "${DEPLOY_LOG}")" && wait_http_ready "${DEPLOY_BASE_URL}/"; then
-  if curl -fsS "${DEPLOY_BASE_URL}/" >"${ART_DIR}/deploy_root.txt" 2>&1; then
+  if curl -fsS --connect-timeout 2 --max-time 5 "${DEPLOY_BASE_URL}/" >"${ART_DIR}/deploy_root.txt" 2>&1; then
     record deploy_root PASS 'Web root reachable'
   else
     record deploy_root FAIL 'Web root curl failed'
   fi
-  if curl -fsS "${DEPLOY_BASE_URL}/api/options" >"${ART_DIR}/deploy_options.txt" 2>&1 && grep -Fq '"packet_size":null' "${ART_DIR}/deploy_options.txt" && grep -Fq '"tos":0' "${ART_DIR}/deploy_options.txt"; then
+  if curl -fsS --connect-timeout 2 --max-time 5 "${DEPLOY_BASE_URL}/api/options" >"${ART_DIR}/deploy_options.txt" 2>&1 && grep -Fq '"packet_size":null' "${ART_DIR}/deploy_options.txt" && grep -Fq '"tos":0' "${ART_DIR}/deploy_options.txt"; then
     record deploy_options PASS 'Options API exposes packet_size=null and tos=0'
   else
     record deploy_options FAIL 'Options API check failed'
   fi
-  if curl -fsS -X POST -H 'Content-Type: application/json' --data '{"target":"1.1.1.1","queries":1,"max_hops":3,"timeout_ms":1000}' "${DEPLOY_BASE_URL}/api/trace" >"${ART_DIR}/deploy_trace.txt" 2>&1 && grep -Fq '"resolved_ip"' "${ART_DIR}/deploy_trace.txt"; then
+  if curl -fsS --connect-timeout 2 --max-time 5 -X POST -H 'Content-Type: application/json' --data '{"target":"1.1.1.1","queries":1,"max_hops":3,"timeout_ms":1000}' "${DEPLOY_BASE_URL}/api/trace" >"${ART_DIR}/deploy_trace.txt" 2>&1 && grep -Fq '"resolved_ip"' "${ART_DIR}/deploy_trace.txt"; then
     record deploy_trace PASS 'REST trace endpoint works'
   else
     record deploy_trace FAIL 'REST trace endpoint failed'

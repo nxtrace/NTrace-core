@@ -28,6 +28,7 @@ TARGET_ARCH=""
 ASSET_NAME=""
 INSTALL_PATH=""
 TEMP_FILE=""
+CANDIDATE_FILE=""
 
 SYSTEM_BIN_DIR="${NT_INSTALL_SYSTEM_BIN_DIR:-${SYSTEM_BIN_DIR_DEFAULT}}"
 USER_BIN_DIR="${NT_INSTALL_USER_BIN_DIR:-${USER_BIN_DIR_DEFAULT}}"
@@ -48,6 +49,9 @@ die() {
 cleanup() {
     if [ -n "${TEMP_FILE}" ] && [ -f "${TEMP_FILE}" ]; then
         rm -f "${TEMP_FILE}" >/dev/null 2>&1 || true
+    fi
+    if [ -n "${CANDIDATE_FILE}" ] && [ -f "${CANDIDATE_FILE}" ]; then
+        rm -f "${CANDIDATE_FILE}" >/dev/null 2>&1 || true
     fi
 }
 
@@ -318,6 +322,7 @@ download_and_install() {
     mkdir_or_die "${install_dir}" "install directory"
     TEMP_FILE="$(mktemp "${install_dir}/.${BIN_NAME}.tmp.XXXXXX")" || die "unable to create temporary file in ${install_dir}"
     candidate_file="$(mktemp "${install_dir}/.${BIN_NAME}.urls.XXXXXX")" || die "unable to create candidate list in ${install_dir}"
+    CANDIDATE_FILE="${candidate_file}"
     build_candidate_list >"${candidate_file}"
 
     downloaded_from=""
@@ -333,6 +338,7 @@ download_and_install() {
         TEMP_FILE="$(mktemp "${install_dir}/.${BIN_NAME}.tmp.XXXXXX")" || die "unable to recreate temporary file in ${install_dir}"
     done <"${candidate_file}"
     rm -f "${candidate_file}" >/dev/null 2>&1 || true
+    CANDIDATE_FILE=""
 
     [ -n "${downloaded_from}" ] || die "failed to download a working ${ASSET_NAME}. Try again later or install from the release page manually."
 

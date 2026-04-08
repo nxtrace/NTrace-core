@@ -458,7 +458,7 @@ function Check-PacketCapture {
     $dump = Join-Path $ArtifactsDir "$Name.tshark.txt"
     $out = Join-Path $ArtifactsDir "$Name.cmd.txt"
     Remove-Item -Force -ErrorAction Ignore $dump, $out
-    $iface = Get-CaptureInterface -AddressFamily $captureFamily -TargetAddress $TargetAddress
+    $iface = Get-CaptureInterface -AddressFamily $captureFamily -TargetAddress $TargetAddress -DiagnosticPath $probeLog
     Set-Content -Path $probeLog -Value @(
         "explicit=$TsharkPath"
         "resolved=$tsharkExe"
@@ -499,7 +499,7 @@ function Check-PacketCapture {
         return
     }
     Start-Sleep -Milliseconds 800
-    $null = Invoke-CommandWithTimeout -Command $Command -OutFile $out -Seconds 60
+    $rc = Invoke-CommandWithTimeout -Command $Command -OutFile $out -Seconds 60
     Start-Sleep -Seconds 1
     if (-not $capture.WaitForExit(8000)) {
         Stop-Process -Id $capture.Id -Force -ErrorAction SilentlyContinue
@@ -509,11 +509,11 @@ function Check-PacketCapture {
     Set-Content -Path $dump -Value ($dumpOutText + $dumpErrText)
     Remove-Item -Force -ErrorAction Ignore $dumpStdout, $dumpStderr
     $content = if (Test-Path $dump) { Get-Content -Raw -Path $dump } else { "" }
-    if ($content.Contains($Expect1) -and $content.Contains($Expect2)) {
+    if ($rc -eq 0 -and $content.Contains($Expect1) -and $content.Contains($Expect2)) {
         Write-Record $Name PASS $Note
     }
     else {
-        Write-Record $Name FAIL "$Note; packet capture mismatch"
+        Write-Record $Name FAIL "$Note; exit=$rc; packet capture mismatch"
     }
 }
 
@@ -568,6 +568,7 @@ function Wait-DeployBaseUrl {
 function Get-CaptureInterface {
     param(
         [string]$TargetAddress = "",
+        [string]$DiagnosticPath = "",
         [ValidateSet("IPv4", "IPv6")]
         [string]$AddressFamily = "IPv4"
     )
@@ -608,6 +609,13 @@ function Get-CaptureInterface {
         }
     }
     catch {
+        $message = "Get-CaptureInterface error: $($_.Exception.Message)"
+        if (-not [string]::IsNullOrWhiteSpace($DiagnosticPath)) {
+            Add-Content -Path $DiagnosticPath -Value $message
+            if (-not [string]::IsNullOrWhiteSpace($_.ScriptStackTrace)) {
+                Add-Content -Path $DiagnosticPath -Value $_.ScriptStackTrace
+            }
+        }
     }
     return $null
 }

@@ -266,9 +266,9 @@ func (s *ICMPSpec) ensureICMPSendHandle(ipv6 bool) error {
 	handle, err := OpenWinDivertHandle("false", 0)
 	if err != nil {
 		if ipv6 {
-			return errors.New(formatWinDivertRequiredError("Windows ICMPv6 --tos", err))
+			return fmt.Errorf("%s: %w", formatWinDivertRequiredError("Windows ICMPv6 --tos", err), err)
 		}
-		return errors.New(formatWinDivertRequiredError("Windows ICMPv4 --tos", err))
+		return fmt.Errorf("%s: %w", formatWinDivertRequiredError("Windows ICMPv4 --tos", err), err)
 	}
 
 	s.sendHandle = handle

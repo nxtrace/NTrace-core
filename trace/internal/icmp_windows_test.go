@@ -3,9 +3,12 @@
 package internal
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/google/gopacket/layers"
+	wd "github.com/xjasonlyu/windivert-go"
+	"golang.org/x/sys/windows"
 )
 
 func TestShouldUseICMPv6RawSend(t *testing.T) {
@@ -29,5 +32,36 @@ func TestShouldUseICMPv4RawSend(t *testing.T) {
 	}
 	if shouldUseICMPv4RawSend(&layers.IPv4{TOS: 46}) {
 		t.Fatal("non-zero tos should keep socket send on Windows ICMPv4")
+	}
+}
+
+func TestEnsureICMPSendHandlePreservesWrappedWinDivertError(t *testing.T) {
+	oldCheck := checkWinDivertDLL
+	oldOpen := openWinDivertCall
+	checkWinDivertDLL = func() error {
+		return &winDivertError{
+			Kind:  winDivertErrorDriverMissing,
+			Cause: wd.Error(windows.ERROR_FILE_NOT_FOUND),
+		}
+	}
+	openWinDivertCall = func(string, uint64) (wd.Handle, error) {
+		t.Fatal("openWinDivertCall should not run when DLL check fails")
+		return 0, nil
+	}
+	defer func() {
+		checkWinDivertDLL = oldCheck
+		openWinDivertCall = oldOpen
+	}()
+
+	err := (&ICMPSpec{}).ensureICMPSendHandle(true)
+	if err == nil {
+		t.Fatal("ensureICMPSendHandle() error = nil, want non-nil")
+	}
+	var wrapped *winDivertError
+	if !errors.As(err, &wrapped) {
+		t.Fatalf("ensureICMPSendHandle() error = %T, want wrapped *winDivertError", err)
+	}
+	if wrapped.Kind != winDivertErrorDriverMissing {
+		t.Fatalf("wrapped.Kind = %v, want %v", wrapped.Kind, winDivertErrorDriverMissing)
 	}
 }

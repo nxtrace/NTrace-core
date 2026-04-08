@@ -91,9 +91,6 @@ func RunWithReady(listenAddr string, onReady func(net.Addr)) error {
 
 	err = srv.Serve(listener)
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		if strings.Contains(err.Error(), "address already in use") {
-			return fmt.Errorf("listen %s: %w", listenAddr, err)
-		}
 		return err
 	}
 
