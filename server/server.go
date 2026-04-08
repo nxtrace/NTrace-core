@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -39,6 +40,12 @@ func init() {
 
 // Run starts the Gin HTTP server that exposes the traceroute UI and APIs.
 func Run(listenAddr string) error {
+	return RunWithReady(listenAddr, nil)
+}
+
+// RunWithReady starts the Gin HTTP server and invokes onReady after the listener
+// has been successfully bound.
+func RunWithReady(listenAddr string, onReady func(net.Addr)) error {
 	if listenAddr == "" {
 		listenAddr = defaultListenAddr
 	}
@@ -64,6 +71,13 @@ func Run(listenAddr string) error {
 	router.GET("/ws/trace", traceWebsocketHandler)
 
 	srv := &http.Server{Addr: listenAddr, Handler: router}
+	listener, err := listenHTTP(listenAddr)
+	if err != nil {
+		return err
+	}
+	if onReady != nil {
+		onReady(listener.Addr())
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -75,7 +89,7 @@ func Run(listenAddr string) error {
 		_ = srv.Shutdown(shutdownCtx)
 	}()
 
-	err := srv.ListenAndServe()
+	err = srv.Serve(listener)
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		if strings.Contains(err.Error(), "address already in use") {
 			return fmt.Errorf("listen %s: %w", listenAddr, err)
@@ -84,4 +98,18 @@ func Run(listenAddr string) error {
 	}
 
 	return nil
+}
+
+func listenHTTP(listenAddr string) (net.Listener, error) {
+	if listenAddr == "" {
+		listenAddr = defaultListenAddr
+	}
+	listener, err := net.Listen("tcp", listenAddr)
+	if err != nil {
+		if strings.Contains(err.Error(), "address already in use") {
+			return nil, fmt.Errorf("listen %s: %w", listenAddr, err)
+		}
+		return nil, err
+	}
+	return listener, nil
 }

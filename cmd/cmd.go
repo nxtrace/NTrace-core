@@ -576,7 +576,7 @@ func maybeRunDeployMode(deploy bool, deployListen string) bool {
 		return false
 	}
 	if !enableWebUI {
-		if err := runDeploy(""); err != nil {
+		if err := runDeploy("", nil); err != nil {
 			if util.EnvDevMode {
 				panic(err)
 			}
@@ -596,16 +596,18 @@ func maybeRunDeployMode(deploy bool, deployListen string) bool {
 		listenAddr = defaultLocalListenAddr()
 	}
 
-	info := buildListenInfo(listenAddr)
-	fmt.Printf("启动 NextTrace Web 控制台，监听地址: %s\n", info.Binding)
-	if !userProvided {
-		fmt.Println("远程访问请显式设置 --listen（例如 --listen 0.0.0.0:1080）。")
+	onReady := func(addr net.Addr) {
+		info := buildListenInfo(addr.String())
+		fmt.Printf("启动 NextTrace Web 控制台，监听地址: %s\n", info.Binding)
+		if !userProvided {
+			fmt.Println("远程访问请显式设置 --listen（例如 --listen 0.0.0.0:1080）。")
+		}
+		if info.Access != "" && info.Access != info.Binding {
+			fmt.Printf("如需远程访问，请尝试: %s\n", info.Access)
+		}
+		fmt.Println("注意：Web 控制台的安全性有限，请在确保安全的前提下使用，如有必要请使用ACL等方式加强安全性")
 	}
-	if info.Access != "" && info.Access != info.Binding {
-		fmt.Printf("如需远程访问，请尝试: %s\n", info.Access)
-	}
-	fmt.Println("注意：Web 控制台的安全性有限，请在确保安全的前提下使用，如有必要请使用ACL等方式加强安全性")
-	if err := runDeploy(listenAddr); err != nil {
+	if err := runDeploy(listenAddr, onReady); err != nil {
 		if util.EnvDevMode {
 			panic(err)
 		}

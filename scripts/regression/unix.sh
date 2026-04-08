@@ -132,14 +132,16 @@ run_timeout_cmd() {
 
 make_runner_script() {
   local command_string="$1"
-  local script_path="${ART_ROOT}/runner-$RANDOM-$RANDOM.sh"
+  local script_path
+  script_path="$(mktemp "${ART_ROOT}/runner.XXXXXX")"
   {
     printf '%s\n' '#!/usr/bin/env bash'
     printf '%s\n' 'set -euo pipefail'
+    printf '%s\n' 'trap '\''rm -f -- "$0"'\'' EXIT'
     if (( NEED_SUDO )); then
-      printf 'exec sudo -E bash -lc %q\n' "${command_string}"
+      printf 'sudo -E bash -lc %q\n' "${command_string}"
     else
-      printf 'exec bash -lc %q\n' "${command_string}"
+      printf 'bash -lc %q\n' "${command_string}"
     fi
   } > "${script_path}"
   chmod +x "${script_path}"
@@ -345,14 +347,31 @@ wait_http_ready() {
   return 1
 }
 
-get_free_tcp_port() {
-  python3 - <<'PY'
-import socket
+extract_http_url() {
+  local log_path="$1"
+  grep -Eo 'http://[^[:space:]]+' "${log_path}" 2>/dev/null | head -n1 || true
+}
 
-with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-    sock.bind(("127.0.0.1", 0))
-    print(sock.getsockname()[1])
-PY
+wait_deploy_base_url() {
+  local log_path="$1"
+  local url
+  for _ in $(seq 1 30); do
+    url="$(extract_http_url "${log_path}")"
+    if [[ -n "${url}" ]]; then
+      printf '%s\n' "${url}"
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+cleanup_deploy_process() {
+  if [[ -n "${DEPLOY_PID:-}" ]]; then
+    kill "${DEPLOY_PID}" >/dev/null 2>&1 || true
+    wait "${DEPLOY_PID}" >/dev/null 2>&1 || true
+    DEPLOY_PID=""
+  fi
 }
 
 echo "artifacts: $(display_path "${ART_ROOT}")"
@@ -430,13 +449,13 @@ else
   record_ipv6_skip psize_tos_tcp6 'TCPv6 psize/tos packet capture'
 fi
 
-DEPLOY_PORT="$(get_free_tcp_port)"
-DEPLOY_BASE_URL="http://127.0.0.1:${DEPLOY_PORT}"
+DEPLOY_BASE_URL=""
 DEPLOY_LOG="${ART_DIR}/deploy_server.txt"
-DEPLOY_RUNNER="$(make_runner_script "\"${BIN}\" --listen 127.0.0.1:${DEPLOY_PORT} --deploy")"
+DEPLOY_RUNNER="$(make_runner_script "\"${BIN}\" --listen 127.0.0.1:0 --deploy")"
 "${DEPLOY_RUNNER}" >"${DEPLOY_LOG}" 2>&1 &
 DEPLOY_PID=$!
-if wait_http_ready "${DEPLOY_BASE_URL}/"; then
+trap cleanup_deploy_process INT TERM EXIT
+if DEPLOY_BASE_URL="$(wait_deploy_base_url "${DEPLOY_LOG}")" && wait_http_ready "${DEPLOY_BASE_URL}/"; then
   if curl -fsS "${DEPLOY_BASE_URL}/" >"${ART_DIR}/deploy_root.txt" 2>&1; then
     record deploy_root PASS 'Web root reachable'
   else
@@ -457,8 +476,8 @@ else
   record deploy_options FAIL 'deploy server not ready'
   record deploy_trace FAIL 'deploy server not ready'
 fi
-kill "${DEPLOY_PID}" >/dev/null 2>&1 || true
-wait "${DEPLOY_PID}" >/dev/null 2>&1 || true
+cleanup_deploy_process
+trap - INT TERM EXIT
 
 echo "__SUMMARY__"
 cat "${SUMMARY}"

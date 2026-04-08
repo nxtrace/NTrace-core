@@ -531,15 +531,38 @@ function Wait-HttpReady {
     return $false
 }
 
-function Get-FreeTcpPort {
-    $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
-    try {
-        $listener.Start()
-        return ([System.Net.IPEndPoint]$listener.LocalEndpoint).Port
+function Get-FirstHttpUrlFromFiles {
+    param([string[]]$Paths)
+    foreach ($path in $Paths) {
+        if ([string]::IsNullOrWhiteSpace($path) -or -not (Test-Path $path)) {
+            continue
+        }
+        $content = Get-Content -Raw -Path $path -ErrorAction SilentlyContinue
+        if ([string]::IsNullOrWhiteSpace($content)) {
+            continue
+        }
+        $match = [regex]::Match($content, 'http://[^\s"''<>]+')
+        if ($match.Success) {
+            return $match.Value
+        }
     }
-    finally {
-        $listener.Stop()
+    return $null
+}
+
+function Wait-DeployBaseUrl {
+    param(
+        [string[]]$Paths,
+        [int]$TimeoutSeconds = 15
+    )
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $deadline) {
+        $url = Get-FirstHttpUrlFromFiles -Paths $Paths
+        if (-not [string]::IsNullOrWhiteSpace($url)) {
+            return $url
+        }
+        Start-Sleep -Milliseconds 200
     }
+    return $null
 }
 
 function Get-CaptureInterface {
@@ -701,15 +724,15 @@ Check-PacketCaptureIfSupported $icmp6Capability.Supported $icmp6Capability.Reaso
 Check-PacketCaptureIfSupported $udp6Capability.Supported $udp6Capability.Reason "psize_tos_udp6" "UDPv6 psize/tos packet capture" "`"$Bin`" --no-color -6 -U -q 1 -m 1 --timeout 1000 --psize 84 -Q 46 2606:4700:4700::1111" "2606:4700:4700::1111" "host 2606:4700:4700::1111" "Traffic Class: 0x2e" "Payload Length: 44"
 Check-PacketCaptureIfSupported $tcp6Capability.Supported $tcp6Capability.Reason "psize_tos_tcp6" "TCPv6 psize/tos packet capture" "`"$Bin`" --no-color -6 -T -q 1 -m 1 --timeout 1000 --psize 84 -Q 46 2606:4700:4700::1111" "2606:4700:4700::1111" "host 2606:4700:4700::1111" "Traffic Class: 0x2e" "Payload Length: 44"
 
-$deployPort = Get-FreeTcpPort
-$deployBaseUrl = "http://127.0.0.1:$deployPort"
+$deployBaseUrl = $null
 $deployLog = Join-Path $ArtifactsDir "deploy_server.txt"
 $deployStdout = "$deployLog.stdout"
 $deployStderr = "$deployLog.stderr"
 Remove-Item -Force -ErrorAction Ignore $deployLog, $deployStdout, $deployStderr
-$deploy = Start-Process -FilePath $Bin -ArgumentList "--listen", "127.0.0.1:$deployPort", "--deploy" -RedirectStandardOutput $deployStdout -RedirectStandardError $deployStderr -PassThru -WindowStyle Hidden
+$deploy = Start-Process -FilePath $Bin -ArgumentList "--listen", "127.0.0.1:0", "--deploy" -RedirectStandardOutput $deployStdout -RedirectStandardError $deployStderr -PassThru -WindowStyle Hidden
 try {
-    if (Wait-HttpReady "$deployBaseUrl/") {
+    $deployBaseUrl = Wait-DeployBaseUrl -Paths @($deployStdout, $deployStderr)
+    if (-not [string]::IsNullOrWhiteSpace($deployBaseUrl) -and (Wait-HttpReady "$deployBaseUrl/")) {
         try {
             Invoke-WebRequest -UseBasicParsing -Uri "$deployBaseUrl/" -TimeoutSec 5 | Out-File -Encoding utf8 (Join-Path $ArtifactsDir "deploy_root.txt")
             Write-Record deploy_root PASS "Web root reachable"
