@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/signal"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/fatih/color"
@@ -27,8 +26,6 @@ type FastTracer struct {
 	TracerouteMethod trace.Method
 	ParamsFastTrace  ParamsFastTrace
 }
-
-var fastTraceSourceWarningOnce sync.Once
 
 type ParamsFastTrace struct {
 	Context        context.Context
@@ -227,16 +224,7 @@ func buildFileTraceConfig(params ParamsFastTrace, tracerouteMethod trace.Method,
 }
 
 func normalizeFastTraceConfig(method trace.Method, conf trace.Config) (trace.Config, error) {
-	conf, warning, err := trace.NormalizeExplicitSourceConfig(method, conf)
-	if err != nil {
-		return conf, err
-	}
-	if warning != "" {
-		fastTraceSourceWarningOnce.Do(func() {
-			_, _ = fmt.Fprintln(os.Stderr, warning)
-		})
-	}
-	return conf, nil
+	return trace.NormalizeExplicitSourceConfig(method, conf)
 }
 
 func configureFastTraceRealtimePrinter(conf *trace.Config, outputPath, header string) (func() error, error) {

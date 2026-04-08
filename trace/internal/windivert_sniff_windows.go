@@ -55,7 +55,7 @@ func winDivertTCPFilter(ipVersion int, dstIP, srcIP net.IP, dstPort int) string 
 func openWinDivertSniffHandle(ctx context.Context, filter, action string) (wd.Handle, func()) {
 	handle, err := openWinDivertSniffCall(filter, wd.FlagSniff|wd.FlagRecvOnly)
 	if err != nil {
-		msg := formatWinDivertRequiredError(fmt.Sprintf("Windows WinDivert 嗅探 (%s)", action), err)
+		msg := formatWinDivertRequiredError(fmt.Sprintf("Windows WinDivert 嗅探 (%s, filter=%q)", action, filter), err)
 		if winDivertSniffDevMode() {
 			panic(msg)
 		}

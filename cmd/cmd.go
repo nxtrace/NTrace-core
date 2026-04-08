@@ -822,13 +822,6 @@ func resolveConfiguredSrcAddr(dstIP net.IP, srcAddr, srcDev string) (resolved st
 	return trace.ResolveConfiguredSrcAddr(dstIP, srcAddr, srcDev)
 }
 
-func writeSourceSelectionWarning(warning string) {
-	if strings.TrimSpace(warning) == "" {
-		return
-	}
-	_, _ = fmt.Fprintln(os.Stderr, warning)
-}
-
 func printTraceNav(jsonPrint bool, effectiveMTR bool, ip net.IP, domain, dataOrigin string, maxHops, packetSize int, srcAddr string, method trace.Method) {
 	if !jsonPrint && !effectiveMTR {
 		printer.PrintTraceRouteNav(ip, domain, dataOrigin, maxHops, packetSize, srcAddr, string(method))
@@ -1086,7 +1079,7 @@ func Execute() {
 	ver := parser.Flag("V", "version", &argparse.Options{Help: "Print version info and exit"})
 	srcAddr := parser.String("s", "source", &argparse.Options{Help: "Use source address src_addr for outgoing packets"})
 	srcPort := parser.Int("", "source-port", &argparse.Options{Help: "Use source port src_port for outgoing packets"})
-	srcDev := parser.String("D", "dev", &argparse.Options{Help: "Use the specified network device for explicit source selection. On Windows, this only chooses the source address and does not guarantee the egress interface"})
+	srcDev := parser.String("D", "dev", &argparse.Options{Help: "Use the specified network device for explicit source selection. On Windows, this only chooses the source address and does not guarantee the egress interface; TCP + --dev is not supported"})
 
 	webFlags := registerWebUIFlags(parser)
 	deployListen := webFlags.deployListen
@@ -1229,7 +1222,7 @@ func Execute() {
 			fmt.Println(srcResolveErr)
 			os.Exit(1)
 		}
-		sourceCfg, warning, srcResolveErr := trace.NormalizeExplicitSourceConfig(trace.UDPTrace, trace.Config{
+		sourceCfg, srcResolveErr := trace.NormalizeExplicitSourceConfig(trace.UDPTrace, trace.Config{
 			OSType:       osType,
 			DstIP:        ip,
 			SrcAddr:      *srcAddr,
@@ -1239,7 +1232,6 @@ func Execute() {
 			fmt.Println(srcResolveErr)
 			os.Exit(1)
 		}
-		writeSourceSelectionWarning(warning)
 		if sourceCfg.SrcAddr != "" {
 			resolvedSrcAddr = sourceCfg.SrcAddr
 		}
@@ -1365,7 +1357,7 @@ func Execute() {
 		fmt.Println(srcResolveErr)
 		os.Exit(1)
 	}
-	sourceCfg, warning, srcResolveErr := trace.NormalizeExplicitSourceConfig(method, trace.Config{
+	sourceCfg, srcResolveErr := trace.NormalizeExplicitSourceConfig(method, trace.Config{
 		OSType:       osType,
 		DstIP:        ip,
 		SrcAddr:      *srcAddr,
@@ -1375,7 +1367,6 @@ func Execute() {
 		fmt.Println(srcResolveErr)
 		os.Exit(1)
 	}
-	writeSourceSelectionWarning(warning)
 	if sourceCfg.SrcAddr != "" {
 		resolvedSrcAddr = sourceCfg.SrcAddr
 	}

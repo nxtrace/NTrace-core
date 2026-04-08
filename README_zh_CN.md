@@ -322,6 +322,7 @@ nexttrace --file /path/to/your/iplist.txt
 
 在 macOS 和 Linux 上，`--dev` 会绑定到指定源网卡。
 在 Windows 上，`--dev` 只用于选择 source address，不保证真实出接口。
+`TCP + --dev` 在 Windows 上仍然是显式不支持的，会直接报错。
 
 ```bash
 # 请注意 Lite 版本此参数不能和快速测试联用，如有需要请使用 enhanced 版本

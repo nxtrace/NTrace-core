@@ -269,9 +269,21 @@ build_candidate_list() {
     response="$(fetch_text "${api_url}" 2>/dev/null || true)"
     if [ -n "${response}" ]; then
         old_ifs="${IFS}"
+        had_noglob=0
+        case "$-" in
+            *f*)
+                had_noglob=1
+                ;;
+            *)
+                set -f
+                ;;
+        esac
         IFS='|'
         set -- ${response}
         IFS="${old_ifs}"
+        if [ "${had_noglob}" -eq 0 ]; then
+            set +f
+        fi
         for candidate in "$@"; do
             append_candidate "${candidate}"
         done

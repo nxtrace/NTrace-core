@@ -45,10 +45,12 @@ func IsIPv6(ip net.IP) bool {
 	return ip != nil && ip.To4() == nil && ip.To16() != nil
 }
 
-// AddrIP 从常见的 net.Addr 中提取 IP：支持 *net.IPAddr / *net.TCPAddr / *net.UDPAddr
+// AddrIP 从常见的 net.Addr 中提取 IP：支持 *net.IPNet / *net.IPAddr / *net.TCPAddr / *net.UDPAddr
 // 若无法提取，返回 nil
 func AddrIP(a net.Addr) net.IP {
 	switch addr := a.(type) {
+	case *net.IPNet:
+		return addr.IP
 	case *net.IPAddr:
 		return addr.IP
 	case *net.TCPAddr:

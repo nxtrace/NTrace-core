@@ -346,6 +346,16 @@ wait_http_ready() {
   return 1
 }
 
+get_free_tcp_port() {
+  python3 - <<'PY'
+import socket
+
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+    sock.bind(("127.0.0.1", 0))
+    print(sock.getsockname()[1])
+PY
+}
+
 echo "artifacts: $(display_path "${ART_ROOT}")"
 echo "building binaries..."
 (cd "${REPO_ROOT}" && go build -trimpath -o "${BIN}" .)
@@ -421,22 +431,24 @@ else
   record_ipv6_skip psize_tos_tcp6 'TCPv6 psize/tos packet capture'
 fi
 
+DEPLOY_PORT="$(get_free_tcp_port)"
+DEPLOY_BASE_URL="http://127.0.0.1:${DEPLOY_PORT}"
 DEPLOY_LOG="${ART_DIR}/deploy_server.txt"
-DEPLOY_RUNNER="$(make_runner_script "\"${BIN}\" --listen 127.0.0.1:30080 --deploy")"
+DEPLOY_RUNNER="$(make_runner_script "\"${BIN}\" --listen 127.0.0.1:${DEPLOY_PORT} --deploy")"
 "${DEPLOY_RUNNER}" >"${DEPLOY_LOG}" 2>&1 &
 DEPLOY_PID=$!
-if wait_http_ready "http://127.0.0.1:30080/"; then
-  if curl -fsS http://127.0.0.1:30080/ >"${ART_DIR}/deploy_root.txt" 2>&1; then
+if wait_http_ready "${DEPLOY_BASE_URL}/"; then
+  if curl -fsS "${DEPLOY_BASE_URL}/" >"${ART_DIR}/deploy_root.txt" 2>&1; then
     record deploy_root PASS 'Web root reachable'
   else
     record deploy_root FAIL 'Web root curl failed'
   fi
-  if curl -fsS http://127.0.0.1:30080/api/options >"${ART_DIR}/deploy_options.txt" 2>&1 && grep -Fq '"packet_size":null' "${ART_DIR}/deploy_options.txt" && grep -Fq '"tos":0' "${ART_DIR}/deploy_options.txt"; then
+  if curl -fsS "${DEPLOY_BASE_URL}/api/options" >"${ART_DIR}/deploy_options.txt" 2>&1 && grep -Fq '"packet_size":null' "${ART_DIR}/deploy_options.txt" && grep -Fq '"tos":0' "${ART_DIR}/deploy_options.txt"; then
     record deploy_options PASS 'Options API exposes packet_size=null and tos=0'
   else
     record deploy_options FAIL 'Options API check failed'
   fi
-  if curl -fsS -X POST -H 'Content-Type: application/json' --data '{"target":"1.1.1.1","queries":1,"max_hops":3,"timeout_ms":1000}' http://127.0.0.1:30080/api/trace >"${ART_DIR}/deploy_trace.txt" 2>&1 && grep -Fq '"resolved_ip"' "${ART_DIR}/deploy_trace.txt"; then
+  if curl -fsS -X POST -H 'Content-Type: application/json' --data '{"target":"1.1.1.1","queries":1,"max_hops":3,"timeout_ms":1000}' "${DEPLOY_BASE_URL}/api/trace" >"${ART_DIR}/deploy_trace.txt" 2>&1 && grep -Fq '"resolved_ip"' "${ART_DIR}/deploy_trace.txt"; then
     record deploy_trace PASS 'REST trace endpoint works'
   else
     record deploy_trace FAIL 'REST trace endpoint failed'

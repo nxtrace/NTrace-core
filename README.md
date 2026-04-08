@@ -325,6 +325,7 @@ nexttrace --file /path/to/your/iplist.txt
 
 On macOS and Linux, `--dev` binds the requested source interface.
 On Windows, `--dev` only selects the source address and does not guarantee the actual egress interface.
+`TCP + --dev` remains explicitly unsupported on Windows and returns an error.
 
 ```bash
 # Use eth0 network interface

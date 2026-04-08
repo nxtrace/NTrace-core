@@ -15,6 +15,8 @@ var (
 	currentGOOS              = runtime.GOOS
 )
 
+const osTypeWindows = 2
+
 func ResolveSourceDevice(device string) (*net.Interface, error) {
 	trimmed := strings.TrimSpace(device)
 	if trimmed == "" {
@@ -38,25 +40,39 @@ func ResolveSourceDeviceAddr(dev *net.Interface, dstIP net.IP) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("load source device %q addresses: %w", dev.Name, err)
 	}
-	var candidate string
+	var preferred string
+	var linkLocal string
 	for _, addr := range addrs {
-		ipNet, ok := addr.(*net.IPNet)
-		if !ok {
+		ip := util.AddrIP(addr)
+		if ip == nil {
 			continue
 		}
-		if (ipNet.IP.To4() == nil) != (dstIP.To4() == nil) {
+		if (ip.To4() == nil) != (dstIP.To4() == nil) {
 			continue
 		}
-		candidate = ipNet.IP.String()
-		parsed := net.ParseIP(candidate)
-		if parsed != nil && !(parsed.IsPrivate() ||
-			parsed.IsLoopback() ||
-			parsed.IsLinkLocalUnicast() ||
-			parsed.IsLinkLocalMulticast()) {
+		if ip.IsLoopback() {
+			continue
+		}
+		candidate := ip.String()
+		if !(ip.IsPrivate() ||
+			ip.IsLinkLocalUnicast() ||
+			ip.IsLinkLocalMulticast()) {
 			return candidate, nil
 		}
+		if !(ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast()) {
+			if preferred == "" {
+				preferred = candidate
+			}
+			continue
+		}
+		if linkLocal == "" {
+			linkLocal = candidate
+		}
 	}
-	return candidate, nil
+	if preferred != "" {
+		return preferred, nil
+	}
+	return linkLocal, nil
 }
 
 func ResolveFallbackSrcAddr(dstIP net.IP) string {
@@ -95,47 +111,48 @@ func ResolveConfiguredSrcAddr(dstIP net.IP, srcAddr, srcDev string) (resolved st
 	return ResolveFallbackSrcAddr(dstIP), false, nil
 }
 
-func NormalizeExplicitSourceConfig(method Method, config Config) (Config, string, error) {
-	_ = method
-
+func NormalizeExplicitSourceConfig(method Method, config Config) (Config, error) {
 	config.SrcAddr = strings.TrimSpace(config.SrcAddr)
 	config.SourceDevice = strings.TrimSpace(config.SourceDevice)
 	explicitSource := config.SrcAddr != ""
 
 	if config.SrcAddr == "" && config.SourceDevice == "" {
-		return config, "", nil
+		return config, nil
 	}
 	if config.SourceDevice == "" {
-		return config, "", nil
+		return config, nil
 	}
-	if config.OSType == 2 && explicitSource {
+	if config.OSType == osTypeWindows && method == TCPTrace {
+		return config, nil
+	}
+	if config.OSType == osTypeWindows && explicitSource {
 		config.SourceDevice = ""
-		return config, "", nil
+		return config, nil
 	}
 
 	dev, err := ResolveSourceDevice(config.SourceDevice)
 	if err != nil {
-		return config, "", err
+		return config, err
 	}
 	if !explicitSource {
 		resolved, err := ResolveSourceDeviceAddr(dev, config.DstIP)
 		if err != nil {
-			return config, "", err
+			return config, err
 		}
 		if resolved == "" {
-			return config, "", fmt.Errorf("source device %q has no usable %s address", config.SourceDevice, sourceFamilyLabel(config.DstIP))
+			return config, fmt.Errorf("source device %q has no usable %s address", config.SourceDevice, sourceFamilyLabel(config.DstIP))
 		}
 		config.SrcAddr = resolved
 	}
 
-	if config.OSType == 2 {
+	if config.OSType == osTypeWindows {
 		config.SourceDevice = ""
-		return config, "", nil
+		return config, nil
 	}
 	if !supportsSourceDeviceBinding(currentGOOS) {
 		config.SourceDevice = ""
 	}
-	return config, "", nil
+	return config, nil
 }
 
 func sourceFamilyLabel(dstIP net.IP) string {

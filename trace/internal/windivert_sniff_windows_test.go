@@ -5,6 +5,7 @@ package internal
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -32,8 +33,8 @@ func TestOpenWinDivertSniffHandlePanicsInDevMode(t *testing.T) {
 	defer func() {
 		if r := recover(); r == nil {
 			t.Fatal("openWinDivertSniffHandle() did not panic in dev mode")
-		} else if !strings.Contains(r.(string), "WinDivert") {
-			t.Fatalf("panic = %q, want WinDivert context", r.(string))
+		} else if msg := fmt.Sprintf("%v", r); !strings.Contains(msg, "WinDivert") || !strings.Contains(msg, `filter="false"`) {
+			t.Fatalf("panic = %q, want WinDivert context and filter", msg)
 		}
 	}()
 
@@ -61,14 +62,14 @@ func TestOpenWinDivertSniffHandleCallsFatalOutsideDevModeThenPanics(t *testing.T
 	defer func() {
 		if r := recover(); r == nil {
 			t.Fatal("openWinDivertSniffHandle() did not panic after fatal hook")
-		} else if !strings.Contains(r.(string), "Windows WinDivert 嗅探 (test)") {
-			t.Fatalf("panic = %q, want action context", r.(string))
+		} else if msg := fmt.Sprintf("%v", r); !strings.Contains(msg, "Windows WinDivert 嗅探 (test") || !strings.Contains(msg, `filter="false"`) {
+			t.Fatalf("panic = %q, want action context and filter", msg)
 		}
 		if gotFatal == "" {
 			t.Fatal("fatal hook was not called")
 		}
-		if !strings.Contains(gotFatal, "Windows WinDivert 嗅探 (test)") {
-			t.Fatalf("fatal message = %q, want action context", gotFatal)
+		if !strings.Contains(gotFatal, "Windows WinDivert 嗅探 (test") || !strings.Contains(gotFatal, `filter="false"`) {
+			t.Fatalf("fatal message = %q, want action context and filter", gotFatal)
 		}
 	}()
 

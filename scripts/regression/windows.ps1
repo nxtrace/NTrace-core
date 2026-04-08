@@ -171,17 +171,27 @@ function Run-Cmd {
         [string]$Note,
         [string]$Command,
         [string]$SuccessPattern = "",
+        [string]$ForbiddenPattern = "",
         [int]$Seconds = 150
     )
     $out = Join-Path $ArtifactsDir "$Name.txt"
     $rc = Invoke-CommandWithTimeout -Command $Command -OutFile $out -Seconds $Seconds
     $content = if (Test-Path $out) { Get-Content -Raw -Path $out } else { "" }
     $patternMatched = [string]::IsNullOrWhiteSpace($SuccessPattern) -or $content -match $SuccessPattern
-    if ($rc -eq 0 -and $patternMatched) {
+    $forbiddenMatched = -not [string]::IsNullOrWhiteSpace($ForbiddenPattern) -and $content -match $ForbiddenPattern
+    if ($rc -eq 0 -and $patternMatched -and -not $forbiddenMatched) {
         Write-Record $Name PASS $Note
     }
     else {
-        Write-Record $Name FAIL "$Note; exit=$rc"
+        if ($rc -ne 0) {
+            Write-Record $Name FAIL "$Note; exit=$rc"
+        }
+        elseif (-not $patternMatched) {
+            Write-Record $Name FAIL "$Note; output mismatch"
+        }
+        else {
+            Write-Record $Name FAIL "$Note; forbidden output matched"
+        }
     }
 }
 
@@ -227,13 +237,14 @@ function Run-CmdIfSupported {
         [string]$Note,
         [string]$Command,
         [string]$SuccessPattern = "",
+        [string]$ForbiddenPattern = "",
         [int]$Seconds = 150
     )
     if (-not $Supported) {
         Write-SkipRecord $Name $Note $Reason
         return
     }
-    Run-Cmd -Name $Name -Note $Note -Command $Command -SuccessPattern $SuccessPattern -Seconds $Seconds
+    Run-Cmd -Name $Name -Note $Note -Command $Command -SuccessPattern $SuccessPattern -ForbiddenPattern $ForbiddenPattern -Seconds $Seconds
 }
 
 function Check-JsonPureIfSupported {
@@ -520,6 +531,17 @@ function Wait-HttpReady {
     return $false
 }
 
+function Get-FreeTcpPort {
+    $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
+    try {
+        $listener.Start()
+        return ([System.Net.IPEndPoint]$listener.LocalEndpoint).Port
+    }
+    finally {
+        $listener.Stop()
+    }
+}
+
 function Get-CaptureInterface {
     param(
         [string]$TargetAddress = "",
@@ -664,7 +686,7 @@ Check-OutputFileIfSupported $icmp4Capability.Supported $icmp4Capability.Reason "
 Check-OutputFileIfSupported $icmp4Capability.Supported $icmp4Capability.Reason "output_default" "Default output file path" "set TEMP=$DefaultTmp && set TMP=$DefaultTmp && `"$Bin`" --no-color -q 1 -m 2 --timeout 1000 -O 1.1.1.1" $DefaultLog
 Run-CmdIfSupported $mtuCapability.Supported $mtuCapability.Reason "mtu_text" "MTU text mode" "`"$Bin`" --no-color --mtu --timeout 1000 -q 1 -m 3 1.1.1.1" "Path MTU:"
 Write-Record mtu_tty_color SKIP "MTU TTY colorized output; no portable Windows PTY capture in this script"
-Run-CmdIfSupported $mtuCapability.Supported $mtuCapability.Reason "mtu_non_tty_plain" "MTU non-TTY output has no ANSI" "`"$Bin`" --mtu --timeout 1000 -q 1 -m 3 1.1.1.1" "Path MTU:"
+Run-CmdIfSupported $mtuCapability.Supported $mtuCapability.Reason "mtu_non_tty_plain" "MTU non-TTY output has no ANSI" "`"$Bin`" --mtu --timeout 1000 -q 1 -m 3 1.1.1.1" "Path MTU:" "\x1b\[[0-9;]*[A-Za-z]"
 Run-CmdIfSupported $mtrCapability.Supported $mtrCapability.Reason "mtr_report" "MTR report ICMP" "`"$Bin`" --no-color -r -q 2 -i 300 --timeout 1000 -m 4 1.1.1.1" "(?m)^HOST:"
 Run-CmdIfSupported $mtrCapability.Supported $mtrCapability.Reason "mtr_wide" "MTR wide + show-ips" "`"$Bin`" --no-color -w --show-ips -q 2 -i 300 --timeout 1000 -m 4 1.1.1.1" "(?m)^HOST:"
 Run-CmdIfSupported $mtrCapability.Supported $mtrCapability.Reason "mtr_raw" "MTR raw stream" "`"$Bin`" --no-color -r --raw -q 2 -i 300 --timeout 1000 -m 4 1.1.1.1" "(?m)^1\|"
@@ -679,22 +701,24 @@ Check-PacketCaptureIfSupported $icmp6Capability.Supported $icmp6Capability.Reaso
 Check-PacketCaptureIfSupported $udp6Capability.Supported $udp6Capability.Reason "psize_tos_udp6" "UDPv6 psize/tos packet capture" "`"$Bin`" --no-color -6 -U -q 1 -m 1 --timeout 1000 --psize 84 -Q 46 2606:4700:4700::1111" "2606:4700:4700::1111" "host 2606:4700:4700::1111" "Traffic Class: 0x2e" "Payload Length: 44"
 Check-PacketCaptureIfSupported $tcp6Capability.Supported $tcp6Capability.Reason "psize_tos_tcp6" "TCPv6 psize/tos packet capture" "`"$Bin`" --no-color -6 -T -q 1 -m 1 --timeout 1000 --psize 84 -Q 46 2606:4700:4700::1111" "2606:4700:4700::1111" "host 2606:4700:4700::1111" "Traffic Class: 0x2e" "Payload Length: 44"
 
+$deployPort = Get-FreeTcpPort
+$deployBaseUrl = "http://127.0.0.1:$deployPort"
 $deployLog = Join-Path $ArtifactsDir "deploy_server.txt"
 $deployStdout = "$deployLog.stdout"
 $deployStderr = "$deployLog.stderr"
 Remove-Item -Force -ErrorAction Ignore $deployLog, $deployStdout, $deployStderr
-$deploy = Start-Process -FilePath $Bin -ArgumentList "--listen", "127.0.0.1:30080", "--deploy" -RedirectStandardOutput $deployStdout -RedirectStandardError $deployStderr -PassThru -WindowStyle Hidden
+$deploy = Start-Process -FilePath $Bin -ArgumentList "--listen", "127.0.0.1:$deployPort", "--deploy" -RedirectStandardOutput $deployStdout -RedirectStandardError $deployStderr -PassThru -WindowStyle Hidden
 try {
-    if (Wait-HttpReady "http://127.0.0.1:30080/") {
+    if (Wait-HttpReady "$deployBaseUrl/") {
         try {
-            Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:30080/" -TimeoutSec 5 | Out-File -Encoding utf8 (Join-Path $ArtifactsDir "deploy_root.txt")
+            Invoke-WebRequest -UseBasicParsing -Uri "$deployBaseUrl/" -TimeoutSec 5 | Out-File -Encoding utf8 (Join-Path $ArtifactsDir "deploy_root.txt")
             Write-Record deploy_root PASS "Web root reachable"
         }
         catch {
             Write-Record deploy_root FAIL "Web root request failed"
         }
         try {
-            Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:30080/api/options" -TimeoutSec 5 | Select-Object -ExpandProperty Content | Tee-Object -FilePath (Join-Path $ArtifactsDir "deploy_options.txt") | Out-Null
+            Invoke-WebRequest -UseBasicParsing -Uri "$deployBaseUrl/api/options" -TimeoutSec 5 | Select-Object -ExpandProperty Content | Tee-Object -FilePath (Join-Path $ArtifactsDir "deploy_options.txt") | Out-Null
             $options = Get-Content -Raw -Path (Join-Path $ArtifactsDir "deploy_options.txt")
             if ($options.Contains('"packet_size":null') -and $options.Contains('"tos":0')) {
                 Write-Record deploy_options PASS "Options API exposes packet_size=null and tos=0"
@@ -709,7 +733,7 @@ try {
         if ($icmp4Capability.Supported) {
             try {
                 $body = '{"target":"1.1.1.1","queries":1,"max_hops":3,"timeout_ms":1000}'
-                Invoke-WebRequest -UseBasicParsing -Method Post -ContentType "application/json" -Body $body -Uri "http://127.0.0.1:30080/api/trace" -TimeoutSec 15 | Select-Object -ExpandProperty Content | Tee-Object -FilePath (Join-Path $ArtifactsDir "deploy_trace.txt") | Out-Null
+                Invoke-WebRequest -UseBasicParsing -Method Post -ContentType "application/json" -Body $body -Uri "$deployBaseUrl/api/trace" -TimeoutSec 15 | Select-Object -ExpandProperty Content | Tee-Object -FilePath (Join-Path $ArtifactsDir "deploy_trace.txt") | Out-Null
                 $traceBody = Get-Content -Raw -Path (Join-Path $ArtifactsDir "deploy_trace.txt")
                 if ($traceBody.Contains('"resolved_ip"')) {
                     Write-Record deploy_trace PASS "REST trace endpoint works"

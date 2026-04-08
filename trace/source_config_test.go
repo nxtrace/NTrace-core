@@ -7,18 +7,60 @@ import (
 	"testing"
 )
 
+func TestResolveSourceDeviceAddrSupportsIPAddr(t *testing.T) {
+	restore := stubSourceDeviceResolver(t, func(device string) (*net.Interface, error) {
+		return &net.Interface{Name: device}, nil
+	}, func(_ *net.Interface) ([]net.Addr, error) {
+		return []net.Addr{&net.IPAddr{IP: net.ParseIP("2001:db8::10")}}, nil
+	})
+	defer restore()
+
+	dev, err := ResolveSourceDevice("en7")
+	if err != nil {
+		t.Fatalf("ResolveSourceDevice() error = %v", err)
+	}
+	got, err := ResolveSourceDeviceAddr(dev, net.ParseIP("2606:4700:4700::1111"))
+	if err != nil {
+		t.Fatalf("ResolveSourceDeviceAddr() error = %v", err)
+	}
+	if got != "2001:db8::10" {
+		t.Fatalf("ResolveSourceDeviceAddr() = %q, want 2001:db8::10", got)
+	}
+}
+
+func TestResolveSourceDeviceAddrPrefersPrivateOverLinkLocalFallback(t *testing.T) {
+	restore := stubSourceDeviceResolver(t, func(device string) (*net.Interface, error) {
+		return &net.Interface{Name: device}, nil
+	}, func(_ *net.Interface) ([]net.Addr, error) {
+		return []net.Addr{
+			&net.IPNet{IP: net.ParseIP("fd00::10"), Mask: net.CIDRMask(64, 128)},
+			&net.IPNet{IP: net.ParseIP("fe80::1"), Mask: net.CIDRMask(64, 128)},
+		}, nil
+	})
+	defer restore()
+
+	dev, err := ResolveSourceDevice("en7")
+	if err != nil {
+		t.Fatalf("ResolveSourceDevice() error = %v", err)
+	}
+	got, err := ResolveSourceDeviceAddr(dev, net.ParseIP("2606:4700:4700::1111"))
+	if err != nil {
+		t.Fatalf("ResolveSourceDeviceAddr() error = %v", err)
+	}
+	if got != "fd00::10" {
+		t.Fatalf("ResolveSourceDeviceAddr() = %q, want fd00::10", got)
+	}
+}
+
 func TestNormalizeExplicitSourceConfigNoopWithoutOverrides(t *testing.T) {
 	cfg := Config{
 		OSType: 1,
 		DstIP:  net.ParseIP("1.1.1.1"),
 	}
 
-	got, warning, err := NormalizeExplicitSourceConfig(TCPTrace, cfg)
+	got, err := NormalizeExplicitSourceConfig(TCPTrace, cfg)
 	if err != nil {
 		t.Fatalf("NormalizeExplicitSourceConfig() error = %v", err)
-	}
-	if warning != "" {
-		t.Fatalf("warning = %q, want empty", warning)
 	}
 	if got.SrcAddr != cfg.SrcAddr || got.SourceDevice != cfg.SourceDevice || got.OSType != cfg.OSType {
 		t.Fatalf("config changed without overrides: got %#v want %#v", got, cfg)
@@ -45,12 +87,9 @@ func TestNormalizeExplicitSourceConfigPrefersExplicitSource(t *testing.T) {
 		SourceDevice: "en7",
 	}
 
-	got, warning, err := NormalizeExplicitSourceConfig(TCPTrace, cfg)
+	got, err := NormalizeExplicitSourceConfig(TCPTrace, cfg)
 	if err != nil {
 		t.Fatalf("NormalizeExplicitSourceConfig() error = %v", err)
-	}
-	if warning != "" {
-		t.Fatalf("warning = %q, want empty", warning)
 	}
 	if got.SrcAddr != "192.0.2.10" {
 		t.Fatalf("SrcAddr = %q, want explicit source", got.SrcAddr)
@@ -79,12 +118,9 @@ func TestNormalizeExplicitSourceConfigResolvesSourceFromDevice(t *testing.T) {
 		SourceDevice: "eth0",
 	}
 
-	got, warning, err := NormalizeExplicitSourceConfig(UDPTrace, cfg)
+	got, err := NormalizeExplicitSourceConfig(UDPTrace, cfg)
 	if err != nil {
 		t.Fatalf("NormalizeExplicitSourceConfig() error = %v", err)
-	}
-	if warning != "" {
-		t.Fatalf("warning = %q, want empty", warning)
 	}
 	if got.SrcAddr != "203.0.113.8" {
 		t.Fatalf("SrcAddr = %q, want 203.0.113.8", got.SrcAddr)
@@ -110,12 +146,9 @@ func TestNormalizeExplicitSourceConfigClearsSourceDeviceOnUnsupportedUnix(t *tes
 		SourceDevice: "em0",
 	}
 
-	got, warning, err := NormalizeExplicitSourceConfig(UDPTrace, cfg)
+	got, err := NormalizeExplicitSourceConfig(UDPTrace, cfg)
 	if err != nil {
 		t.Fatalf("NormalizeExplicitSourceConfig() error = %v", err)
-	}
-	if warning != "" {
-		t.Fatalf("warning = %q, want empty", warning)
 	}
 	if got.SrcAddr != "203.0.113.8" {
 		t.Fatalf("SrcAddr = %q, want 203.0.113.8", got.SrcAddr)
@@ -141,7 +174,7 @@ func TestNormalizeExplicitSourceConfigRejectsDeviceWithoutMatchingFamily(t *test
 		SourceDevice: "eth0",
 	}
 
-	_, _, err := NormalizeExplicitSourceConfig(UDPTrace, cfg)
+	_, err := NormalizeExplicitSourceConfig(UDPTrace, cfg)
 	if err == nil || err.Error() != `source device "eth0" has no usable IPv6 address` {
 		t.Fatalf("err = %v, want IPv6 family error", err)
 	}
@@ -180,7 +213,7 @@ func TestNormalizeExplicitSourceConfigPropagatesSourceDeviceAddrLoadError(t *tes
 		SourceDevice: "eth0",
 	}
 
-	_, _, err := NormalizeExplicitSourceConfig(UDPTrace, cfg)
+	_, err := NormalizeExplicitSourceConfig(UDPTrace, cfg)
 	if err == nil {
 		t.Fatal("NormalizeExplicitSourceConfig() error = nil, want propagated addrs error")
 	}
@@ -189,7 +222,7 @@ func TestNormalizeExplicitSourceConfigPropagatesSourceDeviceAddrLoadError(t *tes
 	}
 }
 
-func TestNormalizeExplicitSourceConfigWindowsClearsDeviceWithoutWarning(t *testing.T) {
+func TestNormalizeExplicitSourceConfigWindowsClearsDeviceForICMP(t *testing.T) {
 	restore := stubSourceDeviceResolver(t, func(device string) (*net.Interface, error) {
 		return &net.Interface{Name: device}, nil
 	}, func(_ *net.Interface) ([]net.Addr, error) {
@@ -198,12 +231,12 @@ func TestNormalizeExplicitSourceConfigWindowsClearsDeviceWithoutWarning(t *testi
 	defer restore()
 
 	cfg := Config{
-		OSType:       2,
+		OSType:       osTypeWindows,
 		DstIP:        net.ParseIP("1.1.1.1"),
 		SourceDevice: "Ethernet0",
 	}
 
-	got, warning, err := NormalizeExplicitSourceConfig(ICMPTrace, cfg)
+	got, err := NormalizeExplicitSourceConfig(ICMPTrace, cfg)
 	if err != nil {
 		t.Fatalf("NormalizeExplicitSourceConfig() error = %v", err)
 	}
@@ -213,12 +246,9 @@ func TestNormalizeExplicitSourceConfigWindowsClearsDeviceWithoutWarning(t *testi
 	if got.SourceDevice != "" {
 		t.Fatalf("SourceDevice = %q, want empty", got.SourceDevice)
 	}
-	if warning != "" {
-		t.Fatalf("warning = %q, want empty", warning)
-	}
 }
 
-func TestNormalizeExplicitSourceConfigWindowsIgnoresDeviceWhenSourceExplicitWithoutWarning(t *testing.T) {
+func TestNormalizeExplicitSourceConfigWindowsIgnoresDeviceWhenSourceExplicitForICMP(t *testing.T) {
 	restore := stubSourceDeviceResolver(t, func(device string) (*net.Interface, error) {
 		t.Fatalf("ResolveSourceDevice should not be called when Windows explicit source is set")
 		return nil, nil
@@ -228,13 +258,13 @@ func TestNormalizeExplicitSourceConfigWindowsIgnoresDeviceWhenSourceExplicitWith
 	defer restore()
 
 	cfg := Config{
-		OSType:       2,
+		OSType:       osTypeWindows,
 		DstIP:        net.ParseIP("1.1.1.1"),
 		SrcAddr:      "192.0.2.30",
 		SourceDevice: "Ethernet0",
 	}
 
-	got, warning, err := NormalizeExplicitSourceConfig(TCPTrace, cfg)
+	got, err := NormalizeExplicitSourceConfig(ICMPTrace, cfg)
 	if err != nil {
 		t.Fatalf("NormalizeExplicitSourceConfig() error = %v", err)
 	}
@@ -244,8 +274,32 @@ func TestNormalizeExplicitSourceConfigWindowsIgnoresDeviceWhenSourceExplicitWith
 	if got.SourceDevice != "" {
 		t.Fatalf("SourceDevice = %q, want empty", got.SourceDevice)
 	}
-	if warning != "" {
-		t.Fatalf("warning = %q, want empty", warning)
+}
+
+func TestNormalizeExplicitSourceConfigWindowsKeepsTCPDeviceUnsupported(t *testing.T) {
+	restore := stubSourceDeviceResolver(t, func(device string) (*net.Interface, error) {
+		t.Fatalf("ResolveSourceDevice should not be called for unsupported Windows TCP source_device")
+		return nil, nil
+	}, func(_ *net.Interface) ([]net.Addr, error) {
+		return nil, nil
+	})
+	defer restore()
+
+	cfg := Config{
+		OSType:       osTypeWindows,
+		DstIP:        net.ParseIP("1.1.1.1"),
+		SourceDevice: "Ethernet0",
+	}
+
+	got, err := NormalizeExplicitSourceConfig(TCPTrace, cfg)
+	if err != nil {
+		t.Fatalf("NormalizeExplicitSourceConfig() error = %v", err)
+	}
+	if got.SourceDevice != "Ethernet0" {
+		t.Fatalf("SourceDevice = %q, want Ethernet0", got.SourceDevice)
+	}
+	if got.SrcAddr != "" {
+		t.Fatalf("SrcAddr = %q, want empty", got.SrcAddr)
 	}
 }
 

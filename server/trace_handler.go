@@ -244,13 +244,9 @@ func prepareTrace(ctx context.Context, req traceRequest) (*traceExecution, int, 
 	if err != nil {
 		return nil, http.StatusBadRequest, err
 	}
-	var warning string
-	exec.Config, warning, err = trace.NormalizeExplicitSourceConfig(exec.Method, exec.Config)
+	exec.Config, err = trace.NormalizeExplicitSourceConfig(exec.Method, exec.Config)
 	if err != nil {
 		return nil, http.StatusBadRequest, err
-	}
-	if warning != "" {
-		log.Printf("[trace] %s", warning)
 	}
 	exec.Config.Context = ctx
 
