@@ -20,14 +20,20 @@ func TestOpenWinDivertSniffHandlePanicsInDevMode(t *testing.T) {
 	openWinDivertSniffCall = func(string, uint64) (wd.Handle, error) {
 		return 0, wd.Error(windows.ERROR_FILE_NOT_FOUND)
 	}
+	var gotFatal string
 	winDivertSniffFatal = func(msg string) {
-		t.Fatalf("fatal should not be called in dev mode: %s", msg)
+		gotFatal = msg
 	}
 	winDivertSniffDevMode = func() bool { return true }
 	defer func() {
 		openWinDivertSniffCall = oldOpen
 		winDivertSniffFatal = oldFatal
 		winDivertSniffDevMode = oldDevMode
+	}()
+	defer func() {
+		if gotFatal != "" {
+			t.Fatalf("fatal should not be called in dev mode: %s", gotFatal)
+		}
 	}()
 
 	defer func() {

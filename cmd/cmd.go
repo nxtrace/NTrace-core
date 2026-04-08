@@ -1217,11 +1217,13 @@ func Execute() {
 			return
 		}
 		ip := lookupTargetIPOrExit(rootCtx, domain, *ipv4Only, *ipv6Only, *dot, *jsonPrint)
+		// ResolveConfiguredSrcAddr is used for display/source-IP fallback before MTU-specific source normalization.
 		resolvedSrcAddr, _, srcResolveErr := trace.ResolveConfiguredSrcAddr(ip, *srcAddr, *srcDev)
 		if srcResolveErr != nil {
 			fmt.Println(srcResolveErr)
 			os.Exit(1)
 		}
+		// NormalizeExplicitSourceConfig enforces explicit --source/--dev rules and unsupported combinations.
 		sourceCfg, srcResolveErr := trace.NormalizeExplicitSourceConfig(trace.UDPTrace, trace.Config{
 			OSType:       osType,
 			DstIP:        ip,
@@ -1352,11 +1354,13 @@ func Execute() {
 
 	ip := lookupTargetIPOrExit(rootCtx, domain, *ipv4Only, *ipv6Only, *dot, *jsonPrint)
 
+	// ResolveConfiguredSrcAddr is used for display/source-IP fallback before tracer runtime normalization.
 	resolvedSrcAddr, _, srcResolveErr := trace.ResolveConfiguredSrcAddr(ip, *srcAddr, *srcDev)
 	if srcResolveErr != nil {
 		fmt.Println(srcResolveErr)
 		os.Exit(1)
 	}
+	// NormalizeExplicitSourceConfig enforces explicit --source/--dev rules and unsupported combinations.
 	sourceCfg, srcResolveErr := trace.NormalizeExplicitSourceConfig(method, trace.Config{
 		OSType:       osType,
 		DstIP:        ip,

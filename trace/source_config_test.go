@@ -52,6 +52,30 @@ func TestResolveSourceDeviceAddrPrefersPrivateOverLinkLocalFallback(t *testing.T
 	}
 }
 
+func TestResolveSourceDeviceAddrFallsBackToLoopbackBeforeLinkLocal(t *testing.T) {
+	restore := stubSourceDeviceResolver(t, func(device string) (*net.Interface, error) {
+		return &net.Interface{Name: device}, nil
+	}, func(_ *net.Interface) ([]net.Addr, error) {
+		return []net.Addr{
+			&net.IPNet{IP: net.ParseIP("127.0.0.1"), Mask: net.CIDRMask(8, 32)},
+			&net.IPNet{IP: net.ParseIP("169.254.0.1"), Mask: net.CIDRMask(16, 32)},
+		}, nil
+	})
+	defer restore()
+
+	dev, err := ResolveSourceDevice("lo0")
+	if err != nil {
+		t.Fatalf("ResolveSourceDevice() error = %v", err)
+	}
+	got, err := ResolveSourceDeviceAddr(dev, net.ParseIP("127.0.0.1"))
+	if err != nil {
+		t.Fatalf("ResolveSourceDeviceAddr() error = %v", err)
+	}
+	if got != "127.0.0.1" {
+		t.Fatalf("ResolveSourceDeviceAddr() = %q, want 127.0.0.1", got)
+	}
+}
+
 func TestNormalizeExplicitSourceConfigNoopWithoutOverrides(t *testing.T) {
 	cfg := Config{
 		OSType: 1,
@@ -276,7 +300,7 @@ func TestNormalizeExplicitSourceConfigWindowsIgnoresDeviceWhenSourceExplicitForI
 	}
 }
 
-func TestNormalizeExplicitSourceConfigWindowsKeepsTCPDeviceUnsupported(t *testing.T) {
+func TestNormalizeExplicitSourceConfigWindowsRejectsTCPSourceDevice(t *testing.T) {
 	restore := stubSourceDeviceResolver(t, func(device string) (*net.Interface, error) {
 		t.Fatalf("ResolveSourceDevice should not be called for unsupported Windows TCP source_device")
 		return nil, nil
@@ -291,15 +315,12 @@ func TestNormalizeExplicitSourceConfigWindowsKeepsTCPDeviceUnsupported(t *testin
 		SourceDevice: "Ethernet0",
 	}
 
-	got, err := NormalizeExplicitSourceConfig(TCPTrace, cfg)
-	if err != nil {
-		t.Fatalf("NormalizeExplicitSourceConfig() error = %v", err)
+	_, err := NormalizeExplicitSourceConfig(TCPTrace, cfg)
+	if err == nil {
+		t.Fatal("NormalizeExplicitSourceConfig() error = nil, want unsupported Windows TCP source_device error")
 	}
-	if got.SourceDevice != "Ethernet0" {
-		t.Fatalf("SourceDevice = %q, want Ethernet0", got.SourceDevice)
-	}
-	if got.SrcAddr != "" {
-		t.Fatalf("SrcAddr = %q, want empty", got.SrcAddr)
+	if err.Error() != `source_device "Ethernet0" is not supported on Windows TCP traces` {
+		t.Fatalf("err = %q, want unsupported Windows TCP source_device error", err.Error())
 	}
 }
 

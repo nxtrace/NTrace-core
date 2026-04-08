@@ -279,6 +279,8 @@ build_candidate_list() {
                 ;;
         esac
         IFS='|'
+        # Intentionally using word-splitting with IFS='|' to split the mirror list into candidates.
+        # shellcheck disable=SC2086
         set -- ${response}
         IFS="${old_ifs}"
         if [ "${had_noglob}" -eq 0 ]; then

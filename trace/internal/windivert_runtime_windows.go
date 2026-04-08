@@ -53,13 +53,14 @@ var (
 	resolveWinDivertExecutablePath = os.Executable
 	loadWinDivertDLLEx             = func(path string, flags uintptr) (windows.Handle, error) { return windows.LoadLibraryEx(path, 0, flags) }
 	preloadedWinDivertDLL          windows.Handle
-	preloadWinDivertDLLErr         error
-	preloadWinDivertDLLOnce        sync.Once
+	preloadWinDivertDLLMu          sync.Mutex
 	checkWinDivertDLL              = func() error {
-		preloadWinDivertDLLOnce.Do(func() {
-			preloadWinDivertDLLErr = preloadWinDivertDLLFromExecutableDir()
-		})
-		return preloadWinDivertDLLErr
+		preloadWinDivertDLLMu.Lock()
+		defer preloadWinDivertDLLMu.Unlock()
+		if preloadedWinDivertDLL != 0 {
+			return nil
+		}
+		return preloadWinDivertDLLFromExecutableDir()
 	}
 	openWinDivertCall = func(filter string, flags uint64) (wd.Handle, error) {
 		return wd.Open(filter, wd.LayerNetwork, 0, flags)

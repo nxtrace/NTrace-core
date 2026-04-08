@@ -48,8 +48,7 @@ func TestCheckWinDivertDLLPreloadsExecutableDirectoryDLL(t *testing.T) {
 	oldResolve := resolveWinDivertExecutablePath
 	oldLoad := loadWinDivertDLLEx
 	oldHandle := preloadedWinDivertDLL
-	oldErr := preloadWinDivertDLLErr
-	oldOnce := preloadWinDivertDLLOnce
+	oldMu := preloadWinDivertDLLMu
 	resolveWinDivertExecutablePath = func() (string, error) {
 		return `C:\nexttrace\bin\nexttrace.exe`, nil
 	}
@@ -61,14 +60,12 @@ func TestCheckWinDivertDLLPreloadsExecutableDirectoryDLL(t *testing.T) {
 		return windows.Handle(1234), nil
 	}
 	preloadedWinDivertDLL = 0
-	preloadWinDivertDLLErr = nil
-	preloadWinDivertDLLOnce = sync.Once{}
+	preloadWinDivertDLLMu = sync.Mutex{}
 	defer func() {
 		resolveWinDivertExecutablePath = oldResolve
 		loadWinDivertDLLEx = oldLoad
 		preloadedWinDivertDLL = oldHandle
-		preloadWinDivertDLLErr = oldErr
-		preloadWinDivertDLLOnce = oldOnce
+		preloadWinDivertDLLMu = oldMu
 	}()
 
 	if err := checkWinDivertDLL(); err != nil {
@@ -85,6 +82,52 @@ func TestCheckWinDivertDLLPreloadsExecutableDirectoryDLL(t *testing.T) {
 	}
 	if preloadedWinDivertDLL != windows.Handle(1234) {
 		t.Fatalf("preloadedWinDivertDLL = %v, want 1234", preloadedWinDivertDLL)
+	}
+}
+
+func TestCheckWinDivertDLLRetriesAfterFailure(t *testing.T) {
+	oldResolve := resolveWinDivertExecutablePath
+	oldLoad := loadWinDivertDLLEx
+	oldHandle := preloadedWinDivertDLL
+	oldMu := preloadWinDivertDLLMu
+	resolveWinDivertExecutablePath = func() (string, error) {
+		return `C:\nexttrace\bin\nexttrace.exe`, nil
+	}
+	attempts := 0
+	loadWinDivertDLLEx = func(path string, flags uintptr) (windows.Handle, error) {
+		attempts++
+		if attempts == 1 {
+			return 0, windows.ERROR_FILE_NOT_FOUND
+		}
+		return windows.Handle(5678), nil
+	}
+	preloadedWinDivertDLL = 0
+	preloadWinDivertDLLMu = sync.Mutex{}
+	defer func() {
+		resolveWinDivertExecutablePath = oldResolve
+		loadWinDivertDLLEx = oldLoad
+		preloadedWinDivertDLL = oldHandle
+		preloadWinDivertDLLMu = oldMu
+	}()
+
+	if err := checkWinDivertDLL(); err == nil {
+		t.Fatal("checkWinDivertDLL() error = nil, want preload failure")
+	}
+	if attempts != 1 {
+		t.Fatalf("attempts after first check = %d, want 1", attempts)
+	}
+	if preloadedWinDivertDLL != 0 {
+		t.Fatalf("preloadedWinDivertDLL = %v, want 0 after failed preload", preloadedWinDivertDLL)
+	}
+
+	if err := checkWinDivertDLL(); err != nil {
+		t.Fatalf("checkWinDivertDLL() second error = %v, want success", err)
+	}
+	if attempts != 2 {
+		t.Fatalf("attempts after second check = %d, want 2", attempts)
+	}
+	if preloadedWinDivertDLL != windows.Handle(5678) {
+		t.Fatalf("preloadedWinDivertDLL = %v, want 5678 after successful retry", preloadedWinDivertDLL)
 	}
 }
 

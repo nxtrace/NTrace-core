@@ -41,6 +41,7 @@ func ResolveSourceDeviceAddr(dev *net.Interface, dstIP net.IP) (string, error) {
 		return "", fmt.Errorf("load source device %q addresses: %w", dev.Name, err)
 	}
 	var preferred string
+	var loopback string
 	var linkLocal string
 	for _, addr := range addrs {
 		ip := util.AddrIP(addr)
@@ -50,14 +51,18 @@ func ResolveSourceDeviceAddr(dev *net.Interface, dstIP net.IP) (string, error) {
 		if (ip.To4() == nil) != (dstIP.To4() == nil) {
 			continue
 		}
-		if ip.IsLoopback() {
-			continue
-		}
 		candidate := ip.String()
 		if !(ip.IsPrivate() ||
+			ip.IsLoopback() ||
 			ip.IsLinkLocalUnicast() ||
 			ip.IsLinkLocalMulticast()) {
 			return candidate, nil
+		}
+		if ip.IsLoopback() {
+			if loopback == "" {
+				loopback = candidate
+			}
+			continue
 		}
 		if !(ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast()) {
 			if preferred == "" {
@@ -71,6 +76,9 @@ func ResolveSourceDeviceAddr(dev *net.Interface, dstIP net.IP) (string, error) {
 	}
 	if preferred != "" {
 		return preferred, nil
+	}
+	if loopback != "" {
+		return loopback, nil
 	}
 	return linkLocal, nil
 }
@@ -123,7 +131,7 @@ func NormalizeExplicitSourceConfig(method Method, config Config) (Config, error)
 		return config, nil
 	}
 	if config.OSType == osTypeWindows && method == TCPTrace {
-		return config, nil
+		return config, fmt.Errorf("source_device %q is not supported on Windows TCP traces", config.SourceDevice)
 	}
 	if config.OSType == osTypeWindows && explicitSource {
 		config.SourceDevice = ""
