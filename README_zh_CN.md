@@ -59,11 +59,23 @@ Document Language: [English](README.md) | 简体中文
 
 ### Automated Install
 
-- Linux
-  - 一键安装脚本
+- Linux / macOS / BSD
+  - 一键安装脚本（完整版，默认）
     ```shell
     curl -sL https://nxtrace.org/nt | bash
     ```
+  - 一键安装脚本（Tiny）
+    ```shell
+    curl -sL https://nxtrace.org/nt | bash -s -- --flavor tiny
+    ```
+  - 一键安装脚本（NTR）
+    ```shell
+    curl -sL https://nxtrace.org/nt | bash -s -- --flavor ntr
+    ```
+  - 安装后的命令名：
+    - Full：`nexttrace`
+    - Tiny：`nexttrace-tiny`
+    - NTR：`ntr`
   - 从 nxtrace的APT源安装
     - 支持 AMD64/ARM64 架构
       ```shell

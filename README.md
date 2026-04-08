@@ -55,12 +55,29 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
 
 ### Automated Install
 
-- Linux
-  - One-click installation script
+- Linux / macOS / BSD
+  - One-click installation script (Full, default)
 
     ```shell
     curl -sL https://nxtrace.org/nt | bash
     ```
+
+  - One-click installation script (Tiny)
+
+    ```shell
+    curl -sL https://nxtrace.org/nt | bash -s -- --flavor tiny
+    ```
+
+  - One-click installation script (NTR)
+
+    ```shell
+    curl -sL https://nxtrace.org/nt | bash -s -- --flavor ntr
+    ```
+
+  - Installed command names:
+    - Full: `nexttrace`
+    - Tiny: `nexttrace-tiny`
+    - NTR: `ntr`
 
   - Install nxtrace from the APT repository
     - Supports AMD64/ARM64 architectures
