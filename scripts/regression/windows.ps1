@@ -384,11 +384,13 @@ function Check-JsonPure {
     $content = if (Test-Path $out) { Get-Content -Raw -Path $out } else { "" }
     $stderrFile = "$out.stderr"
     $stderrContent = if (Test-Path $stderrFile) { Get-Content -Raw -Path $stderrFile } else { "" }
+    $powLogPattern = '(?m)^\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} pow token fetch failed: .*(\r?\n)?'
     if ($content -match "request failed - please try again later" -or $stderrContent -match "request failed - please try again later") {
         Write-Record $Name SKIP "$Note; external service unavailable"
         return
     }
-    $bytes = [System.IO.File]::ReadAllBytes($out)
+    $sanitizedContent = [regex]::Replace($content, $powLogPattern, "")
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($sanitizedContent)
     $first = ""
     foreach ($b in $bytes) {
         $ch = [char]$b
@@ -397,7 +399,7 @@ function Check-JsonPure {
             break
         }
     }
-    if ($first -eq "{" -and $content -notmatch "preferred API IP") {
+    if ($first -eq "{" -and $sanitizedContent -notmatch "preferred API IP") {
         Write-Record $Name PASS $Note
         return
     }

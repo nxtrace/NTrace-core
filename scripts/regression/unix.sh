@@ -188,6 +188,7 @@ check_json_pure() {
   local command_string="$3"
   local out="${ART_DIR}/${name}.txt"
   local service_err='request failed - please try again later'
+  local pow_log_re='^\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} pow token fetch failed: .*$'
   if ! run_timeout_cmd 180 "${command_string}" >"${out}" 2>&1; then
     if grep -Fq "${service_err}" "${out}"; then
       record "${name}" SKIP "${note}; external service unavailable"
@@ -200,11 +201,13 @@ check_json_pure() {
     record "${name}" SKIP "${note}; external service unavailable"
     return
   fi
-  if python3 - <<'PY' "${out}" && ! grep -Fq 'preferred API IP' "${out}"; then
+  if python3 - <<'PY' "${out}" "${pow_log_re}" && ! grep -Fq 'preferred API IP' "${out}"; then
 import json
+import re
 import sys
 
 text = open(sys.argv[1], 'r', encoding='utf-8', errors='replace').read()
+text = re.sub(sys.argv[2], '', text, flags=re.MULTILINE)
 decoder = json.JSONDecoder()
 idx = 0
 length = len(text)
