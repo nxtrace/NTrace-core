@@ -93,7 +93,10 @@ func (s *TCPSpec) tcpCaptureFilter() string {
 }
 
 func mustOpenDarwinTCPSniffHandle(dev string) *pcap.Handle {
-	handle, err := util.OpenLiveImmediate(dev, 65535, true, 4<<20)
+	// TCP traceroute only needs packets destined to or sourced from this host.
+	// Some macOS interfaces refuse promiscuous mode even under sudo, so avoid
+	// requesting it for this narrowly filtered capture.
+	handle, err := util.OpenLiveImmediate(dev, 65535, false, 4<<20)
 	if err != nil {
 		if util.EnvDevMode {
 			panic(fmt.Errorf("(ListenTCP) pcap open failed on %s: %v", dev, err))
