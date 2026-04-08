@@ -126,6 +126,7 @@ test_default_full() {
   run_installer "${case_dir}" ""
   assert_file_exists "${case_dir}/system-bin/nexttrace"
   assert_contains "${case_dir}/stdout.log" "Command: nexttrace"
+  assert_contains "${case_dir}/stdout.log" "nexttrace mock 0.0.0"
   rm -rf "${case_dir}"
 }
 
@@ -135,6 +136,7 @@ test_tiny_flavor() {
   run_installer "${case_dir}" "" --flavor tiny
   assert_file_exists "${case_dir}/system-bin/nexttrace-tiny"
   assert_contains "${case_dir}/stdout.log" "Command: nexttrace-tiny"
+  assert_contains "${case_dir}/stdout.log" "nexttrace mock 0.0.0"
   rm -rf "${case_dir}"
 }
 
@@ -144,6 +146,7 @@ test_ntr_flavor() {
   run_installer "${case_dir}" "" --flavor ntr
   assert_file_exists "${case_dir}/system-bin/ntr"
   assert_contains "${case_dir}/stdout.log" "Command: ntr"
+  assert_contains "${case_dir}/stdout.log" "nexttrace mock 0.0.0"
   rm -rf "${case_dir}"
 }
 

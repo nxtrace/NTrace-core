@@ -7,7 +7,7 @@ set -eu
 
 API_HOST="www.nxtrace.org"
 API_PATH="/api/dist/core"
-GITHUB_RELEASE_BASE="https://github.com/nxtrace/NTrace-dev/releases/latest/download"
+GITHUB_RELEASE_BASE="https://github.com/nxtrace/NTrace-core/releases/latest/download"
 DEFAULT_PROTOCOL="https"
 DEFAULT_FLAVOR="full"
 
@@ -331,6 +331,8 @@ print_post_install() {
     info "Flavor: ${FLAVOR}"
     info "Installed: ${INSTALL_PATH}"
     info "Command: ${BIN_NAME}"
+    info "Version check:"
+    "${INSTALL_PATH}" --version || die "installed binary failed version check: ${INSTALL_PATH}"
     if ! path_in_path_env "${install_dir}"; then
         warn "${install_dir} is not in PATH."
         printf '%s\n' "Add it with: export PATH=\"${install_dir}:\$PATH\""
