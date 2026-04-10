@@ -58,7 +58,7 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
 - Debian / Ubuntu
   - Recommended: install from the official `nexttrace-debs` APT repository
     - Supports: `amd64`, `i386`, `arm64`, `armel`, `armhf`, `loong64`, `mipsel`, `mips64el`, `ppc64el`, `riscv64`, `s390x`
-    - Add the repository and install:
+    - Add the repository and install the default package:
       ```shell
       sudo install -d -m 0755 /etc/apt/keyrings
       curl -fsSL -o /tmp/nexttrace-archive-keyring.gpg https://github.com/nxtrace/nexttrace-debs/releases/latest/download/nexttrace-archive-keyring.gpg
@@ -68,9 +68,8 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
       sudo apt update
       sudo apt install nexttrace
       ```
-    - Install a flavor (choose one):
+    - Optionally install additional flavors:
       ```shell
-      sudo apt install nexttrace
       sudo apt install nexttrace-tiny
       sudo apt install ntr
       ```

@@ -62,7 +62,7 @@ Document Language: [English](README.md) | 简体中文
 - Debian / Ubuntu
   - 推荐：通过官方 `nexttrace-debs` APT 源安装
     - 当前支持：`amd64`、`i386`、`arm64`、`armel`、`armhf`、`loong64`、`mipsel`、`mips64el`、`ppc64el`、`riscv64`、`s390x`
-    - 添加源并安装：
+    - 添加源并安装默认包：
       ```shell
       sudo install -d -m 0755 /etc/apt/keyrings
       curl -fsSL -o /tmp/nexttrace-archive-keyring.gpg https://github.com/nxtrace/nexttrace-debs/releases/latest/download/nexttrace-archive-keyring.gpg
@@ -72,9 +72,8 @@ Document Language: [English](README.md) | 简体中文
       sudo apt update
       sudo apt install nexttrace
       ```
-    - 安装指定 flavor：
+    - 可选：安装额外的 flavor：
       ```shell
-      sudo apt install nexttrace
       sudo apt install nexttrace-tiny
       sudo apt install ntr
       ```
