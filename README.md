@@ -68,7 +68,7 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
       sudo apt update
       sudo apt install nexttrace
       ```
-    - Install a specific flavor:
+    - Install a flavor (choose one):
       ```shell
       sudo apt install nexttrace
       sudo apt install nexttrace-tiny
@@ -162,7 +162,7 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
 Please note:
 
 - The `nexttrace-debs` APT repository is maintained by nxtrace and wcbing.
-- Other package sources above are maintained by open source enthusiasts. Availability and timely updates are not guaranteed. If you encounter problems, please contact the repository maintainer to solve them, or use the binary packages provided by the official build of this project.
+- Other package sources above are maintained by open-source enthusiasts. Availability and timely updates are not guaranteed. If you encounter problems, please contact the repository maintainer to solve them, or use the binary packages provided by the official build of this project.
 
 ### Manual Install
 
