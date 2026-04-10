@@ -64,11 +64,16 @@ Document Language: [English](README.md) | 简体中文
     - 当前支持：`amd64`、`i386`、`arm64`、`armel`、`armhf`、`loong64`、`mipsel`、`mips64el`、`ppc64el`、`riscv64`、`s390x`
     - 添加源并安装：
       ```shell
-      curl -fsSL https://github.com/nxtrace/nexttrace-debs/releases/latest/download/nexttrace-archive-keyring.gpg | sudo tee /etc/apt/keyrings/nexttrace.gpg >/dev/null
-      echo "Types: deb
-      URIs: https://github.com/nxtrace/nexttrace-debs/releases/latest/download/
-      Suites: ./
-      Signed-By: /etc/apt/keyrings/nexttrace.gpg" | sudo tee /etc/apt/sources.list.d/nexttrace.sources >/dev/null
+      sudo install -d -m 0755 /etc/apt/keyrings
+      curl -fsSL -o /tmp/nexttrace-archive-keyring.gpg https://github.com/nxtrace/nexttrace-debs/releases/latest/download/nexttrace-archive-keyring.gpg
+      sudo install -m 0644 /tmp/nexttrace-archive-keyring.gpg /etc/apt/keyrings/nexttrace.gpg
+      rm -f /tmp/nexttrace-archive-keyring.gpg
+      sudo tee /etc/apt/sources.list.d/nexttrace.sources >/dev/null <<'EOF'
+Types: deb
+URIs: https://github.com/nxtrace/nexttrace-debs/releases/latest/download/
+Suites: ./
+Signed-By: /etc/apt/keyrings/nexttrace.gpg
+EOF
       sudo apt update
       sudo apt install nexttrace
       ```
