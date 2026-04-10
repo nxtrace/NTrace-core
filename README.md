@@ -64,12 +64,7 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
       curl -fsSL -o /tmp/nexttrace-archive-keyring.gpg https://github.com/nxtrace/nexttrace-debs/releases/latest/download/nexttrace-archive-keyring.gpg
       sudo install -m 0644 /tmp/nexttrace-archive-keyring.gpg /etc/apt/keyrings/nexttrace.gpg
       rm -f /tmp/nexttrace-archive-keyring.gpg
-      sudo tee /etc/apt/sources.list.d/nexttrace.sources >/dev/null <<'EOF'
-Types: deb
-URIs: https://github.com/nxtrace/nexttrace-debs/releases/latest/download/
-Suites: ./
-Signed-By: /etc/apt/keyrings/nexttrace.gpg
-EOF
+      printf '%s\n' 'Types: deb' 'URIs: https://github.com/nxtrace/nexttrace-debs/releases/latest/download/' 'Suites: ./' 'Signed-By: /etc/apt/keyrings/nexttrace.gpg' | sudo tee /etc/apt/sources.list.d/nexttrace.sources >/dev/null
       sudo apt update
       sudo apt install nexttrace
       ```
