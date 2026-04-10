@@ -55,6 +55,26 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
 
 ### Automated Install
 
+- Debian / Ubuntu
+  - Recommended: install from the official `nexttrace-debs` APT repository
+    - Supports: `amd64`, `i386`, `arm64`, `armel`, `armhf`, `loong64`, `mipsel`, `mips64el`, `ppc64el`, `riscv64`, `s390x`
+    - Add the repository and install the default package:
+      ```shell
+      sudo install -d -m 0755 /etc/apt/keyrings
+      curl -fsSL -o /tmp/nexttrace-archive-keyring.gpg https://github.com/nxtrace/nexttrace-debs/releases/latest/download/nexttrace-archive-keyring.gpg
+      sudo install -m 0644 /tmp/nexttrace-archive-keyring.gpg /etc/apt/keyrings/nexttrace.gpg
+      rm -f /tmp/nexttrace-archive-keyring.gpg
+      printf '%s\n' 'Types: deb' 'URIs: https://github.com/nxtrace/nexttrace-debs/releases/latest/download/' 'Suites: ./' 'Signed-By: /etc/apt/keyrings/nexttrace.gpg' | sudo tee /etc/apt/sources.list.d/nexttrace.sources >/dev/null
+      sudo apt update
+      sudo apt install nexttrace
+      ```
+    - Optionally install additional flavors:
+      ```shell
+      sudo apt install nexttrace-tiny
+      sudo apt install ntr
+      ```
+    - Packages can be installed side by side. Commands: `nexttrace`, `nexttrace-tiny`, `ntr`
+
 - Linux / macOS / BSD
   - One-click installation script (Full, default)
 
@@ -74,23 +94,7 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
     curl -sL https://nxtrace.org/nt | bash -s -- --flavor ntr
     ```
 
-  - Installed command names:
-    - Full: `nexttrace`
-    - Tiny: `nexttrace-tiny`
-    - NTR: `ntr`
-
-  - Install nxtrace from the APT repository
-    - Supports AMD64/ARM64 architectures
-      ```shell
-      curl -fsSL https://github.com/nxtrace/nexttrace-debs/releases/latest/download/nexttrace-archive-keyring.gpg | sudo tee /etc/apt/keyrings/nexttrace.gpg >/dev/null
-      echo "Types: deb
-      URIs: https://github.com/nxtrace/nexttrace-debs/releases/latest/download/
-      Suites: ./
-      Signed-By: /etc/apt/keyrings/nexttrace.gpg" | sudo tee /etc/apt/sources.list.d/nexttrace.sources >/dev/null
-      sudo apt update
-      sudo apt install nexttrace
-      ```
-    - APT repository maintained by wcbing and nxtrace
+  - Installed command names: Full `nexttrace`, Tiny `nexttrace-tiny`, NTR `ntr`
 
   - Arch Linux AUR installation command
     - Directly download bin package (only supports amd64)
@@ -154,7 +158,10 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
       ```
     - Scoop-extra is maintained by soenggam
 
-Please note, the repositories for all of the above installation methods are maintained by open source enthusiasts. Availability and timely updates are not guaranteed. If you encounter problems, please contact the repository maintainer to solve them, or use the binary packages provided by the official build of this project.
+Please note:
+
+- The `nexttrace-debs` APT repository is maintained by nxtrace and wcbing.
+- Other package sources above are maintained by open-source enthusiasts. Availability and timely updates are not guaranteed. If you encounter problems, please contact the repository maintainer to solve them, or use the binary packages provided by the official build of this project.
 
 ### Manual Install
 
@@ -182,7 +189,7 @@ Starting from this release, NextTrace is published in **three flavors** under th
 | Default mode          |     traceroute     |    traceroute    |   MTR TUI    |
 | Binary name           |    `nexttrace`     | `nexttrace-tiny` |    `ntr`     |
 
-> **Note:** Package managers (Homebrew, AUR, Scoop, etc.) currently install the **Full** (`nexttrace`) version only.
+> **Note:** `APT (nexttrace-debs)` provides all three flavors: **Full** (`nexttrace`), **Tiny** (`nexttrace-tiny`), and **NTR** (`ntr`). Other package managers (Homebrew, AUR, Scoop, etc.) currently install the **Full** (`nexttrace`) version only.
 
 ### Feature Matrix
 
