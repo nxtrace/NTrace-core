@@ -59,6 +59,27 @@ Document Language: [English](README.md) | 简体中文
 
 ### Automated Install
 
+- Debian / Ubuntu
+  - 推荐：通过官方 `nexttrace-debs` APT 源安装
+    - 当前支持：`amd64`、`i386`、`arm64`、`armel`、`armhf`、`loong64`、`mipsel`、`mips64el`、`ppc64el`、`riscv64`、`s390x`
+    - 添加源并安装：
+      ```shell
+      curl -fsSL https://github.com/nxtrace/nexttrace-debs/releases/latest/download/nexttrace-archive-keyring.gpg | sudo tee /etc/apt/keyrings/nexttrace.gpg >/dev/null
+      echo "Types: deb
+      URIs: https://github.com/nxtrace/nexttrace-debs/releases/latest/download/
+      Suites: ./
+      Signed-By: /etc/apt/keyrings/nexttrace.gpg" | sudo tee /etc/apt/sources.list.d/nexttrace.sources >/dev/null
+      sudo apt update
+      sudo apt install nexttrace
+      ```
+    - 安装指定 flavor：
+      ```shell
+      sudo apt install nexttrace
+      sudo apt install nexttrace-tiny
+      sudo apt install ntr
+      ```
+    - 三个包可以共存安装，对应命令分别是：`nexttrace`、`nexttrace-tiny`、`ntr`
+
 - Linux / macOS / BSD
   - 一键安装脚本（完整版，默认）
     ```shell
@@ -72,22 +93,7 @@ Document Language: [English](README.md) | 简体中文
     ```shell
     curl -sL https://nxtrace.org/nt | bash -s -- --flavor ntr
     ```
-  - 安装后的命令名：
-    - Full：`nexttrace`
-    - Tiny：`nexttrace-tiny`
-    - NTR：`ntr`
-  - 从 nxtrace的APT源安装
-    - 支持 AMD64/ARM64 架构
-      ```shell
-      curl -fsSL https://github.com/nxtrace/nexttrace-debs/releases/latest/download/nexttrace-archive-keyring.gpg | sudo tee /etc/apt/keyrings/nexttrace.gpg >/dev/null
-      echo "Types: deb
-      URIs: https://github.com/nxtrace/nexttrace-debs/releases/latest/download/
-      Suites: ./
-      Signed-By: /etc/apt/keyrings/nexttrace.gpg" | sudo tee /etc/apt/sources.list.d/nexttrace.sources >/dev/null
-      sudo apt update
-      sudo apt install nexttrace
-      ```
-    - APT源由 wcbing, nxtrace 维护
+  - 安装后的命令名：Full `nexttrace`，Tiny `nexttrace-tiny`，NTR `ntr`
 
   - Arch Linux AUR 安装命令
     - 直接下载bin包(仅支持amd64)
@@ -154,7 +160,10 @@ Document Language: [English](README.md) | 简体中文
 
     - scoop-extra 由 soenggam 维护
 
-请注意，以上多种安装方式的仓库均由开源爱好者自行维护，不保证可用性和及时更新，如遇到问题请联系仓库维护者解决，或使用本项目官方编译提供的二进制包。
+请注意：
+
+- `nexttrace-debs` APT 源由 nxtrace 和 wcbing 维护。
+- 其它安装方式中的软件源大多由开源爱好者自行维护，不保证可用性和及时更新；如遇到问题请联系对应维护者，或使用本项目官方编译提供的二进制包。
 
 ### Manual Install
 
@@ -182,7 +191,7 @@ Document Language: [English](README.md) | 简体中文
 | 默认运行模式            |      traceroute       |    traceroute    |  MTR TUI   |
 | 二进制名                |      `nexttrace`      | `nexttrace-tiny` |   `ntr`    |
 
-> **注意：** 包管理器（Homebrew、AUR、Scoop 等）目前仅安装 **完整版**（`nexttrace`）。
+> **注意：** `APT (nexttrace-debs)` 目前提供 **Full**（`nexttrace`）、**Tiny**（`nexttrace-tiny`）和 **NTR**（`ntr`）三种包；其它包管理器（Homebrew、AUR、Scoop 等）目前仍仅提供 **完整版**（`nexttrace`）。
 
 ### 功能对比
 
