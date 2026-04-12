@@ -228,11 +228,13 @@ jobs:
           set -Eeuo pipefail
           SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
           if [ "${GOARCH}" = "amd64" ]; then ARCH_FLAG="-arch x86_64"; else ARCH_FLAG="-arch arm64"; fi
+          # amd64 (Intel) can target macOS 10.15 (Catalina); arm64 (Apple Silicon) requires 11.0+
+          if [ "${GOARCH}" = "amd64" ]; then MACOS_MIN="10.15"; else MACOS_MIN="11.0"; fi
           CC="$(xcrun -f clang)";  CXX="$(xcrun -f clang++)"
           echo "CC=${CC}"   >> "$GITHUB_ENV"
           echo "CXX=${CXX}" >> "$GITHUB_ENV"
-          echo "CGO_CFLAGS=-isysroot ${SDKROOT} ${ARCH_FLAG} -mmacosx-version-min=11.0"  >> "$GITHUB_ENV"
-          echo "CGO_LDFLAGS=-isysroot ${SDKROOT} ${ARCH_FLAG} -mmacosx-version-min=11.0" >> "$GITHUB_ENV"
+          echo "CGO_CFLAGS=-isysroot ${SDKROOT} ${ARCH_FLAG} -mmacosx-version-min=${MACOS_MIN}"  >> "$GITHUB_ENV"
+          echo "CGO_LDFLAGS=-isysroot ${SDKROOT} ${ARCH_FLAG} -mmacosx-version-min=${MACOS_MIN}" >> "$GITHUB_ENV"
 
           BUILD_VERSION="$(git describe --tags --always 2>/dev/null || echo dev)"
           BUILD_DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
