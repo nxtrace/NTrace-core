@@ -180,6 +180,7 @@ Document Language: [English](README.md) | 简体中文
 | ----------------------- | :-------------------: | :--------------: | :--------: |
 | 常规 traceroute         |          ✅           |        ✅        |     —      |
 | 独立 MTU（`--mtu`）     |          ✅           |        ✅        |     —      |
+| CDN 测速（`--speed`）   |          ✅           |        —         |     —      |
 | MTR TUI                 |          ✅           |        —         | ✅（默认） |
 | MTR 报告（`-r`）        |          ✅           |        —         |     ✅     |
 | MTR 宽报告（`-w`）      |          ✅           |        —         |     ✅     |
@@ -194,9 +195,9 @@ Document Language: [English](README.md) | 简体中文
 
 ### 功能对比
 
-- **`nexttrace`** — 完整版。包含所有功能：traceroute、MTR、Globalping 与 WebUI。
-- **`nexttrace-tiny`** — 精简版。仅保留常规 traceroute，不含 MTR / Globalping / WebUI。适合嵌入式或极简环境。
-- **`ntr`** — MTR 专用版。默认启动 MTR TUI。无 Globalping / WebUI，无常规 traceroute 模式，也不带独立 `--mtu` 模式。
+- **`nexttrace`** — 完整版。包含 traceroute、独立 MTU、CDN 测速、MTR、Globalping、Fast Trace 与 WebUI。
+- **`nexttrace-tiny`** — 精简版。保留常规 traceroute、独立 MTU 和 Fast Trace；不含 CDN 测速 / MTR / Globalping / WebUI。适合嵌入式或极简环境。
+- **`ntr`** — MTR 专用版。默认启动 MTR TUI。不含常规 traceroute、独立 `--mtu`、CDN 测速、Globalping、Fast Trace 与 WebUI。
 
 ### 手动编译
 
@@ -379,6 +380,36 @@ nexttrace --mtu --json 1.1.1.1
 - TTY 下会原地更新当前 hop，并为 hop 状态 / PMTU 高亮加色；重定向/管道输出会退化成“定稿一跳输出一行”的无 ANSI 流式文本。
 - `--mtu --json` 在 stdout 上只输出独立的 MTU JSON 文档。
 - GeoIP、RDNS、`--data-provider`、`--language`、`--no-rdns`、`--always-rdns`、`--dot-server` 都对该模式生效。
+
+#### `NextTrace` 也支持独立的 CDN 测速模式
+
+```bash
+# 默认使用 Apple CDN 后端
+nexttrace --speed
+
+# 改用 Cloudflare 后端
+nexttrace --speed --speed-provider cloudflare
+
+# 查看测速模式专属帮助
+nexttrace --speed --help
+
+# 机器可读输出
+nexttrace --speed --json --non-interactive --no-metadata
+
+# 指定测速节点 IP，或绑定 source address / 网卡
+nexttrace --speed --endpoint 1.2.3.4
+nexttrace --speed --source 192.0.2.10
+nexttrace --speed --dev eth0
+```
+
+- `--speed` 仅在完整版 `nexttrace` 中提供，`nexttrace-tiny` 与 `ntr` 不注册该参数。
+- 主 `nexttrace --help` 只展示顶层 `--speed` 入口；测速模式的详细参数放在 `nexttrace --speed --help`。
+- 支持的后端为 `apple`（默认）和 `cloudflare`。
+- 复用的公共参数：`--json`、`--language`、`--no-color`、`--dot-server`、`--timeout`、`--source`、`--dev`。
+- 测速模式专属参数：`--speed-provider`、`--max`、`--threads`、`--latency-count`、`--non-interactive`、`--endpoint`、`--no-metadata`。
+- 默认终端输出会展示候选节点、最终选中节点、客户端/服务端信息、空载延迟、下载/上传单线程与多线程轮次、负载延迟、总流量、warnings 和 degraded 状态。
+- `--json` 时，stdout 只输出一个 JSON 文档。
+- 退出码：`0` 表示成功，`2` 表示降级完成，`1` 表示失败，`130` 表示被中断。
 
 #### `NextTrace`也同样支持一些进阶功能，如 TTL 控制、并发数控制、模式切换等
 
@@ -657,7 +688,7 @@ NextTrace 当前会读取下列环境变量。对于布尔开关，只识别 `1`
 
 ```shell
 Usage: nexttrace [-h|--help] [--init] [-4|--ipv4] [-6|--ipv6] [-T|--tcp]
-                 [-U|--udp] [-F|--fast-trace] [-p|--port <integer>]
+                 [-U|--udp] [--speed] [-F|--fast-trace] [-p|--port <integer>]
                  [--icmp-mode <integer>] [-q|--queries <integer>]
                  [--max-attempts <integer>] [--parallel-requests <integer>]
                  [-m|--max-hops <integer>] [-d|--data-provider
@@ -681,6 +712,8 @@ Arguments:
   -h  --help                         Print help information
       --init                         Windows ONLY: Extract WinDivert runtime to
                                      executable directory
+      --speed                        Run CDN speed test mode. See `nexttrace
+                                     --speed --help` for details
   -4  --ipv4                         Use IPv4 only
   -6  --ipv6                         Use IPv6 only
   -T  --tcp                          Use TCP SYN for tracerouting (default
