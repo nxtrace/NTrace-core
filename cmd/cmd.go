@@ -1042,6 +1042,10 @@ func finalizeTraceResult(ctx context.Context, res *trace.Result, tablePrint, tab
 }
 
 func Execute() {
+	if handled, exitCode := maybeRunSpeedMode(os.Args[1:], os.Stdout, os.Stderr); handled {
+		os.Exit(exitCode)
+	}
+
 	parser := argparse.NewParser(appBinName, "An open source visual route tracking CLI tool")
 	// Override HelpFunc so positional arg names are sanitized in --help output
 	parser.HelpFunc = func(c *argparse.Command, msg interface{}) string {
@@ -1079,6 +1083,7 @@ func Execute() {
 	disableMaptrace := registerDisableMaptraceFlag(parser)
 	disableMPLS := parser.Flag("e", "disable-mpls", &argparse.Options{Help: "Disable MPLS"})
 	ver := parser.Flag("V", "version", &argparse.Options{Help: "Print version info and exit"})
+	speedMode := registerSpeedFlag(parser)
 	srcAddr := parser.String("s", "source", &argparse.Options{Help: "Use source address src_addr for outgoing packets"})
 	srcPort := parser.Int("", "source-port", &argparse.Options{Help: "Use source port src_port for outgoing packets"})
 	srcDev := parser.String("D", "dev", &argparse.Options{Help: "Use the specified network device for explicit source selection. On Windows, this only chooses the source address and does not guarantee the egress interface; TCP + --dev is not supported"})
@@ -1189,6 +1194,12 @@ func Execute() {
 	}
 	if handleStartupModes(*noColor, *jsonPrint, mtrModes, *ver, *deploy, *deployListen, *init, osType) {
 		return
+	}
+	if *speedMode {
+		// `--speed` should have been handled before the main parser runs. If we reached
+		// here, return a defensive error to avoid silently falling through.
+		fmt.Fprintln(os.Stderr, "internal error: speed mode dispatch failed")
+		os.Exit(1)
 	}
 	restoreFastIPOutput := setFastIPOutputSuppression(*jsonPrint || mtrModes.mtr)
 	defer restoreFastIPOutput()

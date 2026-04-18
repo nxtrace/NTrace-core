@@ -8,5 +8,6 @@ const (
 	enableGlobalping = true
 	enableMTR        = true
 	enableMTU        = true
+	enableSpeed      = true
 	defaultMTR       = false
 )

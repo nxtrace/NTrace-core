@@ -173,32 +173,68 @@ run_cmd() {
   local name="$1"
   local note="$2"
   local command_string="$3"
+  run_cmd_check "${name}" "${note}" "${command_string}" "" "" "0"
+}
+
+allowed_exit_matches() {
+  local rc="$1"
+  local allowed_csv="${2:-0}"
+  local allowed
+  IFS=',' read -r -a allowed <<< "${allowed_csv}"
+  for allowed in "${allowed[@]}"; do
+    if [[ "${rc}" == "${allowed}" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+run_cmd_check() {
+  local name="$1"
+  local note="$2"
+  local command_string="$3"
+  local success_pattern="${4:-}"
+  local forbidden_pattern="${5:-}"
+  local allowed_csv="${6:-0}"
   local out="${ART_DIR}/${name}.txt"
-  if run_timeout_cmd 150 "${command_string}" >"${out}" 2>&1; then
-    record "${name}" PASS "${note}"
-  else
-    local rc=$?
-    record "${name}" FAIL "${note}; exit=${rc}"
+  local rc=0
+  if ! run_timeout_cmd 150 "${command_string}" >"${out}" 2>&1; then
+    rc=$?
   fi
+  if ! allowed_exit_matches "${rc}" "${allowed_csv}"; then
+    record "${name}" FAIL "${note}; exit=${rc}"
+    return
+  fi
+  if [[ -n "${success_pattern}" ]] && ! grep -Eq -- "${success_pattern}" "${out}"; then
+    record "${name}" FAIL "${note}; output mismatch"
+    return
+  fi
+  if [[ -n "${forbidden_pattern}" ]] && grep -Eq -- "${forbidden_pattern}" "${out}"; then
+    record "${name}" FAIL "${note}; forbidden output matched"
+    return
+  fi
+  record "${name}" PASS "${note}"
 }
 
 check_json_pure() {
   local name="$1"
   local note="$2"
   local command_string="$3"
+  local expected_pattern="${4:-}"
+  local allowed_csv="${5:-0}"
   local out="${ART_DIR}/${name}.txt"
   local service_err='request failed - please try again later'
   local pow_log_re='^\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} pow token fetch failed: .*$'
+  local rc=0
   if ! run_timeout_cmd 180 "${command_string}" >"${out}" 2>&1; then
-    if grep -Fq "${service_err}" "${out}"; then
-      record "${name}" SKIP "${note}; external service unavailable"
-      return
-    fi
-    record "${name}" FAIL "${note}; command failed"
-    return
+    rc=$?
   fi
   if grep -Fq "${service_err}" "${out}"; then
     record "${name}" SKIP "${note}; external service unavailable"
+    return
+  fi
+  if ! allowed_exit_matches "${rc}" "${allowed_csv}"; then
+    record "${name}" FAIL "${note}; exit=${rc}"
     return
   fi
   if python3 - <<'PY' "${out}" "${pow_log_re}" && ! grep -Fq 'preferred API IP' "${out}"; then
@@ -219,6 +255,10 @@ _, end = decoder.raw_decode(text, idx)
 if text[end:].strip():
     raise SystemExit(1)
 PY
+    if [[ -n "${expected_pattern}" ]] && ! grep -Eq -- "${expected_pattern}" "${out}"; then
+      record "${name}" FAIL "${note}; JSON content mismatch"
+      return
+    fi
     record "${name}" PASS "${note}"
   else
     record "${name}" FAIL "${note}; stdout not pure JSON"
@@ -488,8 +528,14 @@ run_cmd mtr_report 'MTR report ICMP' "\"${BIN}\" --no-color -r -q 2 -i 300 --tim
 run_cmd mtr_wide 'MTR wide + show-ips' "\"${BIN}\" --no-color -w --show-ips -q 2 -i 300 --timeout 1000 -m 4 1.1.1.1"
 run_cmd mtr_raw 'MTR raw stream' "\"${BIN}\" --no-color -r --raw -q 2 -i 300 --timeout 1000 -m 4 1.1.1.1"
 run_cmd fast_trace_file 'Fast trace via --file' "\"${BIN}\" --no-color --file \"${TARGETS}\" -q 1 -m 2 --timeout 1000"
+run_cmd_check help_speed_main 'Main help exposes only top-level speed entry' "\"${BIN}\" --help" --speed --speed-provider
+run_cmd_check help_speed_detail 'Speed help is dedicated and detailed' "\"${BIN}\" --speed --help" --speed-provider 'hops max, .*ICMP mode'
+check_json_pure speed_apple_json 'Apple speed JSON path' "\"${BIN}\" --speed --json --no-metadata --non-interactive --max 64KiB --timeout 2000 --threads 2 --latency-count 2" '"provider":"apple"' '0,2'
+check_json_pure speed_cloudflare_json 'Cloudflare speed JSON path' "\"${BIN}\" --speed --speed-provider cloudflare --json --no-metadata --non-interactive --max 64KiB --timeout 2000 --threads 2 --latency-count 2" '"provider":"cloudflare"' '0,2'
 run_cmd tiny_smoke 'nexttrace-tiny smoke' "\"${TINY}\" --no-color -q 1 -m 2 --timeout 1000 1.1.1.1"
 run_cmd ntr_report 'ntr report smoke' "\"${NTR}\" --no-color -r -q 2 -i 300 --timeout 1000 -m 4 1.1.1.1"
+run_cmd_check tiny_speed_reject 'nexttrace-tiny rejects --speed' "\"${TINY}\" --speed" '--speed' '' '1'
+run_cmd_check ntr_speed_reject 'ntr rejects --speed' "\"${NTR}\" --speed" '--speed' '' '1'
 
 capture_psize_tos psize_tos_icmp4 'ICMPv4 psize/tos packet capture' '1.1.1.1' "\"${BIN}\" --no-color -q 1 -m 1 --timeout 1000 --psize 84 -Q 46 1.1.1.1" 'tos 0x2e' 'length 84'
 capture_psize_tos psize_tos_udp4 'UDPv4 psize/tos packet capture' '1.1.1.1' "\"${BIN}\" --no-color -U -q 1 -m 1 --timeout 1000 --psize 84 -Q 46 1.1.1.1" 'tos 0x2e' 'length 84'
