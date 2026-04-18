@@ -254,6 +254,66 @@ func TestCreateWsConnHonorsCanceledContextDuringFastIP(t *testing.T) {
 	}
 }
 
+func TestCreateWsConnAsyncReturnsBeforeFastIP(t *testing.T) {
+	oldFastIPFn := wsGetFastIPFn
+	defer func() { wsGetFastIPFn = oldFastIPFn }()
+
+	called := make(chan struct{}, 1)
+	wsGetFastIPFn = func(ctx context.Context, domain string, port string, enableOutput bool) (string, error) {
+		called <- struct{}{}
+		<-ctx.Done()
+		return "", ctx.Err()
+	}
+
+	start := time.Now()
+	conn := createWsConnAsync(context.Background())
+	defer conn.Close()
+
+	if elapsed := time.Since(start); elapsed > 100*time.Millisecond {
+		t.Fatalf("createWsConnAsync took %s, want < 100ms", elapsed)
+	}
+	select {
+	case <-called:
+		t.Fatal("createWsConnAsync should not synchronously call FastIP")
+	case <-time.After(50 * time.Millisecond):
+	}
+}
+
+func TestWaitUntilConnectedReturnsOnConnect(t *testing.T) {
+	conn := newStartedTestWsConn()
+	defer conn.Close()
+
+	done := make(chan error, 1)
+	go func() {
+		done <- conn.WaitUntilConnected(context.Background())
+	}()
+
+	time.Sleep(30 * time.Millisecond)
+	conn.setConnectionState(true, false)
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("WaitUntilConnected returned error: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("WaitUntilConnected did not observe connected state")
+	}
+}
+
+func TestWaitUntilConnectedHonorsContext(t *testing.T) {
+	conn := newStartedTestWsConn()
+	defer conn.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	err := conn.WaitUntilConnected(ctx)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("WaitUntilConnected error = %v, want %v", err, context.DeadlineExceeded)
+	}
+}
+
 func TestRecreateWsConnCloseCancelsFastIP(t *testing.T) {
 	oldFastIPFn := wsGetFastIPFn
 	oldHost, oldPort := host, port

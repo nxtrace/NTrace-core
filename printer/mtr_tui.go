@@ -767,7 +767,7 @@ func truncateStr(s string, maxLen int) string {
 // MTRTUIPrinter 返回一个可直接用作 MTROnSnapshot 的回调函数，
 // 将帧渲染到 os.Stdout。
 func MTRTUIPrinter(target, domain, targetIP, version string, startTime time.Time,
-	srcHost, srcIP, lang, apiInfo string, showIPs bool,
+	srcHost, srcIP, lang string, apiInfo func() string, showIPs bool,
 	isPaused func() bool, displayMode func() int, nameMode func() int, isMPLSDisabled func() bool) func(iteration int, stats []trace.MTRHopStat) {
 	return func(iteration int, stats []trace.MTRHopStat) {
 		status := MTRTUIRunning
@@ -786,6 +786,10 @@ func MTRTUIPrinter(target, domain, targetIP, version string, startTime time.Time
 		if isMPLSDisabled != nil {
 			noMPLS = isMPLSDisabled()
 		}
+		headerAPIInfo := ""
+		if apiInfo != nil {
+			headerAPIInfo = apiInfo()
+		}
 		MTRTUIRender(os.Stdout, MTRTUIHeader{
 			Target:      target,
 			StartTime:   startTime,
@@ -800,7 +804,7 @@ func MTRTUIPrinter(target, domain, targetIP, version string, startTime time.Time
 			DisplayMode: mode,
 			NameMode:    nm,
 			ShowIPs:     showIPs,
-			APIInfo:     apiInfo,
+			APIInfo:     headerAPIInfo,
 			DisableMPLS: noMPLS,
 		}, stats)
 	}

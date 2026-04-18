@@ -83,14 +83,13 @@ func runMTRTUI(method trace.Method, conf trace.Config, hopIntervalMs int, maxPer
 		lang = "cn"
 	}
 
-	// preferred API 信息（仅 LeoMoeAPI 且有结果时展示）
-	apiInfo := buildAPIInfo(dataOrigin)
 	roundConf := normalizeMTRTraceConfig(conf)
 
 	opts := trace.MTROptions{
 		HopInterval:      time.Duration(hopIntervalMs) * time.Millisecond,
 		MaxPerHop:        maxPerHop,
 		IsResetRequested: ui.ConsumeRestartRequest,
+		AsyncMetadata:    true,
 	}
 
 	// TTY 模式下使用 TUI 渲染器 + 暂停支持，非 TTY 使用简单表格
@@ -98,7 +97,7 @@ func runMTRTUI(method trace.Method, conf trace.Config, hopIntervalMs int, maxPer
 	if ui.IsTTY() {
 		opts.IsPaused = ui.IsPaused
 		onSnapshot = printer.MTRTUIPrinter(target, domain, target, config.Version, startTime,
-			srcHost, srcIP, lang, apiInfo, showIPs, ui.IsPaused, ui.CurrentDisplayMode, ui.CurrentNameMode, ui.IsMPLSDisabled)
+			srcHost, srcIP, lang, func() string { return buildAPIInfo(dataOrigin) }, showIPs, ui.IsPaused, ui.CurrentDisplayMode, ui.CurrentNameMode, ui.IsMPLSDisabled)
 	} else {
 		onSnapshot = func(iteration int, stats []trace.MTRHopStat) {
 			printer.MTRTablePrinter(stats, iteration, ui.CurrentDisplayMode(), ui.CurrentNameMode(), lang, showIPs)

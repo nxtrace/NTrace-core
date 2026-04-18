@@ -756,13 +756,13 @@ func applyDN42Mode(enabled bool, dataOrigin *string, disableMaptrace *bool) {
 	*disableMaptrace = true
 }
 
-func prepareRuntimeEnvironment(ctx context.Context, dn42 bool, dataOrigin *string, disableMaptrace *bool, powProvider *string) *wshandle.WsConn {
+func prepareRuntimeEnvironment(ctx context.Context, dn42 bool, dataOrigin *string, disableMaptrace *bool, powProvider *string, asyncLeo bool) *wshandle.WsConn {
 	capabilitiesCheck()
 	applyDN42Mode(dn42, dataOrigin, disableMaptrace)
-	return initLeoWebsocket(ctx, dataOrigin, powProvider)
+	return initLeoWebsocket(ctx, dataOrigin, powProvider, asyncLeo)
 }
 
-func initLeoWebsocket(ctx context.Context, dataOrigin, powProvider *string) *wshandle.WsConn {
+func initLeoWebsocket(ctx context.Context, dataOrigin, powProvider *string, async bool) *wshandle.WsConn {
 	if !strings.EqualFold(*dataOrigin, "LEOMOEAPI") {
 		return nil
 	}
@@ -776,7 +776,12 @@ func initLeoWebsocket(ctx context.Context, dataOrigin, powProvider *string) *wsh
 		return nil
 	}
 
-	leoWs := wshandle.NewWithContext(ctx)
+	var leoWs *wshandle.WsConn
+	if async {
+		leoWs = wshandle.NewWithContextAsync(ctx)
+	} else {
+		leoWs = wshandle.NewWithContext(ctx)
+	}
 	if leoWs != nil {
 		leoWs.Interrupt = make(chan os.Signal, 1)
 		signal.Notify(leoWs.Interrupt, os.Interrupt)
@@ -1245,7 +1250,7 @@ func Execute() {
 			fmt.Println(srcErr)
 			os.Exit(1)
 		}
-		leoWs := prepareRuntimeEnvironment(rootCtx, *dn42, dataOrigin, disableMaptrace, powProvider)
+		leoWs := prepareRuntimeEnvironment(rootCtx, *dn42, dataOrigin, disableMaptrace, powProvider, false)
 		defer closeLeoWebsocket(leoWs)
 		conf := buildMTUTraceConfig(
 			domain,
@@ -1303,7 +1308,8 @@ func Execute() {
 		return
 	}
 
-	leoWs := prepareRuntimeEnvironment(rootCtx, *dn42, dataOrigin, disableMaptrace, powProvider)
+	interactiveMTR := mtrModes.mtr && chooseMTRRunMode(mtrModes.raw, mtrModes.report) == mtrRunTUI
+	leoWs := prepareRuntimeEnvironment(rootCtx, *dn42, dataOrigin, disableMaptrace, powProvider, interactiveMTR)
 	defer closeLeoWebsocket(leoWs)
 
 	if *from != "" {

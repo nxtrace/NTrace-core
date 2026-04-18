@@ -1,6 +1,7 @@
 package ipgeo
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"strconv"
@@ -30,14 +31,20 @@ var IPPools = IPPool{
 	pool: make(map[string]chan IPGeoData),
 }
 
-func sendIPRequest(ip string) {
-	wsConn := wshandle.GetWsConn()
+var getLeoWsConn = wshandle.GetWsConn
+
+func sendIPRequest(ip string) bool {
+	wsConn := getLeoWsConn()
+	if wsConn == nil {
+		return false
+	}
 	wsConn.MsgSendCh <- ip
+	return true
 }
 
 func receiveParse() {
 	// 获得连接实例
-	wsConn := wshandle.GetWsConn()
+	wsConn := getLeoWsConn()
 	// 防止多协程抢夺一个ws连接，导致死锁，当一个协程获得ws的控制权后上锁
 	wsConn.ConnMux.Lock()
 	// 函数退出时解锁，给其他协程使用
@@ -128,8 +135,24 @@ func LeoIP(ip string, timeout time.Duration, lang string, maptrace bool) (*IPGeo
 		IPPools.poolMux.Unlock()
 	}
 
+	wsConn := getLeoWsConn()
+	if wsConn == nil {
+		return &IPGeoData{}, errors.New("TimeOut")
+	}
+
+	waitCtx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	if err := wsConn.WaitUntilConnected(waitCtx); err != nil {
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+			return &IPGeoData{}, errors.New("TimeOut")
+		}
+		return &IPGeoData{}, err
+	}
+
 	// 发送请求
-	sendIPRequest(ip)
+	if !sendIPRequest(ip) {
+		return &IPGeoData{}, errors.New("TimeOut")
+	}
 
 	// 确保 receiveParse 只启动一次
 	receiveParseOnce.Do(func() {

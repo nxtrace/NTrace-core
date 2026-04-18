@@ -250,7 +250,7 @@ func TestScheduler_Reset(t *testing.T) {
 			return mtrProbeResult{
 				TTL:     ttl,
 				Success: true,
-				Addr:    &net.IPAddr{IP: net.ParseIP("10.0.0.1")},
+				Addr:    &net.IPAddr{IP: net.ParseIP("1.1.1.1")},
 				RTT:     5 * time.Millisecond,
 			}, nil
 		},
@@ -785,6 +785,192 @@ func TestBuildMTRRawRecordFromProbe_NoGeoNoSource_NoHostname(t *testing.T) {
 	if rec.ASN != "" || rec.Host != "" || rec.Country != "" {
 		t.Errorf("expected empty geo/host fields, got ASN=%q Host=%q Country=%q",
 			rec.ASN, rec.Host, rec.Country)
+	}
+}
+
+func TestScheduler_AsyncMetadataSnapshotsBeforeGeoCompletes(t *testing.T) {
+	releaseGeo := make(chan struct{})
+	prober := &mockTTLProber{
+		probeFn: func(_ context.Context, ttl int) (mtrProbeResult, error) {
+			return mtrProbeResult{
+				TTL:     ttl,
+				Success: true,
+				Addr:    &net.IPAddr{IP: net.ParseIP("1.1.1.1")},
+				RTT:     5 * time.Millisecond,
+			}, nil
+		},
+	}
+
+	agg := NewMTRAggregator()
+	firstSnapshot := make(chan []MTRHopStat, 1)
+	done := make(chan error, 1)
+
+	go func() {
+		done <- runMTRScheduler(context.Background(), prober, agg, mtrSchedulerConfig{
+			BeginHop:         1,
+			MaxHops:          1,
+			HopInterval:      time.Millisecond,
+			MaxPerHop:        1,
+			ParallelRequests: 1,
+			ProgressThrottle: time.Millisecond,
+			FillGeo:          true,
+			AsyncMetadata:    true,
+			BaseConfig: Config{
+				IPGeoSource: func(ip string, timeout time.Duration, lang string, maptrace bool) (*ipgeo.IPGeoData, error) {
+					<-releaseGeo
+					return &ipgeo.IPGeoData{Asnumber: "64512"}, nil
+				},
+				Timeout: time.Second,
+			},
+		}, func(_ int, stats []MTRHopStat) {
+			if len(stats) == 0 {
+				return
+			}
+			select {
+			case firstSnapshot <- stats:
+			default:
+			}
+		}, nil)
+	}()
+
+	var initial []MTRHopStat
+	select {
+	case initial = <-firstSnapshot:
+	case <-time.After(time.Second):
+		t.Fatal("did not receive initial async snapshot")
+	}
+
+	if len(initial) != 1 {
+		t.Fatalf("initial snapshot rows = %d, want 1", len(initial))
+	}
+	if initial[0].Geo != nil {
+		t.Fatalf("initial snapshot geo = %+v, want nil before async metadata completes", initial[0].Geo)
+	}
+	if initial[0].Snt != 1 {
+		t.Fatalf("initial snapshot Snt = %d, want 1", initial[0].Snt)
+	}
+
+	close(releaseGeo)
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("runMTRScheduler error: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("scheduler did not finish after releasing async metadata")
+	}
+
+	finalStats := agg.Snapshot()
+	if len(finalStats) != 1 {
+		t.Fatalf("final snapshot rows = %d, want 1", len(finalStats))
+	}
+	if finalStats[0].Geo == nil || finalStats[0].Geo.Asnumber != "64512" {
+		t.Fatalf("final geo = %+v, want ASN 64512", finalStats[0].Geo)
+	}
+	if finalStats[0].Snt != 1 || finalStats[0].Received != 1 {
+		t.Fatalf("final stats changed unexpectedly: Snt=%d Received=%d", finalStats[0].Snt, finalStats[0].Received)
+	}
+}
+
+func TestScheduler_AsyncMetadataDedupesAndCachesByIP(t *testing.T) {
+	var lookupCount int32
+	prober := &mockTTLProber{
+		probeFn: func(_ context.Context, ttl int) (mtrProbeResult, error) {
+			return mtrProbeResult{
+				TTL:     ttl,
+				Success: true,
+				Addr:    &net.IPAddr{IP: net.ParseIP("8.8.8.8")},
+				RTT:     5 * time.Millisecond,
+			}, nil
+		},
+	}
+
+	err := runMTRScheduler(context.Background(), prober, NewMTRAggregator(), mtrSchedulerConfig{
+		BeginHop:         1,
+		MaxHops:          2,
+		HopInterval:      time.Millisecond,
+		MaxPerHop:        2,
+		ParallelRequests: 2,
+		ProgressThrottle: time.Millisecond,
+		FillGeo:          true,
+		AsyncMetadata:    true,
+		BaseConfig: Config{
+			IPGeoSource: func(ip string, timeout time.Duration, lang string, maptrace bool) (*ipgeo.IPGeoData, error) {
+				atomic.AddInt32(&lookupCount, 1)
+				time.Sleep(50 * time.Millisecond)
+				return &ipgeo.IPGeoData{Asnumber: "64513"}, nil
+			},
+			Timeout: time.Second,
+		},
+	}, nil, nil)
+	if err != nil {
+		t.Fatalf("runMTRScheduler error: %v", err)
+	}
+
+	if got := atomic.LoadInt32(&lookupCount); got != 1 {
+		t.Fatalf("metadata lookup count = %d, want 1", got)
+	}
+}
+
+func TestScheduler_AsyncMetadataIgnoresOldGenerationAfterReset(t *testing.T) {
+	rt, err := newMTRSchedulerRuntime(context.Background(), &mockTTLProber{}, NewMTRAggregator(), mtrSchedulerConfig{
+		BeginHop:         1,
+		MaxHops:          1,
+		HopInterval:      time.Millisecond,
+		ParallelRequests: 1,
+		ProgressThrottle: time.Millisecond,
+		FillGeo:          true,
+		AsyncMetadata:    true,
+	}, nil, nil)
+	if err != nil {
+		t.Fatalf("newMTRSchedulerRuntime error: %v", err)
+	}
+
+	bare := mtrProbeResult{
+		TTL:     1,
+		Success: true,
+		Addr:    &net.IPAddr{IP: net.ParseIP("9.9.9.9")},
+		RTT:     5 * time.Millisecond,
+	}
+
+	rt.agg.Update(rt.singleProbeResult(1, bare), 1)
+	rt.metadataInFlight["9.9.9.9"] = 0
+
+	rt.generation = 1
+	clear(rt.metadataInFlight)
+	clear(rt.metadataCache)
+	rt.agg.Reset()
+	rt.agg.Update(rt.singleProbeResult(1, bare), 1)
+	rt.metadataInFlight["9.9.9.9"] = 1
+
+	rt.processMetadataResult(mtrMetadataResult{
+		patch: mtrMetadataPatch{
+			ip:  "9.9.9.9",
+			geo: &ipgeo.IPGeoData{Asnumber: "OLD"},
+		},
+		gen: 0,
+	})
+
+	stats := rt.agg.Snapshot()
+	if len(stats) != 1 {
+		t.Fatalf("stats rows after old generation patch = %d, want 1", len(stats))
+	}
+	if stats[0].Geo != nil {
+		t.Fatalf("old generation metadata should be ignored, got %+v", stats[0].Geo)
+	}
+
+	rt.processMetadataResult(mtrMetadataResult{
+		patch: mtrMetadataPatch{
+			ip:  "9.9.9.9",
+			geo: &ipgeo.IPGeoData{Asnumber: "NEW"},
+		},
+		gen: 1,
+	})
+
+	stats = rt.agg.Snapshot()
+	if stats[0].Geo == nil || stats[0].Geo.Asnumber != "NEW" {
+		t.Fatalf("latest geo = %+v, want NEW", stats[0].Geo)
 	}
 }
 

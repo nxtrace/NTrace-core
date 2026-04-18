@@ -138,6 +138,7 @@ func (c *WsConn) enqueueWrite(job wsWriteJob) error {
 var (
 	errWriteQueueFull   = errors.New("wshandle: write queue full")
 	errWriteLoopStopped = errors.New("wshandle: write loop stopped")
+	errConnClosed       = errors.New("wshandle: connection closed")
 )
 
 var wsconn *WsConn
@@ -294,6 +295,34 @@ func (c *WsConn) IsConnecting() bool {
 	c.stateMu.RLock()
 	defer c.stateMu.RUnlock()
 	return c.Connecting
+}
+
+func (c *WsConn) WaitUntilConnected(ctx context.Context) error {
+	if c == nil {
+		return errConnClosed
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if c.IsConnected() {
+		return nil
+	}
+
+	ticker := time.NewTicker(20 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		if c.IsConnected() {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-c.closeCh:
+			return errConnClosed
+		case <-ticker.C:
+		}
+	}
 }
 
 func (c *WsConn) startReconnecting() bool {
@@ -550,33 +579,44 @@ func (c *WsConn) recreateWsConn() {
 	c.startLoop(c.messageReceiveHandler)
 }
 
-func createWsConn(ctx context.Context) *WsConn {
-	proxyUrl := util.GetProxy()
-	//fmt.Println("正在连接 WS")
-	// 设置终端中断通道
+func initWsConnBase(ctx context.Context) (context.Context, chan os.Signal, string, string, bool) {
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
+
 	ctx = normalizeContext(ctx)
 	host, port = util.GetHostAndPort()
-	// 如果 host 是一个 IP 使用默认域名
+	directIP := false
 	if valid := net.ParseIP(host); valid != nil {
+		directIP = true
 		fastIp = host
 		host = "api.nxtrace.org"
-	} else {
+	}
+
+	return ctx, interrupt, host, port, directIP
+}
+
+func newReconnectableWsConn(ctx context.Context, interrupt chan os.Signal) *WsConn {
+	ws := newWsConn(nil, interrupt)
+	ws.baseCtx = ctx
+	ws.setDoneChan(make(chan struct{}))
+	ws.setConnectionState(false, false)
+	ws.startLoop(ws.keepAlive)
+	ws.startLoop(ws.messageSendHandler)
+	return ws
+}
+
+func createWsConn(ctx context.Context) *WsConn {
+	proxyUrl := util.GetProxy()
+	ctx, interrupt, targetHost, targetPort, directIP := initWsConnBase(ctx)
+	if !directIP {
 		// 默认配置完成，开始寻找最优 IP
-		refreshedFastIP, err := wsGetFastIPFn(ctx, host, port, true)
+		refreshedFastIP, err := wsGetFastIPFn(ctx, targetHost, targetPort, true)
 		if err != nil {
 			if util.EnvDevMode {
 				panic(err)
 			}
 			log.Printf("fast ip probe failed: %v", err)
-			ws := newWsConn(nil, interrupt)
-			ws.baseCtx = ctx
-			ws.setDoneChan(make(chan struct{}))
-			ws.setConnectionState(false, false)
-			ws.startLoop(ws.keepAlive)
-			ws.startLoop(ws.messageSendHandler)
-			return ws
+			return newReconnectableWsConn(ctx, interrupt)
 		}
 		fastIp = refreshedFastIP
 	}
@@ -584,40 +624,35 @@ func createWsConn(ctx context.Context) *WsConn {
 	err := error(nil)
 	if envToken == "" {
 		if util.GetPowProvider() == "" {
-			jwtToken, err = wsGetTokenFn(ctx, fastIp, host, port)
+			jwtToken, err = wsGetTokenFn(ctx, fastIp, targetHost, targetPort)
 		} else {
-			jwtToken, err = wsGetTokenFn(ctx, util.GetPowProvider(), util.GetPowProvider(), port)
+			jwtToken, err = wsGetTokenFn(ctx, util.GetPowProvider(), util.GetPowProvider(), targetPort)
 		}
 		if err != nil {
 			if util.EnvDevMode {
 				panic(err)
 			}
 			log.Printf("pow token fetch failed: %v", err)
-			ws := newWsConn(nil, interrupt)
-			ws.setDoneChan(make(chan struct{}))
-			ws.setConnectionState(false, false)
-			ws.startLoop(ws.keepAlive)
-			ws.startLoop(ws.messageSendHandler)
-			return ws
+			return newReconnectableWsConn(ctx, interrupt)
 		}
 		ua = []string{util.UserAgent}
 	}
 	cacheToken = jwtToken
 	cacheTokenFailedTimes = 0
 	requestHeader := http.Header{
-		"Host":          []string{host},
+		"Host":          []string{targetHost},
 		"User-Agent":    ua,
 		"Authorization": []string{"Bearer " + jwtToken},
 	}
 	dialer := *websocket.DefaultDialer // 按值拷贝，变成独立实例
 	// 现在 dialer 是一个新的 Dialer（值），内部字段与 DefaultDialer 相同
 	dialer.TLSClientConfig = &tls.Config{
-		ServerName: host,
+		ServerName: targetHost,
 	}
 	if proxyUrl != nil {
 		dialer.Proxy = http.ProxyURL(proxyUrl)
 	}
-	u := url.URL{Scheme: "wss", Host: formatHostPort(fastIp, port), Path: "/v3/ipGeoWs"}
+	u := url.URL{Scheme: "wss", Host: formatHostPort(fastIp, targetPort), Path: "/v3/ipGeoWs"}
 	// log.Printf("connecting to %s", u.String())
 
 	dialCtx, cancel := deriveOperationContext(ctx, nil, wsClientDialTimeout)
@@ -646,11 +681,15 @@ func createWsConn(ctx context.Context) *WsConn {
 	return ws
 }
 
-func NewWithContext(ctx context.Context) *WsConn {
-	wsconnNewMu.Lock()
-	defer wsconnNewMu.Unlock()
+func createWsConnAsync(ctx context.Context) *WsConn {
+	ctx, interrupt, _, _, directIP := initWsConnBase(ctx)
+	if !directIP {
+		fastIp = ""
+	}
+	return newReconnectableWsConn(ctx, interrupt)
+}
 
-	newConn := createWsConnFn(ctx)
+func replaceGlobalWsConn(newConn *WsConn, ctx context.Context) *WsConn {
 	if newConn != nil {
 		newConn.baseCtx = normalizeContext(ctx)
 	}
@@ -666,8 +705,26 @@ func NewWithContext(ctx context.Context) *WsConn {
 	return newConn
 }
 
+func NewWithContext(ctx context.Context) *WsConn {
+	wsconnNewMu.Lock()
+	defer wsconnNewMu.Unlock()
+
+	newConn := createWsConnFn(ctx)
+	return replaceGlobalWsConn(newConn, ctx)
+}
+
+func NewWithContextAsync(ctx context.Context) *WsConn {
+	wsconnNewMu.Lock()
+	defer wsconnNewMu.Unlock()
+	return replaceGlobalWsConn(createWsConnAsync(ctx), ctx)
+}
+
 func New() *WsConn {
 	return NewWithContext(context.Background())
+}
+
+func NewAsync() *WsConn {
+	return NewWithContextAsync(context.Background())
 }
 
 func GetWsConn() *WsConn {
