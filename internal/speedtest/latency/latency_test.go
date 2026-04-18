@@ -29,13 +29,29 @@ func TestMeasureIdleSkipsErrors(t *testing.T) {
 }
 
 func TestStartLoadedCollectsSamplesUntilStopped(t *testing.T) {
+	sampled := make(chan struct{}, 1)
 	p := StartLoaded(context.Background(), func(ctx context.Context) (float64, error) {
 		time.Sleep(5 * time.Millisecond)
+		select {
+		case sampled <- struct{}{}:
+		default:
+		}
 		return 1, nil
 	})
-	time.Sleep(20 * time.Millisecond)
+	select {
+	case <-sampled:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for loaded latency sample")
+	}
 	stats := p.Stop()
 	if stats.N == 0 {
 		t.Fatal("stats.N = 0, want > 0")
+	}
+}
+
+func TestComputeJitterUsesSampleOrder(t *testing.T) {
+	stats := Compute([]float64{10, 30, 20})
+	if stats.Jitter != 15 {
+		t.Fatalf("stats.Jitter = %v, want 15", stats.Jitter)
 	}
 }

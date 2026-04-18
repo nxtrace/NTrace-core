@@ -114,8 +114,9 @@ func normalizeASN(asn string) string {
 	if asn == "" {
 		return ""
 	}
-	if strings.HasPrefix(strings.ToUpper(asn), "AS") {
-		return asn
+	upper := strings.ToUpper(asn)
+	if strings.HasPrefix(upper, "AS") {
+		asn = strings.TrimSpace(asn[2:])
 	}
 	return "AS" + asn
 }

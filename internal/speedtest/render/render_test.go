@@ -30,3 +30,9 @@ func TestTTYRendererHonorsNoColor(t *testing.T) {
 		t.Fatalf("TTY no-color output should not contain ANSI sequences:\n%s", out)
 	}
 }
+
+func TestNewBusWithNilRendererReturnsNil(t *testing.T) {
+	if bus := NewBus(nil); bus != nil {
+		t.Fatalf("NewBus(nil) = %#v, want nil", bus)
+	}
+}

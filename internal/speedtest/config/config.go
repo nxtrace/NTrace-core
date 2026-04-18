@@ -215,7 +215,7 @@ func ParseSize(s string) (int64, error) {
 	if unit == "" {
 		return int64(num), nil
 	}
-	mul := int64(1)
+	var mul int64
 	switch unit {
 	case "k", "kb":
 		mul = 1000
@@ -254,11 +254,15 @@ func HumanBytes(b int64) string {
 
 func stripSpeedFlag(args []string) []string {
 	out := make([]string, 0, len(args))
-	for _, arg := range args {
-		if arg == "--speed" {
+	for i, arg := range args {
+		if arg == "--speed" || strings.HasPrefix(arg, "--speed=") {
 			continue
 		}
 		out = append(out, arg)
+		if arg == "--" {
+			out = append(out, args[i+1:]...)
+			break
+		}
 	}
 	return out
 }

@@ -74,7 +74,7 @@ func TestCloudflareParseMetadataPrefersHeadersAndFallsBackToBody(t *testing.T) {
 }
 
 func TestCloudflareHostUsesBaseURL(t *testing.T) {
-	if host := New("x").Host(); host == "" || !strings.Contains(DefaultBaseURL, host) {
-		t.Fatalf("Host() = %q, want host parsed from %q", host, DefaultBaseURL)
+	if host := New("x").Host(); host == "" || !strings.Contains(defaultBaseURL, host) {
+		t.Fatalf("Host() = %q, want host parsed from %q", host, defaultBaseURL)
 	}
 }

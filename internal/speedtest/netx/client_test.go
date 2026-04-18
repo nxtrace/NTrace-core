@@ -10,8 +10,6 @@ import (
 	"time"
 )
 
-type stubConn struct{ net.Conn }
-
 func TestResolveAllIPsUsesInjectedResolver(t *testing.T) {
 	prev := resolveAllIPsFn
 	resolveAllIPsFn = func(ctx context.Context, host, dotServer string) ([]net.IP, error) {
@@ -50,17 +48,17 @@ func TestNewClientPinsDialTarget(t *testing.T) {
 	dialContextFn = func(d *net.Dialer, ctx context.Context, network, addr string) (net.Conn, error) {
 		gotAddr = addr
 		server, client := net.Pipe()
-		go server.Close()
+		_ = server.Close()
 		return client, nil
 	}
 
 	client := NewClient(Options{
-		PinHost: "example.com",
+		PinHost: "Example.COM.",
 		PinIP:   "203.0.113.9",
 		Timeout: time.Second,
 	})
 	tr := client.Transport.(*http.Transport)
-	conn, err := tr.DialContext(context.Background(), "tcp", "example.com:443")
+	conn, err := tr.DialContext(context.Background(), "tcp", "example.com.:443")
 	if err != nil {
 		t.Fatalf("DialContext() error = %v", err)
 	}

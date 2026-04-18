@@ -156,14 +156,6 @@ func Run(ctx context.Context, cfg *speedconfig.Config, bus *render.Bus, isTTY bo
 			bus.Info(fmt.Sprintf(speedtest.Text(cfg.Language, "Threads: %d", "线程: %d"), threads))
 			bus.Info(fmt.Sprintf(speedtest.Text(cfg.Language, "Limit: %s / %dms per worker", "上限: %s / 每线程 %dms"), cfg.Max, cfg.TimeoutMs))
 		}
-		loadedProbe := latency.StartLoaded(ctx, func(ctx context.Context) (float64, error) {
-			spec, err := p.LoadedLatencyRequest(ctx, string(dir))
-			if err != nil {
-				return -1, err
-			}
-			ms, _, err := performRequest(ctx, client, spec, p)
-			return ms, err
-		})
 
 		var spec provider.RequestSpec
 		var err error
@@ -187,12 +179,21 @@ func Run(ctx context.Context, cfg *speedconfig.Config, bus *render.Bus, isTTY bo
 			return
 		}
 
+		loadedProbe := latency.StartLoaded(ctx, func(ctx context.Context) (float64, error) {
+			spec, err := p.LoadedLatencyRequest(ctx, string(dir))
+			if err != nil {
+				return -1, err
+			}
+			ms, _, err := performRequest(ctx, client, spec, p)
+			return ms, err
+		})
+
 		xfer := transfer.Run(ctx, client, spec, dir, threads, time.Duration(cfg.TimeoutMs)*time.Millisecond,
 			func(dir transfer.Direction, totalBytes int64, elapsed time.Duration, mbps float64) {
 				if bus == nil {
 					return
 				}
-				bus.Progress(speedtest.Text(cfg.Language, strings.Title(string(dir)), mapDirectionZH(dir)),
+				bus.Progress(speedtest.Text(cfg.Language, mapDirectionEN(dir), mapDirectionZH(dir)),
 					fmt.Sprintf("%.1f Mbps  %s  %.1fs", mbps, speedconfig.HumanBytes(totalBytes), elapsed.Seconds()))
 			},
 		)
@@ -416,10 +417,15 @@ func performRequest(ctx context.Context, client *http.Client, spec provider.Requ
 	if err != nil {
 		return 0, nil, err
 	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	if resp.StatusCode >= http.StatusBadRequest {
 		return 0, nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, nil, fmt.Errorf("read response body: %w", err)
 	}
 	meta := p.ParseMetadata(resp, body)
 	return float64(time.Since(start).Nanoseconds()) / float64(time.Millisecond), meta, nil
@@ -671,6 +677,13 @@ func mapDirectionZH(dir transfer.Direction) string {
 	return "下载"
 }
 
+func mapDirectionEN(dir transfer.Direction) string {
+	if dir == transfer.Upload {
+		return "Upload"
+	}
+	return "Download"
+}
+
 func ptr(v float64) *float64 { return &v }
 
 func value(v *float64) float64 {
@@ -688,7 +701,7 @@ func fallback(v string) string {
 }
 
 func openPromptInput() (*os.File, bool, error) {
-	for _, path := range []string{"/dev/tty", "CONIN$"} {
+	for _, path := range []string{"/dev/tty", "CONIN$", "/dev/stdin"} {
 		file, err := os.Open(path)
 		if err == nil {
 			return file, true, nil

@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -20,8 +21,6 @@ type Options struct {
 	Timeout time.Duration
 	LocalIP net.IP
 }
-
-type dialContextFuncType func(ctx context.Context, network, addr string) (net.Conn, error)
 
 var (
 	resolveAllIPsFn = resolveAllIPs
@@ -95,7 +94,7 @@ func NewClient(opts Options) *http.Client {
 		targetAddr := addr
 		if opts.PinHost != "" && opts.PinIP != "" {
 			host, port, err := net.SplitHostPort(addr)
-			if err == nil && host == opts.PinHost {
+			if err == nil && normalizeHost(host) == normalizeHost(opts.PinHost) {
 				targetAddr = net.JoinHostPort(opts.PinIP, port)
 			}
 		}
@@ -108,4 +107,10 @@ func NewClient(opts Options) *http.Client {
 		Timeout:   opts.Timeout,
 		Transport: transport,
 	}
+}
+
+func normalizeHost(host string) string {
+	host = strings.TrimSpace(host)
+	host = strings.TrimSuffix(host, ".")
+	return strings.ToLower(host)
 }

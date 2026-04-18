@@ -46,7 +46,10 @@ func maybeRunSpeedModeWithAvailability(enabled bool, rawArgs []string, stdout, s
 
 func containsSpeedFlag(args []string) bool {
 	for _, arg := range args {
-		if arg == "--speed" {
+		if arg == "--" {
+			return false
+		}
+		if arg == "--speed" || strings.HasPrefix(arg, "--speed=") {
 			return true
 		}
 	}
@@ -89,8 +92,4 @@ func runSpeedMode(rawArgs []string, stdout, stderr io.Writer) int {
 		}
 	}
 	return res.ExitCode
-}
-
-func speedFlagMentionedInUsage(usage string) bool {
-	return strings.Contains(usage, "--speed")
 }

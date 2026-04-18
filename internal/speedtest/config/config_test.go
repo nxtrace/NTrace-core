@@ -93,6 +93,16 @@ func TestLoadStripsSpeedFlagAndParsesArgs(t *testing.T) {
 	}
 }
 
+func TestLoadStripsAssignedSpeedFlag(t *testing.T) {
+	cfg, err := Load("--speed=true", "--threads", "2")
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Threads != 2 {
+		t.Fatalf("Threads = %d, want 2", cfg.Threads)
+	}
+}
+
 func TestLoadRejectsUnexpectedArgs(t *testing.T) {
 	_, err := Load("--speed", "1.1.1.1")
 	if err == nil || !strings.Contains(err.Error(), "unexpected argument") {

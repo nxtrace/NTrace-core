@@ -688,7 +688,7 @@ NextTrace 当前会读取下列环境变量。对于布尔开关，只识别 `1`
 
 ```shell
 Usage: nexttrace [-h|--help] [--init] [-4|--ipv4] [-6|--ipv6] [-T|--tcp]
-                 [-U|--udp] [-F|--fast-trace] [-p|--port <integer>]
+                 [-U|--udp] [--speed] [-F|--fast-trace] [-p|--port <integer>]
                  [--icmp-mode <integer>] [-q|--queries <integer>]
                  [--max-attempts <integer>] [--parallel-requests <integer>]
                  [-m|--max-hops <integer>] [-d|--data-provider
@@ -712,6 +712,8 @@ Arguments:
   -h  --help                         Print help information
       --init                         Windows ONLY: Extract WinDivert runtime to
                                      executable directory
+      --speed                        Run CDN speed test mode. See `nexttrace
+                                     --speed --help` for details
   -4  --ipv4                         Use IPv4 only
   -6  --ipv6                         Use IPv6 only
   -T  --tcp                          Use TCP SYN for tracerouting (default

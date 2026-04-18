@@ -98,7 +98,7 @@ func TestRunSpeedModeAppleJSON(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	restoreApple := overrideAppleBaseForCmdTest(t, srv.URL)
+	restoreApple := apple.SetBaseForTest(srv.URL)
 	defer restoreApple()
 	restoreRoots := netx.SetExtraRootCAsForTest(srv.Client().Transport.(*http.Transport).TLSClientConfig.RootCAs)
 	defer restoreRoots()
@@ -134,7 +134,7 @@ func TestRunSpeedModeCloudflareJSON(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	restoreCF := overrideCloudflareBaseForCmdTest(t, srv.URL)
+	restoreCF := cloudflare.SetBaseForTest(srv.URL)
 	defer restoreCF()
 	restoreRoots := netx.SetExtraRootCAsForTest(srv.Client().Transport.(*http.Transport).TLSClientConfig.RootCAs)
 	defer restoreRoots()
@@ -145,24 +145,6 @@ func TestRunSpeedModeCloudflareJSON(t *testing.T) {
 		t.Fatalf("runSpeedMode(cloudflare) rc = %d, stderr=%s", rc, stderr.String())
 	}
 	assertPureJSONSpeedResult(t, stdout.Bytes(), "cloudflare")
-}
-
-func overrideAppleBaseForCmdTest(t *testing.T, base string) func() {
-	t.Helper()
-	prevDown, prevUp, prevLatency := apple.DefaultDownloadURL, apple.DefaultUploadURL, apple.DefaultLatencyURL
-	apple.DefaultDownloadURL = base + "/api/v1/gm/large"
-	apple.DefaultUploadURL = base + "/api/v1/gm/slurp"
-	apple.DefaultLatencyURL = base + "/api/v1/gm/small"
-	return func() {
-		apple.DefaultDownloadURL, apple.DefaultUploadURL, apple.DefaultLatencyURL = prevDown, prevUp, prevLatency
-	}
-}
-
-func overrideCloudflareBaseForCmdTest(t *testing.T, base string) func() {
-	t.Helper()
-	prev := cloudflare.DefaultBaseURL
-	cloudflare.DefaultBaseURL = base
-	return func() { cloudflare.DefaultBaseURL = prev }
 }
 
 func assertPureJSONSpeedResult(t *testing.T, data []byte, providerName string) {
@@ -182,10 +164,11 @@ func assertPureJSONSpeedResult(t *testing.T, data []byte, providerName string) {
 	}
 }
 
-func TestRunSpeedModeRespectsContextlessExecution(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-	rc := runSpeedMode([]string{"--speed", "--help"}, &stdout, &stderr)
-	if rc != 0 {
-		t.Fatalf("rc = %d, want 0", rc)
+func TestContainsSpeedFlagSupportsAssignedFormAndRespectsTerminator(t *testing.T) {
+	if !containsSpeedFlag([]string{"--speed=true"}) {
+		t.Fatal("containsSpeedFlag(--speed=true) = false, want true")
+	}
+	if containsSpeedFlag([]string{"--", "--speed"}) {
+		t.Fatal("containsSpeedFlag should ignore --speed after terminator")
 	}
 }

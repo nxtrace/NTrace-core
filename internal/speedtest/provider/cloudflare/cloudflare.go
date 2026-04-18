@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/nxtrace/NTrace-core/internal/speedtest/provider"
@@ -14,7 +15,14 @@ import (
 
 const DefaultUserAgent = "NextTrace-Speed/1"
 
-var DefaultBaseURL = "https://speed.cloudflare.com"
+const defaultBaseURL = "https://speed.cloudflare.com"
+
+var cloudflareBaseURL = struct {
+	mu   sync.RWMutex
+	base string
+}{
+	base: defaultBaseURL,
+}
 
 type Provider struct {
 	measID string
@@ -29,7 +37,7 @@ func (p *Provider) Name() string {
 }
 
 func (p *Provider) Host() string {
-	u, err := url.Parse(DefaultBaseURL)
+	u, err := url.Parse(currentBaseURL())
 	if err != nil {
 		return ""
 	}
@@ -70,14 +78,15 @@ func (p *Provider) DownloadRequest(ctx context.Context, maxBytes int64) (provide
 		return provider.RequestSpec{}, err
 	}
 	return provider.RequestSpec{
-		Method:  http.MethodGet,
-		URL:     endpoint,
-		Headers: defaultHeaders(),
+		Method:        http.MethodGet,
+		URL:           endpoint,
+		Headers:       defaultHeaders(),
+		ResponseLimit: maxBytes,
 	}, nil
 }
 
 func (p *Provider) UploadRequest(ctx context.Context, maxBytes int64) (provider.RequestSpec, error) {
-	u, err := url.Parse(DefaultBaseURL)
+	u, err := url.Parse(currentBaseURL())
 	if err != nil {
 		return provider.RequestSpec{}, err
 	}
@@ -162,7 +171,7 @@ func (p *Provider) ParseMetadata(resp *http.Response, body []byte) map[string]an
 }
 
 func (p *Provider) buildDownURL(bytes int64, phase string) (string, error) {
-	u, err := url.Parse(DefaultBaseURL)
+	u, err := url.Parse(currentBaseURL())
 	if err != nil {
 		return "", err
 	}
@@ -195,4 +204,23 @@ func defaultHeaders() map[string]string {
 
 func NewMeasurementID() string {
 	return strconv.FormatInt(time.Now().UnixNano(), 10)
+}
+
+func SetBaseForTest(base string) func() {
+	base = strings.TrimRight(strings.TrimSpace(base), "/")
+	prev := currentBaseURL()
+	cloudflareBaseURL.mu.Lock()
+	cloudflareBaseURL.base = base
+	cloudflareBaseURL.mu.Unlock()
+	return func() {
+		cloudflareBaseURL.mu.Lock()
+		cloudflareBaseURL.base = prev
+		cloudflareBaseURL.mu.Unlock()
+	}
+}
+
+func currentBaseURL() string {
+	cloudflareBaseURL.mu.RLock()
+	defer cloudflareBaseURL.mu.RUnlock()
+	return cloudflareBaseURL.base
 }

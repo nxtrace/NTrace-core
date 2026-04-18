@@ -51,3 +51,45 @@ func TestLookupIPGeoRejectsNonIPTargets(t *testing.T) {
 		t.Fatal("LookupIPGeo(non-ip) error = nil, want error")
 	}
 }
+
+func TestLookupIPGeoHonorsContextCancellationDuringRetry(t *testing.T) {
+	ClearCaches()
+	t.Cleanup(ClearCaches)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	sourceEntered := make(chan struct{}, 1)
+	source := func(ip string, timeout time.Duration, lang string, maptrace bool) (*ipgeo.IPGeoData, error) {
+		select {
+		case sourceEntered <- struct{}{}:
+		default:
+		}
+		time.Sleep(200 * time.Millisecond)
+		return nil, context.DeadlineExceeded
+	}
+
+	done := make(chan error, 1)
+	start := time.Now()
+	go func() {
+		_, err := LookupIPGeo(ctx, source, "en", false, 3, "8.8.8.8")
+		done <- err
+	}()
+
+	select {
+	case <-sourceEntered:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for geo lookup attempt to start")
+	}
+	cancel()
+
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("LookupIPGeo() error = nil, want cancellation")
+		}
+		if time.Since(start) >= 150*time.Millisecond {
+			t.Fatalf("LookupIPGeo() returned too slowly after cancellation: %v", time.Since(start))
+		}
+	case <-time.After(time.Second):
+		t.Fatal("LookupIPGeo() did not return after cancellation")
+	}
+}

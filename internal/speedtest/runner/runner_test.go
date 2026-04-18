@@ -47,7 +47,7 @@ func TestRunAppleWithEndpoint(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	restoreURLs := overrideAppleURLsForTest(t, srv.URL)
+	restoreURLs := apple.SetBaseForTest(srv.URL)
 	defer restoreURLs()
 	restoreRoots := netx.SetExtraRootCAsForTest(srv.Client().Transport.(*http.Transport).TLSClientConfig.RootCAs)
 	defer restoreRoots()
@@ -106,7 +106,7 @@ func TestRunCloudflareDiscoveryAndMetadata(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	restoreBase := overrideCloudflareBaseURLForTest(t, srv.URL)
+	restoreBase := cloudflare.SetBaseForTest(srv.URL)
 	defer restoreBase()
 	restoreRoots := netx.SetExtraRootCAsForTest(srv.Client().Transport.(*http.Transport).TLSClientConfig.RootCAs)
 	defer restoreRoots()
@@ -146,24 +146,6 @@ func (zeroReader) Read(p []byte) (int, error) {
 		p[i] = 0
 	}
 	return len(p), nil
-}
-
-func overrideAppleURLsForTest(t *testing.T, base string) func() {
-	t.Helper()
-	prevDown, prevUp, prevLatency := apple.DefaultDownloadURL, apple.DefaultUploadURL, apple.DefaultLatencyURL
-	apple.DefaultDownloadURL = base + "/api/v1/gm/large"
-	apple.DefaultUploadURL = base + "/api/v1/gm/slurp"
-	apple.DefaultLatencyURL = base + "/api/v1/gm/small"
-	return func() {
-		apple.DefaultDownloadURL, apple.DefaultUploadURL, apple.DefaultLatencyURL = prevDown, prevUp, prevLatency
-	}
-}
-
-func overrideCloudflareBaseURLForTest(t *testing.T, base string) func() {
-	t.Helper()
-	prev := cloudflare.DefaultBaseURL
-	cloudflare.DefaultBaseURL = base
-	return func() { cloudflare.DefaultBaseURL = prev }
 }
 
 func overrideMetadataFetchersForTest(t *testing.T) func() {

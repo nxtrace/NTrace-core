@@ -16,16 +16,19 @@ func TestAppleRequestsUseExpectedDefaults(t *testing.T) {
 	if idle.Method != http.MethodGet {
 		t.Fatalf("idle.Method = %q, want GET", idle.Method)
 	}
-	if idle.URL != DefaultLatencyURL {
-		t.Fatalf("idle.URL = %q, want %q", idle.URL, DefaultLatencyURL)
+	if idle.URL != defaultLatencyURL {
+		t.Fatalf("idle.URL = %q, want %q", idle.URL, defaultLatencyURL)
 	}
 
 	down, err := p.DownloadRequest(context.Background(), 123)
 	if err != nil {
 		t.Fatalf("DownloadRequest() error = %v", err)
 	}
-	if down.URL != DefaultDownloadURL {
-		t.Fatalf("down.URL = %q, want %q", down.URL, DefaultDownloadURL)
+	if down.URL != defaultDownloadURL {
+		t.Fatalf("down.URL = %q, want %q", down.URL, defaultDownloadURL)
+	}
+	if down.ResponseLimit != 123 {
+		t.Fatalf("down.ResponseLimit = %d, want 123", down.ResponseLimit)
 	}
 
 	up, err := p.UploadRequest(context.Background(), 123)
@@ -35,8 +38,8 @@ func TestAppleRequestsUseExpectedDefaults(t *testing.T) {
 	if up.Method != http.MethodPut {
 		t.Fatalf("up.Method = %q, want PUT", up.Method)
 	}
-	if up.URL != DefaultUploadURL {
-		t.Fatalf("up.URL = %q, want %q", up.URL, DefaultUploadURL)
+	if up.URL != defaultUploadURL {
+		t.Fatalf("up.URL = %q, want %q", up.URL, defaultUploadURL)
 	}
 	if up.Headers["Upload-Draft-Interop-Version"] != "6" {
 		t.Fatalf("upload header missing Upload-Draft-Interop-Version: %#v", up.Headers)
@@ -59,7 +62,7 @@ func TestAppleParseMetadata(t *testing.T) {
 }
 
 func TestAppleHostUsesLatencyEndpoint(t *testing.T) {
-	if host := New().Host(); host == "" || !strings.Contains(DefaultLatencyURL, host) {
-		t.Fatalf("Host() = %q, want host parsed from %q", host, DefaultLatencyURL)
+	if host := New().Host(); host == "" || !strings.Contains(defaultDownloadURL, host) {
+		t.Fatalf("Host() = %q, want host parsed from %q", host, defaultDownloadURL)
 	}
 }

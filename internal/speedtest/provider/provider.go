@@ -17,6 +17,7 @@ type RequestSpec struct {
 	URL           string
 	Headers       map[string]string
 	ContentLength int64
+	ResponseLimit int64
 	BodyFactory   func() io.Reader
 }
 

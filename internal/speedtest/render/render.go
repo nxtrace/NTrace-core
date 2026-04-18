@@ -42,11 +42,10 @@ type Bus struct {
 }
 
 func NewBus(r Renderer) *Bus {
-	b := &Bus{ch: make(chan Event, 256)}
 	if r == nil {
-		close(b.ch)
-		return b
+		return nil
 	}
+	b := &Bus{ch: make(chan Event, 256)}
 	b.wg.Add(1)
 	go func() {
 		defer b.wg.Done()
@@ -138,35 +137,35 @@ func (t *TTYRenderer) Render(ev Event) {
 	defer t.mu.Unlock()
 
 	if t.lastProg != "" && ev.Kind != KindProgress {
-		fmt.Fprintf(t.w, "\r%s\r", strings.Repeat(" ", len(t.lastProg)+2))
+		writef(t.w, "\r%s\r", strings.Repeat(" ", len(t.lastProg)+2))
 		t.lastProg = ""
 	}
 
 	switch ev.Kind {
 	case KindBanner:
-		fmt.Fprintf(t.w, "\n  %s%s%s%s\n", t.style(cCyan, cBold), ev.Value, t.style(cReset), "")
+		writef(t.w, "\n  %s%s%s%s\n", t.style(cCyan, cBold), ev.Value, t.style(cReset), "")
 	case KindHeader:
-		fmt.Fprintf(t.w, "\n%s%s  ▸ %s%s\n", t.style(cCyan, cBold), "", ev.Value, t.style(cReset))
+		writef(t.w, "\n%s%s  ▸ %s%s\n", t.style(cCyan, cBold), "", ev.Value, t.style(cReset))
 	case KindInfo:
-		fmt.Fprintf(t.w, "  %s%s[+]%s %s\n", t.style(cGreen, cBold), "", t.style(cReset), ev.Value)
+		writef(t.w, "  %s%s[+]%s %s\n", t.style(cGreen, cBold), "", t.style(cReset), ev.Value)
 	case KindWarn:
-		fmt.Fprintf(t.w, "  %s%s[!]%s %s\n", t.style(cYellow, cBold), "", t.style(cReset), ev.Value)
+		writef(t.w, "  %s%s[!]%s %s\n", t.style(cYellow, cBold), "", t.style(cReset), ev.Value)
 	case KindResult:
-		fmt.Fprintf(t.w, "  %s%s    ➜  %s%s\n", t.style(cGreen, cBold), "", ev.Value, t.style(cReset))
+		writef(t.w, "  %s%s    ➜  %s%s\n", t.style(cGreen, cBold), "", ev.Value, t.style(cReset))
 	case KindKV:
-		fmt.Fprintf(t.w, "  %s%s%-18s%s %s\n", t.style(cDim, cBold), "", ev.Label+":", t.style(cReset), ev.Value)
+		writef(t.w, "  %s%s%-18s%s %s\n", t.style(cDim, cBold), "", ev.Label+":", t.style(cReset), ev.Value)
 	case KindLine:
 		if t.noColor {
-			fmt.Fprintln(t.w, "  --------------------------------------------------------")
+			writeln(t.w, "  --------------------------------------------------------")
 		} else {
-			fmt.Fprintf(t.w, "%s\n", t.style(cDim)+strings.Repeat("─", 58)+t.style(cReset))
+			writef(t.w, "%s\n", t.style(cDim)+strings.Repeat("─", 58)+t.style(cReset))
 		}
 	case KindProgress:
 		line := fmt.Sprintf("  [%s] %s", ev.Label, ev.Value)
 		if !t.noColor {
 			line = fmt.Sprintf("  %s[%s]%s %s", t.style(cDim), ev.Label, t.style(cReset), ev.Value)
 		}
-		fmt.Fprintf(t.w, "\r%s", line)
+		writef(t.w, "\r%s", line)
 		t.lastProg = line
 	case KindSync:
 	}
@@ -187,21 +186,29 @@ func (p *PlainRenderer) Render(ev Event) {
 
 	switch ev.Kind {
 	case KindBanner:
-		fmt.Fprintf(p.w, "\n  %s\n", ev.Value)
+		writef(p.w, "\n  %s\n", ev.Value)
 	case KindHeader:
-		fmt.Fprintf(p.w, "\n  > %s\n", ev.Value)
+		writef(p.w, "\n  > %s\n", ev.Value)
 	case KindInfo:
-		fmt.Fprintf(p.w, "  [+] %s\n", ev.Value)
+		writef(p.w, "  [+] %s\n", ev.Value)
 	case KindWarn:
-		fmt.Fprintf(p.w, "  [!] %s\n", ev.Value)
+		writef(p.w, "  [!] %s\n", ev.Value)
 	case KindResult:
-		fmt.Fprintf(p.w, "      -> %s\n", ev.Value)
+		writef(p.w, "      -> %s\n", ev.Value)
 	case KindKV:
-		fmt.Fprintf(p.w, "  %-18s %s\n", ev.Label+":", ev.Value)
+		writef(p.w, "  %-18s %s\n", ev.Label+":", ev.Value)
 	case KindLine:
-		fmt.Fprintln(p.w, "  "+strings.Repeat("-", 56))
+		writeln(p.w, "  "+strings.Repeat("-", 56))
 	case KindProgress:
-		fmt.Fprintf(p.w, "  [%s] %s\n", ev.Label, ev.Value)
+		writef(p.w, "  [%s] %s\n", ev.Label, ev.Value)
 	case KindSync:
 	}
+}
+
+func writef(w io.Writer, format string, args ...any) {
+	_, _ = fmt.Fprintf(w, format, args...)
+}
+
+func writeln(w io.Writer, args ...any) {
+	_, _ = fmt.Fprintln(w, args...)
 }

@@ -40,7 +40,7 @@ func Run(
 	timeout time.Duration,
 	progress ProgressFunc,
 ) Result {
-	var totalBytes int64
+	var totalBytes atomic.Int64
 	var faultCount atomic.Int32
 	var wg sync.WaitGroup
 
@@ -56,7 +56,7 @@ func Run(
 		for {
 			select {
 			case <-ticker.C:
-				cur := atomic.LoadInt64(&totalBytes)
+				cur := totalBytes.Load()
 				elapsed := time.Since(start)
 				if elapsed > 0 && progress != nil {
 					mbps := float64(cur) * 8 / (elapsed.Seconds() * 1_000_000)
@@ -89,7 +89,7 @@ func Run(
 	<-progressDone
 
 	dur := time.Since(start)
-	total := atomic.LoadInt64(&totalBytes)
+	total := totalBytes.Load()
 	secs := dur.Seconds()
 	if secs <= 0 {
 		secs = 1
@@ -107,7 +107,7 @@ func Run(
 	}
 }
 
-func doDownload(ctx context.Context, client *http.Client, spec provider.RequestSpec, timeout time.Duration, shared *int64) (int64, bool) {
+func doDownload(ctx context.Context, client *http.Client, spec provider.RequestSpec, timeout time.Duration, shared *atomic.Int64) (int64, bool) {
 	ctx2, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
@@ -119,33 +119,40 @@ func doDownload(ctx context.Context, client *http.Client, spec provider.RequestS
 	if err != nil {
 		return 0, true
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	if resp.StatusCode >= http.StatusBadRequest {
 		return 0, true
 	}
 	buf := make([]byte, 256*1024)
 	var total int64
-	fault := false
 	for {
-		n, readErr := resp.Body.Read(buf)
+		readBuf := buf
+		if remaining := spec.ResponseLimit - total; spec.ResponseLimit > 0 && remaining <= 0 {
+			break
+		} else if spec.ResponseLimit > 0 && remaining < int64(len(buf)) {
+			readBuf = buf[:int(remaining)]
+		}
+		n, readErr := resp.Body.Read(readBuf)
 		if n > 0 {
 			total += int64(n)
-			atomic.AddInt64(shared, int64(n))
+			shared.Add(int64(n))
 		}
 		if readErr != nil {
-			if !errors.Is(readErr, io.EOF) {
-				fault = true
+			if isExpectedTransferStop(readErr) {
+				return total, false
 			}
-			break
+			return total, true
 		}
 	}
-	return total, fault
+	return total, false
 }
 
 type countingReader struct {
 	r      io.Reader
 	count  atomic.Int64
-	shared *int64
+	shared *atomic.Int64
 }
 
 func (c *countingReader) Read(p []byte) (int, error) {
@@ -153,13 +160,13 @@ func (c *countingReader) Read(p []byte) (int, error) {
 	if n > 0 {
 		c.count.Add(int64(n))
 		if c.shared != nil {
-			atomic.AddInt64(c.shared, int64(n))
+			c.shared.Add(int64(n))
 		}
 	}
 	return n, err
 }
 
-func doUpload(ctx context.Context, client *http.Client, spec provider.RequestSpec, timeout time.Duration, shared *int64) (int64, bool) {
+func doUpload(ctx context.Context, client *http.Client, spec provider.RequestSpec, timeout time.Duration, shared *atomic.Int64) (int64, bool) {
 	ctx2, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
@@ -177,14 +184,17 @@ func doUpload(ctx context.Context, client *http.Client, spec provider.RequestSpe
 	}
 	resp, err := client.Do(req)
 	if err != nil {
+		if isExpectedTransferStop(err) {
+			return cr.count.Load(), false
+		}
 		return cr.count.Load(), true
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	_, _ = io.Copy(io.Discard, resp.Body)
 	if resp.StatusCode >= http.StatusBadRequest {
-		sent := cr.count.Load()
-		atomic.AddInt64(shared, -sent)
-		return 0, true
+		return cr.count.Load(), true
 	}
 	return cr.count.Load(), false
 }
@@ -205,4 +215,11 @@ func newRequest(ctx context.Context, spec provider.RequestSpec) (*http.Request, 
 		req.Header.Set(k, v)
 	}
 	return req, nil
+}
+
+func isExpectedTransferStop(err error) bool {
+	return err == nil ||
+		errors.Is(err, io.EOF) ||
+		errors.Is(err, context.Canceled) ||
+		errors.Is(err, context.DeadlineExceeded)
 }
