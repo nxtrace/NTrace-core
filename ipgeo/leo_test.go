@@ -13,16 +13,20 @@ func TestLeoIPWaitsForConnectionBeforeSending(t *testing.T) {
 	oldGet := getLeoWsConn
 	oldPools := IPPools.pool
 	oldOnce := receiveParseOnce
+	var conn *wshandle.WsConn
 	defer func() {
+		if conn != nil && conn.MsgReceiveCh != nil {
+			close(conn.MsgReceiveCh)
+		}
 		getLeoWsConn = oldGet
 		IPPools.pool = oldPools
 		receiveParseOnce = oldOnce
 	}()
 
 	IPPools.pool = make(map[string]chan IPGeoData)
-	receiveParseOnce = sync.Once{}
+	receiveParseOnce = &sync.Once{}
 
-	conn := &wshandle.WsConn{
+	conn = &wshandle.WsConn{
 		MsgSendCh:    make(chan string, 1),
 		MsgReceiveCh: make(chan string, 1),
 		Interrupt:    make(chan os.Signal, 1),
@@ -74,5 +78,53 @@ func TestLeoIPWaitsForConnectionBeforeSending(t *testing.T) {
 	}
 	if gotGeo == nil || gotGeo.Asnumber != "13335" {
 		t.Fatalf("LeoIP geo = %+v, want ASN 13335", gotGeo)
+	}
+}
+
+func TestLeoIPUsesSingleTimeoutBudget(t *testing.T) {
+	oldGet := getLeoWsConn
+	oldPools := IPPools.pool
+	oldOnce := receiveParseOnce
+	var conn *wshandle.WsConn
+	defer func() {
+		if conn != nil && conn.MsgReceiveCh != nil {
+			close(conn.MsgReceiveCh)
+		}
+		getLeoWsConn = oldGet
+		IPPools.pool = oldPools
+		receiveParseOnce = oldOnce
+	}()
+
+	IPPools.pool = make(map[string]chan IPGeoData)
+	receiveParseOnce = &sync.Once{}
+
+	conn = &wshandle.WsConn{
+		MsgSendCh:    make(chan string, 1),
+		MsgReceiveCh: make(chan string),
+		Interrupt:    make(chan os.Signal, 1),
+	}
+	getLeoWsConn = func() *wshandle.WsConn { return conn }
+
+	start := time.Now()
+	done := make(chan error, 1)
+	go func() {
+		_, err := LeoIP("1.1.1.1", 2*time.Second, "en", false)
+		done <- err
+	}()
+
+	time.Sleep(1500 * time.Millisecond)
+	conn.Connected = true
+
+	select {
+	case err := <-done:
+		if err == nil || err.Error() != "TimeOut" {
+			t.Fatalf("LeoIP error = %v, want TimeOut", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("LeoIP exceeded expected shared timeout budget")
+	}
+
+	if elapsed := time.Since(start); elapsed > 2800*time.Millisecond {
+		t.Fatalf("LeoIP elapsed = %s, want <= 2.8s", elapsed)
 	}
 }

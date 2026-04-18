@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"os"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/nxtrace/NTrace-core/util"
 )
 
 func newStartedTestWsConn() *WsConn {
@@ -348,5 +350,45 @@ func TestRecreateWsConnCloseCancelsFastIP(t *testing.T) {
 	case <-done:
 	case <-time.After(100 * time.Millisecond):
 		t.Fatal("recreateWsConn did not stop promptly after Close")
+	}
+}
+
+func TestCreateWsConnAsyncPreservesDirectIPOnReconnect(t *testing.T) {
+	oldFastIPFn := wsGetFastIPFn
+	oldHost, oldPort, oldFastIP := host, port, fastIp
+	oldEnvHostPort := util.EnvHostPort
+	oldEnvToken := envToken
+	defer func() {
+		wsGetFastIPFn = oldFastIPFn
+		host, port, fastIp = oldHost, oldPort, oldFastIP
+		util.EnvHostPort = oldEnvHostPort
+		envToken = oldEnvToken
+	}()
+
+	var fastIPCalls int32
+	wsGetFastIPFn = func(ctx context.Context, domain string, port string, enableOutput bool) (string, error) {
+		atomic.AddInt32(&fastIPCalls, 1)
+		return "", errors.New("unexpected FastIP refresh")
+	}
+	util.EnvHostPort = "1.1.1.1:443"
+	envToken = "token"
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	conn := createWsConnAsync(ctx)
+	defer conn.Close()
+
+	if !conn.directIP {
+		t.Fatal("async websocket should preserve direct-IP state")
+	}
+
+	conn.recreateWsConn()
+
+	if got := atomic.LoadInt32(&fastIPCalls); got != 0 {
+		t.Fatalf("FastIP refresh calls = %d, want 0 for direct-IP reconnect", got)
+	}
+	if fastIp != "1.1.1.1" {
+		t.Fatalf("fastIp = %q, want direct IP preserved", fastIp)
 	}
 }

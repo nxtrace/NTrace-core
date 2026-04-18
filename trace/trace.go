@@ -599,6 +599,31 @@ func geoTimeoutForAttempt(attempt int) time.Duration {
 	return time.Duration(timeout) * time.Second
 }
 
+type geoLookupAttemptResult struct {
+	value any
+	err   error
+}
+
+func lookupGeoSourceWithContext(ctx context.Context, cacheKey string, fn func() (any, error)) (any, error) {
+	if ctx == nil || ctx.Done() == nil {
+		v, err, _ := ipGeoSF.Do(cacheKey, fn)
+		return v, err
+	}
+
+	resultCh := make(chan geoLookupAttemptResult, 1)
+	go func() {
+		v, err, _ := ipGeoSF.Do(cacheKey, fn)
+		resultCh <- geoLookupAttemptResult{value: v, err: err}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case result := <-resultCh:
+		return result.value, result.err
+	}
+}
+
 func lookupGeoWithRetry(c Config, cacheKey, query string, dn42 bool) (*ipgeo.IPGeoData, error) {
 	if cacheVal, ok := geoCache.Load(cacheKey); ok {
 		if g, ok := cacheVal.(*ipgeo.IPGeoData); ok && g != nil {
@@ -614,13 +639,29 @@ func lookupGeoWithRetry(c Config, cacheKey, query string, dn42 bool) (*ipgeo.IPG
 	}
 
 	var lastErr error
+	ctx := c.Context
 	for attempt := 0; attempt <= geoLookupMaxRetries(c.NumMeasurements); attempt++ {
+		if ctx != nil {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			default:
+			}
+		}
+
 		timeout := geoTimeoutForAttempt(attempt)
-		v, err, _ := ipGeoSF.Do(cacheKey, func() (any, error) {
+		v, err := lookupGeoSourceWithContext(ctx, cacheKey, func() (any, error) {
 			return c.IPGeoSource(query, timeout, c.Lang, c.Maptrace)
 		})
 		if err != nil {
 			lastErr = err
+			if ctx != nil {
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				default:
+				}
+			}
 			continue
 		}
 

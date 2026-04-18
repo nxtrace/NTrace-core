@@ -59,6 +59,7 @@ type WsConn struct {
 	closeCh      chan struct{}   // signals background loops to exit
 	closed       bool
 	baseCtx      context.Context
+	directIP     bool
 }
 
 func (c *WsConn) getConn() *websocket.Conn {
@@ -492,7 +493,7 @@ func (c *WsConn) recreateWsConn() {
 	}
 	c.setConnected(false)
 	// 尝试重新连线
-	if host != "" && net.ParseIP(host) == nil {
+	if !c.directIP && host != "" && net.ParseIP(host) == nil {
 		// 刷新一次最优 IP，防止旧 IP 已失效
 		fastIPCtx, cancelFastIP := deriveOperationContext(c.baseCtx, c.closeCh, 0)
 		refreshedFastIP, err := wsGetFastIPFn(fastIPCtx, host, port, true)
@@ -595,9 +596,10 @@ func initWsConnBase(ctx context.Context) (context.Context, chan os.Signal, strin
 	return ctx, interrupt, host, port, directIP
 }
 
-func newReconnectableWsConn(ctx context.Context, interrupt chan os.Signal) *WsConn {
+func newReconnectableWsConn(ctx context.Context, interrupt chan os.Signal, directIP bool) *WsConn {
 	ws := newWsConn(nil, interrupt)
 	ws.baseCtx = ctx
+	ws.directIP = directIP
 	ws.setDoneChan(make(chan struct{}))
 	ws.setConnectionState(false, false)
 	ws.startLoop(ws.keepAlive)
@@ -616,7 +618,7 @@ func createWsConn(ctx context.Context) *WsConn {
 				panic(err)
 			}
 			log.Printf("fast ip probe failed: %v", err)
-			return newReconnectableWsConn(ctx, interrupt)
+			return newReconnectableWsConn(ctx, interrupt, directIP)
 		}
 		fastIp = refreshedFastIP
 	}
@@ -633,7 +635,7 @@ func createWsConn(ctx context.Context) *WsConn {
 				panic(err)
 			}
 			log.Printf("pow token fetch failed: %v", err)
-			return newReconnectableWsConn(ctx, interrupt)
+			return newReconnectableWsConn(ctx, interrupt, directIP)
 		}
 		ua = []string{util.UserAgent}
 	}
@@ -661,6 +663,7 @@ func createWsConn(ctx context.Context) *WsConn {
 
 	ws := newWsConn(c, interrupt)
 	ws.baseCtx = ctx
+	ws.directIP = directIP
 	ws.setConnectionState(err == nil, false)
 
 	if err != nil {
@@ -686,7 +689,7 @@ func createWsConnAsync(ctx context.Context) *WsConn {
 	if !directIP {
 		fastIp = ""
 	}
-	return newReconnectableWsConn(ctx, interrupt)
+	return newReconnectableWsConn(ctx, interrupt, directIP)
 }
 
 func replaceGlobalWsConn(newConn *WsConn, ctx context.Context) *WsConn {

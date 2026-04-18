@@ -85,12 +85,7 @@ func runMTRTUI(method trace.Method, conf trace.Config, hopIntervalMs int, maxPer
 
 	roundConf := normalizeMTRTraceConfig(conf)
 
-	opts := trace.MTROptions{
-		HopInterval:      time.Duration(hopIntervalMs) * time.Millisecond,
-		MaxPerHop:        maxPerHop,
-		IsResetRequested: ui.ConsumeRestartRequest,
-		AsyncMetadata:    true,
-	}
+	opts := buildMTRInteractiveOptions(ui, hopIntervalMs, maxPerHop)
 
 	// TTY 模式下使用 TUI 渲染器 + 暂停支持，非 TTY 使用简单表格
 	var onSnapshot trace.MTROnSnapshot
@@ -109,6 +104,19 @@ func runMTRTUI(method trace.Method, conf trace.Config, hopIntervalMs int, maxPer
 		// 离开备用屏幕后再打印错误
 		fmt.Println(err)
 	}
+}
+
+func buildMTRInteractiveOptions(ui *mtrUI, hopIntervalMs int, maxPerHop int) trace.MTROptions {
+	opts := trace.MTROptions{
+		HopInterval: time.Duration(hopIntervalMs) * time.Millisecond,
+		MaxPerHop:   maxPerHop,
+	}
+	if ui == nil {
+		return opts
+	}
+	opts.IsResetRequested = ui.ConsumeRestartRequest
+	opts.AsyncMetadata = ui.IsTTY()
+	return opts
 }
 
 // runMTRReport 执行 MTR 非全屏报告模式（对齐 mtr -rzw 风格）。

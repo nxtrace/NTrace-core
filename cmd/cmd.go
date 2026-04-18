@@ -782,10 +782,6 @@ func initLeoWebsocket(ctx context.Context, dataOrigin, powProvider *string, asyn
 	} else {
 		leoWs = wshandle.NewWithContext(ctx)
 	}
-	if leoWs != nil {
-		leoWs.Interrupt = make(chan os.Signal, 1)
-		signal.Notify(leoWs.Interrupt, os.Interrupt)
-	}
 	return leoWs
 }
 

@@ -974,6 +974,45 @@ func TestScheduler_AsyncMetadataIgnoresOldGenerationAfterReset(t *testing.T) {
 	}
 }
 
+func TestScheduler_AsyncMetadataNaturalCompletionUsesBoundedContext(t *testing.T) {
+	prober := &mockTTLProber{
+		probeFn: func(_ context.Context, ttl int) (mtrProbeResult, error) {
+			return mtrProbeResult{
+				TTL:     ttl,
+				Success: true,
+				Addr:    &net.IPAddr{IP: net.ParseIP("4.4.4.4")},
+				RTT:     5 * time.Millisecond,
+			}, nil
+		},
+	}
+
+	start := time.Now()
+	err := runMTRScheduler(context.Background(), prober, NewMTRAggregator(), mtrSchedulerConfig{
+		BeginHop:         1,
+		MaxHops:          1,
+		HopInterval:      time.Millisecond,
+		MaxPerHop:        1,
+		ParallelRequests: 1,
+		ProgressThrottle: time.Millisecond,
+		FillGeo:          true,
+		AsyncMetadata:    true,
+		BaseConfig: Config{
+			IPGeoSource: func(ip string, timeout time.Duration, lang string, maptrace bool) (*ipgeo.IPGeoData, error) {
+				time.Sleep(time.Second)
+				return &ipgeo.IPGeoData{Asnumber: "64514"}, nil
+			},
+			Timeout: 80 * time.Millisecond,
+		},
+	}, nil, nil)
+	if err != nil {
+		t.Fatalf("runMTRScheduler error: %v", err)
+	}
+
+	if elapsed := time.Since(start); elapsed > 400*time.Millisecond {
+		t.Fatalf("runMTRScheduler elapsed = %s, want async metadata completion to stop waiting promptly", elapsed)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // End-to-end: raw record count matches aggregator Snt under error budget
 // ---------------------------------------------------------------------------

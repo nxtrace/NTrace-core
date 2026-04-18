@@ -336,11 +336,17 @@ func (rt *mtrSchedulerRuntime) maybeLaunchMetadataLookup(result mtrProbeResult) 
 
 	gen := rt.generation
 	cfg := rt.cfg.BaseConfig
-	cfg.Context = rt.ctx
+	metadataTimeout := cfg.Timeout
+	if metadataTimeout <= 0 {
+		metadataTimeout = geoTimeoutForAttempt(0)
+	}
+	metadataCtx, cancel := context.WithTimeout(rt.ctx, metadataTimeout)
+	cfg.Context = metadataCtx
 	addr := result.Addr
 	rt.metadataInFlight[ip] = gen
 
 	go func() {
+		defer cancel()
 		patch := lookupMTRMetadata(addr, cfg)
 		select {
 		case rt.metadataCh <- mtrMetadataResult{patch: patch, gen: gen}:

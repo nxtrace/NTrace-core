@@ -113,7 +113,7 @@ func receiveParse() {
 // 当前的实现中，每次调用 receiveParse() 都会锁定 WebSocket 连接
 // 当前为单例模式，只启动一个 receiveParse 协程
 
-var receiveParseOnce sync.Once
+var receiveParseOnce = &sync.Once{}
 
 func LeoIP(ip string, timeout time.Duration, lang string, maptrace bool) (*IPGeoData, error) {
 	// TODO: 根据lang的值请求中文/英文API
@@ -163,7 +163,7 @@ func LeoIP(ip string, timeout time.Duration, lang string, maptrace bool) (*IPGeo
 	select {
 	case res := <-ch:
 		return &res, nil
-	case <-time.After(timeout):
+	case <-waitCtx.Done():
 		return &IPGeoData{}, errors.New("TimeOut")
 	}
 }

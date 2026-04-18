@@ -322,6 +322,18 @@ func TestNormalizeMTRTraceConfig_UsesMTRInternalTTLInterval50(t *testing.T) {
 	}
 }
 
+func TestBuildMTRInteractiveOptions_AsyncMetadataFollowsTTY(t *testing.T) {
+	ttyUI := &mtrUI{isTTY: true}
+	nonTTYUI := &mtrUI{isTTY: false}
+
+	if !buildMTRInteractiveOptions(ttyUI, 1000, 0).AsyncMetadata {
+		t.Fatal("TTY MTR should enable async metadata")
+	}
+	if buildMTRInteractiveOptions(nonTTYUI, 1000, 0).AsyncMetadata {
+		t.Fatal("non-TTY MTR should keep synchronous metadata")
+	}
+}
+
 func TestDefaultConstants_NormalVsMTR(t *testing.T) {
 	if defaultPacketIntervalMs != 50 {
 		t.Fatalf("defaultPacketIntervalMs = %d, want 50", defaultPacketIntervalMs)
