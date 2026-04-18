@@ -328,7 +328,7 @@ func discoverCandidates(ctx context.Context, cfg *speedconfig.Config, p provider
 func buildCandidate(ctx context.Context, cfg *speedconfig.Config, p provider.Provider, host, ip, source string) candidate {
 	cand := candidate{IP: ip, Source: source, Status: "degraded"}
 	if !cfg.NoMetadata {
-		cand.Desc = fetchIPDescFn(ctx, ip, cfg.Language)
+		cand.Desc = fetchIPDescFn(ctx, ip, cfg)
 	}
 	client, err := newPinnedClient(cfg, host, ip, time.Duration(cfg.TimeoutMs)*time.Millisecond)
 	if err != nil {
@@ -442,8 +442,8 @@ func gatherConnectionInfo(ctx context.Context, cfg *speedconfig.Config, host str
 			clientTarget = v
 		}
 	}
-	info.Client = fetchPeerInfoFn(ctx, clientTarget, cfg.Language)
-	info.Server = fetchPeerInfoFn(ctx, selected.IP, cfg.Language)
+	info.Client = fetchPeerInfoFn(ctx, clientTarget, cfg)
+	info.Server = fetchPeerInfoFn(ctx, selected.IP, cfg)
 	if info.Server.Status == "ok" && info.Server.IP == "" {
 		info.Server.IP = selected.IP
 	}

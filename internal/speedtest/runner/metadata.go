@@ -2,119 +2,166 @@ package runner
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/http"
-	"time"
+	"strings"
 
-	"github.com/nxtrace/NTrace-core/internal/speedtest"
+	speedconfig "github.com/nxtrace/NTrace-core/internal/speedtest/config"
 	"github.com/nxtrace/NTrace-core/internal/speedtest/result"
+	"github.com/nxtrace/NTrace-core/ipgeo"
+	"github.com/nxtrace/NTrace-core/printer"
+	"github.com/nxtrace/NTrace-core/trace"
 )
 
-type ipInfo struct {
-	Status     string `json:"status"`
-	Query      string `json:"query"`
-	AS         string `json:"as"`
-	ISP        string `json:"isp"`
-	Org        string `json:"org"`
-	City       string `json:"city"`
-	RegionName string `json:"regionName"`
-	Country    string `json:"country"`
-}
+const (
+	defaultSpeedGeoSourceProvider   = "LeoMoeAPI"
+	defaultSpeedGeoLookupRetryCount = 3
+)
 
 var (
 	fetchIPDescFn   = fetchIPDescription
 	fetchPeerInfoFn = fetchPeerInfo
+	lookupGeoDataFn = lookupGeoData
 )
 
-func fetchIPDescription(ctx context.Context, ip, lang string) string {
-	info, err := lookupIPInfo(ctx, ip)
+func fetchIPDescription(ctx context.Context, ip string, cfg *speedconfig.Config) string {
+	geo, err := lookupGeoDataFn(ctx, ip, cfg)
 	if err != nil {
-		return speedtest.Text(lang, "lookup failed", "查询失败")
+		return localizedText(cfg, "lookup failed", "查询失败")
 	}
-	loc := formatLocation(info.City, info.RegionName, info.Country)
-	if loc == "" {
-		loc = speedtest.Text(lang, "unknown location", "未知位置")
+	desc := formatGeoDescription(ip, geo, cfg.Language)
+	if strings.TrimSpace(desc) == "" {
+		return localizedText(cfg, "unknown location", "未知位置")
 	}
-	asn := info.AS
-	if asn == "" {
-		asn = info.Org
-	}
-	if asn != "" {
-		loc += " (" + asn + ")"
-	}
-	return loc
+	return desc
 }
 
-func fetchPeerInfo(ctx context.Context, target, lang string) result.PeerInfo {
-	info, err := lookupIPInfo(ctx, target)
+func fetchPeerInfo(ctx context.Context, target string, cfg *speedconfig.Config) result.PeerInfo {
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return result.PeerInfo{Status: "unavailable"}
+	}
+
+	geo, err := lookupGeoDataFn(ctx, target, cfg)
 	if err != nil {
 		return result.PeerInfo{Status: "unavailable"}
 	}
-	isp := info.ISP
-	if isp == "" {
-		isp = info.Org
-	}
+
 	peer := result.PeerInfo{
 		Status:   "ok",
-		IP:       info.Query,
-		ISP:      isp,
-		ASN:      info.AS,
-		Location: formatLocation(info.City, info.RegionName, info.Country),
+		IP:       firstNonEmpty(strings.TrimSpace(geo.IP), target),
+		ISP:      ownerOrISP(geo),
+		ASN:      normalizeASN(geo.Asnumber),
+		Location: formatGeoLocation(geo, cfg.Language),
 	}
 	if peer.Location == "" {
-		peer.Location = speedtest.Text(lang, "unknown", "未知")
+		peer.Location = localizedText(cfg, "unknown", "未知")
 	}
 	return peer
 }
 
-func lookupIPInfo(ctx context.Context, target string) (ipInfo, error) {
-	ctx2, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
-	fields := "status,query,as,isp,org,city,regionName,country"
-	url := fmt.Sprintf("http://ip-api.com/json/%s?fields=%s", target, fields)
-	if target == "" {
-		url = fmt.Sprintf("http://ip-api.com/json/?fields=%s", fields)
+func lookupGeoData(ctx context.Context, target string, cfg *speedconfig.Config) (*ipgeo.IPGeoData, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("nil speed config")
 	}
-	req, err := http.NewRequestWithContext(ctx2, http.MethodGet, url, nil)
-	if err != nil {
-		return ipInfo{}, err
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return ipInfo{}, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= http.StatusBadRequest {
-		return ipInfo{}, fmt.Errorf("metadata lookup returned HTTP %d", resp.StatusCode)
-	}
-	var info ipInfo
-	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
-		return ipInfo{}, err
-	}
-	if info.Status != "" && info.Status != "success" {
-		return ipInfo{}, fmt.Errorf("metadata lookup status %q", info.Status)
-	}
-	return info, nil
+	source := ipgeo.GetSourceWithGeoDNS(defaultSpeedGeoSourceProvider, cfg.DotServer)
+	return trace.LookupIPGeo(ctx, source, cfg.Language, false, defaultSpeedGeoLookupRetryCount, target)
 }
 
-func formatLocation(city, region, country string) string {
-	out := ""
-	if city != "" {
-		out = city
+func formatGeoDescription(ip string, geo *ipgeo.IPGeoData, lang string) string {
+	if geo == nil || isEmptyGeo(geo) {
+		return ""
 	}
-	if region != "" && region != city {
-		if out != "" {
-			out += ", "
+	return strings.TrimSpace(printer.FormatIPGeoData(ip, localizedGeoCopy(geo, lang)))
+}
+
+func formatGeoLocation(geo *ipgeo.IPGeoData, lang string) string {
+	if geo == nil {
+		return ""
+	}
+	localized := localizedGeoCopy(geo, lang)
+	parts := make([]string, 0, 3)
+	if localized.City != "" {
+		parts = append(parts, localized.City)
+	}
+	if localized.Prov != "" && localized.Prov != localized.City {
+		parts = append(parts, localized.Prov)
+	}
+	if localized.Country != "" && localized.Country != localized.Prov {
+		parts = append(parts, localized.Country)
+	}
+	return strings.Join(parts, ", ")
+}
+
+func localizedGeoCopy(geo *ipgeo.IPGeoData, lang string) *ipgeo.IPGeoData {
+	if geo == nil {
+		return nil
+	}
+	cp := *geo
+	if strings.EqualFold(lang, "en") {
+		cp.Country = firstNonEmpty(strings.TrimSpace(geo.CountryEn), strings.TrimSpace(geo.Country))
+		cp.Prov = firstNonEmpty(strings.TrimSpace(geo.ProvEn), strings.TrimSpace(geo.Prov))
+		cp.City = firstNonEmpty(strings.TrimSpace(geo.CityEn), strings.TrimSpace(geo.City))
+		return &cp
+	}
+	cp.Country = firstNonEmpty(strings.TrimSpace(geo.Country), strings.TrimSpace(geo.CountryEn))
+	cp.Prov = firstNonEmpty(strings.TrimSpace(geo.Prov), strings.TrimSpace(geo.ProvEn))
+	cp.City = firstNonEmpty(strings.TrimSpace(geo.City), strings.TrimSpace(geo.CityEn))
+	return &cp
+}
+
+func normalizeASN(asn string) string {
+	asn = strings.TrimSpace(asn)
+	if asn == "" {
+		return ""
+	}
+	if strings.HasPrefix(strings.ToUpper(asn), "AS") {
+		return asn
+	}
+	return "AS" + asn
+}
+
+func ownerOrISP(geo *ipgeo.IPGeoData) string {
+	if geo == nil {
+		return ""
+	}
+	if owner := strings.TrimSpace(geo.Owner); owner != "" {
+		return owner
+	}
+	return strings.TrimSpace(geo.Isp)
+}
+
+func isEmptyGeo(geo *ipgeo.IPGeoData) bool {
+	if geo == nil {
+		return true
+	}
+	return strings.TrimSpace(geo.Asnumber) == "" &&
+		strings.TrimSpace(geo.Country) == "" &&
+		strings.TrimSpace(geo.CountryEn) == "" &&
+		strings.TrimSpace(geo.Prov) == "" &&
+		strings.TrimSpace(geo.ProvEn) == "" &&
+		strings.TrimSpace(geo.City) == "" &&
+		strings.TrimSpace(geo.CityEn) == "" &&
+		strings.TrimSpace(geo.District) == "" &&
+		strings.TrimSpace(geo.Owner) == "" &&
+		strings.TrimSpace(geo.Isp) == "" &&
+		strings.TrimSpace(geo.Whois) == ""
+}
+
+func localizedText(cfg *speedconfig.Config, en, zh string) string {
+	if cfg == nil {
+		return en
+	}
+	if strings.EqualFold(cfg.Language, "en") {
+		return en
+	}
+	return zh
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
 		}
-		out += region
 	}
-	if country != "" {
-		if out != "" {
-			out += ", "
-		}
-		out += country
-	}
-	return out
+	return ""
 }

@@ -170,10 +170,10 @@ func overrideMetadataFetchersForTest(t *testing.T) func() {
 	t.Helper()
 	prevDesc := fetchIPDescFn
 	prevPeer := fetchPeerInfoFn
-	fetchIPDescFn = func(ctx context.Context, ip, lang string) string {
+	fetchIPDescFn = func(ctx context.Context, ip string, cfg *speedconfig.Config) string {
 		return "test-desc"
 	}
-	fetchPeerInfoFn = func(ctx context.Context, target, lang string) result.PeerInfo {
+	fetchPeerInfoFn = func(ctx context.Context, target string, cfg *speedconfig.Config) result.PeerInfo {
 		switch target {
 		case "", "198.51.100.10":
 			return result.PeerInfo{Status: "ok", IP: "198.51.100.10", ISP: "TestISP", ASN: "AS64500", Location: "Test City"}
