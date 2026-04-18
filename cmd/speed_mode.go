@@ -30,8 +30,16 @@ func registerSpeedFlagWithAvailability(parser *argparse.Parser, enabled bool) *b
 }
 
 func maybeRunSpeedMode(rawArgs []string, stdout, stderr io.Writer) (bool, int) {
-	if !enableSpeed || !containsSpeedFlag(rawArgs) {
+	return maybeRunSpeedModeWithAvailability(enableSpeed, rawArgs, stdout, stderr)
+}
+
+func maybeRunSpeedModeWithAvailability(enabled bool, rawArgs []string, stdout, stderr io.Writer) (bool, int) {
+	if !containsSpeedFlag(rawArgs) {
 		return false, 0
+	}
+	if !enabled {
+		_, _ = fmt.Fprintf(stderr, "--speed is not available in %s; please use the full nexttrace build\n", appBinName)
+		return true, 1
 	}
 	return true, runSpeedMode(rawArgs, stdout, stderr)
 }

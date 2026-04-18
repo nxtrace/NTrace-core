@@ -54,6 +54,20 @@ func TestRunSpeedModeHelpOutputsDedicatedUsage(t *testing.T) {
 	}
 }
 
+func TestMaybeRunSpeedModeWithAvailabilityDisabledRejectsSpeed(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	handled, rc := maybeRunSpeedModeWithAvailability(false, []string{"--speed"}, &stdout, &stderr)
+	if !handled {
+		t.Fatal("handled = false, want true")
+	}
+	if rc != 1 {
+		t.Fatalf("rc = %d, want 1", rc)
+	}
+	if !strings.Contains(stderr.String(), "--speed is not available") {
+		t.Fatalf("stderr = %q, want unavailable message", stderr.String())
+	}
+}
+
 func TestRunSpeedModeRejectsUnexpectedTarget(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	rc := runSpeedMode([]string{"--speed", "1.1.1.1"}, &stdout, &stderr)
