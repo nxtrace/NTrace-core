@@ -700,26 +700,25 @@ func fallback(v string) string {
 	return v
 }
 
-func openPromptInput() (*os.File, bool, error) {
+func openPromptInput() (*os.File, error) {
 	for _, path := range []string{"/dev/tty", "CONIN$", "/dev/stdin"} {
 		file, err := os.Open(path)
 		if err == nil {
-			return file, true, nil
+			return file, nil
 		}
 	}
-	fi, err := os.Stdin.Stat()
-	if err == nil && fi.Mode()&os.ModeCharDevice != 0 {
-		return os.Stdin, false, nil
-	}
-	return nil, false, fmt.Errorf("interactive input not available")
+	return nil, fmt.Errorf("interactive input not available")
 }
 
 func promptChoice(ctx context.Context, count int, lang string) (int, bool) {
 	fmt.Fprintf(os.Stderr, "  [?] %s", fmt.Sprintf(speedtest.Text(lang, "Select endpoint [1-%d, Enter=1]: ", "选择节点 [1-%d，回车=1]: "), count))
-	tty, shouldClose, err := openPromptInputFn()
+	tty, err := openPromptInputFn()
 	if err != nil {
 		return 0, false
 	}
+	defer func() {
+		_ = tty.Close()
+	}()
 	type readResult struct {
 		line string
 		err  error
@@ -732,14 +731,8 @@ func promptChoice(ctx context.Context, count int, lang string) (int, bool) {
 	}()
 	select {
 	case <-ctx.Done():
-		if shouldClose {
-			tty.Close()
-		}
 		return 0, true
 	case res := <-ch:
-		if shouldClose {
-			tty.Close()
-		}
 		if res.err != nil && res.line == "" {
 			return 0, false
 		}

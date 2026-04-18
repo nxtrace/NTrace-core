@@ -661,6 +661,13 @@ func lookupGeoWithRetry(c Config, cacheKey, query string, dn42 bool) (*ipgeo.IPG
 }
 
 func lookupGeoAttempt(ctx context.Context, cacheKey, query string, timeout time.Duration, c Config) (any, error) {
+	if ctx == nil || ctx.Done() == nil {
+		v, err, _ := ipGeoSF.Do(cacheKey, func() (any, error) {
+			return c.IPGeoSource(query, timeout, c.Lang, c.Maptrace)
+		})
+		return v, err
+	}
+
 	type result struct {
 		value any
 		err   error
