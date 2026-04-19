@@ -42,10 +42,11 @@ type Span struct {
 }
 
 type Annotator struct {
-	cfg        Config
-	cacheMu    sync.RWMutex
-	cache      map[string]string
-	cacheOrder []string
+	cfg       Config
+	cacheMu   sync.RWMutex
+	cache     map[string]string
+	cacheRing []string
+	cacheNext int
 }
 
 func New(cfg Config) *Annotator {
@@ -176,20 +177,21 @@ func (a *Annotator) storeLabel(ip, label string) {
 		a.cache[ip] = label
 		return
 	}
-	if len(a.cacheOrder) >= maxCacheEntries {
-		oldest := a.cacheOrder[0]
+	if len(a.cacheRing) < maxCacheEntries {
+		a.cacheRing = append(a.cacheRing, ip)
+	} else {
+		oldest := a.cacheRing[a.cacheNext]
 		delete(a.cache, oldest)
-		copy(a.cacheOrder, a.cacheOrder[1:])
-		a.cacheOrder = a.cacheOrder[:len(a.cacheOrder)-1]
+		a.cacheRing[a.cacheNext] = ip
+		a.cacheNext = (a.cacheNext + 1) % maxCacheEntries
 	}
 	a.cache[ip] = label
-	a.cacheOrder = append(a.cacheOrder, ip)
 }
 
 func FindIPSpans(line string) []Span {
 	spans := make([]Span, 0, 2)
 	for i := 0; i < len(line); {
-		if !isIPStart(line[i]) {
+		if !isIPStart(line[i]) || !isIPLeftBoundary(line, i) {
 			i++
 			continue
 		}
@@ -218,6 +220,14 @@ func isIPStart(b byte) bool {
 	return isHexByte(b) || b == ':'
 }
 
+func isIPLeftBoundary(s string, start int) bool {
+	if start <= 0 {
+		return true
+	}
+	prev := s[start-1]
+	return !isWordByte(prev)
+}
+
 func scanCandidateEnd(s string, start int) int {
 	for i := start; i < len(s); i++ {
 		switch {
@@ -240,6 +250,13 @@ func isHexByte(b byte) bool {
 	return (b >= '0' && b <= '9') ||
 		(b >= 'a' && b <= 'f') ||
 		(b >= 'A' && b <= 'F')
+}
+
+func isWordByte(b byte) bool {
+	return (b >= '0' && b <= '9') ||
+		(b >= 'a' && b <= 'z') ||
+		(b >= 'A' && b <= 'Z') ||
+		b == '_' || b == '-'
 }
 
 func isZoneByte(b byte) bool {

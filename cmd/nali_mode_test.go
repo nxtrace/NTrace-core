@@ -70,6 +70,7 @@ func TestValidateNaliModeOptions(t *testing.T) {
 		{name: "output", opts: naliModeOptions{output: true}, want: "--nali 不能与 --output 同时使用"},
 		{name: "probe", opts: naliModeOptions{queries: true}, want: "--nali 不能与 --queries 同时使用"},
 		{name: "ttl interval", opts: naliModeOptions{ttlInterval: true}, want: "--nali 不能与 --ttl-time 同时使用"},
+		{name: "source port", opts: naliModeOptions{sourcePort: true}, want: "--nali 不能与 --source-port 同时使用"},
 		{name: "source", opts: naliModeOptions{sourceDevice: true}, want: "--nali 不能与 --dev 同时使用"},
 	}
 
@@ -94,19 +95,33 @@ func TestBuildNaliModeOptionsDetectsExplicitDefaults(t *testing.T) {
 	parser.Int("q", "queries", &argparse.Options{Default: 3})
 	parser.Int("m", "max-hops", &argparse.Options{Default: 30})
 	parser.Int("i", "ttl-time", &argparse.Options{Default: 300})
+	parser.Int("", "source-port", &argparse.Options{Default: 0})
 	parser.Int("", "timeout", &argparse.Options{Default: 1000})
-	if err := parser.Parse([]string{"nexttrace", "-q", "3", "--max-hops", "30", "-i", "300"}); err != nil {
+	if err := parser.Parse([]string{"nexttrace", "-q", "3", "--max-hops", "30", "-i", "300", "--source-port", "0"}); err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
 
 	opts := buildNaliModeOptions(naliModeOptionInputs{
 		parser: parser,
 	})
-	if !opts.queries || !opts.maxHops || !opts.ttlInterval {
+	if !opts.queries || !opts.maxHops || !opts.ttlInterval || !opts.sourcePort {
 		t.Fatalf("explicit probe flags not detected: %+v", opts)
 	}
 	if opts.port || opts.packetSize {
 		t.Fatalf("unexpected explicit flags: %+v", opts)
+	}
+}
+
+func TestNaliModeOptionsAllowDisableMaptraceFlag(t *testing.T) {
+	parser := argparse.NewParser("nexttrace", "")
+	parser.Flag("M", "map", &argparse.Options{})
+	if err := parser.Parse([]string{"nexttrace", "--map"}); err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	opts := buildNaliModeOptions(naliModeOptionInputs{parser: parser})
+	if err := validateNaliModeOptions(opts); err != nil {
+		t.Fatalf("validateNaliModeOptions() error = %v, want nil", err)
 	}
 }
 

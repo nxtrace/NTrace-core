@@ -156,6 +156,21 @@ func TestFindIPSpans(t *testing.T) {
 	}
 }
 
+func TestFindIPSpansRespectsLeftBoundary(t *testing.T) {
+	a := New(Config{
+		Source: func(ip string, timeout time.Duration, lang string, maptrace bool) (*ipgeo.IPGeoData, error) {
+			return &ipgeo.IPGeoData{CountryEn: "ok"}, nil
+		},
+		Lang: "en",
+	})
+
+	got := a.AnnotateLine(context.Background(), "src:2001:db8::1 embeddedx8.8.8.8 dst=8.8.4.4")
+	want := "src:2001:db8::1 [RFC3849] embeddedx8.8.8.8 dst=8.8.4.4 [ok]"
+	if got != want {
+		t.Fatalf("AnnotateLine() = %q, want %q", got, want)
+	}
+}
+
 func TestFormatGeo(t *testing.T) {
 	if got := FormatGeo(&ipgeo.IPGeoData{Whois: "RFC5737"}, "en"); got != "RFC5737" {
 		t.Fatalf("FormatGeo(whois) = %q", got)
@@ -188,8 +203,14 @@ func TestCacheIsBounded(t *testing.T) {
 	if len(a.cache) != maxCacheEntries {
 		t.Fatalf("cache size = %d, want %d", len(a.cache), maxCacheEntries)
 	}
-	if len(a.cacheOrder) != maxCacheEntries {
-		t.Fatalf("cache order size = %d, want %d", len(a.cacheOrder), maxCacheEntries)
+	if len(a.cacheRing) != maxCacheEntries {
+		t.Fatalf("cache ring size = %d, want %d", len(a.cacheRing), maxCacheEntries)
+	}
+	if _, ok := a.cache["8.8.0.0"]; ok {
+		t.Fatal("oldest cache entry was not evicted")
+	}
+	if _, ok := a.cache["8.8.16.9"]; !ok {
+		t.Fatal("newest cache entry missing")
 	}
 }
 

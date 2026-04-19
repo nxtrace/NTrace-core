@@ -38,7 +38,6 @@ type naliModeOptions struct {
 	output           bool
 	outputDefault    bool
 	routePath        bool
-	maptraceFlag     bool
 	from             bool
 	deploy           bool
 	listen           bool
@@ -65,33 +64,31 @@ type naliModeOptions struct {
 }
 
 type naliModeOptionInputs struct {
-	parser          *argparse.Parser
-	ipv4Only        bool
-	ipv6Only        bool
-	tcp             bool
-	udp             bool
-	mtu             bool
-	mtrModes        effectiveMTRModes
-	raw             bool
-	table           bool
-	classic         bool
-	json            bool
-	outputPath      string
-	outputDefault   bool
-	routePath       bool
-	disableMaptrace bool
-	from            string
-	deploy          bool
-	listen          string
-	fastTrace       bool
-	file            string
-	disableMPLS     bool
-	noRDNS          bool
-	alwaysRDNS      bool
-	init            bool
-	srcAddr         string
-	srcPort         int
-	srcDev          string
+	parser        *argparse.Parser
+	ipv4Only      bool
+	ipv6Only      bool
+	tcp           bool
+	udp           bool
+	mtu           bool
+	mtrModes      effectiveMTRModes
+	raw           bool
+	table         bool
+	classic       bool
+	json          bool
+	outputPath    string
+	outputDefault bool
+	routePath     bool
+	from          string
+	deploy        bool
+	listen        string
+	fastTrace     bool
+	file          string
+	disableMPLS   bool
+	noRDNS        bool
+	alwaysRDNS    bool
+	init          bool
+	srcAddr       string
+	srcDev        string
 }
 
 type naliRunOptions struct {
@@ -127,7 +124,6 @@ func validateNaliModeOptions(opts naliModeOptions) error {
 		{"--output", opts.output},
 		{"--output-default", opts.outputDefault},
 		{"--route-path", opts.routePath},
-		{"--map", opts.maptraceFlag},
 		{"--from", opts.from},
 		{"--deploy", opts.deploy},
 		{"--listen", opts.listen},
@@ -176,7 +172,6 @@ func buildNaliModeOptions(input naliModeOptionInputs) naliModeOptions {
 		output:           strings.TrimSpace(input.outputPath) != "",
 		outputDefault:    input.outputDefault,
 		routePath:        input.routePath,
-		maptraceFlag:     input.disableMaptrace,
 		from:             strings.TrimSpace(input.from) != "",
 		deploy:           input.deploy,
 		listen:           strings.TrimSpace(input.listen) != "",
@@ -198,7 +193,7 @@ func buildNaliModeOptions(input naliModeOptionInputs) naliModeOptions {
 		packetSize:       parsedFlag(input.parser, "psize"),
 		tos:              parsedFlag(input.parser, "tos"),
 		source:           strings.TrimSpace(input.srcAddr) != "",
-		sourcePort:       input.srcPort != 0,
+		sourcePort:       parsedFlag(input.parser, "source-port"),
 		sourceDevice:     strings.TrimSpace(input.srcDev) != "",
 	}
 }
