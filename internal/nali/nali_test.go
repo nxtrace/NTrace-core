@@ -196,6 +196,21 @@ func TestFindIPSpansRespectsLeftBoundary(t *testing.T) {
 	}
 }
 
+func TestFindIPSpansResyncsAfterInvalidCandidate(t *testing.T) {
+	a := New(Config{
+		Source: func(ip string, timeout time.Duration, lang string, maptrace bool) (*ipgeo.IPGeoData, error) {
+			return &ipgeo.IPGeoData{CountryEn: "ok"}, nil
+		},
+		Lang: "en",
+	})
+
+	got := a.AnnotateLine(context.Background(), "dead:8.8.8.8")
+	want := "dead:8.8.8.8 [ok]"
+	if got != want {
+		t.Fatalf("AnnotateLine() = %q, want %q", got, want)
+	}
+}
+
 func TestFormatGeo(t *testing.T) {
 	if got := FormatGeo(&ipgeo.IPGeoData{Whois: "RFC5737"}, "en"); got != "RFC5737" {
 		t.Fatalf("FormatGeo(whois) = %q", got)

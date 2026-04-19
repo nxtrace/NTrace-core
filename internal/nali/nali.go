@@ -260,9 +260,14 @@ func FindIPSpans(line string) []Span {
 			i++
 			continue
 		}
-		span, ok := parseCandidate(line[i:end], i)
+		candidate := line[i:end]
+		span, ok := parseCandidate(candidate, i)
 		if !ok {
-			i = end
+			if strings.HasPrefix(candidate, "::") {
+				i = end
+				continue
+			}
+			i++
 			continue
 		}
 		span.InsertEnd = insertionEnd(line, span)
