@@ -40,11 +40,6 @@ type Span struct {
 	Family    Family
 }
 
-type lineReadResult struct {
-	line string
-	err  error
-}
-
 type Annotator struct {
 	cfg       Config
 	cacheMu   sync.RWMutex
@@ -79,71 +74,34 @@ func Run(ctx context.Context, cfg Config, input io.Reader, output io.Writer, tar
 		return err
 	}
 
-	readCtx, stopRead := context.WithCancel(ctx)
-	defer stopRead()
-	lines := readLines(readCtx, input)
+	stopReadInterrupt := interruptInputOnCancel(ctx, input)
+	defer stopReadInterrupt()
+	reader := bufio.NewReader(input)
 	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case result, ok := <-lines:
-			if !ok {
-				if err := ctx.Err(); err != nil {
-					return err
-				}
-				return nil
-			}
-			exit, err := processLine(ctx, output, annotator, result)
-			if err != nil {
-				return err
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		line, err := reader.ReadString('\n')
+		if line != "" {
+			exit, writeErr := processLine(ctx, output, annotator, line)
+			if writeErr != nil {
+				return writeErr
 			}
 			if exit {
 				return nil
 			}
-			if result.err != nil {
-				if result.err == io.EOF {
-					return nil
-				}
-				return result.err
-			}
 		}
-	}
-}
-
-func readLines(ctx context.Context, input io.Reader) <-chan lineReadResult {
-	results := make(chan lineReadResult, 1)
-	go func() {
-		defer close(results)
-		reader := bufio.NewReader(input)
-		for {
-			line, err := reader.ReadString('\n')
-			select {
-			case results <- lineReadResult{line: line, err: err}:
-			case <-ctx.Done():
-				return
-			}
-			if err != nil {
-				return
-			}
+		if err == nil {
+			continue
 		}
-	}()
-	return results
-}
-
-func processLine(ctx context.Context, output io.Writer, annotator *Annotator, result lineReadResult) (bool, error) {
-	if result.line == "" {
-		return false, nil
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
+		}
+		if err == io.EOF {
+			return nil
+		}
+		return err
 	}
-	if isExitLine(result.line) {
-		return true, nil
-	}
-	if err := ctx.Err(); err != nil {
-		return false, err
-	}
-	if _, err := io.WriteString(output, annotator.AnnotateLine(ctx, result.line)); err != nil {
-		return false, err
-	}
-	return false, nil
 }
 
 func isExitLine(line string) bool {
@@ -153,6 +111,56 @@ func isExitLine(line string) bool {
 	default:
 		return false
 	}
+}
+
+type readDeadlineSetter interface {
+	SetReadDeadline(time.Time) error
+}
+
+func interruptInputOnCancel(ctx context.Context, input io.Reader) func() {
+	deadlineSetter, hasDeadline := input.(readDeadlineSetter)
+	closer, hasCloser := input.(io.Closer)
+	if !hasDeadline && !hasCloser {
+		return func() {}
+	}
+
+	done := make(chan struct{})
+	var once sync.Once
+	go func() {
+		select {
+		case <-ctx.Done():
+			if hasDeadline {
+				if err := deadlineSetter.SetReadDeadline(time.Now()); err == nil {
+					return
+				}
+			}
+			if hasCloser {
+				_ = closer.Close()
+			}
+		case <-done:
+		}
+	}()
+	return func() {
+		once.Do(func() {
+			close(done)
+		})
+	}
+}
+
+func processLine(ctx context.Context, output io.Writer, annotator *Annotator, line string) (bool, error) {
+	if line == "" {
+		return false, nil
+	}
+	if isExitLine(line) {
+		return true, nil
+	}
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	if _, err := io.WriteString(output, annotator.AnnotateLine(ctx, line)); err != nil {
+		return false, err
+	}
+	return false, nil
 }
 
 func (a *Annotator) AnnotateLine(ctx context.Context, line string) string {
