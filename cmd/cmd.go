@@ -1182,9 +1182,10 @@ func Execute() {
 			ipv6Only:  *ipv6Only,
 			target:    *str,
 		}); err != nil {
-			if !errors.Is(err, context.Canceled) {
-				fmt.Println(err)
+			if errors.Is(err, context.Canceled) {
+				return
 			}
+			fmt.Println(err)
 			os.Exit(1)
 		}
 		return
