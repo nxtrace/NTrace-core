@@ -370,6 +370,9 @@ func (rt *mtrSchedulerRuntime) maybeLaunchMetadataLookup(result mtrProbeResult) 
 	go func() {
 		defer cancel()
 		patch := lookupMTRMetadata(addr, cfg)
+		if generationCtx.Err() != nil {
+			return
+		}
 		select {
 		case rt.metadataCh <- mtrMetadataResult{patch: patch, gen: gen}:
 		case <-generationCtx.Done():

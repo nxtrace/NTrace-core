@@ -622,6 +622,11 @@ func lookupGeoWithRetry(c Config, cacheKey, query string, dn42 bool) (*ipgeo.IPG
 		}
 	}
 
+	ctx := c.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	typeErr := "ipgeo: nil or bad type from singleflight"
 	lookupErr := "ipgeo: lookup failed without specific error"
 	if dn42 {
@@ -630,28 +635,29 @@ func lookupGeoWithRetry(c Config, cacheKey, query string, dn42 bool) (*ipgeo.IPG
 	}
 
 	var lastErr error
-	ctx := c.Context
 	for attempt := 0; attempt <= geoLookupMaxRetries(c.NumMeasurements); attempt++ {
-		if ctx != nil {
-			select {
-			case <-ctx.Done():
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		timeout := geoTimeoutForAttempt(attempt)
+		if deadline, ok := ctx.Deadline(); ok {
+			remaining := time.Until(deadline)
+			if remaining <= 0 {
 				return nil, ctx.Err()
-			default:
+			}
+			if remaining < timeout {
+				timeout = remaining
 			}
 		}
-
-		timeout := geoTimeoutForAttempt(attempt)
-		v, err := lookupGeoSourceWithContext(ctx, cacheKey, func() (any, error) {
+		attemptCtx, cancel := context.WithTimeout(ctx, timeout)
+		v, err := lookupGeoSourceWithContext(attemptCtx, cacheKey, func() (any, error) {
 			return c.IPGeoSource(query, timeout, c.Lang, c.Maptrace)
 		})
+		cancel()
 		if err != nil {
 			lastErr = err
-			if ctx != nil {
-				select {
-				case <-ctx.Done():
-					return nil, ctx.Err()
-				default:
-				}
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
 			}
 			continue
 		}

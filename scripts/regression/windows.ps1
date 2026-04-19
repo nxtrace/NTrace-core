@@ -70,6 +70,19 @@ function Ensure-LastExitCodeSuccess {
     }
 }
 
+function Test-AllowedExitCode {
+    param(
+        [int]$ExitCode,
+        [int[]]$AllowedExitCodes = @(0)
+    )
+    foreach ($allowed in $AllowedExitCodes) {
+        if ($ExitCode -eq $allowed) {
+            return $true
+        }
+    }
+    return $false
+}
+
 function Test-IsAdmin {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = [Security.Principal.WindowsPrincipal]::new($identity)
@@ -172,6 +185,7 @@ function Run-Cmd {
         [string]$Command,
         [string]$SuccessPattern = "",
         [string]$ForbiddenPattern = "",
+        [int[]]$AllowedExitCodes = @(0),
         [int]$Seconds = 150
     )
     $out = Join-Path $ArtifactsDir "$Name.txt"
@@ -179,11 +193,11 @@ function Run-Cmd {
     $content = if (Test-Path $out) { Get-Content -Raw -Path $out } else { "" }
     $patternMatched = [string]::IsNullOrWhiteSpace($SuccessPattern) -or $content -match $SuccessPattern
     $forbiddenMatched = -not [string]::IsNullOrWhiteSpace($ForbiddenPattern) -and $content -match $ForbiddenPattern
-    if ($rc -eq 0 -and $patternMatched -and -not $forbiddenMatched) {
+    if ((Test-AllowedExitCode -ExitCode $rc -AllowedExitCodes $AllowedExitCodes) -and $patternMatched -and -not $forbiddenMatched) {
         Write-Record $Name PASS $Note
     }
     else {
-        if ($rc -ne 0) {
+        if (-not (Test-AllowedExitCode -ExitCode $rc -AllowedExitCodes $AllowedExitCodes)) {
             Write-Record $Name FAIL "$Note; exit=$rc"
         }
         elseif (-not $patternMatched) {
@@ -238,13 +252,14 @@ function Run-CmdIfSupported {
         [string]$Command,
         [string]$SuccessPattern = "",
         [string]$ForbiddenPattern = "",
+        [int[]]$AllowedExitCodes = @(0),
         [int]$Seconds = 150
     )
     if (-not $Supported) {
         Write-SkipRecord $Name $Note $Reason
         return
     }
-    Run-Cmd -Name $Name -Note $Note -Command $Command -SuccessPattern $SuccessPattern -ForbiddenPattern $ForbiddenPattern -Seconds $Seconds
+    Run-Cmd -Name $Name -Note $Note -Command $Command -SuccessPattern $SuccessPattern -ForbiddenPattern $ForbiddenPattern -AllowedExitCodes $AllowedExitCodes -Seconds $Seconds
 }
 
 function Check-JsonPureIfSupported {
@@ -253,13 +268,15 @@ function Check-JsonPureIfSupported {
         [string]$Reason,
         [string]$Name,
         [string]$Note,
-        [string]$Command
+        [string]$Command,
+        [string]$ExpectedJsonPattern = "",
+        [int[]]$AllowedExitCodes = @(0)
     )
     if (-not $Supported) {
         Write-SkipRecord $Name $Note $Reason
         return
     }
-    Check-JsonPure -Name $Name -Note $Note -Command $Command
+    Check-JsonPure -Name $Name -Note $Note -Command $Command -ExpectedJsonPattern $ExpectedJsonPattern -AllowedExitCodes $AllowedExitCodes
 }
 
 function Check-OutputFileIfSupported {
@@ -377,7 +394,9 @@ function Check-JsonPure {
     param(
         [string]$Name,
         [string]$Note,
-        [string]$Command
+        [string]$Command,
+        [string]$ExpectedJsonPattern = "",
+        [int[]]$AllowedExitCodes = @(0)
     )
     $out = Join-Path $ArtifactsDir "$Name.txt"
     $rc = Invoke-CommandWithTimeout -Command $Command -OutFile $out -MergeStreams $false -Seconds 180
@@ -399,16 +418,19 @@ function Check-JsonPure {
             break
         }
     }
+    if (-not (Test-AllowedExitCode -ExitCode $rc -AllowedExitCodes $AllowedExitCodes)) {
+        Write-Record $Name FAIL "$Note; exit=$rc"
+        return
+    }
     if ($first -eq "{" -and $sanitizedContent -notmatch "preferred API IP") {
+        if (-not [string]::IsNullOrWhiteSpace($ExpectedJsonPattern) -and $sanitizedContent -notmatch $ExpectedJsonPattern) {
+            Write-Record $Name FAIL "$Note; JSON content mismatch"
+            return
+        }
         Write-Record $Name PASS $Note
         return
     }
-    if ($rc -ne 0) {
-        Write-Record $Name FAIL "$Note; command failed"
-    }
-    else {
-        Write-Record $Name FAIL "$Note; stdout not pure JSON"
-    }
+    Write-Record $Name FAIL "$Note; stdout not pure JSON"
 }
 
 function Check-OutputFile {
@@ -686,6 +708,9 @@ $udp4Capability = Get-CapabilityStatus -Name "udp4" -Label "UDPv4 tracing" -Comm
 $mtrCapability = Get-CapabilityStatus -Name "mtr" -Label "MTR ICMP tracing" -Command "`"$Bin`" --no-color -r -q 1 -i 300 --timeout 1000 -m 2 1.1.1.1" -SuccessPattern "(?m)^HOST:"
 $mtuCapability = Get-CapabilityStatus -Name "mtu" -Label "MTU tracing" -Command "`"$Bin`" --no-color --mtu --timeout 1000 -q 1 -m 1 1.1.1.1" -SuccessPattern "Path MTU:"
 $globalpingCapability = Get-CapabilityStatus -Name "globalping" -Label "Globalping tracing" -Command "`"$Bin`" --no-color --json --from Germany -q 1 -m 1 --timeout 1000 1.1.1.1" -SuccessPattern '^\s*\{'
+$speedCapability = Get-CapabilityStatus -Name "speed" -Label "speed mode" -Command "`"$Bin`" --speed --help" -SuccessPattern "--speed-provider"
+$tinyCliCapability = Get-CapabilityStatus -Name "tiny_cli" -Label "nexttrace-tiny CLI" -Command "`"$Tiny`" --help" -SuccessPattern "--help"
+$ntrCliCapability = Get-CapabilityStatus -Name "ntr_cli" -Label "ntr CLI" -Command "`"$Ntr`" --help" -SuccessPattern "--help"
 
 if ($IPv6Available) {
     $icmp6Capability = Get-CapabilityStatus -Name "icmp6" -Label "ICMPv6 tracing" -Command "`"$Bin`" --no-color -6 -q 1 -m 1 --timeout 1000 2606:4700:4700::1111" -SuccessPattern "hops max, .*ICMP mode"
@@ -724,8 +749,14 @@ Run-CmdIfSupported $mtrCapability.Supported $mtrCapability.Reason "mtr_report" "
 Run-CmdIfSupported $mtrCapability.Supported $mtrCapability.Reason "mtr_wide" "MTR wide + show-ips" "`"$Bin`" --no-color -w --show-ips -q 2 -i 300 --timeout 1000 -m 4 1.1.1.1" "(?m)^HOST:"
 Run-CmdIfSupported $mtrCapability.Supported $mtrCapability.Reason "mtr_raw" "MTR raw stream" "`"$Bin`" --no-color -r --raw -q 2 -i 300 --timeout 1000 -m 4 1.1.1.1" "(?m)^1\|"
 Run-CmdIfSupported $icmp4Capability.Supported $icmp4Capability.Reason "fast_trace_file" "Fast trace via --file" "`"$Bin`" --no-color --file `"$Targets`" -q 1 -m 2 --timeout 1000" "traceroute to "
+Run-CmdIfSupported -Supported $speedCapability.Supported -Reason $speedCapability.Reason -Name "help_speed_main" -Note "Main help exposes only top-level speed entry" -Command "`"$Bin`" --help" -SuccessPattern "--speed" -ForbiddenPattern "--speed-provider"
+Run-CmdIfSupported -Supported $speedCapability.Supported -Reason $speedCapability.Reason -Name "help_speed_detail" -Note "Speed help is dedicated and detailed" -Command "`"$Bin`" --speed --help" -SuccessPattern "--speed-provider" -ForbiddenPattern "hops max, .*ICMP mode"
+Check-JsonPureIfSupported -Supported $speedCapability.Supported -Reason $speedCapability.Reason -Name "speed_apple_json" -Note "Apple speed JSON path" -Command "`"$Bin`" --speed --json --no-metadata --non-interactive --max 64KiB --timeout 2000 --threads 2 --latency-count 2" -ExpectedJsonPattern '"provider":"apple"' -AllowedExitCodes @(0, 2)
+Check-JsonPureIfSupported -Supported $speedCapability.Supported -Reason $speedCapability.Reason -Name "speed_cloudflare_json" -Note "Cloudflare speed JSON path" -Command "`"$Bin`" --speed --speed-provider cloudflare --json --no-metadata --non-interactive --max 64KiB --timeout 2000 --threads 2 --latency-count 2" -ExpectedJsonPattern '"provider":"cloudflare"' -AllowedExitCodes @(0, 2)
 Run-CmdIfSupported $icmp4Capability.Supported $icmp4Capability.Reason "tiny_smoke" "nexttrace-tiny smoke" "`"$Tiny`" --no-color -q 1 -m 2 --timeout 1000 1.1.1.1" "hops max, .*ICMP mode"
 Run-CmdIfSupported $mtrCapability.Supported $mtrCapability.Reason "ntr_report" "ntr report smoke" "`"$Ntr`" --no-color -r -q 2 -i 300 --timeout 1000 -m 4 1.1.1.1" "(?m)^HOST:"
+Run-CmdIfSupported -Supported $tinyCliCapability.Supported -Reason $tinyCliCapability.Reason -Name "tiny_speed_reject" -Note "nexttrace-tiny rejects --speed" -Command "`"$Tiny`" --speed" -AllowedExitCodes @(1)
+Run-CmdIfSupported -Supported $ntrCliCapability.Supported -Reason $ntrCliCapability.Reason -Name "ntr_speed_reject" -Note "ntr rejects --speed" -Command "`"$Ntr`" --speed" -AllowedExitCodes @(1)
 
 Check-PacketCaptureIfSupported $icmp4Capability.Supported $icmp4Capability.Reason "psize_tos_icmp4" "ICMPv4 psize/tos packet capture" "`"$Bin`" --no-color -q 1 -m 1 --timeout 1000 --psize 84 -Q 46 1.1.1.1" "1.1.1.1" "host 1.1.1.1" "Differentiated Services Field: 0x2e" "Total Length: 84"
 Check-PacketCaptureIfSupported $udp4Capability.Supported $udp4Capability.Reason "psize_tos_udp4" "UDPv4 psize/tos packet capture" "`"$Bin`" --no-color -U -q 1 -m 1 --timeout 1000 --psize 84 -Q 46 1.1.1.1" "1.1.1.1" "host 1.1.1.1" "Differentiated Services Field: 0x2e" "Total Length: 84"
