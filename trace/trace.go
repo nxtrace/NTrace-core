@@ -599,28 +599,19 @@ func geoTimeoutForAttempt(attempt int) time.Duration {
 	return time.Duration(timeout) * time.Second
 }
 
-type geoLookupAttemptResult struct {
-	value any
-	err   error
-}
-
 func lookupGeoSourceWithContext(ctx context.Context, cacheKey string, fn func() (any, error)) (any, error) {
 	if ctx == nil || ctx.Done() == nil {
 		v, err, _ := ipGeoSF.Do(cacheKey, fn)
 		return v, err
 	}
 
-	resultCh := make(chan geoLookupAttemptResult, 1)
-	go func() {
-		v, err, _ := ipGeoSF.Do(cacheKey, fn)
-		resultCh <- geoLookupAttemptResult{value: v, err: err}
-	}()
+	resultCh := ipGeoSF.DoChan(cacheKey, fn)
 
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case result := <-resultCh:
-		return result.value, result.err
+		return result.Val, result.Err
 	}
 }
 

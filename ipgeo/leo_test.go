@@ -3,6 +3,7 @@ package ipgeo
 import (
 	"os"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -14,10 +15,14 @@ func TestLeoIPWaitsForConnectionBeforeSending(t *testing.T) {
 	oldPools := IPPools.pool
 	oldOnce := receiveParseOnce
 	var conn *wshandle.WsConn
+	receiveParseStarted := make(chan struct{})
+	var getConnCalls int32
+	var closeStarted sync.Once
 	defer func() {
 		if conn != nil && conn.MsgReceiveCh != nil {
 			close(conn.MsgReceiveCh)
 		}
+		waitForReceiveParseStart(receiveParseStarted)
 		getLeoWsConn = oldGet
 		IPPools.pool = oldPools
 		receiveParseOnce = oldOnce
@@ -31,7 +36,12 @@ func TestLeoIPWaitsForConnectionBeforeSending(t *testing.T) {
 		MsgReceiveCh: make(chan string, 1),
 		Interrupt:    make(chan os.Signal, 1),
 	}
-	getLeoWsConn = func() *wshandle.WsConn { return conn }
+	getLeoWsConn = func() *wshandle.WsConn {
+		if atomic.AddInt32(&getConnCalls, 1) >= 3 {
+			closeStarted.Do(func() { close(receiveParseStarted) })
+		}
+		return conn
+	}
 
 	sent := make(chan string, 1)
 	go func() {
@@ -56,7 +66,7 @@ func TestLeoIPWaitsForConnectionBeforeSending(t *testing.T) {
 	case <-time.After(60 * time.Millisecond):
 	}
 
-	conn.Connected = true
+	conn.SetConnected(true)
 
 	select {
 	case msg := <-sent:
@@ -86,10 +96,14 @@ func TestLeoIPUsesSingleTimeoutBudget(t *testing.T) {
 	oldPools := IPPools.pool
 	oldOnce := receiveParseOnce
 	var conn *wshandle.WsConn
+	receiveParseStarted := make(chan struct{})
+	var getConnCalls int32
+	var closeStarted sync.Once
 	defer func() {
 		if conn != nil && conn.MsgReceiveCh != nil {
 			close(conn.MsgReceiveCh)
 		}
+		waitForReceiveParseStart(receiveParseStarted)
 		getLeoWsConn = oldGet
 		IPPools.pool = oldPools
 		receiveParseOnce = oldOnce
@@ -103,7 +117,12 @@ func TestLeoIPUsesSingleTimeoutBudget(t *testing.T) {
 		MsgReceiveCh: make(chan string),
 		Interrupt:    make(chan os.Signal, 1),
 	}
-	getLeoWsConn = func() *wshandle.WsConn { return conn }
+	getLeoWsConn = func() *wshandle.WsConn {
+		if atomic.AddInt32(&getConnCalls, 1) >= 3 {
+			closeStarted.Do(func() { close(receiveParseStarted) })
+		}
+		return conn
+	}
 
 	start := time.Now()
 	done := make(chan error, 1)
@@ -113,7 +132,7 @@ func TestLeoIPUsesSingleTimeoutBudget(t *testing.T) {
 	}()
 
 	time.Sleep(1500 * time.Millisecond)
-	conn.Connected = true
+	conn.SetConnected(true)
 
 	select {
 	case err := <-done:
@@ -126,5 +145,12 @@ func TestLeoIPUsesSingleTimeoutBudget(t *testing.T) {
 
 	if elapsed := time.Since(start); elapsed > 2800*time.Millisecond {
 		t.Fatalf("LeoIP elapsed = %s, want <= 2.8s", elapsed)
+	}
+}
+
+func waitForReceiveParseStart(started <-chan struct{}) {
+	select {
+	case <-started:
+	case <-time.After(time.Second):
 	}
 }

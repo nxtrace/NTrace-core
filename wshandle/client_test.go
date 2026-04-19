@@ -1,5 +1,8 @@
 package wshandle
 
+// Tests in this file mutate package-level websocket globals; do not add
+// t.Parallel without isolating that state first.
+
 import (
 	"context"
 	"errors"
@@ -318,10 +321,8 @@ func TestWaitUntilConnectedHonorsContext(t *testing.T) {
 
 func TestRecreateWsConnCloseCancelsFastIP(t *testing.T) {
 	oldFastIPFn := wsGetFastIPFn
-	oldHost, oldPort := host, port
 	defer func() {
 		wsGetFastIPFn = oldFastIPFn
-		host, port = oldHost, oldPort
 	}()
 
 	started := make(chan struct{})
@@ -331,10 +332,9 @@ func TestRecreateWsConnCloseCancelsFastIP(t *testing.T) {
 		return "", ctx.Err()
 	}
 
-	host = "example.com"
-	port = "443"
-
 	conn := newStartedTestWsConn()
+	conn.apiHost = "example.com"
+	conn.apiPort = "443"
 	defer conn.Close()
 
 	done := make(chan struct{})
@@ -354,16 +354,16 @@ func TestRecreateWsConnCloseCancelsFastIP(t *testing.T) {
 }
 
 func TestCreateWsConnAsyncPreservesDirectIPOnReconnect(t *testing.T) {
+	saveAndRestoreGlobalWsConn(t)
+
 	oldFastIPFn := wsGetFastIPFn
-	oldHost, oldPort, oldFastIP := host, port, fastIp
 	oldEnvHostPort := util.EnvHostPort
 	oldEnvToken := envToken
-	defer func() {
+	t.Cleanup(func() {
 		wsGetFastIPFn = oldFastIPFn
-		host, port, fastIp = oldHost, oldPort, oldFastIP
 		util.EnvHostPort = oldEnvHostPort
 		envToken = oldEnvToken
-	}()
+	})
 
 	var fastIPCalls int32
 	wsGetFastIPFn = func(ctx context.Context, domain string, port string, enableOutput bool) (string, error) {
@@ -377,18 +377,26 @@ func TestCreateWsConnAsyncPreservesDirectIPOnReconnect(t *testing.T) {
 	cancel()
 
 	conn := createWsConnAsync(ctx)
-	defer conn.Close()
 
 	if !conn.directIP {
 		t.Fatal("async websocket should preserve direct-IP state")
 	}
+	if conn.apiFastIP != "1.1.1.1" {
+		t.Fatalf("apiFastIP = %q, want direct IP preserved", conn.apiFastIP)
+	}
+	conn.Close()
 
-	conn.recreateWsConn()
+	reconnectConn := newWsConn(nil, make(chan os.Signal, 1))
+	reconnectConn.baseCtx = ctx
+	reconnectConn.directIP = true
+	reconnectConn.apiHost = "api.nxtrace.org"
+	reconnectConn.apiPort = "443"
+	reconnectConn.apiFastIP = "1.1.1.1"
+	defer reconnectConn.Close()
+
+	reconnectConn.recreateWsConn()
 
 	if got := atomic.LoadInt32(&fastIPCalls); got != 0 {
 		t.Fatalf("FastIP refresh calls = %d, want 0 for direct-IP reconnect", got)
-	}
-	if fastIp != "1.1.1.1" {
-		t.Fatalf("fastIp = %q, want direct IP preserved", fastIp)
 	}
 }

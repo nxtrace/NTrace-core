@@ -60,6 +60,9 @@ type WsConn struct {
 	closed       bool
 	baseCtx      context.Context
 	directIP     bool
+	apiHost      string
+	apiPort      string
+	apiFastIP    string
 }
 
 func (c *WsConn) getConn() *websocket.Conn {
@@ -145,13 +148,19 @@ var (
 var wsconn *WsConn
 var wsconnMu sync.RWMutex
 var wsconnNewMu sync.Mutex
-var host, port, fastIp string
 var envToken = util.EnvToken
 var cacheToken string
 var cacheTokenFailedTimes int
 var createWsConnFn = createWsConn
 var wsGetFastIPFn = util.GetFastIPWithContext
 var wsGetTokenFn = pow.GetTokenWithContext
+
+type wsEndpoint struct {
+	host   string
+	port   string
+	fastIP string
+	direct bool
+}
 
 func newWsConn(conn *websocket.Conn, interrupt chan os.Signal) *WsConn {
 	c := &WsConn{
@@ -278,6 +287,14 @@ func (c *WsConn) setConnected(v bool) {
 	c.stateMu.Lock()
 	c.Connected = v
 	c.stateMu.Unlock()
+}
+
+// SetConnected updates the websocket connection state under the internal lock.
+func (c *WsConn) SetConnected(v bool) {
+	if c == nil {
+		return
+	}
+	c.setConnected(v)
 }
 
 func (c *WsConn) setConnecting(v bool) {
@@ -493,10 +510,10 @@ func (c *WsConn) recreateWsConn() {
 	}
 	c.setConnected(false)
 	// 尝试重新连线
-	if !c.directIP && host != "" && net.ParseIP(host) == nil {
+	if !c.directIP && c.apiHost != "" && net.ParseIP(c.apiHost) == nil {
 		// 刷新一次最优 IP，防止旧 IP 已失效
 		fastIPCtx, cancelFastIP := deriveOperationContext(c.baseCtx, c.closeCh, 0)
-		refreshedFastIP, err := wsGetFastIPFn(fastIPCtx, host, port, true)
+		refreshedFastIP, err := wsGetFastIPFn(fastIPCtx, c.apiHost, c.apiPort, true)
 		cancelFastIP()
 		if err != nil {
 			if !errors.Is(err, context.Canceled) {
@@ -505,9 +522,9 @@ func (c *WsConn) recreateWsConn() {
 			c.setConnectionState(false, false)
 			return
 		}
-		fastIp = refreshedFastIP
+		c.apiFastIP = refreshedFastIP
 	}
-	u := url.URL{Scheme: "wss", Host: formatHostPort(fastIp, port), Path: "/v3/ipGeoWs"}
+	u := url.URL{Scheme: "wss", Host: formatHostPort(c.apiFastIP, c.apiPort), Path: "/v3/ipGeoWs"}
 	// log.Printf("connecting to %s", u.String())
 	jwtToken, ua := envToken, []string{"Privileged Client"}
 	err := error(nil)
@@ -517,9 +534,9 @@ func (c *WsConn) recreateWsConn() {
 			// 无cacheToken, 重新获取 token
 			tokenCtx, cancelToken := deriveOperationContext(c.baseCtx, c.closeCh, 0)
 			if util.GetPowProvider() == "" {
-				jwtToken, err = wsGetTokenFn(tokenCtx, fastIp, host, port)
+				jwtToken, err = wsGetTokenFn(tokenCtx, c.apiFastIP, c.apiHost, c.apiPort)
 			} else {
-				jwtToken, err = wsGetTokenFn(tokenCtx, util.GetPowProvider(), util.GetPowProvider(), port)
+				jwtToken, err = wsGetTokenFn(tokenCtx, util.GetPowProvider(), util.GetPowProvider(), c.apiPort)
 			}
 			cancelToken()
 			if err != nil {
@@ -542,14 +559,14 @@ func (c *WsConn) recreateWsConn() {
 	}
 	cacheToken = jwtToken
 	requestHeader := http.Header{
-		"Host":          []string{host},
+		"Host":          []string{c.apiHost},
 		"User-Agent":    ua,
 		"Authorization": []string{"Bearer " + jwtToken},
 	}
 	dialer := *websocket.DefaultDialer // 按值拷贝，变成独立实例
 	// 现在 dialer 是一个新的 Dialer（值），内部字段与 DefaultDialer 相同
 	dialer.TLSClientConfig = &tls.Config{
-		ServerName: host,
+		ServerName: c.apiHost,
 	}
 	proxyUrl := util.GetProxy()
 	if proxyUrl != nil {
@@ -580,26 +597,32 @@ func (c *WsConn) recreateWsConn() {
 	c.startLoop(c.messageReceiveHandler)
 }
 
-func initWsConnBase(ctx context.Context) (context.Context, chan os.Signal, string, string, bool) {
+func initWsConnBase(ctx context.Context) (context.Context, chan os.Signal, wsEndpoint) {
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 
 	ctx = normalizeContext(ctx)
-	host, port = util.GetHostAndPort()
-	directIP := false
-	if valid := net.ParseIP(host); valid != nil {
-		directIP = true
-		fastIp = host
-		host = "api.nxtrace.org"
+	targetHost, targetPort := util.GetHostAndPort()
+	endpoint := wsEndpoint{
+		host: targetHost,
+		port: targetPort,
+	}
+	if valid := net.ParseIP(targetHost); valid != nil {
+		endpoint.direct = true
+		endpoint.fastIP = targetHost
+		endpoint.host = "api.nxtrace.org"
 	}
 
-	return ctx, interrupt, host, port, directIP
+	return ctx, interrupt, endpoint
 }
 
-func newReconnectableWsConn(ctx context.Context, interrupt chan os.Signal, directIP bool) *WsConn {
+func newReconnectableWsConn(ctx context.Context, interrupt chan os.Signal, endpoint wsEndpoint) *WsConn {
 	ws := newWsConn(nil, interrupt)
 	ws.baseCtx = ctx
-	ws.directIP = directIP
+	ws.directIP = endpoint.direct
+	ws.apiHost = endpoint.host
+	ws.apiPort = endpoint.port
+	ws.apiFastIP = endpoint.fastIP
 	ws.setDoneChan(make(chan struct{}))
 	ws.setConnectionState(false, false)
 	ws.startLoop(ws.keepAlive)
@@ -609,52 +632,52 @@ func newReconnectableWsConn(ctx context.Context, interrupt chan os.Signal, direc
 
 func createWsConn(ctx context.Context) *WsConn {
 	proxyUrl := util.GetProxy()
-	ctx, interrupt, targetHost, targetPort, directIP := initWsConnBase(ctx)
-	if !directIP {
+	ctx, interrupt, endpoint := initWsConnBase(ctx)
+	if !endpoint.direct {
 		// 默认配置完成，开始寻找最优 IP
-		refreshedFastIP, err := wsGetFastIPFn(ctx, targetHost, targetPort, true)
+		refreshedFastIP, err := wsGetFastIPFn(ctx, endpoint.host, endpoint.port, true)
 		if err != nil {
 			if util.EnvDevMode {
 				panic(err)
 			}
 			log.Printf("fast ip probe failed: %v", err)
-			return newReconnectableWsConn(ctx, interrupt, directIP)
+			return newReconnectableWsConn(ctx, interrupt, endpoint)
 		}
-		fastIp = refreshedFastIP
+		endpoint.fastIP = refreshedFastIP
 	}
 	jwtToken, ua := envToken, []string{"Privileged Client"}
 	err := error(nil)
 	if envToken == "" {
 		if util.GetPowProvider() == "" {
-			jwtToken, err = wsGetTokenFn(ctx, fastIp, targetHost, targetPort)
+			jwtToken, err = wsGetTokenFn(ctx, endpoint.fastIP, endpoint.host, endpoint.port)
 		} else {
-			jwtToken, err = wsGetTokenFn(ctx, util.GetPowProvider(), util.GetPowProvider(), targetPort)
+			jwtToken, err = wsGetTokenFn(ctx, util.GetPowProvider(), util.GetPowProvider(), endpoint.port)
 		}
 		if err != nil {
 			if util.EnvDevMode {
 				panic(err)
 			}
 			log.Printf("pow token fetch failed: %v", err)
-			return newReconnectableWsConn(ctx, interrupt, directIP)
+			return newReconnectableWsConn(ctx, interrupt, endpoint)
 		}
 		ua = []string{util.UserAgent}
 	}
 	cacheToken = jwtToken
 	cacheTokenFailedTimes = 0
 	requestHeader := http.Header{
-		"Host":          []string{targetHost},
+		"Host":          []string{endpoint.host},
 		"User-Agent":    ua,
 		"Authorization": []string{"Bearer " + jwtToken},
 	}
 	dialer := *websocket.DefaultDialer // 按值拷贝，变成独立实例
 	// 现在 dialer 是一个新的 Dialer（值），内部字段与 DefaultDialer 相同
 	dialer.TLSClientConfig = &tls.Config{
-		ServerName: targetHost,
+		ServerName: endpoint.host,
 	}
 	if proxyUrl != nil {
 		dialer.Proxy = http.ProxyURL(proxyUrl)
 	}
-	u := url.URL{Scheme: "wss", Host: formatHostPort(fastIp, targetPort), Path: "/v3/ipGeoWs"}
+	u := url.URL{Scheme: "wss", Host: formatHostPort(endpoint.fastIP, endpoint.port), Path: "/v3/ipGeoWs"}
 	// log.Printf("connecting to %s", u.String())
 
 	dialCtx, cancel := deriveOperationContext(ctx, nil, wsClientDialTimeout)
@@ -663,7 +686,10 @@ func createWsConn(ctx context.Context) *WsConn {
 
 	ws := newWsConn(c, interrupt)
 	ws.baseCtx = ctx
-	ws.directIP = directIP
+	ws.directIP = endpoint.direct
+	ws.apiHost = endpoint.host
+	ws.apiPort = endpoint.port
+	ws.apiFastIP = endpoint.fastIP
 	ws.setConnectionState(err == nil, false)
 
 	if err != nil {
@@ -685,11 +711,8 @@ func createWsConn(ctx context.Context) *WsConn {
 }
 
 func createWsConnAsync(ctx context.Context) *WsConn {
-	ctx, interrupt, _, _, directIP := initWsConnBase(ctx)
-	if !directIP {
-		fastIp = ""
-	}
-	return newReconnectableWsConn(ctx, interrupt, directIP)
+	ctx, interrupt, endpoint := initWsConnBase(ctx)
+	return newReconnectableWsConn(ctx, interrupt, endpoint)
 }
 
 func replaceGlobalWsConn(newConn *WsConn, ctx context.Context) *WsConn {

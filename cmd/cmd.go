@@ -1304,8 +1304,8 @@ func Execute() {
 		return
 	}
 
-	interactiveMTR := mtrModes.mtr && chooseMTRRunMode(mtrModes.raw, mtrModes.report) == mtrRunTUI
-	leoWs := prepareRuntimeEnvironment(rootCtx, *dn42, dataOrigin, disableMaptrace, powProvider, interactiveMTR)
+	asyncLeo := shouldUseAsyncLeoForMTR(mtrModes, CheckTTY(int(os.Stdin.Fd())), stdoutIsTTY)
+	leoWs := prepareRuntimeEnvironment(rootCtx, *dn42, dataOrigin, disableMaptrace, powProvider, asyncLeo)
 	defer closeLeoWebsocket(leoWs)
 
 	if *from != "" {
@@ -1461,6 +1461,10 @@ func chooseMTRRunMode(effectiveMTRRaw, effectiveReport bool) mtrRunMode {
 		return mtrRunReport
 	}
 	return mtrRunTUI
+}
+
+func shouldUseAsyncLeoForMTR(modes effectiveMTRModes, stdinTTY bool, stdoutTTY bool) bool {
+	return modes.mtr && chooseMTRRunMode(modes.raw, modes.report) == mtrRunTUI && stdinTTY && stdoutTTY
 }
 
 // deriveMTRProbeParams computes per-hop scheduling parameters for MTR.

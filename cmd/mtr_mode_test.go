@@ -161,6 +161,26 @@ func TestChooseMTRRunMode_RawPriority(t *testing.T) {
 	}
 }
 
+func TestShouldUseAsyncLeoForMTR_RequiresTrueTTYMode(t *testing.T) {
+	modes := effectiveMTRModes{mtr: true}
+
+	if !shouldUseAsyncLeoForMTR(modes, true, true) {
+		t.Fatal("TTY MTR should use async Leo startup")
+	}
+	if shouldUseAsyncLeoForMTR(modes, false, true) {
+		t.Fatal("non-TTY stdin should not use async Leo startup")
+	}
+	if shouldUseAsyncLeoForMTR(modes, true, false) {
+		t.Fatal("non-TTY stdout should not use async Leo startup")
+	}
+	if shouldUseAsyncLeoForMTR(effectiveMTRModes{mtr: true, raw: true}, true, true) {
+		t.Fatal("raw MTR should not use async Leo startup")
+	}
+	if shouldUseAsyncLeoForMTR(effectiveMTRModes{mtr: true, report: true}, true, true) {
+		t.Fatal("report MTR should not use async Leo startup")
+	}
+}
+
 func TestDeriveMTRRoundParams_DefaultsAndOverrides(t *testing.T) {
 	tests := []struct {
 		name            string

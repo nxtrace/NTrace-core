@@ -8,8 +8,13 @@ import (
 	"time"
 )
 
+const mtrMetadataNegativeCacheTTL = 5 * time.Second
+
 type mtrSchedulerRuntime struct {
 	ctx              context.Context
+	metadataCtx      context.Context
+	metadataCancel   context.CancelFunc
+	doneCh           chan struct{}
 	prober           mtrTTLProber
 	agg              *MTRAggregator
 	cfg              mtrSchedulerConfig
@@ -30,6 +35,7 @@ type mtrSchedulerRuntime struct {
 	metadataCh       chan mtrMetadataResult
 	metadataInFlight map[string]uint64
 	metadataCache    map[string]mtrMetadataPatch
+	metadataBackoff  map[string]time.Time
 	lastSnapshot     time.Time
 }
 
@@ -94,8 +100,13 @@ func newMTRSchedulerRuntime(
 		}
 	}
 
+	metadataCtx, metadataCancel := context.WithCancel(ctx)
+
 	return &mtrSchedulerRuntime{
 		ctx:              ctx,
+		metadataCtx:      metadataCtx,
+		metadataCancel:   metadataCancel,
+		doneCh:           make(chan struct{}),
 		prober:           prober,
 		agg:              agg,
 		cfg:              cfg,
@@ -114,10 +125,14 @@ func newMTRSchedulerRuntime(
 		metadataCh:       make(chan mtrMetadataResult, parallelism*2),
 		metadataInFlight: make(map[string]uint64),
 		metadataCache:    make(map[string]mtrMetadataPatch),
+		metadataBackoff:  make(map[string]time.Time),
 	}, nil
 }
 
 func (rt *mtrSchedulerRuntime) run() error {
+	defer close(rt.doneCh)
+	defer rt.cancelMetadataLookups()
+
 	rt.scheduleReady()
 
 	tick := time.NewTicker(5 * time.Millisecond)
@@ -333,6 +348,9 @@ func (rt *mtrSchedulerRuntime) maybeLaunchMetadataLookup(result mtrProbeResult) 
 	if _, ok := rt.metadataInFlight[ip]; ok {
 		return
 	}
+	if rt.metadataBackoffActive(ip, time.Now()) {
+		return
+	}
 
 	gen := rt.generation
 	cfg := rt.cfg.BaseConfig
@@ -340,8 +358,12 @@ func (rt *mtrSchedulerRuntime) maybeLaunchMetadataLookup(result mtrProbeResult) 
 	if metadataTimeout <= 0 {
 		metadataTimeout = geoTimeoutForAttempt(0)
 	}
-	metadataCtx, cancel := context.WithTimeout(rt.ctx, metadataTimeout)
-	cfg.Context = metadataCtx
+	generationCtx := rt.metadataCtx
+	if generationCtx == nil {
+		generationCtx = rt.ctx
+	}
+	lookupCtx, cancel := context.WithTimeout(generationCtx, metadataTimeout)
+	cfg.Context = lookupCtx
 	addr := result.Addr
 	rt.metadataInFlight[ip] = gen
 
@@ -350,7 +372,8 @@ func (rt *mtrSchedulerRuntime) maybeLaunchMetadataLookup(result mtrProbeResult) 
 		patch := lookupMTRMetadata(addr, cfg)
 		select {
 		case rt.metadataCh <- mtrMetadataResult{patch: patch, gen: gen}:
-		case <-rt.ctx.Done():
+		case <-generationCtx.Done():
+		case <-rt.doneCh:
 		}
 	}()
 }
@@ -373,9 +396,15 @@ func (rt *mtrSchedulerRuntime) processMetadataResult(result mtrMetadataResult) {
 }
 
 func (rt *mtrSchedulerRuntime) cacheMetadataPatch(patch mtrMetadataPatch) {
-	if patch.ip == "" || (patch.host == "" && patch.geo == nil) {
+	if patch.ip == "" {
 		return
 	}
+	if patch.host == "" && patch.geo == nil {
+		rt.metadataBackoff[patch.ip] = time.Now().Add(mtrMetadataNegativeCacheTTL)
+		return
+	}
+	delete(rt.metadataBackoff, patch.ip)
+
 	cached := rt.metadataCache[patch.ip]
 	if cached.ip == "" {
 		cached.ip = patch.ip
@@ -387,6 +416,18 @@ func (rt *mtrSchedulerRuntime) cacheMetadataPatch(patch mtrMetadataPatch) {
 		cached.geo = patch.geo
 	}
 	rt.metadataCache[patch.ip] = cached
+}
+
+func (rt *mtrSchedulerRuntime) metadataBackoffActive(ip string, now time.Time) bool {
+	until, ok := rt.metadataBackoff[ip]
+	if !ok {
+		return false
+	}
+	if now.Before(until) {
+		return true
+	}
+	delete(rt.metadataBackoff, ip)
+	return false
 }
 
 func (rt *mtrSchedulerRuntime) detectDestination(ttl int, result mtrProbeResult) {
@@ -510,14 +551,27 @@ func (rt *mtrSchedulerRuntime) handleReset() {
 	}
 
 	rt.generation++
+	rt.resetMetadataContext()
 	for idx := range rt.states {
 		rt.states[idx] = mtrHopState{}
 	}
 	clear(rt.metadataInFlight)
 	clear(rt.metadataCache)
+	clear(rt.metadataBackoff)
 	atomic.StoreInt32(&rt.knownFinalTTL, -1)
 	rt.agg.Reset()
 	_ = rt.prober.Reset()
+}
+
+func (rt *mtrSchedulerRuntime) resetMetadataContext() {
+	rt.cancelMetadataLookups()
+	rt.metadataCtx, rt.metadataCancel = context.WithCancel(rt.ctx)
+}
+
+func (rt *mtrSchedulerRuntime) cancelMetadataLookups() {
+	if rt.metadataCancel != nil {
+		rt.metadataCancel()
+	}
 }
 
 func (rt *mtrSchedulerRuntime) handleCancel() error {

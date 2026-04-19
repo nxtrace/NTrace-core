@@ -974,6 +974,103 @@ func TestScheduler_AsyncMetadataIgnoresOldGenerationAfterReset(t *testing.T) {
 	}
 }
 
+func TestScheduler_ResetCancelsMetadataGeneration(t *testing.T) {
+	started := make(chan struct{})
+	rt, err := newMTRSchedulerRuntime(context.Background(), &mockTTLProber{}, NewMTRAggregator(), mtrSchedulerConfig{
+		BeginHop:         1,
+		MaxHops:          1,
+		HopInterval:      time.Millisecond,
+		ParallelRequests: 1,
+		ProgressThrottle: time.Millisecond,
+		FillGeo:          true,
+		AsyncMetadata:    true,
+		IsResetRequested: func() bool { return true },
+		BaseConfig: Config{
+			IPGeoSource: func(ip string, timeout time.Duration, lang string, maptrace bool) (*ipgeo.IPGeoData, error) {
+				close(started)
+				time.Sleep(time.Second)
+				return &ipgeo.IPGeoData{Asnumber: "STALE"}, nil
+			},
+			Timeout: time.Second,
+		},
+	}, nil, nil)
+	if err != nil {
+		t.Fatalf("newMTRSchedulerRuntime error: %v", err)
+	}
+
+	rt.maybeLaunchMetadataLookup(mtrProbeResult{
+		TTL:     1,
+		Success: true,
+		Addr:    &net.IPAddr{IP: net.ParseIP("1.0.0.1")},
+	})
+
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("metadata lookup did not start")
+	}
+
+	rt.handleReset()
+
+	select {
+	case stale := <-rt.metadataCh:
+		t.Fatalf("stale metadata result should be dropped after reset: %+v", stale)
+	case <-time.After(120 * time.Millisecond):
+	}
+	if len(rt.metadataInFlight) != 0 {
+		t.Fatalf("metadataInFlight len = %d, want 0 after reset", len(rt.metadataInFlight))
+	}
+}
+
+func TestScheduler_AsyncMetadataBacksOffEmptyLookup(t *testing.T) {
+	var lookupCount int32
+	rt, err := newMTRSchedulerRuntime(context.Background(), &mockTTLProber{}, NewMTRAggregator(), mtrSchedulerConfig{
+		BeginHop:         1,
+		MaxHops:          1,
+		HopInterval:      time.Millisecond,
+		ParallelRequests: 1,
+		ProgressThrottle: time.Millisecond,
+		FillGeo:          true,
+		AsyncMetadata:    true,
+		BaseConfig: Config{
+			IPGeoSource: func(ip string, timeout time.Duration, lang string, maptrace bool) (*ipgeo.IPGeoData, error) {
+				atomic.AddInt32(&lookupCount, 1)
+				return nil, errors.New("metadata unavailable")
+			},
+			Timeout: time.Second,
+		},
+	}, nil, nil)
+	if err != nil {
+		t.Fatalf("newMTRSchedulerRuntime error: %v", err)
+	}
+
+	result := mtrProbeResult{
+		TTL:     1,
+		Success: true,
+		Addr:    &net.IPAddr{IP: net.ParseIP("1.0.0.2")},
+	}
+	rt.maybeLaunchMetadataLookup(result)
+
+	select {
+	case mr := <-rt.metadataCh:
+		rt.processMetadataResult(mr)
+	case <-time.After(time.Second):
+		t.Fatal("metadata lookup did not finish")
+	}
+
+	if got := atomic.LoadInt32(&lookupCount); got != 1 {
+		t.Fatalf("lookup count = %d, want 1", got)
+	}
+
+	rt.maybeLaunchMetadataLookup(result)
+	if len(rt.metadataInFlight) != 0 {
+		t.Fatal("empty metadata result should suppress immediate retry")
+	}
+	if got := atomic.LoadInt32(&lookupCount); got != 1 {
+		t.Fatalf("lookup count after backoff = %d, want 1", got)
+	}
+}
+
 func TestScheduler_AsyncMetadataNaturalCompletionUsesBoundedContext(t *testing.T) {
 	prober := &mockTTLProber{
 		probeFn: func(_ context.Context, ttl int) (mtrProbeResult, error) {
