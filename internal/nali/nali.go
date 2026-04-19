@@ -35,10 +35,14 @@ type Span struct {
 	Start     int
 	End       int
 	InsertEnd int
-	ScanEnd   int
 	Text      string
 	LookupIP  string
 	Family    Family
+}
+
+type lineReadResult struct {
+	line string
+	err  error
 }
 
 type Annotator struct {
@@ -75,28 +79,71 @@ func Run(ctx context.Context, cfg Config, input io.Reader, output io.Writer, tar
 		return err
 	}
 
-	reader := bufio.NewReader(input)
+	readCtx, stopRead := context.WithCancel(ctx)
+	defer stopRead()
+	lines := readLines(readCtx, input)
 	for {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		line, err := reader.ReadString('\n')
-		if line != "" {
-			if isExitLine(line) {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case result, ok := <-lines:
+			if !ok {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
 				return nil
 			}
-			if _, writeErr := io.WriteString(output, annotator.AnnotateLine(ctx, line)); writeErr != nil {
-				return writeErr
+			exit, err := processLine(ctx, output, annotator, result)
+			if err != nil {
+				return err
+			}
+			if exit {
+				return nil
+			}
+			if result.err != nil {
+				if result.err == io.EOF {
+					return nil
+				}
+				return result.err
 			}
 		}
-		if err == nil {
-			continue
-		}
-		if err == io.EOF {
-			return nil
-		}
-		return err
 	}
+}
+
+func readLines(ctx context.Context, input io.Reader) <-chan lineReadResult {
+	results := make(chan lineReadResult, 1)
+	go func() {
+		defer close(results)
+		reader := bufio.NewReader(input)
+		for {
+			line, err := reader.ReadString('\n')
+			select {
+			case results <- lineReadResult{line: line, err: err}:
+			case <-ctx.Done():
+				return
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+	return results
+}
+
+func processLine(ctx context.Context, output io.Writer, annotator *Annotator, result lineReadResult) (bool, error) {
+	if result.line == "" {
+		return false, nil
+	}
+	if isExitLine(result.line) {
+		return true, nil
+	}
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	if _, err := io.WriteString(output, annotator.AnnotateLine(ctx, result.line)); err != nil {
+		return false, err
+	}
+	return false, nil
 }
 
 func isExitLine(line string) bool {
@@ -151,14 +198,19 @@ func (a *Annotator) lookupLabel(ctx context.Context, ip string) string {
 	}
 
 	label := ""
+	shouldCache := false
 	if geo, ok := ipgeo.Filter(ip); ok {
 		label = FormatGeo(geo, a.cfg.Lang)
+		shouldCache = true
 	} else if a.cfg.Source != nil && ctx.Err() == nil {
 		if geo, err := a.cfg.Source(ip, a.cfg.Timeout, a.cfg.Lang, false); err == nil {
 			label = FormatGeo(geo, a.cfg.Lang)
+			shouldCache = true
 		}
 	}
-	a.storeLabel(ip, label)
+	if shouldCache {
+		a.storeLabel(ip, label)
+	}
 	return label
 }
 
@@ -200,7 +252,7 @@ func FindIPSpans(line string) []Span {
 			i++
 			continue
 		}
-		span, ok := parseCandidate(line[i:end], i, end)
+		span, ok := parseCandidate(line[i:end], i)
 		if !ok {
 			i = end
 			continue
@@ -266,23 +318,23 @@ func isZoneByte(b byte) bool {
 		b == '_' || b == '-'
 }
 
-func parseCandidate(token string, base, scanEnd int) (Span, bool) {
+func parseCandidate(token string, base int) (Span, bool) {
 	if token == "" {
 		return Span{}, false
 	}
 	if trimmed := strings.TrimRight(token, "."); trimmed != token {
-		return parseCandidate(trimmed, base, scanEnd)
+		return parseCandidate(trimmed, base)
 	}
 	if !strings.ContainsAny(token, ".:") {
 		return Span{}, false
 	}
 	if strings.HasPrefix(token, ":") && !strings.HasPrefix(token, "::") {
-		return parseCandidate(token[1:], base+1, scanEnd)
+		return parseCandidate(token[1:], base+1)
 	}
 	if host, ok := splitIPv4Port(token); ok {
-		return parseAddr(host, base, base+len(host), scanEnd)
+		return parseAddr(host, base, base+len(host))
 	}
-	return parseAddr(token, base, base+len(token), scanEnd)
+	return parseAddr(token, base, base+len(token))
 }
 
 func splitIPv4Port(token string) (string, bool) {
@@ -302,7 +354,7 @@ func splitIPv4Port(token string) (string, bool) {
 	return host, true
 }
 
-func parseAddr(raw string, start, end, scanEnd int) (Span, bool) {
+func parseAddr(raw string, start, end int) (Span, bool) {
 	addr, err := netip.ParseAddr(raw)
 	if err != nil || !addr.IsValid() {
 		return Span{}, false
@@ -319,7 +371,6 @@ func parseAddr(raw string, start, end, scanEnd int) (Span, bool) {
 		Start:     start,
 		End:       end,
 		InsertEnd: end,
-		ScanEnd:   scanEnd,
 		Text:      raw,
 		LookupIP:  lookup,
 		Family:    family,

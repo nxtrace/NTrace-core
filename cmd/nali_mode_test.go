@@ -72,6 +72,8 @@ func TestValidateNaliModeOptions(t *testing.T) {
 		{name: "ttl interval", opts: naliModeOptions{ttlInterval: true}, want: "--nali 不能与 --ttl-time 同时使用"},
 		{name: "source port", opts: naliModeOptions{sourcePort: true}, want: "--nali 不能与 --source-port 同时使用"},
 		{name: "source", opts: naliModeOptions{sourceDevice: true}, want: "--nali 不能与 --dev 同时使用"},
+		{name: "show ips", opts: naliModeOptions{showIPs: true}, want: "--nali 不能与 --show-ips 同时使用"},
+		{name: "ipinfo", opts: naliModeOptions{ipInfoMode: true}, want: "--nali 不能与 --ipinfo 同时使用"},
 	}
 
 	for _, tt := range tests {
@@ -96,15 +98,17 @@ func TestBuildNaliModeOptionsDetectsExplicitDefaults(t *testing.T) {
 	parser.Int("m", "max-hops", &argparse.Options{Default: 30})
 	parser.Int("i", "ttl-time", &argparse.Options{Default: 300})
 	parser.Int("", "source-port", &argparse.Options{Default: 0})
+	parser.Flag("", "show-ips", &argparse.Options{})
+	parser.Int("y", "ipinfo", &argparse.Options{Default: 0})
 	parser.Int("", "timeout", &argparse.Options{Default: 1000})
-	if err := parser.Parse([]string{"nexttrace", "-q", "3", "--max-hops", "30", "-i", "300", "--source-port", "0"}); err != nil {
+	if err := parser.Parse([]string{"nexttrace", "-q", "3", "--max-hops", "30", "-i", "300", "--source-port", "0", "--show-ips", "-y", "0"}); err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
 
 	opts := buildNaliModeOptions(naliModeOptionInputs{
 		parser: parser,
 	})
-	if !opts.queries || !opts.maxHops || !opts.ttlInterval || !opts.sourcePort {
+	if !opts.queries || !opts.maxHops || !opts.ttlInterval || !opts.sourcePort || !opts.showIPs || !opts.ipInfoMode {
 		t.Fatalf("explicit probe flags not detected: %+v", opts)
 	}
 	if opts.port || opts.packetSize {

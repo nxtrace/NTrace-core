@@ -61,6 +61,8 @@ type naliModeOptions struct {
 	source           bool
 	sourcePort       bool
 	sourceDevice     bool
+	showIPs          bool
+	ipInfoMode       bool
 }
 
 type naliModeOptionInputs struct {
@@ -145,6 +147,8 @@ func validateNaliModeOptions(opts naliModeOptions) error {
 		{"--source", opts.source},
 		{"--source-port", opts.sourcePort},
 		{"--dev", opts.sourceDevice},
+		{"--show-ips", opts.showIPs},
+		{"--ipinfo", opts.ipInfoMode},
 		{"--disable-mpls", opts.disableMPLS},
 		{"--no-rdns", opts.noRDNS},
 		{"--always-rdns", opts.alwaysRDNS},
@@ -195,6 +199,8 @@ func buildNaliModeOptions(input naliModeOptionInputs) naliModeOptions {
 		source:           strings.TrimSpace(input.srcAddr) != "",
 		sourcePort:       parsedFlag(input.parser, "source-port"),
 		sourceDevice:     strings.TrimSpace(input.srcDev) != "",
+		showIPs:          parsedFlag(input.parser, "show-ips"),
+		ipInfoMode:       parsedFlag(input.parser, "ipinfo"),
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"strconv"
 	"strings"
 	"testing"
@@ -142,6 +143,30 @@ func TestAnnotateLineFailureAndEmptyGeoKeepOriginal(t *testing.T) {
 	}
 }
 
+func TestAnnotateLineDoesNotCacheLookupErrors(t *testing.T) {
+	calls := 0
+	a := New(Config{
+		Lang: "en",
+		Source: func(ip string, timeout time.Duration, lang string, maptrace bool) (*ipgeo.IPGeoData, error) {
+			calls++
+			if calls == 1 {
+				return nil, errors.New("temporary")
+			}
+			return &ipgeo.IPGeoData{CountryEn: "ok"}, nil
+		},
+	})
+
+	if got := a.AnnotateLine(context.Background(), "A 8.8.8.8"); got != "A 8.8.8.8" {
+		t.Fatalf("first AnnotateLine() = %q, want original", got)
+	}
+	if got := a.AnnotateLine(context.Background(), "A 8.8.8.8"); got != "A 8.8.8.8 [ok]" {
+		t.Fatalf("second AnnotateLine() = %q, want annotated", got)
+	}
+	if calls != 2 {
+		t.Fatalf("lookup calls = %d, want 2", calls)
+	}
+}
+
 func TestFindIPSpans(t *testing.T) {
 	line := "IP:1.1.1.1 [2001:db8::1]:443"
 	spans := FindIPSpans(line)
@@ -228,6 +253,30 @@ func TestRunStdinPreservesNewlineAndStopsOnExit(t *testing.T) {
 	}
 	if got, want := out.String(), "A 8.8.8.8 [United States]\n"; got != want {
 		t.Fatalf("Run() output = %q, want %q", got, want)
+	}
+}
+
+func TestRunStdinReturnsOnContextCancelWhileWaiting(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	reader, writer := io.Pipe()
+	t.Cleanup(func() {
+		_ = reader.Close()
+		_ = writer.Close()
+	})
+
+	done := make(chan error, 1)
+	go func() {
+		done <- Run(ctx, Config{}, reader, io.Discard, "")
+	}()
+
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("Run() error = %v, want context.Canceled", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Run() did not return after context cancellation")
 	}
 }
 
