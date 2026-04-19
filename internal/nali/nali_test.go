@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -82,6 +83,22 @@ func TestAnnotateLineBracketPortCIDRZoneAndPunctuation(t *testing.T) {
 	}
 }
 
+func TestAnnotateLineIPv4MappedIPv6WithPortStaysPlain(t *testing.T) {
+	a := New(Config{
+		Source: func(ip string, timeout time.Duration, lang string, maptrace bool) (*ipgeo.IPGeoData, error) {
+			t.Fatalf("unexpected lookup for invalid unbracketed IPv6 endpoint %q", ip)
+			return nil, nil
+		},
+	})
+
+	// parseCandidate only strips ports from pure IPv4 tokens through splitIPv4Port;
+	// parseAddr rejects unbracketed IPv6 endpoints with a port suffix.
+	got := a.AnnotateLine(context.Background(), "::ffff:1.2.3.4:53")
+	if got != "::ffff:1.2.3.4:53" {
+		t.Fatalf("AnnotateLine() = %q, want original", got)
+	}
+}
+
 func TestAnnotateLineFamilyFilters(t *testing.T) {
 	source := func(ip string, timeout time.Duration, lang string, maptrace bool) (*ipgeo.IPGeoData, error) {
 		return &ipgeo.IPGeoData{CountryEn: "ok"}, nil
@@ -146,8 +163,33 @@ func TestFormatGeo(t *testing.T) {
 	if got := FormatGeo(&ipgeo.IPGeoData{Asnumber: "AS65000", CountryEn: "Test", Isp: "Example ISP"}, "en"); got != "AS65000, Test, Example ISP" {
 		t.Fatalf("FormatGeo(fields) = %q", got)
 	}
+	if got := FormatGeo(&ipgeo.IPGeoData{Asnumber: "as 15169", CountryEn: "Test"}, "en"); got != "AS15169, Test" {
+		t.Fatalf("FormatGeo(normalized ASN) = %q", got)
+	}
 	if got := FormatGeo(&ipgeo.IPGeoData{}, "cn"); got != "" {
 		t.Fatalf("FormatGeo(empty) = %q, want empty", got)
+	}
+}
+
+func TestCacheIsBounded(t *testing.T) {
+	a := New(Config{
+		Source: func(ip string, timeout time.Duration, lang string, maptrace bool) (*ipgeo.IPGeoData, error) {
+			return &ipgeo.IPGeoData{CountryEn: "Test"}, nil
+		},
+		Lang: "en",
+	})
+
+	for i := 0; i < maxCacheEntries+10; i++ {
+		a.lookupLabel(context.Background(), "8.8."+strconv.Itoa(i/256)+"."+strconv.Itoa(i%256))
+	}
+
+	a.cacheMu.RLock()
+	defer a.cacheMu.RUnlock()
+	if len(a.cache) != maxCacheEntries {
+		t.Fatalf("cache size = %d, want %d", len(a.cache), maxCacheEntries)
+	}
+	if len(a.cacheOrder) != maxCacheEntries {
+		t.Fatalf("cache order size = %d, want %d", len(a.cacheOrder), maxCacheEntries)
 	}
 }
 

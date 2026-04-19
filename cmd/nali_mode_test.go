@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"strings"
 	"testing"
 
@@ -68,6 +69,7 @@ func TestValidateNaliModeOptions(t *testing.T) {
 		{name: "mtr", opts: naliModeOptions{mtr: true}, want: "--nali 不能与 --mtr/-r/--report/-w/--wide 同时使用"},
 		{name: "output", opts: naliModeOptions{output: true}, want: "--nali 不能与 --output 同时使用"},
 		{name: "probe", opts: naliModeOptions{queries: true}, want: "--nali 不能与 --queries 同时使用"},
+		{name: "ttl interval", opts: naliModeOptions{ttlInterval: true}, want: "--nali 不能与 --ttl-time 同时使用"},
 		{name: "source", opts: naliModeOptions{sourceDevice: true}, want: "--nali 不能与 --dev 同时使用"},
 	}
 
@@ -91,21 +93,16 @@ func TestBuildNaliModeOptionsDetectsExplicitDefaults(t *testing.T) {
 	parser := argparse.NewParser("nexttrace", "")
 	parser.Int("q", "queries", &argparse.Options{Default: 3})
 	parser.Int("m", "max-hops", &argparse.Options{Default: 30})
+	parser.Int("i", "ttl-time", &argparse.Options{Default: 300})
 	parser.Int("", "timeout", &argparse.Options{Default: 1000})
-	if err := parser.Parse([]string{"nexttrace", "-q", "3", "--max-hops", "30"}); err != nil {
+	if err := parser.Parse([]string{"nexttrace", "-q", "3", "--max-hops", "30", "-i", "300"}); err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
 
-	opts := buildNaliModeOptions(
-		parser,
-		false, false, false, false, false,
-		effectiveMTRModes{},
-		false, false, false, false,
-		"", false, false, false,
-		"", false, "", false, "", false, false, false, false,
-		"", 0, "",
-	)
-	if !opts.queries || !opts.maxHops {
+	opts := buildNaliModeOptions(naliModeOptionInputs{
+		parser: parser,
+	})
+	if !opts.queries || !opts.maxHops || !opts.ttlInterval {
 		t.Fatalf("explicit probe flags not detected: %+v", opts)
 	}
 	if opts.port || opts.packetSize {
@@ -115,7 +112,7 @@ func TestBuildNaliModeOptionsDetectsExplicitDefaults(t *testing.T) {
 
 func TestRunNaliModeTargetWithDisableGeoIPKeepsOriginal(t *testing.T) {
 	var out bytes.Buffer
-	err := runNaliMode(t.Context(), naliRunOptions{
+	err := runNaliMode(context.Background(), naliRunOptions{
 		stdout:    &out,
 		data:      "disable-geoip",
 		pow:       "api.nxtrace.org",
@@ -133,7 +130,7 @@ func TestRunNaliModeTargetWithDisableGeoIPKeepsOriginal(t *testing.T) {
 
 func TestRunNaliModeReadsStdinWithoutTarget(t *testing.T) {
 	var out bytes.Buffer
-	err := runNaliMode(t.Context(), naliRunOptions{
+	err := runNaliMode(context.Background(), naliRunOptions{
 		stdin:     strings.NewReader("A 192.0.2.1\n"),
 		stdout:    &out,
 		data:      "disable-geoip",

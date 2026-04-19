@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/nxtrace/NTrace-core/ipgeo"
@@ -20,6 +21,8 @@ const (
 	Family4
 	Family6
 )
+
+const maxCacheEntries = 4096
 
 type Config struct {
 	Source  ipgeo.Source
@@ -39,8 +42,10 @@ type Span struct {
 }
 
 type Annotator struct {
-	cfg   Config
-	cache map[string]string
+	cfg        Config
+	cacheMu    sync.RWMutex
+	cache      map[string]string
+	cacheOrder []string
 }
 
 func New(cfg Config) *Annotator {
@@ -140,7 +145,7 @@ func (a *Annotator) lookupLabel(ctx context.Context, ip string) string {
 	if ip == "" {
 		return ""
 	}
-	if label, ok := a.cache[ip]; ok {
+	if label, ok := a.cachedLabel(ip); ok {
 		return label
 	}
 
@@ -152,8 +157,33 @@ func (a *Annotator) lookupLabel(ctx context.Context, ip string) string {
 			label = FormatGeo(geo, a.cfg.Lang)
 		}
 	}
-	a.cache[ip] = label
+	a.storeLabel(ip, label)
 	return label
+}
+
+func (a *Annotator) cachedLabel(ip string) (string, bool) {
+	a.cacheMu.RLock()
+	defer a.cacheMu.RUnlock()
+	label, ok := a.cache[ip]
+	return label, ok
+}
+
+func (a *Annotator) storeLabel(ip, label string) {
+	a.cacheMu.Lock()
+	defer a.cacheMu.Unlock()
+
+	if _, ok := a.cache[ip]; ok {
+		a.cache[ip] = label
+		return
+	}
+	if len(a.cacheOrder) >= maxCacheEntries {
+		oldest := a.cacheOrder[0]
+		delete(a.cache, oldest)
+		copy(a.cacheOrder, a.cacheOrder[1:])
+		a.cacheOrder = a.cacheOrder[:len(a.cacheOrder)-1]
+	}
+	a.cache[ip] = label
+	a.cacheOrder = append(a.cacheOrder, ip)
 }
 
 func FindIPSpans(line string) []Span {
@@ -225,6 +255,9 @@ func parseCandidate(token string, base, scanEnd int) (Span, bool) {
 	}
 	if trimmed := strings.TrimRight(token, "."); trimmed != token {
 		return parseCandidate(trimmed, base, scanEnd)
+	}
+	if !strings.ContainsAny(token, ".:") {
+		return Span{}, false
 	}
 	if strings.HasPrefix(token, ":") && !strings.HasPrefix(token, "::") {
 		return parseCandidate(token[1:], base+1, scanEnd)
@@ -346,8 +379,9 @@ func localized(cn, en, lang string) string {
 }
 
 func normalizeASN(asn string) string {
-	if strings.HasPrefix(strings.ToUpper(asn), "AS") {
-		return asn
+	asn = strings.TrimSpace(asn)
+	if len(asn) >= 2 && strings.EqualFold(asn[:2], "AS") {
+		asn = strings.TrimSpace(asn[2:])
 	}
 	return "AS" + asn
 }

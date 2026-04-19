@@ -56,11 +56,42 @@ type naliModeOptions struct {
 	maxHops          bool
 	beginHop         bool
 	packetInterval   bool
+	ttlInterval      bool
 	packetSize       bool
 	tos              bool
 	source           bool
 	sourcePort       bool
 	sourceDevice     bool
+}
+
+type naliModeOptionInputs struct {
+	parser          *argparse.Parser
+	ipv4Only        bool
+	ipv6Only        bool
+	tcp             bool
+	udp             bool
+	mtu             bool
+	mtrModes        effectiveMTRModes
+	raw             bool
+	table           bool
+	classic         bool
+	json            bool
+	outputPath      string
+	outputDefault   bool
+	routePath       bool
+	disableMaptrace bool
+	from            string
+	deploy          bool
+	listen          string
+	fastTrace       bool
+	file            string
+	disableMPLS     bool
+	noRDNS          bool
+	alwaysRDNS      bool
+	init            bool
+	srcAddr         string
+	srcPort         int
+	srcDev          string
 }
 
 type naliRunOptions struct {
@@ -112,6 +143,7 @@ func validateNaliModeOptions(opts naliModeOptions) error {
 		{"--max-hops", opts.maxHops},
 		{"--first", opts.beginHop},
 		{"--send-time", opts.packetInterval},
+		{"--ttl-time", opts.ttlInterval},
 		{"--psize", opts.packetSize},
 		{"--tos", opts.tos},
 		{"--source", opts.source},
@@ -129,60 +161,45 @@ func validateNaliModeOptions(opts naliModeOptions) error {
 	return nil
 }
 
-func buildNaliModeOptions(
-	parser *argparse.Parser,
-	ipv4Only, ipv6Only, tcp, udp, mtu bool,
-	mtrModes effectiveMTRModes,
-	raw, table, classic, json bool,
-	outputPath string,
-	outputDefault, routePath, disableMaptrace bool,
-	from string,
-	deploy bool,
-	listen string,
-	fastTrace bool,
-	file string,
-	disableMPLS, noRDNS, alwaysRDNS, init bool,
-	srcAddr string,
-	srcPort int,
-	srcDev string,
-) naliModeOptions {
+func buildNaliModeOptions(input naliModeOptionInputs) naliModeOptions {
 	return naliModeOptions{
-		ipv4Only:         ipv4Only,
-		ipv6Only:         ipv6Only,
-		tcp:              tcp,
-		udp:              udp,
-		mtu:              mtu,
-		mtr:              mtrModes.mtr,
-		raw:              raw,
-		table:            table,
-		classic:          classic,
-		json:             json,
-		output:           strings.TrimSpace(outputPath) != "",
-		outputDefault:    outputDefault,
-		routePath:        routePath,
-		maptraceFlag:     disableMaptrace,
-		from:             strings.TrimSpace(from) != "",
-		deploy:           deploy,
-		listen:           strings.TrimSpace(listen) != "",
-		fastTrace:        fastTrace,
-		file:             strings.TrimSpace(file) != "",
-		disableMPLS:      disableMPLS,
-		noRDNS:           noRDNS,
-		alwaysRDNS:       alwaysRDNS,
-		init:             init,
-		icmpMode:         parsedFlag(parser, "icmp-mode"),
-		port:             parsedFlag(parser, "port"),
-		queries:          parsedFlag(parser, "queries"),
-		maxAttempts:      parsedFlag(parser, "max-attempts"),
-		parallelRequests: parsedFlag(parser, "parallel-requests"),
-		maxHops:          parsedFlag(parser, "max-hops"),
-		beginHop:         parsedFlag(parser, "first"),
-		packetInterval:   parsedFlag(parser, "send-time"),
-		packetSize:       parsedFlag(parser, "psize"),
-		tos:              parsedFlag(parser, "tos"),
-		source:           strings.TrimSpace(srcAddr) != "",
-		sourcePort:       srcPort != 0,
-		sourceDevice:     strings.TrimSpace(srcDev) != "",
+		ipv4Only:         input.ipv4Only,
+		ipv6Only:         input.ipv6Only,
+		tcp:              input.tcp,
+		udp:              input.udp,
+		mtu:              input.mtu,
+		mtr:              input.mtrModes.mtr,
+		raw:              input.raw,
+		table:            input.table,
+		classic:          input.classic,
+		json:             input.json,
+		output:           strings.TrimSpace(input.outputPath) != "",
+		outputDefault:    input.outputDefault,
+		routePath:        input.routePath,
+		maptraceFlag:     input.disableMaptrace,
+		from:             strings.TrimSpace(input.from) != "",
+		deploy:           input.deploy,
+		listen:           strings.TrimSpace(input.listen) != "",
+		fastTrace:        input.fastTrace,
+		file:             strings.TrimSpace(input.file) != "",
+		disableMPLS:      input.disableMPLS,
+		noRDNS:           input.noRDNS,
+		alwaysRDNS:       input.alwaysRDNS,
+		init:             input.init,
+		icmpMode:         parsedFlag(input.parser, "icmp-mode"),
+		port:             parsedFlag(input.parser, "port"),
+		queries:          parsedFlag(input.parser, "queries"),
+		maxAttempts:      parsedFlag(input.parser, "max-attempts"),
+		parallelRequests: parsedFlag(input.parser, "parallel-requests"),
+		maxHops:          parsedFlag(input.parser, "max-hops"),
+		beginHop:         parsedFlag(input.parser, "first"),
+		packetInterval:   parsedFlag(input.parser, "send-time"),
+		ttlInterval:      parsedFlag(input.parser, "ttl-time"),
+		packetSize:       parsedFlag(input.parser, "psize"),
+		tos:              parsedFlag(input.parser, "tos"),
+		source:           strings.TrimSpace(input.srcAddr) != "",
+		sourcePort:       input.srcPort != 0,
+		sourceDevice:     strings.TrimSpace(input.srcDev) != "",
 	}
 }
 
