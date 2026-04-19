@@ -218,8 +218,9 @@ func runNaliMode(ctx context.Context, opts naliRunOptions) error {
 	restoreFastIPOutput := setFastIPOutputSuppression(true)
 	defer restoreFastIPOutput()
 
-	disableMaptrace := false
-	applyDN42Mode(opts.dn42, &opts.data, &disableMaptrace)
+	if opts.dn42 {
+		applyDN42DataOrigin(&opts.data)
+	}
 	leoWs := initLeoWebsocket(ctx, &opts.data, &opts.pow, false)
 	defer closeLeoWebsocket(leoWs)
 

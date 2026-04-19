@@ -751,9 +751,13 @@ func applyDN42Mode(enabled bool, dataOrigin *string, disableMaptrace *bool) {
 	if !enabled {
 		return
 	}
+	applyDN42DataOrigin(dataOrigin)
+	*disableMaptrace = true
+}
+
+func applyDN42DataOrigin(dataOrigin *string) {
 	config.InitConfig()
 	*dataOrigin = "DN42"
-	*disableMaptrace = true
 }
 
 func prepareRuntimeEnvironment(ctx context.Context, dn42 bool, dataOrigin *string, disableMaptrace *bool, powProvider *string, asyncLeo bool) *wshandle.WsConn {
@@ -1254,8 +1258,8 @@ func Execute() {
 		return
 	}
 	if *speedMode {
-		// `--speed` should have been handled before the main parser runs. If we reached
-		// here, return a defensive error to avoid silently falling through.
+		// maybeRunSpeedMode should handle --speed before parser.Parse runs. This
+		// branch is a safety net for parser edge cases such as a "--" terminator.
 		fmt.Fprintln(os.Stderr, "internal error: speed mode dispatch failed")
 		os.Exit(1)
 	}

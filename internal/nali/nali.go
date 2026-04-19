@@ -216,7 +216,7 @@ func (a *Annotator) lookupLabel(ctx context.Context, ip string) string {
 			shouldCache = true
 		}
 	}
-	if shouldCache {
+	if shouldCache && label != "" {
 		a.storeLabel(ip, label)
 	}
 	return label

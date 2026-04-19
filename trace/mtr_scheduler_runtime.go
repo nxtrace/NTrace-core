@@ -354,10 +354,7 @@ func (rt *mtrSchedulerRuntime) maybeLaunchMetadataLookup(result mtrProbeResult) 
 
 	gen := rt.generation
 	cfg := rt.cfg.BaseConfig
-	metadataTimeout := cfg.Timeout
-	if metadataTimeout <= 0 {
-		metadataTimeout = geoTimeoutForAttempt(0)
-	}
+	metadataTimeout := mtrMetadataLookupTimeout(cfg.Timeout)
 	generationCtx := rt.metadataCtx
 	if generationCtx == nil {
 		generationCtx = rt.ctx
@@ -381,6 +378,14 @@ func (rt *mtrSchedulerRuntime) maybeLaunchMetadataLookup(result mtrProbeResult) 
 	}()
 }
 
+func mtrMetadataLookupTimeout(probeTimeout time.Duration) time.Duration {
+	floor := geoTimeoutForAttempt(0)
+	if probeTimeout > floor {
+		return probeTimeout
+	}
+	return floor
+}
+
 func (rt *mtrSchedulerRuntime) processMetadataResult(result mtrMetadataResult) {
 	if result.gen != rt.generation {
 		return
@@ -402,11 +407,14 @@ func (rt *mtrSchedulerRuntime) cacheMetadataPatch(patch mtrMetadataPatch) {
 	if patch.ip == "" {
 		return
 	}
-	if patch.host == "" && patch.geo == nil {
-		rt.metadataBackoff[patch.ip] = time.Now().Add(mtrMetadataNegativeCacheTTL)
-		return
+	now := time.Now()
+	missingGeo := rt.cfg.BaseConfig.IPGeoSource != nil && patch.geo == nil
+	missingHost := rt.cfg.BaseConfig.RDNS && patch.host == ""
+	if missingGeo || missingHost {
+		rt.metadataBackoff[patch.ip] = now.Add(mtrMetadataNegativeCacheTTL)
+	} else {
+		delete(rt.metadataBackoff, patch.ip)
 	}
-	delete(rt.metadataBackoff, patch.ip)
 
 	cached := rt.metadataCache[patch.ip]
 	if cached.ip == "" {

@@ -92,6 +92,29 @@ func TestValidateNaliModeOptions(t *testing.T) {
 	}
 }
 
+func TestValidateNaliModeOptionsRejectsStartupConflictsFromInputs(t *testing.T) {
+	tests := []struct {
+		name  string
+		input naliModeOptionInputs
+		want  string
+	}{
+		{name: "deploy", input: naliModeOptionInputs{deploy: true}, want: "--deploy"},
+		{name: "from", input: naliModeOptionInputs{from: "Germany"}, want: "--from"},
+		{name: "init", input: naliModeOptionInputs{init: true}, want: "--init"},
+		{name: "listen", input: naliModeOptionInputs{listen: "127.0.0.1:8080"}, want: "--listen"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.input.parser = argparse.NewParser("nexttrace", "")
+			err := validateNaliModeOptions(buildNaliModeOptions(tt.input))
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("validateNaliModeOptions() error = %v, want conflict %q", err, tt.want)
+			}
+		})
+	}
+}
+
 func TestBuildNaliModeOptionsDetectsExplicitDefaults(t *testing.T) {
 	parser := argparse.NewParser("nexttrace", "")
 	parser.Int("q", "queries", &argparse.Options{Default: 3})

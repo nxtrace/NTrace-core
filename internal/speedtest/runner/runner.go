@@ -37,6 +37,8 @@ type candidate struct {
 	Meta   map[string]any
 }
 
+const defaultProbeResponseLimit = 1 << 20
+
 var (
 	resolveAllIPsFn   = netx.ResolveAllIPs
 	newHTTPClientFn   = netx.NewClient
@@ -423,12 +425,27 @@ func performRequest(ctx context.Context, client *http.Client, spec provider.Requ
 	if resp.StatusCode >= http.StatusBadRequest {
 		return 0, nil, fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
-	body, err := io.ReadAll(resp.Body)
+	body, err := readProbeResponseBody(resp.Body, spec.ResponseLimit)
 	if err != nil {
 		return 0, nil, fmt.Errorf("read response body: %w", err)
 	}
 	meta := p.ParseMetadata(resp, body)
 	return float64(time.Since(start).Nanoseconds()) / float64(time.Millisecond), meta, nil
+}
+
+func readProbeResponseBody(body io.Reader, responseLimit int64) ([]byte, error) {
+	limit := int64(defaultProbeResponseLimit)
+	if responseLimit > 0 && responseLimit < limit {
+		limit = responseLimit
+	}
+	data, err := io.ReadAll(io.LimitReader(body, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > limit {
+		return nil, fmt.Errorf("response body exceeds %s", speedconfig.HumanBytes(limit))
+	}
+	return data, nil
 }
 
 func gatherConnectionInfo(ctx context.Context, cfg *speedconfig.Config, host string, selected candidate) result.ConnectionInfo {
@@ -445,10 +462,13 @@ func gatherConnectionInfo(ctx context.Context, cfg *speedconfig.Config, host str
 	clientTarget := ""
 	if selected.Meta != nil {
 		if v, ok := selected.Meta["client_ip"].(string); ok {
-			clientTarget = v
+			clientTarget = strings.TrimSpace(v)
 		}
 	}
-	info.Client = fetchPeerInfoFn(ctx, clientTarget, cfg)
+	clientExpected := clientTarget != ""
+	if clientExpected {
+		info.Client = fetchPeerInfoFn(ctx, clientTarget, cfg)
+	}
 	info.Server = fetchPeerInfoFn(ctx, selected.IP, cfg)
 	if info.Server.Status == "ok" && info.Server.IP == "" {
 		info.Server.IP = selected.IP
@@ -463,7 +483,7 @@ func gatherConnectionInfo(ctx context.Context, cfg *speedconfig.Config, host str
 		info.Server.ProviderMeta = extractServerMeta(selected.Meta)
 	}
 	switch {
-	case info.Client.Status == "ok" && info.Server.Status == "ok":
+	case info.Server.Status == "ok" && (!clientExpected || info.Client.Status == "ok"):
 		info.Status = "ok"
 	case info.Client.Status == "ok" || info.Server.Status == "ok":
 		info.Status = "degraded"

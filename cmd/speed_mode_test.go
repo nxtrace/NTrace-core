@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"bytes"
+	"context"
+	"crypto/x509"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -13,10 +15,12 @@ import (
 
 	"github.com/akamensky/argparse"
 
+	speedconfig "github.com/nxtrace/NTrace-core/internal/speedtest/config"
 	"github.com/nxtrace/NTrace-core/internal/speedtest/netx"
 	"github.com/nxtrace/NTrace-core/internal/speedtest/provider/apple"
 	"github.com/nxtrace/NTrace-core/internal/speedtest/provider/cloudflare"
 	"github.com/nxtrace/NTrace-core/internal/speedtest/result"
+	"github.com/nxtrace/NTrace-core/util"
 )
 
 func TestRegisterSpeedFlagWithAvailabilityEnabledAddsSingleHelpEntry(t *testing.T) {
@@ -79,6 +83,70 @@ func TestRunSpeedModeRejectsUnexpectedTarget(t *testing.T) {
 	}
 }
 
+type fakeSpeedMetadataBackend struct {
+	closed bool
+}
+
+func (f *fakeSpeedMetadataBackend) Close() {
+	f.closed = true
+}
+
+func TestStartSpeedMetadataBackendHonorsNoMetadata(t *testing.T) {
+	calls := 0
+	prev := newSpeedMetadataBackend
+	newSpeedMetadataBackend = func(context.Context) speedMetadataBackend {
+		calls++
+		return &fakeSpeedMetadataBackend{}
+	}
+	defer func() { newSpeedMetadataBackend = prev }()
+
+	if backend := startSpeedMetadataBackend(context.Background(), &speedconfig.Config{NoMetadata: true}); backend != nil {
+		t.Fatalf("backend = %#v, want nil when metadata is disabled", backend)
+	}
+	if calls != 0 {
+		t.Fatalf("metadata backend calls = %d, want 0", calls)
+	}
+}
+
+func TestStartSpeedMetadataBackendClosesWhenEnabled(t *testing.T) {
+	fake := &fakeSpeedMetadataBackend{}
+	prev := newSpeedMetadataBackend
+	newSpeedMetadataBackend = func(context.Context) speedMetadataBackend {
+		return fake
+	}
+	defer func() { newSpeedMetadataBackend = prev }()
+
+	backend := startSpeedMetadataBackend(context.Background(), &speedconfig.Config{})
+	if backend != fake {
+		t.Fatalf("backend = %#v, want fake backend", backend)
+	}
+	closeSpeedMetadataBackend(backend)
+	if !fake.closed {
+		t.Fatal("metadata backend was not closed")
+	}
+}
+
+func TestSuppressSpeedMetadataOutputOnlyForJSONMetadata(t *testing.T) {
+	orig := util.SuppressFastIPOutput
+	defer func() { util.SuppressFastIPOutput = orig }()
+
+	util.SuppressFastIPOutput = false
+	restore := suppressSpeedMetadataOutput(&speedconfig.Config{OutputJSON: true})
+	if !util.SuppressFastIPOutput {
+		t.Fatal("SuppressFastIPOutput = false, want true for JSON metadata")
+	}
+	restore()
+	if util.SuppressFastIPOutput {
+		t.Fatal("SuppressFastIPOutput = true after restore, want false")
+	}
+
+	restore = suppressSpeedMetadataOutput(&speedconfig.Config{OutputJSON: true, NoMetadata: true})
+	if util.SuppressFastIPOutput {
+		t.Fatal("SuppressFastIPOutput = true, want unchanged when metadata is disabled")
+	}
+	restore()
+}
+
 func TestRunSpeedModeAppleJSON(t *testing.T) {
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -100,16 +168,22 @@ func TestRunSpeedModeAppleJSON(t *testing.T) {
 
 	restoreApple := apple.SetBaseForTest(srv.URL)
 	defer restoreApple()
-	restoreRoots := netx.SetExtraRootCAsForTest(srv.Client().Transport.(*http.Transport).TLSClientConfig.RootCAs)
+	restoreRoots := netx.SetExtraRootCAsForTest(testServerRootCAs(srv))
 	defer restoreRoots()
 
 	u, _ := url.Parse(srv.URL)
 	var stdout, stderr bytes.Buffer
 	rc := runSpeedMode([]string{"--speed", "--json", "--no-metadata", "--max", "64KiB", "--timeout", "1500", "--threads", "2", "--latency-count", "2", "--endpoint", u.Hostname()}, &stdout, &stderr)
 	if rc != 0 && rc != 2 {
-		t.Fatalf("runSpeedMode(apple) rc = %d, stderr=%s", rc, stderr.String())
+		t.Fatalf("runSpeedMode(apple) rc = %d, want 0 or degraded 2, stderr=%s", rc, stderr.String())
 	}
-	assertPureJSONSpeedResult(t, stdout.Bytes(), "apple")
+	res := assertPureJSONSpeedResult(t, stdout.Bytes(), "apple")
+	if res.ExitCode != rc {
+		t.Fatalf("JSON exit_code = %d, want rc %d", res.ExitCode, rc)
+	}
+	if rc == 2 && !res.Degraded {
+		t.Fatal("Degraded = false, want true when rc=2")
+	}
 }
 
 func TestRunSpeedModeCloudflareJSON(t *testing.T) {
@@ -136,18 +210,24 @@ func TestRunSpeedModeCloudflareJSON(t *testing.T) {
 
 	restoreCF := cloudflare.SetBaseForTest(srv.URL)
 	defer restoreCF()
-	restoreRoots := netx.SetExtraRootCAsForTest(srv.Client().Transport.(*http.Transport).TLSClientConfig.RootCAs)
+	restoreRoots := netx.SetExtraRootCAsForTest(testServerRootCAs(srv))
 	defer restoreRoots()
 
 	var stdout, stderr bytes.Buffer
 	rc := runSpeedMode([]string{"--speed", "--speed-provider", "cloudflare", "--json", "--no-metadata", "--max", "64KiB", "--timeout", "1500", "--threads", "2", "--latency-count", "2", "--non-interactive"}, &stdout, &stderr)
 	if rc != 0 && rc != 2 {
-		t.Fatalf("runSpeedMode(cloudflare) rc = %d, stderr=%s", rc, stderr.String())
+		t.Fatalf("runSpeedMode(cloudflare) rc = %d, want 0 or degraded 2, stderr=%s", rc, stderr.String())
 	}
-	assertPureJSONSpeedResult(t, stdout.Bytes(), "cloudflare")
+	res := assertPureJSONSpeedResult(t, stdout.Bytes(), "cloudflare")
+	if res.ExitCode != rc {
+		t.Fatalf("JSON exit_code = %d, want rc %d", res.ExitCode, rc)
+	}
+	if rc == 2 && !res.Degraded {
+		t.Fatal("Degraded = false, want true when rc=2")
+	}
 }
 
-func assertPureJSONSpeedResult(t *testing.T, data []byte, providerName string) {
+func assertPureJSONSpeedResult(t *testing.T, data []byte, providerName string) result.RunResult {
 	t.Helper()
 	if bytes.Contains(data, []byte("preferred API IP")) {
 		t.Fatalf("speed JSON output should not contain text noise:\n%s", data)
@@ -162,11 +242,28 @@ func assertPureJSONSpeedResult(t *testing.T, data []byte, providerName string) {
 	if len(res.Rounds) != 4 {
 		t.Fatalf("len(Rounds) = %d, want 4", len(res.Rounds))
 	}
+	return res
+}
+
+func testServerRootCAs(srv *httptest.Server) *x509.CertPool {
+	if transport, ok := srv.Client().Transport.(*http.Transport); ok && transport.TLSClientConfig != nil && transport.TLSClientConfig.RootCAs != nil {
+		return transport.TLSClientConfig.RootCAs
+	}
+	pool := x509.NewCertPool()
+	pool.AddCert(srv.Certificate())
+	return pool
 }
 
 func TestContainsSpeedFlagSupportsAssignedFormAndRespectsTerminator(t *testing.T) {
-	if !containsSpeedFlag([]string{"--speed=true"}) {
-		t.Fatal("containsSpeedFlag(--speed=true) = false, want true")
+	for _, arg := range []string{"--speed=true", "--speed=True", "--speed=1", "--speed="} {
+		if !containsSpeedFlag([]string{arg}) {
+			t.Fatalf("containsSpeedFlag(%s) = false, want true", arg)
+		}
+	}
+	for _, arg := range []string{"--speed=false", "--speed=0", "--speed=no"} {
+		if containsSpeedFlag([]string{arg}) {
+			t.Fatalf("containsSpeedFlag(%s) = true, want false", arg)
+		}
 	}
 	if containsSpeedFlag([]string{"--", "--speed"}) {
 		t.Fatal("containsSpeedFlag should ignore --speed after terminator")

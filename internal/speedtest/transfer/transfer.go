@@ -40,6 +40,10 @@ func Run(
 	timeout time.Duration,
 	progress ProgressFunc,
 ) Result {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	var totalBytes atomic.Int64
 	var faultCount atomic.Int32
 	var wg sync.WaitGroup
@@ -117,6 +121,9 @@ func doDownload(ctx context.Context, client *http.Client, spec provider.RequestS
 	}
 	resp, err := client.Do(req)
 	if err != nil {
+		if isExpectedTransferStop(err) {
+			return 0, false
+		}
 		return 0, true
 	}
 	defer func() {
@@ -192,8 +199,10 @@ func doUpload(ctx context.Context, client *http.Client, spec provider.RequestSpe
 	defer func() {
 		_ = resp.Body.Close()
 	}()
-	_, _ = io.Copy(io.Discard, resp.Body)
 	if resp.StatusCode >= http.StatusBadRequest {
+		return cr.count.Load(), true
+	}
+	if _, err := io.Copy(io.Discard, resp.Body); err != nil && !isExpectedTransferStop(err) {
 		return cr.count.Load(), true
 	}
 	return cr.count.Load(), false

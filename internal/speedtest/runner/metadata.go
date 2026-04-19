@@ -80,16 +80,23 @@ func formatGeoLocation(geo *ipgeo.IPGeoData, lang string) string {
 	}
 	localized := localizedGeoCopy(geo, lang)
 	parts := make([]string, 0, 3)
-	if localized.City != "" {
-		parts = append(parts, localized.City)
-	}
-	if localized.Prov != "" && localized.Prov != localized.City {
-		parts = append(parts, localized.Prov)
-	}
-	if localized.Country != "" && localized.Country != localized.Prov {
-		parts = append(parts, localized.Country)
-	}
+	parts = appendUniqueLocationPart(parts, localized.City)
+	parts = appendUniqueLocationPart(parts, localized.Prov)
+	parts = appendUniqueLocationPart(parts, localized.Country)
 	return strings.Join(parts, ", ")
+}
+
+func appendUniqueLocationPart(parts []string, value string) []string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return parts
+	}
+	for _, part := range parts {
+		if part == value {
+			return parts
+		}
+	}
+	return append(parts, value)
 }
 
 func localizedGeoCopy(geo *ipgeo.IPGeoData, lang string) *ipgeo.IPGeoData {

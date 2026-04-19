@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -139,6 +140,60 @@ func TestRunCloudflareDiscoveryAndMetadata(t *testing.T) {
 	}
 }
 
+func TestGatherConnectionInfoServerOnlyMetadataIsHealthy(t *testing.T) {
+	prevPeer := fetchPeerInfoFn
+	defer func() { fetchPeerInfoFn = prevPeer }()
+
+	var targets []string
+	fetchPeerInfoFn = func(ctx context.Context, target string, cfg *speedconfig.Config) result.PeerInfo {
+		targets = append(targets, target)
+		if target != "203.0.113.10" {
+			return result.PeerInfo{Status: "unavailable"}
+		}
+		return result.PeerInfo{Status: "ok", IP: target, Location: "Test City"}
+	}
+
+	info := gatherConnectionInfo(context.Background(), &speedconfig.Config{}, "example.test", candidate{
+		IP: "203.0.113.10",
+	})
+
+	if info.Status != "ok" {
+		t.Fatalf("ConnectionInfo.Status = %q, want ok", info.Status)
+	}
+	if info.Client.Status != "unavailable" {
+		t.Fatalf("Client.Status = %q, want unavailable", info.Client.Status)
+	}
+	if len(targets) != 1 || targets[0] != "203.0.113.10" {
+		t.Fatalf("metadata targets = %#v, want server only", targets)
+	}
+}
+
+func TestGatherConnectionInfoExpectedClientFailureIsDegraded(t *testing.T) {
+	prevPeer := fetchPeerInfoFn
+	defer func() { fetchPeerInfoFn = prevPeer }()
+
+	fetchPeerInfoFn = func(ctx context.Context, target string, cfg *speedconfig.Config) result.PeerInfo {
+		switch target {
+		case "198.51.100.10":
+			return result.PeerInfo{Status: "unavailable"}
+		case "203.0.113.10":
+			return result.PeerInfo{Status: "ok", IP: target, Location: "Test City"}
+		default:
+			t.Fatalf("unexpected metadata target %q", target)
+		}
+		return result.PeerInfo{Status: "unavailable"}
+	}
+
+	info := gatherConnectionInfo(context.Background(), &speedconfig.Config{}, "example.test", candidate{
+		IP:   "203.0.113.10",
+		Meta: map[string]any{"client_ip": "198.51.100.10"},
+	})
+
+	if info.Status != "degraded" {
+		t.Fatalf("ConnectionInfo.Status = %q, want degraded", info.Status)
+	}
+}
+
 type zeroReader struct{}
 
 func (zeroReader) Read(p []byte) (int, error) {
@@ -197,5 +252,30 @@ func TestPerformRequestUsesProviderMetadataParser(t *testing.T) {
 	}
 	if meta["colo"] != "SIN" {
 		t.Fatalf("meta = %#v, want provider parser result", meta)
+	}
+}
+
+func TestPerformRequestRejectsOversizedProbeBody(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, "12345")
+	}))
+	defer srv.Close()
+
+	restoreRoots := netx.SetExtraRootCAsForTest(srv.Client().Transport.(*http.Transport).TLSClientConfig.RootCAs)
+	defer restoreRoots()
+
+	u, _ := url.Parse(srv.URL)
+	client := netx.NewClient(netx.Options{
+		PinHost: u.Hostname(),
+		PinIP:   u.Hostname(),
+		Timeout: time.Second,
+	})
+	_, _, err := performRequest(context.Background(), client, provider.RequestSpec{
+		Method:        http.MethodGet,
+		URL:           srv.URL,
+		ResponseLimit: 4,
+	}, cloudflare.New("m"))
+	if err == nil || !strings.Contains(err.Error(), "response body exceeds") {
+		t.Fatalf("performRequest() error = %v, want response body limit error", err)
 	}
 }

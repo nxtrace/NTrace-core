@@ -643,7 +643,10 @@ func lookupGeoWithRetry(c Config, cacheKey, query string, dn42 bool) (*ipgeo.IPG
 		if deadline, ok := ctx.Deadline(); ok {
 			remaining := time.Until(deadline)
 			if remaining <= 0 {
-				return nil, ctx.Err()
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
+				return nil, context.DeadlineExceeded
 			}
 			if remaining < timeout {
 				timeout = remaining

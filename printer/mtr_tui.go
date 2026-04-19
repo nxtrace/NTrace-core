@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mattn/go-runewidth"
@@ -769,6 +770,25 @@ func truncateStr(s string, maxLen int) string {
 func MTRTUIPrinter(target, domain, targetIP, version string, startTime time.Time,
 	srcHost, srcIP, lang string, apiInfo func() string, showIPs bool,
 	isPaused func() bool, displayMode func() int, nameMode func() int, isMPLSDisabled func() bool) func(iteration int, stats []trace.MTRHopStat) {
+	var apiInfoMu sync.Mutex
+	var cachedAPIInfo string
+	var cachedAPIInfoAt time.Time
+	const apiInfoCacheTTL = 250 * time.Millisecond
+
+	getAPIInfo := func() string {
+		if apiInfo == nil {
+			return ""
+		}
+		apiInfoMu.Lock()
+		defer apiInfoMu.Unlock()
+		if !cachedAPIInfoAt.IsZero() && time.Since(cachedAPIInfoAt) < apiInfoCacheTTL {
+			return cachedAPIInfo
+		}
+		cachedAPIInfo = apiInfo()
+		cachedAPIInfoAt = time.Now()
+		return cachedAPIInfo
+	}
+
 	return func(iteration int, stats []trace.MTRHopStat) {
 		status := MTRTUIRunning
 		if isPaused != nil && isPaused() {
@@ -786,10 +806,7 @@ func MTRTUIPrinter(target, domain, targetIP, version string, startTime time.Time
 		if isMPLSDisabled != nil {
 			noMPLS = isMPLSDisabled()
 		}
-		headerAPIInfo := ""
-		if apiInfo != nil {
-			headerAPIInfo = apiInfo()
-		}
+		headerAPIInfo := getAPIInfo()
 		MTRTUIRender(os.Stdout, MTRTUIHeader{
 			Target:      target,
 			StartTime:   startTime,

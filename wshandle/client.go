@@ -272,8 +272,11 @@ func (c *WsConn) Close() {
 			signal.Stop(c.Interrupt)
 		}
 		c.closeConn()
+		c.loopWG.Wait()
+		if c.MsgReceiveCh != nil {
+			close(c.MsgReceiveCh)
+		}
 	})
-	c.loopWG.Wait()
 }
 
 func (c *WsConn) setConnectionState(connected, connecting bool) {
@@ -382,6 +385,12 @@ func (c *WsConn) keepAlive() {
 				c.recreateWsConn()
 			}
 		}
+	}
+}
+
+func (c *WsConn) reconnectNow() {
+	if c.startReconnecting() {
+		c.startLoop(c.recreateWsConn)
 	}
 }
 
@@ -712,7 +721,9 @@ func createWsConn(ctx context.Context) *WsConn {
 
 func createWsConnAsync(ctx context.Context) *WsConn {
 	ctx, interrupt, endpoint := initWsConnBase(ctx)
-	return newReconnectableWsConn(ctx, interrupt, endpoint)
+	ws := newReconnectableWsConn(ctx, interrupt, endpoint)
+	ws.reconnectNow()
+	return ws
 }
 
 func replaceGlobalWsConn(newConn *WsConn, ctx context.Context) *WsConn {

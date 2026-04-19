@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/mattn/go-runewidth"
 )
 
 type EventKind int
@@ -36,9 +38,12 @@ type Renderer interface {
 }
 
 type Bus struct {
-	ch   chan Event
-	wg   sync.WaitGroup
-	once sync.Once
+	ch     chan Event
+	wg     sync.WaitGroup
+	sendWG sync.WaitGroup
+	once   sync.Once
+	mu     sync.Mutex
+	closed bool
 }
 
 func NewBus(r Renderer) *Bus {
@@ -60,22 +65,52 @@ func NewBus(r Renderer) *Bus {
 }
 
 func (b *Bus) Send(ev Event) {
+	_ = b.send(ev)
+}
+
+func (b *Bus) send(ev Event) bool {
 	if b == nil {
-		return
+		return false
 	}
 	ev.Time = time.Now()
-	select {
-	case b.ch <- ev:
-	default:
-		b.ch <- ev
+	if !b.beginSend() {
+		return false
 	}
+	defer b.sendWG.Done()
+
+	if ev.Kind == KindProgress {
+		select {
+		case b.ch <- ev:
+			return true
+		default:
+			return false
+		}
+	}
+	b.ch <- ev
+	return true
+}
+
+func (b *Bus) beginSend() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.closed {
+		return false
+	}
+	b.sendWG.Add(1)
+	return true
 }
 
 func (b *Bus) Close() {
 	if b == nil {
 		return
 	}
-	b.once.Do(func() { close(b.ch) })
+	b.once.Do(func() {
+		b.mu.Lock()
+		b.closed = true
+		b.mu.Unlock()
+		b.sendWG.Wait()
+		close(b.ch)
+	})
 	b.wg.Wait()
 }
 
@@ -84,7 +119,9 @@ func (b *Bus) Flush() {
 		return
 	}
 	done := make(chan struct{})
-	b.Send(Event{Kind: KindSync, done: done})
+	if !b.send(Event{Kind: KindSync, done: done}) {
+		return
+	}
 	<-done
 }
 
@@ -115,10 +152,11 @@ const (
 )
 
 type TTYRenderer struct {
-	mu       sync.Mutex
-	w        io.Writer
-	noColor  bool
-	lastProg string
+	mu            sync.Mutex
+	w             io.Writer
+	noColor       bool
+	lastProg      string
+	lastProgWidth int
 }
 
 func NewTTYRenderer(w io.Writer, noColor bool) *TTYRenderer {
@@ -137,8 +175,7 @@ func (t *TTYRenderer) Render(ev Event) {
 	defer t.mu.Unlock()
 
 	if t.lastProg != "" && ev.Kind != KindProgress {
-		writef(t.w, "\r%s\r", strings.Repeat(" ", len(t.lastProg)+2))
-		t.lastProg = ""
+		t.clearProgressLine()
 	}
 
 	switch ev.Kind {
@@ -161,14 +198,25 @@ func (t *TTYRenderer) Render(ev Event) {
 			writef(t.w, "%s\n", t.style(cDim)+strings.Repeat("─", 58)+t.style(cReset))
 		}
 	case KindProgress:
-		line := fmt.Sprintf("  [%s] %s", ev.Label, ev.Value)
+		plainLine := fmt.Sprintf("  [%s] %s", ev.Label, ev.Value)
+		line := plainLine
 		if !t.noColor {
 			line = fmt.Sprintf("  %s[%s]%s %s", t.style(cDim), ev.Label, t.style(cReset), ev.Value)
 		}
+		if t.lastProg != "" {
+			t.clearProgressLine()
+		}
 		writef(t.w, "\r%s", line)
 		t.lastProg = line
+		t.lastProgWidth = runewidth.StringWidth(plainLine)
 	case KindSync:
 	}
+}
+
+func (t *TTYRenderer) clearProgressLine() {
+	writef(t.w, "\r%s\r", strings.Repeat(" ", t.lastProgWidth))
+	t.lastProg = ""
+	t.lastProgWidth = 0
 }
 
 type PlainRenderer struct {

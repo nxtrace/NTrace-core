@@ -181,8 +181,9 @@ allowed_exit_matches() {
   local allowed_csv="${2:-0}"
   local allowed
   IFS=',' read -r -a allowed <<< "${allowed_csv}"
-  for allowed in "${allowed[@]}"; do
-    if [[ "${rc}" == "${allowed}" ]]; then
+  local candidate
+  for candidate in "${allowed[@]}"; do
+    if [[ "${rc}" == "${candidate}" ]]; then
       return 0
     fi
   done
@@ -538,8 +539,8 @@ check_json_pure speed_apple_json 'Apple speed JSON path' "\"${BIN}\" --speed --j
 check_json_pure speed_cloudflare_json 'Cloudflare speed JSON path' "\"${BIN}\" --speed --speed-provider cloudflare --json --no-metadata --non-interactive --max 64KiB --timeout 2000 --threads 2 --latency-count 2" '"provider":"cloudflare"' '0,2'
 run_cmd tiny_smoke 'nexttrace-tiny smoke' "\"${TINY}\" --no-color -q 1 -m 2 --timeout 1000 1.1.1.1"
 run_cmd ntr_report 'ntr report smoke' "\"${NTR}\" --no-color -r -q 2 -i 300 --timeout 1000 -m 4 1.1.1.1"
-run_cmd_check tiny_speed_reject 'nexttrace-tiny rejects --speed' "\"${TINY}\" --speed" '' '' '1'
-run_cmd_check ntr_speed_reject 'ntr rejects --speed' "\"${NTR}\" --speed" '' '' '1'
+run_cmd_check tiny_speed_reject 'nexttrace-tiny rejects --speed' "\"${TINY}\" --speed" '--speed is not available' 'panic|goroutine [0-9]+|stack trace' '1'
+run_cmd_check ntr_speed_reject 'ntr rejects --speed' "\"${NTR}\" --speed" '--speed is not available' 'panic|goroutine [0-9]+|stack trace' '1'
 
 capture_psize_tos psize_tos_icmp4 'ICMPv4 psize/tos packet capture' '1.1.1.1' "\"${BIN}\" --no-color -q 1 -m 1 --timeout 1000 --psize 84 -Q 46 1.1.1.1" 'tos 0x2e' 'length 84'
 capture_psize_tos psize_tos_udp4 'UDPv4 psize/tos packet capture' '1.1.1.1' "\"${BIN}\" --no-color -U -q 1 -m 1 --timeout 1000 --psize 84 -Q 46 1.1.1.1" 'tos 0x2e' 'length 84'

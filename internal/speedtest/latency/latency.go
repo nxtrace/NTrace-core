@@ -81,6 +81,9 @@ func (p *Probe) loop() {
 			return
 		case <-timer.C:
 		}
+		if p.ctx.Err() != nil {
+			return
+		}
 		v, err := p.probe(p.ctx)
 		if err == nil && v >= 0 {
 			p.mu.Lock()
@@ -129,8 +132,8 @@ func Compute(samples []float64) Stats {
 
 	sorted := append([]float64(nil), samples...)
 	sort.Float64s(sorted)
-	min := sorted[0]
-	max := sorted[n-1]
+	minV := sorted[0]
+	maxV := sorted[n-1]
 
 	med := sorted[n/2]
 	if n%2 == 0 {
@@ -138,10 +141,10 @@ func Compute(samples []float64) Stats {
 	}
 
 	return Stats{
-		Min:    round2(min),
+		Min:    round2(minV),
 		Avg:    round2(avg),
 		Median: round2(med),
-		Max:    round2(max),
+		Max:    round2(maxV),
 		Jitter: round2(jitter),
 		N:      n,
 	}

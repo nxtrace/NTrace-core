@@ -422,8 +422,16 @@ function Check-JsonPure {
         Write-Record $Name FAIL "$Note; exit=$rc"
         return
     }
-    if ($first -eq "{" -and $sanitizedContent -notmatch "preferred API IP") {
-        if (-not [string]::IsNullOrWhiteSpace($ExpectedJsonPattern) -and $sanitizedContent -notmatch $ExpectedJsonPattern) {
+    $jsonText = $sanitizedContent.Trim()
+    if ($first -eq "{" -and $jsonText -notmatch "preferred API IP") {
+        try {
+            $null = $jsonText | ConvertFrom-Json -ErrorAction Stop
+        }
+        catch {
+            Write-Record $Name FAIL "$Note; stdout not pure JSON"
+            return
+        }
+        if (-not [string]::IsNullOrWhiteSpace($ExpectedJsonPattern) -and $jsonText -notmatch $ExpectedJsonPattern) {
             Write-Record $Name FAIL "$Note; JSON content mismatch"
             return
         }
@@ -755,8 +763,8 @@ Check-JsonPureIfSupported -Supported $speedCapability.Supported -Reason $speedCa
 Check-JsonPureIfSupported -Supported $speedCapability.Supported -Reason $speedCapability.Reason -Name "speed_cloudflare_json" -Note "Cloudflare speed JSON path" -Command "`"$Bin`" --speed --speed-provider cloudflare --json --no-metadata --non-interactive --max 64KiB --timeout 2000 --threads 2 --latency-count 2" -ExpectedJsonPattern '"provider":"cloudflare"' -AllowedExitCodes @(0, 2)
 Run-CmdIfSupported $icmp4Capability.Supported $icmp4Capability.Reason "tiny_smoke" "nexttrace-tiny smoke" "`"$Tiny`" --no-color -q 1 -m 2 --timeout 1000 1.1.1.1" "hops max, .*ICMP mode"
 Run-CmdIfSupported $mtrCapability.Supported $mtrCapability.Reason "ntr_report" "ntr report smoke" "`"$Ntr`" --no-color -r -q 2 -i 300 --timeout 1000 -m 4 1.1.1.1" "(?m)^HOST:"
-Run-CmdIfSupported -Supported $tinyCliCapability.Supported -Reason $tinyCliCapability.Reason -Name "tiny_speed_reject" -Note "nexttrace-tiny rejects --speed" -Command "`"$Tiny`" --speed" -AllowedExitCodes @(1)
-Run-CmdIfSupported -Supported $ntrCliCapability.Supported -Reason $ntrCliCapability.Reason -Name "ntr_speed_reject" -Note "ntr rejects --speed" -Command "`"$Ntr`" --speed" -AllowedExitCodes @(1)
+Run-CmdIfSupported -Supported $tinyCliCapability.Supported -Reason $tinyCliCapability.Reason -Name "tiny_speed_reject" -Note "nexttrace-tiny rejects --speed" -Command "`"$Tiny`" --speed" -SuccessPattern "--speed is not available" -ForbiddenPattern "panic|goroutine [0-9]+|stack trace" -AllowedExitCodes @(1)
+Run-CmdIfSupported -Supported $ntrCliCapability.Supported -Reason $ntrCliCapability.Reason -Name "ntr_speed_reject" -Note "ntr rejects --speed" -Command "`"$Ntr`" --speed" -SuccessPattern "--speed is not available" -ForbiddenPattern "panic|goroutine [0-9]+|stack trace" -AllowedExitCodes @(1)
 
 Check-PacketCaptureIfSupported $icmp4Capability.Supported $icmp4Capability.Reason "psize_tos_icmp4" "ICMPv4 psize/tos packet capture" "`"$Bin`" --no-color -q 1 -m 1 --timeout 1000 --psize 84 -Q 46 1.1.1.1" "1.1.1.1" "host 1.1.1.1" "Differentiated Services Field: 0x2e" "Total Length: 84"
 Check-PacketCaptureIfSupported $udp4Capability.Supported $udp4Capability.Reason "psize_tos_udp4" "UDPv4 psize/tos packet capture" "`"$Bin`" --no-color -U -q 1 -m 1 --timeout 1000 --psize 84 -Q 46 1.1.1.1" "1.1.1.1" "host 1.1.1.1" "Differentiated Services Field: 0x2e" "Total Length: 84"

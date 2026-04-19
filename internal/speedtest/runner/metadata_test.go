@@ -3,13 +3,19 @@ package runner
 import (
 	"context"
 	"strings"
+	"sync"
 	"testing"
 
 	speedconfig "github.com/nxtrace/NTrace-core/internal/speedtest/config"
 	"github.com/nxtrace/NTrace-core/ipgeo"
 )
 
+var geoLookupMu sync.Mutex
+
 func TestFetchIPDescriptionUsesGeoData(t *testing.T) {
+	geoLookupMu.Lock()
+	defer geoLookupMu.Unlock()
+
 	prev := lookupGeoDataFn
 	lookupGeoDataFn = func(ctx context.Context, target string, cfg *speedconfig.Config) (*ipgeo.IPGeoData, error) {
 		return &ipgeo.IPGeoData{
@@ -31,6 +37,9 @@ func TestFetchIPDescriptionUsesGeoData(t *testing.T) {
 }
 
 func TestFetchPeerInfoUsesLocalizedGeoData(t *testing.T) {
+	geoLookupMu.Lock()
+	defer geoLookupMu.Unlock()
+
 	prev := lookupGeoDataFn
 	lookupGeoDataFn = func(ctx context.Context, target string, cfg *speedconfig.Config) (*ipgeo.IPGeoData, error) {
 		return &ipgeo.IPGeoData{
@@ -54,8 +63,19 @@ func TestFetchPeerInfoUsesLocalizedGeoData(t *testing.T) {
 	if got.ISP != "Cloudflare, Inc." {
 		t.Fatalf("ISP = %q, want Cloudflare, Inc.", got.ISP)
 	}
+	// Location order is intentionally language-specific.
 	if got.Location != "多伦多, 安大略省, 加拿大" {
 		t.Fatalf("Location = %q, want localized location", got.Location)
+	}
+}
+
+func TestFormatGeoLocationDeduplicatesRepeatedParts(t *testing.T) {
+	got := formatGeoLocation(&ipgeo.IPGeoData{
+		CountryEn: "Singapore",
+		CityEn:    "Singapore",
+	}, "en")
+	if got != "Singapore" {
+		t.Fatalf("formatGeoLocation() = %q, want Singapore", got)
 	}
 }
 

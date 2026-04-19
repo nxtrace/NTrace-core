@@ -30,7 +30,7 @@ func TestParseSize(t *testing.T) {
 }
 
 func TestParseSizeRejectsInvalidValues(t *testing.T) {
-	for _, input := range []string{"", "abc", "-1G", "1XB"} {
+	for _, input := range []string{"", "abc", "-1G", "1XB", "9223372036854775808", "9000000000TB"} {
 		if _, err := ParseSize(input); err == nil {
 			t.Fatalf("ParseSize(%q) error = nil, want non-nil", input)
 		}
@@ -51,13 +51,16 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Threads != DefaultThreads {
 		t.Fatalf("Threads = %d, want %d", cfg.Threads, DefaultThreads)
 	}
+	if cfg.Max != DefaultMax {
+		t.Fatalf("Max = %q, want %q", cfg.Max, DefaultMax)
+	}
 	if cfg.LatencyCount != DefaultLatencyCount {
 		t.Fatalf("LatencyCount = %d, want %d", cfg.LatencyCount, DefaultLatencyCount)
 	}
 }
 
 func TestLoadStripsSpeedFlagAndParsesArgs(t *testing.T) {
-	cfg, err := Load("--speed", "--speed-provider", "cloudflare", "--timeout", "1200", "--threads", "8", "--latency-count", "7", "--endpoint", "1.1.1.1", "--language", "en", "--json", "--source", "192.0.2.10", "--dev", "eth0", "--dot-server", "aliyun")
+	cfg, err := Load("--speed", "--speed-provider", "cloudflare", "--timeout", "1200", "--threads", "8", "--latency-count", "7", "--endpoint", "1.1.1.1", "--language", "en", "--json", "--source", "192.0.2.10", "--dot-server", "aliyun")
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
@@ -85,11 +88,25 @@ func TestLoadStripsSpeedFlagAndParsesArgs(t *testing.T) {
 	if cfg.SourceAddress != "192.0.2.10" {
 		t.Fatalf("SourceAddress = %q, want 192.0.2.10", cfg.SourceAddress)
 	}
+	if cfg.DotServer != "aliyun" {
+		t.Fatalf("DotServer = %q, want aliyun", cfg.DotServer)
+	}
+}
+
+func TestLoadParsesSourceDevice(t *testing.T) {
+	cfg, err := Load("--speed", "--dev", "eth0")
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
 	if cfg.SourceDevice != "eth0" {
 		t.Fatalf("SourceDevice = %q, want eth0", cfg.SourceDevice)
 	}
-	if cfg.DotServer != "aliyun" {
-		t.Fatalf("DotServer = %q, want aliyun", cfg.DotServer)
+}
+
+func TestLoadRejectsSourceAndDeviceTogether(t *testing.T) {
+	_, err := Load("--speed", "--source", "192.0.2.10", "--dev", "eth0")
+	if err == nil || !strings.Contains(err.Error(), "--source and --dev") {
+		t.Fatalf("Load() error = %v, want source/dev conflict", err)
 	}
 }
 

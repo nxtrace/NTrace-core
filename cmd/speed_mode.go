@@ -16,7 +16,16 @@ import (
 	speedconfig "github.com/nxtrace/NTrace-core/internal/speedtest/config"
 	speedrender "github.com/nxtrace/NTrace-core/internal/speedtest/render"
 	speedrunner "github.com/nxtrace/NTrace-core/internal/speedtest/runner"
+	"github.com/nxtrace/NTrace-core/wshandle"
 )
+
+type speedMetadataBackend interface {
+	Close()
+}
+
+var newSpeedMetadataBackend = func(ctx context.Context) speedMetadataBackend {
+	return wshandle.NewWithContextAsync(ctx)
+}
 
 func registerSpeedFlag(parser *argparse.Parser) *bool {
 	return registerSpeedFlagWithAvailability(parser, enableSpeed)
@@ -49,8 +58,11 @@ func containsSpeedFlag(args []string) bool {
 		if arg == "--" {
 			return false
 		}
-		if arg == "--speed" || strings.HasPrefix(arg, "--speed=") {
+		if arg == "--speed" {
 			return true
+		}
+		if v, ok := strings.CutPrefix(arg, "--speed="); ok {
+			return v == "" || strings.EqualFold(v, "true") || v == "1"
 		}
 	}
 	return false
@@ -69,6 +81,10 @@ func runSpeedMode(rawArgs []string, stdout, stderr io.Writer) int {
 
 	rootCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	restoreFastIPOutput := suppressSpeedMetadataOutput(cfg)
+	defer restoreFastIPOutput()
+	metadataBackend := startSpeedMetadataBackend(rootCtx, cfg)
+	defer closeSpeedMetadataBackend(metadataBackend)
 
 	var bus *speedrender.Bus
 	isTTY := speedrender.IsTTY()
@@ -80,9 +96,9 @@ func runSpeedMode(rawArgs []string, stdout, stderr io.Writer) int {
 	} else {
 		bus = speedrender.NewBus(speedrender.NewPlainRenderer(stderr))
 	}
+	defer bus.Close()
 
 	res := speedrunner.Run(rootCtx, cfg, bus, isTTY)
-	bus.Close()
 	if cfg.OutputJSON {
 		enc := json.NewEncoder(stdout)
 		enc.SetEscapeHTML(false)
@@ -92,4 +108,24 @@ func runSpeedMode(rawArgs []string, stdout, stderr io.Writer) int {
 		}
 	}
 	return res.ExitCode
+}
+
+func suppressSpeedMetadataOutput(cfg *speedconfig.Config) func() {
+	if cfg == nil || cfg.NoMetadata || !cfg.OutputJSON {
+		return func() {}
+	}
+	return setFastIPOutputSuppression(true)
+}
+
+func startSpeedMetadataBackend(ctx context.Context, cfg *speedconfig.Config) speedMetadataBackend {
+	if cfg == nil || cfg.NoMetadata {
+		return nil
+	}
+	return newSpeedMetadataBackend(ctx)
+}
+
+func closeSpeedMetadataBackend(backend speedMetadataBackend) {
+	if backend != nil {
+		backend.Close()
+	}
 }

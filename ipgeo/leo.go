@@ -33,90 +33,151 @@ var IPPools = IPPool{
 
 var getLeoWsConn = wshandle.GetWsConn
 
-func sendIPRequest(ip string) bool {
-	wsConn := getLeoWsConn()
+func sendIPRequest(ctx context.Context, wsConn *wshandle.WsConn, ip string) bool {
 	if wsConn == nil {
 		return false
 	}
-	wsConn.MsgSendCh <- ip
-	return true
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if ctx.Err() != nil {
+		return false
+	}
+	select {
+	case wsConn.MsgSendCh <- ip:
+		return true
+	case <-ctx.Done():
+		return false
+	}
 }
 
 func receiveParse() {
-	// 获得连接实例
-	wsConn := getLeoWsConn()
-	if wsConn == nil {
-		return
+	for {
+		// 获得连接实例
+		wsConn := getLeoWsConn()
+		if wsConn == nil {
+			return
+		}
+		if !receiveParseConn(wsConn) {
+			return
+		}
 	}
+}
+
+func receiveParseConn(wsConn *wshandle.WsConn) bool {
 	// 防止多协程抢夺一个ws连接，导致死锁，当一个协程获得ws的控制权后上锁
 	wsConn.ConnMux.Lock()
 	// 函数退出时解锁，给其他协程使用
 	defer wsConn.ConnMux.Unlock()
-	for {
-		// 接收到了一条IP信息
-		data, ok := <-wsConn.MsgReceiveCh
-		if !ok {
-			// channel 已关闭，退出循环
-			return
+	for data := range wsConn.MsgReceiveCh {
+		dispatchLeoMessage(data)
+	}
+	return getLeoWsConn() != wsConn
+}
+
+func dispatchLeoMessage(data string) {
+	// json解析 -> data
+	res := gjson.Parse(data)
+	// 根据返回的IP信息，发送给对应等待回复的IP通道上
+	var domain = res.Get("domain").String()
+
+	if res.Get("domain").String() == "" {
+		domain = res.Get("owner").String()
+	}
+
+	m := make(map[string][]string)
+	_ = json.Unmarshal([]byte(res.Get("router").String()), &m)
+
+	lat, _ := strconv.ParseFloat(res.Get("lat").String(), 32)
+	lng, _ := strconv.ParseFloat(res.Get("lng").String(), 32)
+
+	ip := res.Get("ip").String()
+	geo := IPGeoData{
+		Asnumber:  res.Get("asnumber").String(),
+		Country:   res.Get("country").String(),
+		CountryEn: res.Get("country_en").String(),
+		Prov:      res.Get("prov").String(),
+		ProvEn:    res.Get("prov_en").String(),
+		City:      res.Get("city").String(),
+		CityEn:    res.Get("city_en").String(),
+		District:  res.Get("district").String(),
+		Owner:     domain,
+		Lat:       lat,
+		Lng:       lng,
+		Isp:       res.Get("isp").String(),
+		Whois:     res.Get("whois").String(),
+		Prefix:    res.Get("prefix").String(),
+		Router:    m,
+	}
+
+	// Safely load (or lazily create) the channel for this IP before sending
+	IPPools.poolMux.RLock()
+	ch, ok := IPPools.pool[ip]
+	IPPools.poolMux.RUnlock()
+	if !ok || ch == nil {
+		IPPools.poolMux.Lock()
+		if IPPools.pool[ip] == nil {
+			IPPools.pool[ip] = make(chan IPGeoData, 1)
 		}
+		ch = IPPools.pool[ip]
+		IPPools.poolMux.Unlock()
+	}
+	deliverGeo(ch, geo)
+}
 
-		// json解析 -> data
-		res := gjson.Parse(data)
-		// 根据返回的IP信息，发送给对应等待回复的IP通道上
-		var domain = res.Get("domain").String()
-
-		if res.Get("domain").String() == "" {
-			domain = res.Get("owner").String()
-		}
-
-		m := make(map[string][]string)
-		err := json.Unmarshal([]byte(res.Get("router").String()), &m)
-		if err != nil {
-			// 此处是正常的，因为有些IP没有路由信息
-		}
-
-		lat, _ := strconv.ParseFloat(res.Get("lat").String(), 32)
-		lng, _ := strconv.ParseFloat(res.Get("lng").String(), 32)
-
-		ip := res.Get("ip").String()
-		geo := IPGeoData{
-			Asnumber:  res.Get("asnumber").String(),
-			Country:   res.Get("country").String(),
-			CountryEn: res.Get("country_en").String(),
-			Prov:      res.Get("prov").String(),
-			ProvEn:    res.Get("prov_en").String(),
-			City:      res.Get("city").String(),
-			CityEn:    res.Get("city_en").String(),
-			District:  res.Get("district").String(),
-			Owner:     domain,
-			Lat:       lat,
-			Lng:       lng,
-			Isp:       res.Get("isp").String(),
-			Whois:     res.Get("whois").String(),
-			Prefix:    res.Get("prefix").String(),
-			Router:    m,
-		}
-
-		// Safely load (or lazily create) the channel for this IP before sending
-		IPPools.poolMux.RLock()
-		ch, ok := IPPools.pool[ip]
-		IPPools.poolMux.RUnlock()
-		if !ok || ch == nil {
-			IPPools.poolMux.Lock()
-			if IPPools.pool[ip] == nil {
-				IPPools.pool[ip] = make(chan IPGeoData, 1)
-			}
-			ch = IPPools.pool[ip]
-			IPPools.poolMux.Unlock()
-		}
-		ch <- geo
+func deliverGeo(ch chan IPGeoData, geo IPGeoData) {
+	select {
+	case ch <- geo:
+		return
+	default:
+	}
+	select {
+	case <-ch:
+	default:
+	}
+	select {
+	case ch <- geo:
+	default:
 	}
 }
 
 // 当前的实现中，每次调用 receiveParse() 都会锁定 WebSocket 连接
 // 当前为单例模式，只启动一个 receiveParse 协程
 
-var receiveParseOnce = &sync.Once{}
+var (
+	receiveParseMu      sync.Mutex
+	receiveParseRunning bool
+	receiveParseRestart bool
+)
+
+func startReceiveParse() {
+	receiveParseMu.Lock()
+	if receiveParseRunning {
+		receiveParseRestart = true
+		receiveParseMu.Unlock()
+		return
+	}
+	receiveParseRunning = true
+	receiveParseRestart = false
+	receiveParseMu.Unlock()
+
+	go runReceiveParseLoop()
+}
+
+func runReceiveParseLoop() {
+	for {
+		receiveParse()
+
+		receiveParseMu.Lock()
+		if !receiveParseRestart {
+			receiveParseRunning = false
+			receiveParseMu.Unlock()
+			return
+		}
+		receiveParseRestart = false
+		receiveParseMu.Unlock()
+	}
+}
 
 func LeoIP(ip string, timeout time.Duration, lang string, maptrace bool) (*IPGeoData, error) {
 	// TODO: 根据lang的值请求中文/英文API
@@ -137,6 +198,7 @@ func LeoIP(ip string, timeout time.Duration, lang string, maptrace bool) (*IPGeo
 		ch = IPPools.pool[ip]
 		IPPools.poolMux.Unlock()
 	}
+	drainStaleGeo(ch)
 
 	wsConn := getLeoWsConn()
 	if wsConn == nil {
@@ -153,14 +215,12 @@ func LeoIP(ip string, timeout time.Duration, lang string, maptrace bool) (*IPGeo
 	}
 
 	// 发送请求
-	if !sendIPRequest(ip) {
+	if !sendIPRequest(waitCtx, wsConn, ip) {
 		return &IPGeoData{}, errors.New("TimeOut")
 	}
 
 	// 确保 receiveParse 只启动一次
-	receiveParseOnce.Do(func() {
-		go receiveParse()
-	})
+	startReceiveParse()
 
 	// 等待数据返回或超时
 	select {
@@ -168,5 +228,12 @@ func LeoIP(ip string, timeout time.Duration, lang string, maptrace bool) (*IPGeo
 		return &res, nil
 	case <-waitCtx.Done():
 		return &IPGeoData{}, errors.New("TimeOut")
+	}
+}
+
+func drainStaleGeo(ch chan IPGeoData) {
+	select {
+	case <-ch:
+	default:
 	}
 }

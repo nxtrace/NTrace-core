@@ -167,6 +167,30 @@ func TestAnnotateLineDoesNotCacheLookupErrors(t *testing.T) {
 	}
 }
 
+func TestAnnotateLineDoesNotCacheEmptyGeo(t *testing.T) {
+	calls := 0
+	a := New(Config{
+		Lang: "en",
+		Source: func(ip string, timeout time.Duration, lang string, maptrace bool) (*ipgeo.IPGeoData, error) {
+			calls++
+			if calls == 1 {
+				return &ipgeo.IPGeoData{}, nil
+			}
+			return &ipgeo.IPGeoData{CountryEn: "ok"}, nil
+		},
+	})
+
+	if got := a.AnnotateLine(context.Background(), "A 8.8.8.8"); got != "A 8.8.8.8" {
+		t.Fatalf("first AnnotateLine() = %q, want original", got)
+	}
+	if got := a.AnnotateLine(context.Background(), "A 8.8.8.8"); got != "A 8.8.8.8 [ok]" {
+		t.Fatalf("second AnnotateLine() = %q, want annotated", got)
+	}
+	if calls != 2 {
+		t.Fatalf("lookup calls = %d, want 2", calls)
+	}
+}
+
 func TestFindIPSpans(t *testing.T) {
 	line := "IP:1.1.1.1 [2001:db8::1]:443"
 	spans := FindIPSpans(line)

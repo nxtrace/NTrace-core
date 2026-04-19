@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"regexp"
 	"strconv"
@@ -162,6 +163,9 @@ func Load(args ...string) (*Config, error) {
 	if cfg.EndpointIP != "" && net.ParseIP(cfg.EndpointIP) == nil {
 		return nil, fmt.Errorf("invalid endpoint IP %q", cfg.EndpointIP)
 	}
+	if cfg.SourceAddress != "" && cfg.SourceDevice != "" {
+		return nil, errors.New("--source and --dev cannot be used together")
+	}
 	if cfg.SourceAddress != "" && net.ParseIP(cfg.SourceAddress) == nil {
 		return nil, fmt.Errorf("invalid source IP %q", cfg.SourceAddress)
 	}
@@ -208,12 +212,15 @@ func ParseSize(s string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+	if math.IsInf(num, 0) || math.IsNaN(num) {
+		return 0, fmt.Errorf("size %q is out of range", s)
+	}
 	if num < 0 {
 		return 0, fmt.Errorf("size must be non-negative")
 	}
 	unit := strings.ToLower(m[2])
 	if unit == "" {
-		return int64(num), nil
+		return sizeBytes(num, 1, s)
 	}
 	var mul int64
 	switch unit {
@@ -236,7 +243,15 @@ func ParseSize(s string) (int64, error) {
 	default:
 		return 0, fmt.Errorf("unknown unit %q", unit)
 	}
-	return int64(num * float64(mul)), nil
+	return sizeBytes(num, mul, s)
+}
+
+func sizeBytes(num float64, mul int64, input string) (int64, error) {
+	bytes := num * float64(mul)
+	if math.IsInf(bytes, 0) || math.IsNaN(bytes) || bytes >= float64(math.MaxInt64) {
+		return 0, fmt.Errorf("size %q exceeds maximum supported value", input)
+	}
+	return int64(bytes), nil
 }
 
 func HumanBytes(b int64) string {

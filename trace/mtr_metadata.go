@@ -21,17 +21,15 @@ func lookupMTRMetadata(addr net.Addr, cfg Config) mtrMetadataPatch {
 
 	host := ""
 	if cfg.RDNS {
-		applyPTRResultToText := lookupPTR(cfg.Context, ipStr)
-		if len(applyPTRResultToText) > 0 {
-			host = CanonicalHostname(applyPTRResultToText[0])
+		ptrs := lookupPTR(cfg.Context, ipStr)
+		if len(ptrs) > 0 {
+			host = CanonicalHostname(ptrs[0])
 		}
 	}
 
 	var geo *ipgeo.IPGeoData
 	if cfg.IPGeoSource != nil {
-		if g, ok := ipgeo.Filter(ipStr); ok {
-			geo = g
-		} else if cfg.DN42 {
+		if cfg.DN42 {
 			query := ipStr
 			if host != "" {
 				query = ipStr + "," + host
@@ -39,6 +37,8 @@ func lookupMTRMetadata(addr net.Addr, cfg Config) mtrMetadataPatch {
 			if resolved, err := lookupGeoWithRetry(cfg, query, query, true); err == nil {
 				geo = resolved
 			}
+		} else if g, ok := ipgeo.Filter(ipStr); ok {
+			geo = g
 		} else if resolved, err := lookupGeoWithRetry(cfg, ipStr, ipStr, false); err == nil {
 			geo = resolved
 		}

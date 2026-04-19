@@ -61,7 +61,7 @@ func TestAppleParseMetadata(t *testing.T) {
 	}
 }
 
-func TestAppleHostUsesLatencyEndpoint(t *testing.T) {
+func TestAppleHostMatchesDefaultEndpoints(t *testing.T) {
 	if host := New().Host(); host == "" || !strings.Contains(defaultDownloadURL, host) {
 		t.Fatalf("Host() = %q, want host parsed from %q", host, defaultDownloadURL)
 	}

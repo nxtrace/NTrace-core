@@ -6,7 +6,9 @@ package wshandle
 import (
 	"context"
 	"errors"
+	"net"
 	"os"
+	"strconv"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -59,6 +61,14 @@ func TestWsConnCloseStopsBackgroundLoops(t *testing.T) {
 	case <-doneCh:
 	default:
 		t.Fatal("done channel should be closed by Close")
+	}
+	select {
+	case _, ok := <-conn.MsgReceiveCh:
+		if ok {
+			t.Fatal("receive channel should be closed by Close")
+		}
+	default:
+		t.Fatal("receive channel should be closed after Close returns")
 	}
 }
 
@@ -263,24 +273,50 @@ func TestCreateWsConnAsyncReturnsBeforeFastIP(t *testing.T) {
 	oldFastIPFn := wsGetFastIPFn
 	defer func() { wsGetFastIPFn = oldFastIPFn }()
 
-	called := make(chan struct{}, 1)
+	fastIPStarted := make(chan struct{}, 1)
+	fastIPDone := make(chan struct{}, 1)
+	releaseFastIP := make(chan struct{})
+	defer close(releaseFastIP)
 	wsGetFastIPFn = func(ctx context.Context, domain string, port string, enableOutput bool) (string, error) {
-		called <- struct{}{}
-		<-ctx.Done()
-		return "", ctx.Err()
+		select {
+		case fastIPStarted <- struct{}{}:
+		default:
+		}
+		defer func() {
+			select {
+			case fastIPDone <- struct{}{}:
+			default:
+			}
+		}()
+		select {
+		case <-releaseFastIP:
+			return "127.0.0.1", nil
+		case <-ctx.Done():
+			return "", ctx.Err()
+		}
 	}
 
-	start := time.Now()
-	conn := createWsConnAsync(context.Background())
-	defer conn.Close()
+	returned := make(chan *WsConn, 1)
+	go func() {
+		returned <- createWsConnAsync(context.Background())
+	}()
 
-	if elapsed := time.Since(start); elapsed > 100*time.Millisecond {
-		t.Fatalf("createWsConnAsync took %s, want < 100ms", elapsed)
-	}
 	select {
-	case <-called:
-		t.Fatal("createWsConnAsync should not synchronously call FastIP")
-	case <-time.After(50 * time.Millisecond):
+	case <-fastIPStarted:
+	case <-time.After(time.Second):
+		t.Fatal("FastIP probe did not start")
+	}
+
+	select {
+	case conn := <-returned:
+		if conn == nil {
+			t.Fatal("createWsConnAsync returned nil")
+		}
+		defer conn.Close()
+	case <-fastIPDone:
+		t.Fatal("createWsConnAsync waited for FastIP to complete")
+	case <-time.After(time.Second):
+		t.Fatal("createWsConnAsync did not return while FastIP was blocked")
 	}
 }
 
@@ -293,7 +329,6 @@ func TestWaitUntilConnectedReturnsOnConnect(t *testing.T) {
 		done <- conn.WaitUntilConnected(context.Background())
 	}()
 
-	time.Sleep(30 * time.Millisecond)
 	conn.setConnectionState(true, false)
 
 	select {
@@ -370,28 +405,41 @@ func TestCreateWsConnAsyncPreservesDirectIPOnReconnect(t *testing.T) {
 		atomic.AddInt32(&fastIPCalls, 1)
 		return "", errors.New("unexpected FastIP refresh")
 	}
-	util.EnvHostPort = "1.1.1.1:443"
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("net.Listen() error = %v", err)
+	}
+	directPort := strconv.Itoa(listener.Addr().(*net.TCPAddr).Port)
+	_ = listener.Close()
+	util.EnvHostPort = "127.0.0.1:" + directPort
 	envToken = "token"
 
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
 
 	conn := createWsConnAsync(ctx)
 
 	if !conn.directIP {
 		t.Fatal("async websocket should preserve direct-IP state")
 	}
-	if conn.apiFastIP != "1.1.1.1" {
+	if conn.apiFastIP != "127.0.0.1" {
 		t.Fatalf("apiFastIP = %q, want direct IP preserved", conn.apiFastIP)
 	}
+	cancel()
 	conn.Close()
 
+	// Keep the reconnect context live and use a closed local port so
+	// recreateWsConn reaches the direct-IP dial path without external network.
+	reconnectCtx, reconnectCancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer reconnectCancel()
+	if err := reconnectCtx.Err(); err != nil {
+		t.Fatalf("reconnect context should be live before recreateWsConn: %v", err)
+	}
 	reconnectConn := newWsConn(nil, make(chan os.Signal, 1))
-	reconnectConn.baseCtx = ctx
+	reconnectConn.baseCtx = reconnectCtx
 	reconnectConn.directIP = true
 	reconnectConn.apiHost = "api.nxtrace.org"
-	reconnectConn.apiPort = "443"
-	reconnectConn.apiFastIP = "1.1.1.1"
+	reconnectConn.apiPort = directPort
+	reconnectConn.apiFastIP = "127.0.0.1"
 	defer reconnectConn.Close()
 
 	reconnectConn.recreateWsConn()

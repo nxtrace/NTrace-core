@@ -2,6 +2,7 @@ package trace
 
 import (
 	"context"
+	"errors"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -49,6 +50,8 @@ func TestLookupIPGeoRejectsNonIPTargets(t *testing.T) {
 
 	if _, err := LookupIPGeo(context.Background(), source, "en", false, 3, "example.com"); err == nil {
 		t.Fatal("LookupIPGeo(non-ip) error = nil, want error")
+	} else if !errors.Is(err, ErrNotIPGeoQuery) {
+		t.Fatalf("LookupIPGeo(non-ip) error = %v, want ErrNotIPGeoQuery", err)
 	}
 }
 
@@ -91,5 +94,25 @@ func TestLookupIPGeoHonorsContextCancellationDuringRetry(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("LookupIPGeo() did not return after cancellation")
+	}
+}
+
+func TestLookupGeoWithRetryExpiredDeadlineReturnsDeadlineExceeded(t *testing.T) {
+	ClearCaches()
+	t.Cleanup(ClearCaches)
+
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+	source := func(ip string, timeout time.Duration, lang string, maptrace bool) (*ipgeo.IPGeoData, error) {
+		t.Fatal("geo source should not be called after deadline")
+		return nil, nil
+	}
+
+	_, err := lookupGeoWithRetry(Config{
+		Context:     ctx,
+		IPGeoSource: source,
+	}, "8.8.8.8", "8.8.8.8", false)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("lookupGeoWithRetry() error = %v, want DeadlineExceeded", err)
 	}
 }
