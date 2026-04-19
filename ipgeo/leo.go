@@ -45,6 +45,9 @@ func sendIPRequest(ip string) bool {
 func receiveParse() {
 	// 获得连接实例
 	wsConn := getLeoWsConn()
+	if wsConn == nil {
+		return
+	}
 	// 防止多协程抢夺一个ws连接，导致死锁，当一个协程获得ws的控制权后上锁
 	wsConn.ConnMux.Lock()
 	// 函数退出时解锁，给其他协程使用

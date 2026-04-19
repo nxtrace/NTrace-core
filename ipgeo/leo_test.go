@@ -148,6 +148,25 @@ func TestLeoIPUsesSingleTimeoutBudget(t *testing.T) {
 	}
 }
 
+func TestReceiveParseReturnsWhenWebsocketMissing(t *testing.T) {
+	oldGet := getLeoWsConn
+	defer func() { getLeoWsConn = oldGet }()
+
+	getLeoWsConn = func() *wshandle.WsConn { return nil }
+
+	done := make(chan struct{})
+	go func() {
+		receiveParse()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("receiveParse should return when websocket is nil")
+	}
+}
+
 func waitForReceiveParseStart(started <-chan struct{}) {
 	select {
 	case <-started:
