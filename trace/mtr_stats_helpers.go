@@ -35,10 +35,7 @@ func groupMTRHopAttempts(attempts []Hop) map[string]*mtrHopGroup {
 	groups := make(map[string]*mtrHopGroup)
 	for _, attempt := range attempts {
 		host := strings.TrimSpace(attempt.Hostname)
-		ip := ""
-		if attempt.Address != nil {
-			ip = strings.TrimSpace(attempt.Address.String())
-		}
+		ip := strings.TrimSpace(mtrAddrString(attempt.Address))
 		key := mtrHopKey(ip, host)
 		group := groups[key]
 		if group == nil {

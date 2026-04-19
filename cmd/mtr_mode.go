@@ -83,22 +83,16 @@ func runMTRTUI(method trace.Method, conf trace.Config, hopIntervalMs int, maxPer
 		lang = "cn"
 	}
 
-	// preferred API 信息（仅 LeoMoeAPI 且有结果时展示）
-	apiInfo := buildAPIInfo(dataOrigin)
 	roundConf := normalizeMTRTraceConfig(conf)
 
-	opts := trace.MTROptions{
-		HopInterval:      time.Duration(hopIntervalMs) * time.Millisecond,
-		MaxPerHop:        maxPerHop,
-		IsResetRequested: ui.ConsumeRestartRequest,
-	}
+	opts := buildMTRInteractiveOptions(ui, hopIntervalMs, maxPerHop)
 
 	// TTY 模式下使用 TUI 渲染器 + 暂停支持，非 TTY 使用简单表格
 	var onSnapshot trace.MTROnSnapshot
 	if ui.IsTTY() {
 		opts.IsPaused = ui.IsPaused
 		onSnapshot = printer.MTRTUIPrinter(target, domain, target, config.Version, startTime,
-			srcHost, srcIP, lang, apiInfo, showIPs, ui.IsPaused, ui.CurrentDisplayMode, ui.CurrentNameMode, ui.IsMPLSDisabled)
+			srcHost, srcIP, lang, func() string { return buildAPIInfo(dataOrigin) }, showIPs, ui.IsPaused, ui.CurrentDisplayMode, ui.CurrentNameMode, ui.IsMPLSDisabled)
 	} else {
 		onSnapshot = func(iteration int, stats []trace.MTRHopStat) {
 			printer.MTRTablePrinter(stats, iteration, ui.CurrentDisplayMode(), ui.CurrentNameMode(), lang, showIPs)
@@ -110,6 +104,19 @@ func runMTRTUI(method trace.Method, conf trace.Config, hopIntervalMs int, maxPer
 		// 离开备用屏幕后再打印错误
 		fmt.Println(err)
 	}
+}
+
+func buildMTRInteractiveOptions(ui *mtrUI, hopIntervalMs int, maxPerHop int) trace.MTROptions {
+	opts := trace.MTROptions{
+		HopInterval: time.Duration(hopIntervalMs) * time.Millisecond,
+		MaxPerHop:   maxPerHop,
+	}
+	if ui == nil {
+		return opts
+	}
+	opts.IsResetRequested = ui.ConsumeRestartRequest
+	opts.AsyncMetadata = ui.IsTTY()
+	return opts
 }
 
 // runMTRReport 执行 MTR 非全屏报告模式（对齐 mtr -rzw 风格）。

@@ -45,6 +45,7 @@ type mtrSchedulerConfig struct {
 	ParallelRequests  int
 	ProgressThrottle  time.Duration
 	FillGeo           bool
+	AsyncMetadata     bool
 	BaseConfig        Config // used for geo/RDNS lookup
 	DstIP             net.IP
 
@@ -108,4 +109,14 @@ func mtrAddrToIP(addr net.Addr) net.IP {
 		return a.IP
 	}
 	return nil
+}
+
+func mtrAddrString(addr net.Addr) string {
+	if ip := mtrAddrToIP(addr); ip != nil {
+		return ip.String()
+	}
+	if addr == nil {
+		return ""
+	}
+	return addr.String()
 }

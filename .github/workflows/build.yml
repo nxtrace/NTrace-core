@@ -340,7 +340,7 @@ jobs:
           test -n "$(find dist_release -type f -print -quit)" || { echo "No artifacts found in dist_release"; exit 1; }
 
       - name: Create GitHub Release (draft)
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           draft: true
           name: ${{ github.ref_name }}

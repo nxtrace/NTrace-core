@@ -180,6 +180,38 @@ func (agg *MTRAggregator) Snapshot() []MTRHopStat {
 	return agg.snapshotLocked()
 }
 
+// PatchMetadataByIP updates existing rows for the given IP with late-arriving
+// host/geo data without affecting sent/received/RTT statistics.
+func (agg *MTRAggregator) PatchMetadataByIP(ip, host string, geo *ipgeo.IPGeoData) bool {
+	agg.mu.Lock()
+	defer agg.mu.Unlock()
+
+	ip = strings.TrimSpace(ip)
+	host = strings.TrimSpace(host)
+	if ip == "" || (host == "" && geo == nil) {
+		return false
+	}
+
+	changed := false
+	for _, accMap := range agg.stats {
+		for _, acc := range accMap {
+			if strings.TrimSpace(acc.ip) != ip {
+				continue
+			}
+			if host != "" && acc.host == "" {
+				acc.host = host
+				changed = true
+			}
+			if geo != nil && acc.geo == nil {
+				geoCopy := *geo
+				acc.geo = &geoCopy
+				changed = true
+			}
+		}
+	}
+	return changed
+}
+
 func (agg *MTRAggregator) snapshotLocked() []MTRHopStat {
 	// 收集 TTL 列表并排序
 	ttls := make([]int, 0, len(agg.stats))

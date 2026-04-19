@@ -751,18 +751,22 @@ func applyDN42Mode(enabled bool, dataOrigin *string, disableMaptrace *bool) {
 	if !enabled {
 		return
 	}
-	config.InitConfig()
-	*dataOrigin = "DN42"
+	applyDN42DataOrigin(dataOrigin)
 	*disableMaptrace = true
 }
 
-func prepareRuntimeEnvironment(ctx context.Context, dn42 bool, dataOrigin *string, disableMaptrace *bool, powProvider *string) *wshandle.WsConn {
-	capabilitiesCheck()
-	applyDN42Mode(dn42, dataOrigin, disableMaptrace)
-	return initLeoWebsocket(ctx, dataOrigin, powProvider)
+func applyDN42DataOrigin(dataOrigin *string) {
+	config.InitConfig()
+	*dataOrigin = "DN42"
 }
 
-func initLeoWebsocket(ctx context.Context, dataOrigin, powProvider *string) *wshandle.WsConn {
+func prepareRuntimeEnvironment(ctx context.Context, dn42 bool, dataOrigin *string, disableMaptrace *bool, powProvider *string, asyncLeo bool) *wshandle.WsConn {
+	capabilitiesCheck()
+	applyDN42Mode(dn42, dataOrigin, disableMaptrace)
+	return initLeoWebsocket(ctx, dataOrigin, powProvider, asyncLeo)
+}
+
+func initLeoWebsocket(ctx context.Context, dataOrigin, powProvider *string, async bool) *wshandle.WsConn {
 	if !strings.EqualFold(*dataOrigin, "LEOMOEAPI") {
 		return nil
 	}
@@ -776,10 +780,11 @@ func initLeoWebsocket(ctx context.Context, dataOrigin, powProvider *string) *wsh
 		return nil
 	}
 
-	leoWs := wshandle.NewWithContext(ctx)
-	if leoWs != nil {
-		leoWs.Interrupt = make(chan os.Signal, 1)
-		signal.Notify(leoWs.Interrupt, os.Interrupt)
+	var leoWs *wshandle.WsConn
+	if async {
+		leoWs = wshandle.NewWithContextAsync(ctx)
+	} else {
+		leoWs = wshandle.NewWithContext(ctx)
 	}
 	return leoWs
 }
@@ -1042,6 +1047,10 @@ func finalizeTraceResult(ctx context.Context, res *trace.Result, tablePrint, tab
 }
 
 func Execute() {
+	if handled, exitCode := maybeRunSpeedMode(os.Args[1:], os.Stdout, os.Stderr); handled {
+		os.Exit(exitCode)
+	}
+
 	parser := argparse.NewParser(appBinName, "An open source visual route tracking CLI tool")
 	// Override HelpFunc so positional arg names are sanitized in --help output
 	parser.HelpFunc = func(c *argparse.Command, msg interface{}) string {
@@ -1079,6 +1088,8 @@ func Execute() {
 	disableMaptrace := registerDisableMaptraceFlag(parser)
 	disableMPLS := parser.Flag("e", "disable-mpls", &argparse.Options{Help: "Disable MPLS"})
 	ver := parser.Flag("V", "version", &argparse.Options{Help: "Print version info and exit"})
+	speedMode := registerSpeedFlag(parser)
+	naliMode := registerNaliFlag(parser)
 	srcAddr := parser.String("s", "source", &argparse.Options{Help: "Use source address src_addr for outgoing packets"})
 	srcPort := parser.Int("", "source-port", &argparse.Options{Help: "Use source port src_port for outgoing packets"})
 	srcDev := parser.String("D", "dev", &argparse.Options{Help: "Use the specified network device for explicit source selection. On Windows, this only chooses the source address and does not guarantee the egress interface; TCP + --dev is not supported"})
@@ -1127,6 +1138,62 @@ func Execute() {
 	util.SrcDev = ""
 
 	mtrModes := deriveEffectiveMTRModes(*mtrMode, *reportMode, *wideMode, *rawPrint)
+	if *naliMode {
+		applyColorMode(*noColor)
+		if maybePrintVersion(*ver) {
+			return
+		}
+		if err := validateNaliModeOptions(buildNaliModeOptions(naliModeOptionInputs{
+			parser:        parser,
+			ipv4Only:      *ipv4Only,
+			ipv6Only:      *ipv6Only,
+			tcp:           *tcp,
+			udp:           *udp,
+			mtu:           *mtuMode,
+			mtrModes:      mtrModes,
+			raw:           *rawPrint,
+			table:         *tablePrint,
+			classic:       *classicPrint,
+			json:          *jsonPrint,
+			outputPath:    *outputPath,
+			outputDefault: *outputDefault,
+			routePath:     *routePath,
+			from:          *from,
+			deploy:        *deploy,
+			listen:        *deployListen,
+			fastTrace:     *fastTraceFlag,
+			file:          *file,
+			disableMPLS:   *disableMPLS,
+			noRDNS:        *norDNS,
+			alwaysRDNS:    *alwaysrDNS,
+			init:          *init,
+			srcAddr:       *srcAddr,
+			srcDev:        *srcDev,
+		})); err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		if err := runNaliMode(rootCtx, naliRunOptions{
+			stdin:     os.Stdin,
+			stdout:    os.Stdout,
+			dn42:      *dn42,
+			data:      *dataOrigin,
+			dot:       *dot,
+			pow:       *powProvider,
+			lang:      *lang,
+			timeoutMs: *timeout,
+			ipv4Only:  *ipv4Only,
+			ipv6Only:  *ipv6Only,
+			target:    *str,
+		}); err != nil {
+			if errors.Is(err, context.Canceled) {
+				return
+			}
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		return
+	}
 	resolvedOutputPath, outputErr := resolveOutputPath(*outputPath, *outputDefault)
 	if outputErr != nil {
 		fmt.Println(outputErr)
@@ -1190,6 +1257,12 @@ func Execute() {
 	if handleStartupModes(*noColor, *jsonPrint, mtrModes, *ver, *deploy, *deployListen, *init, osType) {
 		return
 	}
+	if *speedMode {
+		// maybeRunSpeedMode should handle --speed before parser.Parse runs. This
+		// branch is a safety net for parser edge cases such as a "--" terminator.
+		fmt.Fprintln(os.Stderr, "internal error: speed mode dispatch failed")
+		os.Exit(1)
+	}
 	restoreFastIPOutput := setFastIPOutputSuppression(*jsonPrint || mtrModes.mtr)
 	defer restoreFastIPOutput()
 
@@ -1245,7 +1318,7 @@ func Execute() {
 			fmt.Println(srcErr)
 			os.Exit(1)
 		}
-		leoWs := prepareRuntimeEnvironment(rootCtx, *dn42, dataOrigin, disableMaptrace, powProvider)
+		leoWs := prepareRuntimeEnvironment(rootCtx, *dn42, dataOrigin, disableMaptrace, powProvider, false)
 		defer closeLeoWebsocket(leoWs)
 		conf := buildMTUTraceConfig(
 			domain,
@@ -1303,7 +1376,8 @@ func Execute() {
 		return
 	}
 
-	leoWs := prepareRuntimeEnvironment(rootCtx, *dn42, dataOrigin, disableMaptrace, powProvider)
+	asyncLeo := shouldUseAsyncLeoForMTR(mtrModes, CheckTTY(int(os.Stdin.Fd())), stdoutIsTTY)
+	leoWs := prepareRuntimeEnvironment(rootCtx, *dn42, dataOrigin, disableMaptrace, powProvider, asyncLeo)
 	defer closeLeoWebsocket(leoWs)
 
 	if *from != "" {
@@ -1459,6 +1533,10 @@ func chooseMTRRunMode(effectiveMTRRaw, effectiveReport bool) mtrRunMode {
 		return mtrRunReport
 	}
 	return mtrRunTUI
+}
+
+func shouldUseAsyncLeoForMTR(modes effectiveMTRModes, stdinTTY bool, stdoutTTY bool) bool {
+	return modes.mtr && chooseMTRRunMode(modes.raw, modes.report) == mtrRunTUI && stdinTTY && stdoutTTY
 }
 
 // deriveMTRProbeParams computes per-hop scheduling parameters for MTR.

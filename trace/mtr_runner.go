@@ -39,6 +39,9 @@ type MTROptions struct {
 	IsResetRequested func() bool
 	// ProgressThrottle 流式预览最小刷新间隔（默认 200ms）。
 	ProgressThrottle time.Duration
+	// AsyncMetadata causes interactive per-hop MTR to render bare hops first,
+	// then patch Geo/RDNS metadata into existing rows asynchronously.
+	AsyncMetadata bool
 }
 
 // MTROnSnapshot 每轮完成后的回调，用于刷新 CLI 表格。
@@ -126,7 +129,7 @@ func runMTRPerHop(ctx context.Context, method Method, baseConfig Config, opts MT
 		}
 		prober = engine
 	} else {
-		prober = &mtrFallbackTTLProber{method: method, config: baseConfig}
+		prober = &mtrFallbackTTLProber{method: method, config: baseConfig, asyncMetadata: opts.AsyncMetadata}
 	}
 
 	return runMTRScheduler(ctx, prober, agg, mtrSchedulerConfig{
@@ -138,6 +141,7 @@ func runMTRPerHop(ctx context.Context, method Method, baseConfig Config, opts MT
 		ParallelRequests: baseConfig.ParallelRequests,
 		ProgressThrottle: opts.ProgressThrottle,
 		FillGeo:          true,
+		AsyncMetadata:    opts.AsyncMetadata,
 		BaseConfig:       baseConfig,
 		DstIP:            baseConfig.DstIP,
 		IsPaused:         opts.IsPaused,
@@ -983,8 +987,9 @@ func (e *mtrICMPEngine) Close() error {
 
 // mtrFallbackTTLProber uses Traceroute for single-TTL probing (TCP/UDP fallback).
 type mtrFallbackTTLProber struct {
-	method Method
-	config Config
+	method        Method
+	config        Config
+	asyncMetadata bool
 }
 
 func (p *mtrFallbackTTLProber) ProbeTTL(ctx context.Context, ttl int) (mtrProbeResult, error) {
@@ -996,6 +1001,11 @@ func (p *mtrFallbackTTLProber) ProbeTTL(ctx context.Context, ttl int) (mtrProbeR
 	cfg.ParallelRequests = 1
 	cfg.RealtimePrinter = nil
 	cfg.AsyncPrinter = nil
+	if p.asyncMetadata {
+		cfg.IPGeoSource = nil
+		cfg.RDNS = false
+		cfg.AlwaysWaitRDNS = false
+	}
 
 	res, err := TracerouteWithContext(ctx, p.method, cfg)
 	if err != nil {

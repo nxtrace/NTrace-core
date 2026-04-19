@@ -1,13 +1,20 @@
 package wshandle
 
+// Tests in this file mutate package-level websocket globals; do not add
+// t.Parallel without isolating that state first.
+
 import (
 	"context"
 	"errors"
+	"net"
 	"os"
+	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/nxtrace/NTrace-core/util"
 )
 
 func newStartedTestWsConn() *WsConn {
@@ -54,6 +61,14 @@ func TestWsConnCloseStopsBackgroundLoops(t *testing.T) {
 	case <-doneCh:
 	default:
 		t.Fatal("done channel should be closed by Close")
+	}
+	select {
+	case _, ok := <-conn.MsgReceiveCh:
+		if ok {
+			t.Fatal("receive channel should be closed by Close")
+		}
+	default:
+		t.Fatal("receive channel should be closed after Close returns")
 	}
 }
 
@@ -254,12 +269,95 @@ func TestCreateWsConnHonorsCanceledContextDuringFastIP(t *testing.T) {
 	}
 }
 
+func TestCreateWsConnAsyncReturnsBeforeFastIP(t *testing.T) {
+	oldFastIPFn := wsGetFastIPFn
+	defer func() { wsGetFastIPFn = oldFastIPFn }()
+
+	fastIPStarted := make(chan struct{}, 1)
+	fastIPDone := make(chan struct{}, 1)
+	releaseFastIP := make(chan struct{})
+	defer close(releaseFastIP)
+	wsGetFastIPFn = func(ctx context.Context, domain string, port string, enableOutput bool) (string, error) {
+		select {
+		case fastIPStarted <- struct{}{}:
+		default:
+		}
+		defer func() {
+			select {
+			case fastIPDone <- struct{}{}:
+			default:
+			}
+		}()
+		select {
+		case <-releaseFastIP:
+			return "127.0.0.1", nil
+		case <-ctx.Done():
+			return "", ctx.Err()
+		}
+	}
+
+	returned := make(chan *WsConn, 1)
+	go func() {
+		returned <- createWsConnAsync(context.Background())
+	}()
+
+	select {
+	case <-fastIPStarted:
+	case <-time.After(time.Second):
+		t.Fatal("FastIP probe did not start")
+	}
+
+	select {
+	case conn := <-returned:
+		if conn == nil {
+			t.Fatal("createWsConnAsync returned nil")
+		}
+		defer conn.Close()
+	case <-fastIPDone:
+		t.Fatal("createWsConnAsync waited for FastIP to complete")
+	case <-time.After(time.Second):
+		t.Fatal("createWsConnAsync did not return while FastIP was blocked")
+	}
+}
+
+func TestWaitUntilConnectedReturnsOnConnect(t *testing.T) {
+	conn := newStartedTestWsConn()
+	defer conn.Close()
+
+	done := make(chan error, 1)
+	go func() {
+		done <- conn.WaitUntilConnected(context.Background())
+	}()
+
+	conn.setConnectionState(true, false)
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("WaitUntilConnected returned error: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("WaitUntilConnected did not observe connected state")
+	}
+}
+
+func TestWaitUntilConnectedHonorsContext(t *testing.T) {
+	conn := newStartedTestWsConn()
+	defer conn.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	err := conn.WaitUntilConnected(ctx)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("WaitUntilConnected error = %v, want %v", err, context.DeadlineExceeded)
+	}
+}
+
 func TestRecreateWsConnCloseCancelsFastIP(t *testing.T) {
 	oldFastIPFn := wsGetFastIPFn
-	oldHost, oldPort := host, port
 	defer func() {
 		wsGetFastIPFn = oldFastIPFn
-		host, port = oldHost, oldPort
 	}()
 
 	started := make(chan struct{})
@@ -269,10 +367,9 @@ func TestRecreateWsConnCloseCancelsFastIP(t *testing.T) {
 		return "", ctx.Err()
 	}
 
-	host = "example.com"
-	port = "443"
-
 	conn := newStartedTestWsConn()
+	conn.apiHost = "example.com"
+	conn.apiPort = "443"
 	defer conn.Close()
 
 	done := make(chan struct{})
@@ -288,5 +385,66 @@ func TestRecreateWsConnCloseCancelsFastIP(t *testing.T) {
 	case <-done:
 	case <-time.After(100 * time.Millisecond):
 		t.Fatal("recreateWsConn did not stop promptly after Close")
+	}
+}
+
+func TestCreateWsConnAsyncPreservesDirectIPOnReconnect(t *testing.T) {
+	saveAndRestoreGlobalWsConn(t)
+
+	oldFastIPFn := wsGetFastIPFn
+	oldEnvHostPort := util.EnvHostPort
+	oldEnvToken := envToken
+	t.Cleanup(func() {
+		wsGetFastIPFn = oldFastIPFn
+		util.EnvHostPort = oldEnvHostPort
+		envToken = oldEnvToken
+	})
+
+	var fastIPCalls int32
+	wsGetFastIPFn = func(ctx context.Context, domain string, port string, enableOutput bool) (string, error) {
+		atomic.AddInt32(&fastIPCalls, 1)
+		return "", errors.New("unexpected FastIP refresh")
+	}
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("net.Listen() error = %v", err)
+	}
+	directPort := strconv.Itoa(listener.Addr().(*net.TCPAddr).Port)
+	_ = listener.Close()
+	util.EnvHostPort = "127.0.0.1:" + directPort
+	envToken = "token"
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	conn := createWsConnAsync(ctx)
+
+	if !conn.directIP {
+		t.Fatal("async websocket should preserve direct-IP state")
+	}
+	if conn.apiFastIP != "127.0.0.1" {
+		t.Fatalf("apiFastIP = %q, want direct IP preserved", conn.apiFastIP)
+	}
+	cancel()
+	conn.Close()
+
+	// Keep the reconnect context live and use a closed local port so
+	// recreateWsConn reaches the direct-IP dial path without external network.
+	reconnectCtx, reconnectCancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer reconnectCancel()
+	if err := reconnectCtx.Err(); err != nil {
+		t.Fatalf("reconnect context should be live before recreateWsConn: %v", err)
+	}
+	reconnectConn := newWsConn(nil, make(chan os.Signal, 1))
+	reconnectConn.baseCtx = reconnectCtx
+	reconnectConn.directIP = true
+	reconnectConn.apiHost = "api.nxtrace.org"
+	reconnectConn.apiPort = directPort
+	reconnectConn.apiFastIP = "127.0.0.1"
+	defer reconnectConn.Close()
+
+	reconnectConn.recreateWsConn()
+
+	if got := atomic.LoadInt32(&fastIPCalls); got != 0 {
+		t.Fatalf("FastIP refresh calls = %d, want 0 for direct-IP reconnect", got)
 	}
 }

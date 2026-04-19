@@ -107,12 +107,15 @@ func TestAdvancedHelpTextMentionsTuningGuidance(t *testing.T) {
 	parser.Int("", "psize", &argparse.Options{Help: buildPayloadSizeHelp()})
 
 	usage := parser.Usage(nil)
-	for _, want := range []string{
+	wants := []string{
 		"load-balanced paths",
-		"rate-limited links",
 		"intercontinental",
 		"raise for MTU or",
-	} {
+	}
+	if !defaultMTR {
+		wants = append(wants, "rate-limited links")
+	}
+	for _, want := range wants {
 		if !strings.Contains(usage, want) {
 			t.Fatalf("usage missing tuning guidance %q:\n%s", want, usage)
 		}
@@ -205,6 +208,9 @@ func TestResolvePacketSizeArg_DefaultsToProtocolMinimum(t *testing.T) {
 }
 
 func TestRegisterTracerouteOutputFlagsParsesOutputPath(t *testing.T) {
+	if defaultMTR {
+		t.Skip("normal traceroute output flags are unavailable in the ntr flavor")
+	}
 	parser := argparse.NewParser("nexttrace", "")
 	flags := registerTracerouteOutputFlags(parser)
 	target := parser.StringPositional(&argparse.Options{})
@@ -224,6 +230,9 @@ func TestRegisterTracerouteOutputFlagsParsesOutputPath(t *testing.T) {
 }
 
 func TestRegisterTracerouteOutputFlagsParsesOutputDefault(t *testing.T) {
+	if defaultMTR {
+		t.Skip("normal traceroute output flags are unavailable in the ntr flavor")
+	}
 	parser := argparse.NewParser("nexttrace", "")
 	flags := registerTracerouteOutputFlags(parser)
 	target := parser.StringPositional(&argparse.Options{})
