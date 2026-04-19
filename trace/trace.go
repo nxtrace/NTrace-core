@@ -599,6 +599,22 @@ func geoTimeoutForAttempt(attempt int) time.Duration {
 	return time.Duration(timeout) * time.Second
 }
 
+func lookupGeoSourceWithContext(ctx context.Context, cacheKey string, fn func() (any, error)) (any, error) {
+	if ctx == nil || ctx.Done() == nil {
+		v, err, _ := ipGeoSF.Do(cacheKey, fn)
+		return v, err
+	}
+
+	resultCh := ipGeoSF.DoChan(cacheKey, fn)
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case result := <-resultCh:
+		return result.Val, result.Err
+	}
+}
+
 func lookupGeoWithRetry(c Config, cacheKey, query string, dn42 bool) (*ipgeo.IPGeoData, error) {
 	if cacheVal, ok := geoCache.Load(cacheKey); ok {
 		if g, ok := cacheVal.(*ipgeo.IPGeoData); ok && g != nil {
@@ -634,7 +650,9 @@ func lookupGeoWithRetry(c Config, cacheKey, query string, dn42 bool) (*ipgeo.IPG
 			}
 		}
 		attemptCtx, cancel := context.WithTimeout(ctx, timeout)
-		v, err := lookupGeoAttempt(attemptCtx, cacheKey, query, timeout, c)
+		v, err := lookupGeoSourceWithContext(attemptCtx, cacheKey, func() (any, error) {
+			return c.IPGeoSource(query, timeout, c.Lang, c.Maptrace)
+		})
 		cancel()
 		if err != nil {
 			lastErr = err
@@ -658,35 +676,6 @@ func lookupGeoWithRetry(c Config, cacheKey, query string, dn42 bool) (*ipgeo.IPG
 		lastErr = errors.New(lookupErr)
 	}
 	return nil, lastErr
-}
-
-func lookupGeoAttempt(ctx context.Context, cacheKey, query string, timeout time.Duration, c Config) (any, error) {
-	if ctx == nil || ctx.Done() == nil {
-		v, err, _ := ipGeoSF.Do(cacheKey, func() (any, error) {
-			return c.IPGeoSource(query, timeout, c.Lang, c.Maptrace)
-		})
-		return v, err
-	}
-
-	type result struct {
-		value any
-		err   error
-	}
-
-	done := make(chan result, 1)
-	go func() {
-		v, err, _ := ipGeoSF.Do(cacheKey, func() (any, error) {
-			return c.IPGeoSource(query, timeout, c.Lang, c.Maptrace)
-		})
-		done <- result{value: v, err: err}
-	}()
-
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case res := <-done:
-		return res.value, res.err
-	}
 }
 
 func lookupPTR(ctx context.Context, ipStr string) []string {
