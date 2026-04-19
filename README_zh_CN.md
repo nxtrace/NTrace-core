@@ -181,6 +181,7 @@ Document Language: [English](README.md) | 简体中文
 | 常规 traceroute         |          ✅           |        ✅        |     —      |
 | 独立 MTU（`--mtu`）     |          ✅           |        ✅        |     —      |
 | CDN 测速（`--speed`）   |          ✅           |        —         |     —      |
+| IP 文本标注（`--nali`） |          ✅           |        —         |     —      |
 | MTR TUI                 |          ✅           |        —         | ✅（默认） |
 | MTR 报告（`-r`）        |          ✅           |        —         |     ✅     |
 | MTR 宽报告（`-w`）      |          ✅           |        —         |     ✅     |
@@ -195,9 +196,9 @@ Document Language: [English](README.md) | 简体中文
 
 ### 功能对比
 
-- **`nexttrace`** — 完整版。包含 traceroute、独立 MTU、CDN 测速、MTR、Globalping、Fast Trace 与 WebUI。
-- **`nexttrace-tiny`** — 精简版。保留常规 traceroute、独立 MTU 和 Fast Trace；不含 CDN 测速 / MTR / Globalping / WebUI。适合嵌入式或极简环境。
-- **`ntr`** — MTR 专用版。默认启动 MTR TUI。不含常规 traceroute、独立 `--mtu`、CDN 测速、Globalping、Fast Trace 与 WebUI。
+- **`nexttrace`** — 完整版。包含 traceroute、独立 MTU、CDN 测速、IP 文本标注、MTR、Globalping、Fast Trace 与 WebUI。
+- **`nexttrace-tiny`** — 精简版。保留常规 traceroute、独立 MTU 和 Fast Trace；不含 CDN 测速 / IP 文本标注 / MTR / Globalping / WebUI。适合嵌入式或极简环境。
+- **`ntr`** — MTR 专用版。默认启动 MTR TUI。不含常规 traceroute、独立 `--mtu`、CDN 测速、IP 文本标注、Globalping、Fast Trace 与 WebUI。
 
 ### 手动编译
 
@@ -410,6 +411,21 @@ nexttrace --speed --dev eth0
 - 默认终端输出会展示候选节点、最终选中节点、客户端/服务端信息、空载延迟、下载/上传单线程与多线程轮次、负载延迟、总流量、warnings 和 degraded 状态。
 - `--json` 时，stdout 只输出一个 JSON 文档。
 - 退出码：`0` 表示成功，`2` 表示降级完成，`1` 表示失败，`130` 表示被中断。
+
+#### `NextTrace` 可以对文本流中的 IP 字面量做归属标注
+
+```bash
+# 标注单行文本
+nexttrace --nali 1.1.1.1
+
+# 标注管道输出
+dig example.com +short | nexttrace --nali --data-provider IPInfo --language en
+```
+
+- `--nali` 仅在完整版 `nexttrace` 中提供，`nexttrace-tiny` 与 `ntr` 不注册该参数。
+- 仅标注 IPv4/IPv6 字面量，并复用 NextTrace 现有 GeoIP provider；不内置 CDN/CNAME 匹配、离线数据库、更新逻辑或 nali 专属路径。
+- 复用的公共参数：`--data-provider`、`--language`、`--dot-server`、`--timeout`、`--dn42`、`-4`、`-6`。
+- 该文本标注模式参考 [zu1k/nali](https://github.com/zu1k/nali) 的使用体验；nali 使用 [MIT License](https://github.com/zu1k/nali/blob/master/LICENSE)。
 
 #### `NextTrace`也同样支持一些进阶功能，如 TTL 控制、并发数控制、模式切换等
 
@@ -688,8 +704,8 @@ NextTrace 当前会读取下列环境变量。对于布尔开关，只识别 `1`
 
 ```shell
 Usage: nexttrace [-h|--help] [--init] [-4|--ipv4] [-6|--ipv6] [-T|--tcp]
-                 [-U|--udp] [--speed] [-F|--fast-trace] [-p|--port <integer>]
-                 [--icmp-mode <integer>] [-q|--queries <integer>]
+                 [-U|--udp] [--speed] [--nali] [-F|--fast-trace]
+                 [-p|--port <integer>] [--icmp-mode <integer>] [-q|--queries <integer>]
                  [--max-attempts <integer>] [--parallel-requests <integer>]
                  [-m|--max-hops <integer>] [-d|--data-provider
                  (IP.SB|ip.sb|IPInfo|ipinfo|IPInsight|ipinsight|IPAPI.com|ip-api.com|IPInfoLocal|ipinfolocal|chunzhen|LeoMoeAPI|leomoeapi|ipdb.one|disable-geoip)]
@@ -714,6 +730,8 @@ Arguments:
                                      executable directory
       --speed                        Run CDN speed test mode. See `nexttrace
                                      --speed --help` for details
+      --nali                         Annotate IP literals in text using
+                                     NextTrace GeoIP data
   -4  --ipv4                         Use IPv4 only
   -6  --ipv6                         Use IPv6 only
   -T  --tcp                          Use TCP SYN for tracerouting (default
