@@ -1085,6 +1085,7 @@ func Execute() {
 	disableMPLS := parser.Flag("e", "disable-mpls", &argparse.Options{Help: "Disable MPLS"})
 	ver := parser.Flag("V", "version", &argparse.Options{Help: "Print version info and exit"})
 	speedMode := registerSpeedFlag(parser)
+	naliMode := registerNaliFlag(parser)
 	srcAddr := parser.String("s", "source", &argparse.Options{Help: "Use source address src_addr for outgoing packets"})
 	srcPort := parser.Int("", "source-port", &argparse.Options{Help: "Use source port src_port for outgoing packets"})
 	srcDev := parser.String("D", "dev", &argparse.Options{Help: "Use the specified network device for explicit source selection. On Windows, this only chooses the source address and does not guarantee the egress interface; TCP + --dev is not supported"})
@@ -1133,6 +1134,63 @@ func Execute() {
 	util.SrcDev = ""
 
 	mtrModes := deriveEffectiveMTRModes(*mtrMode, *reportMode, *wideMode, *rawPrint)
+	if *naliMode {
+		applyColorMode(*noColor)
+		if maybePrintVersion(*ver) {
+			return
+		}
+		if err := validateNaliModeOptions(buildNaliModeOptions(
+			parser,
+			*ipv4Only,
+			*ipv6Only,
+			*tcp,
+			*udp,
+			*mtuMode,
+			mtrModes,
+			*rawPrint,
+			*tablePrint,
+			*classicPrint,
+			*jsonPrint,
+			*outputPath,
+			*outputDefault,
+			*routePath,
+			*disableMaptrace,
+			*from,
+			*deploy,
+			*deployListen,
+			*fastTraceFlag,
+			*file,
+			*disableMPLS,
+			*norDNS,
+			*alwaysrDNS,
+			*init,
+			*srcAddr,
+			*srcPort,
+			*srcDev,
+		)); err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		if err := runNaliMode(rootCtx, naliRunOptions{
+			stdin:     os.Stdin,
+			stdout:    os.Stdout,
+			dn42:      *dn42,
+			data:      *dataOrigin,
+			dot:       *dot,
+			pow:       *powProvider,
+			lang:      *lang,
+			timeoutMs: *timeout,
+			ipv4Only:  *ipv4Only,
+			ipv6Only:  *ipv6Only,
+			target:    *str,
+		}); err != nil {
+			if !errors.Is(err, context.Canceled) {
+				fmt.Println(err)
+			}
+			os.Exit(1)
+		}
+		return
+	}
 	resolvedOutputPath, outputErr := resolveOutputPath(*outputPath, *outputDefault)
 	if outputErr != nil {
 		fmt.Println(outputErr)

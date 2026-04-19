@@ -9,5 +9,6 @@ const (
 	enableMTR        = true
 	enableMTU        = true
 	enableSpeed      = true
+	enableNali       = true
 	defaultMTR       = false
 )
