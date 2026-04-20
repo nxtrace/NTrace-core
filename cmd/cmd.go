@@ -1092,7 +1092,7 @@ func Execute() {
 	naliMode := registerNaliFlag(parser)
 	srcAddr := parser.String("s", "source", &argparse.Options{Help: "Use source address src_addr for outgoing packets"})
 	srcPort := parser.Int("", "source-port", &argparse.Options{Help: "Use source port src_port for outgoing packets"})
-	srcDev := parser.String("D", "dev", &argparse.Options{Help: "Use the specified network device for explicit source selection. On Windows, this only chooses the source address and does not guarantee the egress interface; TCP + --dev is not supported"})
+	srcDev := parser.String("D", "dev", &argparse.Options{Help: "Use the specified network device for explicit source selection. On Windows, this selects the device source address; routing may still choose the egress interface"})
 
 	webFlags := registerWebUIFlags(parser)
 	deployListen := webFlags.deployListen
@@ -1298,7 +1298,7 @@ func Execute() {
 			fmt.Println(srcResolveErr)
 			os.Exit(1)
 		}
-		// NormalizeExplicitSourceConfig enforces explicit --source/--dev rules and unsupported combinations.
+		// NormalizeExplicitSourceConfig applies explicit --source/--dev selection rules.
 		sourceCfg, srcResolveErr := trace.NormalizeExplicitSourceConfig(trace.UDPTrace, trace.Config{
 			OSType:       osType,
 			DstIP:        ip,
@@ -1436,7 +1436,7 @@ func Execute() {
 		fmt.Println(srcResolveErr)
 		os.Exit(1)
 	}
-	// NormalizeExplicitSourceConfig enforces explicit --source/--dev rules and unsupported combinations.
+	// NormalizeExplicitSourceConfig applies explicit --source/--dev selection rules.
 	sourceCfg, srcResolveErr := trace.NormalizeExplicitSourceConfig(method, trace.Config{
 		OSType:       osType,
 		DstIP:        ip,

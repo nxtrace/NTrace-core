@@ -333,8 +333,7 @@ nexttrace --file /path/to/your/iplist.txt
 #### `NextTrace` already supports route tracing for specified Network Devices
 
 On macOS and Linux, `--dev` binds the requested source interface.
-On Windows, `--dev` only selects the source address and does not guarantee the actual egress interface.
-`TCP + --dev` remains explicitly unsupported on Windows and returns an error.
+On Windows, `--dev` resolves the source IP from the selected device and uses that source address for ICMP/TCP/UDP probes; it does not bind WinDivert or sockets to a real egress interface, so Windows routing may still choose a different path. The standalone `--mtu` mode follows the same source-address behavior and also uses the device name for local MTU lookup.
 
 ```bash
 # Use eth0 network interface
@@ -818,8 +817,9 @@ Arguments:
                                      packets
   -D  --dev                          Use the specified network device for
                                      explicit source selection. On Windows,
-                                     this only chooses the source address and
-                                     does not guarantee the egress interface
+                                     this selects the device source address;
+                                     routing may still choose the egress
+                                     interface
       --listen                       Set listen address for web console (e.g.
                                      127.0.0.1:30080)
       --deploy                       Start the Gin powered web console
