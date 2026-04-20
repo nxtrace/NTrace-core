@@ -331,8 +331,7 @@ nexttrace --file /path/to/your/iplist.txt
 #### `NextTrace` 已支持指定网卡进行路由跟踪
 
 在 macOS 和 Linux 上，`--dev` 会绑定到指定源网卡。
-在 Windows 上，`--dev` 只用于选择 source address，不保证真实出接口。
-`TCP + --dev` 在 Windows 上仍然是显式不支持的，会直接报错。
+在 Windows 上，`--dev` 会从指定网卡解析 source IP，并用该 source address 发起 ICMP/TCP/UDP 探测；它不会把 WinDivert 或 socket 绑定到真实出接口，实际出口仍可能由 Windows 路由表决定。独立 `--mtu` 模式也遵循相同的 source-address 语义，并额外使用网卡名查询本地 MTU。
 
 ```bash
 # 请注意 Lite 版本此参数不能和快速测试联用，如有需要请使用 enhanced 版本
@@ -794,8 +793,9 @@ Arguments:
                                      packets
   -D  --dev                          Use the specified network device for
                                      explicit source selection. On Windows,
-                                     this only chooses the source address and
-                                     does not guarantee the egress interface
+                                     this selects the device source address;
+                                     routing may still choose the egress
+                                     interface
       --listen                       Set listen address for web console (e.g.
                                      127.0.0.1:30080)
       --deploy                       Start the Gin powered web console

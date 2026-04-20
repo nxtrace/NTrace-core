@@ -300,12 +300,14 @@ func TestNormalizeExplicitSourceConfigWindowsIgnoresDeviceWhenSourceExplicitForI
 	}
 }
 
-func TestNormalizeExplicitSourceConfigWindowsRejectsTCPSourceDevice(t *testing.T) {
+func TestNormalizeExplicitSourceConfigWindowsTCPResolvesDeviceToSourceAddress(t *testing.T) {
 	restore := stubSourceDeviceResolver(t, func(device string) (*net.Interface, error) {
-		t.Fatalf("ResolveSourceDevice should not be called for unsupported Windows TCP source_device")
-		return nil, nil
+		if device != "Ethernet0" {
+			t.Fatalf("ResolveSourceDevice device = %q, want Ethernet0", device)
+		}
+		return &net.Interface{Name: device}, nil
 	}, func(_ *net.Interface) ([]net.Addr, error) {
-		return nil, nil
+		return []net.Addr{&net.IPNet{IP: net.ParseIP("192.0.2.44"), Mask: net.CIDRMask(24, 32)}}, nil
 	})
 	defer restore()
 
@@ -315,12 +317,15 @@ func TestNormalizeExplicitSourceConfigWindowsRejectsTCPSourceDevice(t *testing.T
 		SourceDevice: "Ethernet0",
 	}
 
-	_, err := NormalizeExplicitSourceConfig(TCPTrace, cfg)
-	if err == nil {
-		t.Fatal("NormalizeExplicitSourceConfig() error = nil, want unsupported Windows TCP source_device error")
+	got, err := NormalizeExplicitSourceConfig(TCPTrace, cfg)
+	if err != nil {
+		t.Fatalf("NormalizeExplicitSourceConfig() error = %v", err)
 	}
-	if err.Error() != `source_device "Ethernet0" is not supported on Windows TCP traces` {
-		t.Fatalf("err = %q, want unsupported Windows TCP source_device error", err.Error())
+	if got.SrcAddr != "192.0.2.44" {
+		t.Fatalf("SrcAddr = %q, want 192.0.2.44", got.SrcAddr)
+	}
+	if got.SourceDevice != "" {
+		t.Fatalf("SourceDevice = %q, want empty", got.SourceDevice)
 	}
 }
 

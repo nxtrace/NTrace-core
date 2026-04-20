@@ -290,7 +290,8 @@
 - `--dev` 在 `cmd/cmd.go` 先解析网卡并推导 `srcAddr`（已处理非 `*net.IPNet` 地址类型，避免 panic）。
 - `trace.Config` 现在显式携带 `SourceDevice` / `DisableMPLS`，Darwin TCP/UDP 抓包与 MPLS 解析优先走会话级配置，不再依赖 Web 侧临时改写全局变量。
 - `trace.Config` 也显式携带 `Context`；`TracerouteWithContext(...)` 通过把上游 ctx 传入各 tracer 的 `signal.NotifyContext(...)` 基底，让 TCP/UDP fallback MTR 可以响应取消。
-- Windows TCP 目前仍无法把 `SourceDevice` 映射到 WinDivert 接口选择；当前策略是显式报错拒绝，而不是静默忽略该字段。
+- Windows 下 ICMP/TCP/UDP 的 `--dev` 都必须保持 v1.6.2 兼容行为：先解析指定网卡对应的 source IP，写入 `SrcAddr`，再清空 `SourceDevice`，让后续路径按 source address 继续运行；不要把 Windows `--dev` 改成拒绝执行或报错退出。
+- 这只是通过 source IP 影响 Windows 路由选择，不代表 WinDivert 或 socket 已支持真实按设备绑定；README 需要如实说明可能不准确。独立 `--mtu` 同样按 source-address 发送，但可额外保留 device 名用于本地 MTU 查询。
 - MTR 标题显示源信息来自：
   - `--source`（最高优先）
   - `--dev` 推导

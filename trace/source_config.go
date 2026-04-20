@@ -120,6 +120,8 @@ func ResolveConfiguredSrcAddr(dstIP net.IP, srcAddr, srcDev string) (resolved st
 }
 
 func NormalizeExplicitSourceConfig(method Method, config Config) (Config, error) {
+	_ = method
+
 	config.SrcAddr = strings.TrimSpace(config.SrcAddr)
 	config.SourceDevice = strings.TrimSpace(config.SourceDevice)
 	explicitSource := config.SrcAddr != ""
@@ -129,9 +131,6 @@ func NormalizeExplicitSourceConfig(method Method, config Config) (Config, error)
 	}
 	if config.SourceDevice == "" {
 		return config, nil
-	}
-	if config.OSType == osTypeWindows && method == TCPTrace {
-		return config, fmt.Errorf("source_device %q is not supported on Windows TCP traces", config.SourceDevice)
 	}
 	if config.OSType == osTypeWindows && explicitSource {
 		config.SourceDevice = ""
