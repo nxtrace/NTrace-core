@@ -86,6 +86,21 @@ func TestRegisterWebUIFlagsWithAvailability_EnabledParsesMCPAndToken(t *testing.
 	}
 }
 
+func TestMCPEndpointURLPrefersAccessAddress(t *testing.T) {
+	got := mcpEndpointURL(listenInfo{
+		Binding: "http://0.0.0.0:1080",
+		Access:  "http://192.0.2.10:1080",
+	})
+	if got != "http://192.0.2.10:1080/mcp" {
+		t.Fatalf("mcpEndpointURL wildcard = %q, want access endpoint", got)
+	}
+
+	got = mcpEndpointURL(listenInfo{Binding: "http://127.0.0.1:1080"})
+	if got != "http://127.0.0.1:1080/mcp" {
+		t.Fatalf("mcpEndpointURL loopback = %q, want binding endpoint", got)
+	}
+}
+
 func TestValidateDeployMCPModeRequiresDeploy(t *testing.T) {
 	if err := validateDeployMCPMode(false, true); err == nil {
 		t.Fatal("validateDeployMCPMode(false, true) error = nil, want error")
