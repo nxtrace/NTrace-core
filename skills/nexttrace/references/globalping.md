@@ -11,6 +11,8 @@ Use Globalping when the user needs traceroute/MTR from outside the local host, e
 5. If more detail is needed later, call `nexttrace_globalping_get_measurement`.
 6. Compare per probe: country, ASN, network, tags, raw output, and hop path.
 
+Do not change the requested ASN, target, protocol, or IP family by yourself. If the requested ASN has no online probes or Globalping rejects it, report that exact limitation and ask before trying another ASN, country, city, protocol, or port. Switching from ICMP to TCP/UDP does not make an offline or unavailable ASN probe become available.
+
 ## Example
 
 ```json
@@ -18,6 +20,19 @@ Use Globalping when the user needs traceroute/MTR from outside the local host, e
   "target": "example.com",
   "locations": ["Japan", "Germany", "AS13335", "aws-us-east-1"],
   "limit": 4,
+  "protocol": "ICMP",
+  "packets": 3,
+  "ip_version": 4
+}
+```
+
+ASN-specific example:
+
+```json
+{
+  "target": "w135.gubo.org",
+  "locations": ["AS4837"],
+  "limit": 3,
   "protocol": "ICMP",
   "packets": 3,
   "ip_version": 4
@@ -37,6 +52,14 @@ Useful magic string forms:
 - Cloud region: provider-specific strings such as `aws-us-east-1` when supported by Globalping
 
 If a location is rejected, simplify it to country, city, or ASN.
+
+For ASN requests:
+
+- Use the exact uppercase form, for example `AS4837`.
+- Do not replace `AS4837` with a nearby ASN such as `AS9929`.
+- Verify each returned `results[].probe.asn` matches the requested ASN before summarizing.
+- If Globalping returns fewer probes than `limit`, state the actual `probes_count`; do not treat it as a protocol failure.
+- If `results[].status` is `in-progress`, use `nexttrace_globalping_get_measurement` with `measurement_id` before giving a final route conclusion.
 
 ## Output
 

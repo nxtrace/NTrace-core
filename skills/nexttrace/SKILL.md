@@ -41,7 +41,7 @@ Auth:
    - Global vantage points: `nexttrace_globalping_trace`
    - Other tools: `nexttrace_speed_test`, `nexttrace_annotate_ips`, `nexttrace_geo_lookup`, `nexttrace_globalping_limits`, `nexttrace_globalping_get_measurement`
 3. Prefer `structuredContent`; use text content only as a fallback.
-4. For Globalping, read [references/globalping.md](references/globalping.md).
+4. For Globalping, read [references/globalping.md](references/globalping.md). Do not substitute the requested ASN, location, target, protocol, or IP family unless the user asks for a fallback.
 5. For full tool schemas and boundaries, read [references/mcp-tools.md](references/mcp-tools.md) and [references/capability-matrix.md](references/capability-matrix.md).
 6. Keep this skill and its references synced with `server/mcp.go` whenever MCP tools or parameters change.
 
