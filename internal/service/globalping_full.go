@@ -124,6 +124,9 @@ func buildGlobalpingCreate(req GlobalpingTraceRequest) (*globalping.MeasurementC
 
 func defaultGlobalpingPort(protocol string) int {
 	switch protocol {
+	case "ICMP":
+		// Globalping's CLI model always serializes port; probes reject port 0 even for ICMP MTR.
+		return 80
 	case "TCP":
 		return 80
 	case "UDP":

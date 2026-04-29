@@ -36,12 +36,12 @@ func TestBuildGlobalpingCreateUsesLocationsAndOptions(t *testing.T) {
 	}
 }
 
-func TestBuildGlobalpingCreateDefaultsTCPUDPPorts(t *testing.T) {
+func TestBuildGlobalpingCreateDefaultsPorts(t *testing.T) {
 	tests := []struct {
 		protocol string
 		wantPort uint16
 	}{
-		{protocol: "icmp", wantPort: 0},
+		{protocol: "icmp", wantPort: 80},
 		{protocol: "tcp", wantPort: 80},
 		{protocol: "udp", wantPort: 33494},
 	}
