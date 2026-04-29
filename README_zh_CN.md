@@ -918,6 +918,55 @@ nexttrace --deploy --mcp --listen 0.0.0.0:1080 --deploy-token "$TOKEN"
 
 监听 loopback 地址（`127.0.0.1`、`::1`、`localhost`）时默认免 token。监听外网地址时必须启用 token；如果没有通过 `--deploy-token` 或 `NEXTTRACE_DEPLOY_TOKEN` 设置，NextTrace 会启动时随机生成 token 并输出到 stdout。API、WebSocket 与 MCP 客户端可使用 `Authorization: Bearer <token>` 或 `X-NextTrace-Token`；浏览器 WebUI 用户可访问 `/auth/login` 登录。
 
+### 在 Agent 客户端注册 MCP
+
+先启动 NextTrace。MCP endpoint 是 Streamable HTTP，不是 stdio：
+
+```text
+http://127.0.0.1:1080/mcp
+```
+
+监听外网地址或手动配置 token 时，把 token 放在 HTTP header 中。不要把 deploy token 放进 URL query。
+
+通用 MCP 客户端配置示例：
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "nexttrace": {
+        "url": "http://127.0.0.1:1080/mcp",
+        "transport": "streamable-http",
+        "headers": {
+          "Authorization": "Bearer <token>"
+        }
+      }
+    }
+  }
+}
+```
+
+OpenClaw 可通过 [`openclaw mcp set`](https://docs.openclaw.ai/zh-CN/cli/mcp) 保存同样的 server 定义：
+
+```bash
+openclaw mcp set nexttrace '{
+  "url": "http://127.0.0.1:1080/mcp",
+  "transport": "streamable-http",
+  "headers": {
+    "Authorization": "Bearer <token>"
+  }
+}'
+```
+
+`openclaw mcp set` 只保存 MCP server 定义；它不会启动 NextTrace，也不会验证 endpoint 是否可达，所以需要先运行 `nexttrace --deploy --mcp`。
+
+Agent 接入后可先调用这些工具：
+
+- `nexttrace_capabilities`
+- `nexttrace_traceroute`
+- `nexttrace_globalping_trace`
+- `nexttrace_globalping_limits`
+
 ## NextTraceroute
 
 `NextTraceroute`，一款默认使用`NextTrace API`的免`root`安卓版路由跟踪应用，由 @surfaceocean 开发。  

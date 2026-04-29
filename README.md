@@ -918,6 +918,55 @@ nexttrace --deploy --mcp --listen 0.0.0.0:1080 --deploy-token "$TOKEN"
 
 Loopback listen addresses (`127.0.0.1`, `::1`, `localhost`) are tokenless by default. External listen addresses require a token; if none is set with `--deploy-token` or `NEXTTRACE_DEPLOY_TOKEN`, NextTrace generates one and prints it to stdout. API, WebSocket, and MCP clients may use `Authorization: Bearer <token>` or `X-NextTrace-Token`; browser WebUI users can sign in at `/auth/login`.
 
+### Register MCP in Agent clients
+
+Start NextTrace first. The MCP endpoint is Streamable HTTP, not stdio:
+
+```text
+http://127.0.0.1:1080/mcp
+```
+
+For external listeners or manually configured tokens, pass the token in an HTTP header. Do not put deploy tokens in URL query strings.
+
+Generic MCP client config:
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "nexttrace": {
+        "url": "http://127.0.0.1:1080/mcp",
+        "transport": "streamable-http",
+        "headers": {
+          "Authorization": "Bearer <token>"
+        }
+      }
+    }
+  }
+}
+```
+
+OpenClaw can save the same server definition with [`openclaw mcp set`](https://docs.openclaw.ai/cli/mcp):
+
+```bash
+openclaw mcp set nexttrace '{
+  "url": "http://127.0.0.1:1080/mcp",
+  "transport": "streamable-http",
+  "headers": {
+    "Authorization": "Bearer <token>"
+  }
+}'
+```
+
+`openclaw mcp set` only saves the MCP server definition. It does not start NextTrace or verify that the endpoint is reachable, so run `nexttrace --deploy --mcp` first.
+
+Useful first tool calls for Agents:
+
+- `nexttrace_capabilities`
+- `nexttrace_traceroute`
+- `nexttrace_globalping_trace`
+- `nexttrace_globalping_limits`
+
 ## NextTraceroute
 
 `NextTraceroute` is a root-free Android route tracing application that defaults to using the `NextTrace API`, developed by @surfaceocean.  
