@@ -4,11 +4,15 @@ MCP endpoint: `/mcp` under `nexttrace --deploy --mcp`.
 
 All tools return structured JSON under `structuredContent`.
 
+For every tool, respect the returned or documented `parameters.supported`, `parameters.not_applicable`, and `parameters.not_yet_supported` boundaries. Do not pass unsupported families just because another NextTrace tool accepts them.
+
 ## Tools
 
 ### `nexttrace_capabilities`
 
 Lists tools and parameter boundaries. Call this first when the server is reachable.
+
+Respect the capability output when choosing tools. Do not infer that a parameter supported by one tool is available in another.
 
 ### `nexttrace_traceroute`
 
@@ -50,6 +54,8 @@ Supported:
 
 Output includes `target`, `resolved_ip`, `protocol`, `data_provider`, `language`, `hops[]`, and `duration_ms`.
 
+Respect its parameter boundaries. Do not switch from ICMP to TCP/UDP because some hops drop packets; ask or report the limitation first. Keep explicit TCP/UDP ports, and remember omitted ports default to TCP `80` and UDP `33494`.
+
 ### `nexttrace_mtr_report`
 
 Runs bounded MTR and returns aggregated `stats[]`.
@@ -60,6 +66,8 @@ Adds:
 - `max_per_hop`
 
 Use this for loss, jitter, and repeated RTT comparison.
+
+Respect its parameter boundaries. Use this for repeated local statistics, not for worldwide probe selection. Do not summarize a lossy intermediate hop as destination failure without checking later hops and final-hop stats.
 
 ### `nexttrace_mtr_raw`
 
@@ -72,6 +80,8 @@ Adds:
 - `duration_ms`
 
 If neither `max_per_hop` nor `duration_ms` is set, NextTrace bounds output with a small default and reports a warning.
+
+Respect its parameter boundaries. Raw output is probe-level records, not a final path table. Accept the bounded default or set `max_per_hop` / `duration_ms`; do not request unbounded raw streams through MCP.
 
 ### `nexttrace_mtu_trace`
 
@@ -103,6 +113,8 @@ Not applicable:
 - `packet_size`
 - `tos`
 
+Respect these boundaries. MTU is UDP-only; do not pass `protocol`, `packet_size`, or `tos`. MTU failure indicates path-MTU discovery could not complete, not that normal traceroute or the destination is necessarily down.
+
 ### `nexttrace_speed_test`
 
 Runs a conservative local speed test.
@@ -121,6 +133,8 @@ Supported:
 - `source_address`
 - `source_device`
 
+Respect its parameter boundaries. Use speed test only for bandwidth/latency-to-test-endpoint questions. It is local HTTP transfer testing, not route diagnostics and not Globalping.
+
 ### `nexttrace_annotate_ips`
 
 Annotates IPv4/IPv6 literals in text.
@@ -134,6 +148,8 @@ Supported:
 - `ipv4_only`
 - `ipv6_only`
 
+Respect its parameter boundaries. This tool annotates IP literals already present in text; it does not resolve domains, run traceroute, or validate reachability.
+
 ### `nexttrace_geo_lookup`
 
 Looks up metadata for one IP address.
@@ -143,6 +159,8 @@ Supported:
 - `query`
 - `data_provider`
 - `language`
+
+Respect its parameter boundaries. `query` must be an IP address. For a domain, first use a trace or resolver path that returns an IP, then call this tool if a separate GeoIP lookup is still needed.
 
 ### `nexttrace_globalping_trace`
 
@@ -167,9 +185,13 @@ Not applicable:
 - `tos`
 - `ttl_interval`
 
+Respect these boundaries. Summarize per `results[].probe` and verify requested ASN/location constraints against returned probe metadata. Do not use Globalping for local `source_address`, `source_device`, `dot_server`, `packet_size`, `tos`, or TTL-interval experiments.
+
 ### `nexttrace_globalping_limits`
 
 Returns current Globalping rate/credit limits. Call this before large multi-location jobs.
+
+Respect its parameter boundaries. This tool takes no target; do not use it as a reachability probe.
 
 ### `nexttrace_globalping_get_measurement`
 
@@ -178,3 +200,5 @@ Fetches an existing measurement:
 ```json
 {"measurement_id": "..." }
 ```
+
+Respect its parameter boundaries. Use it only with a `measurement_id` returned by `nexttrace_globalping_trace`; do not change the original target/location/protocol while polling.

@@ -1,6 +1,8 @@
 # CLI Fallback
 
-Use CLI fallback when MCP is unreachable or the user wants terminal output.
+Use CLI fallback only when MCP is unreachable, the user wants terminal output, or MCP returns an explicit unsupported-capability error.
+
+Fallback must preserve explicit user inputs: `target`, `protocol`, `port`, `source_address`, `source_device`, ASN, location, and IP family. Do not change those values unless the user agrees.
 
 ## Local Traceroute
 

@@ -41,9 +41,11 @@ Auth:
    - Global vantage points: `nexttrace_globalping_trace`
    - Other tools: `nexttrace_speed_test`, `nexttrace_annotate_ips`, `nexttrace_geo_lookup`, `nexttrace_globalping_limits`, `nexttrace_globalping_get_measurement`
 3. Prefer `structuredContent`; use text content only as a fallback.
-4. For Globalping, read [references/globalping.md](references/globalping.md). Do not substitute the requested ASN, location, target, protocol, or IP family unless the user asks for a fallback.
-5. For full tool schemas and boundaries, read [references/mcp-tools.md](references/mcp-tools.md) and [references/capability-matrix.md](references/capability-matrix.md).
-6. Keep this skill and its references synced with `server/mcp.go` whenever MCP tools or parameters change.
+4. Preserve explicit user inputs: `target`, `protocol`, `port`, `source_address`, `source_device`, ASN, location, and `ip_version`. Do not substitute them unless the user asks for a fallback.
+5. On errors or missing results, report the exact failure and suggested next step. Do not automatically switch protocol, port, location, ASN, tool, or local/Globalping mode.
+6. For full tool schemas and boundaries, read [references/mcp-tools.md](references/mcp-tools.md) and [references/capability-matrix.md](references/capability-matrix.md).
+7. For Globalping, read [references/globalping.md](references/globalping.md). For local source/device/TOS behavior, read [references/platform-notes.md](references/platform-notes.md). Use [references/cli-fallback.md](references/cli-fallback.md) only when MCP is unavailable, unsupported, or the user asks for CLI output.
+8. Keep this skill and its references synced with `server/mcp.go` whenever MCP tools or parameters change.
 
 ## References
 

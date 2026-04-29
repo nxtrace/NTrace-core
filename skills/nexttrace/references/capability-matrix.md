@@ -14,6 +14,18 @@
 | Existing Globalping result | `nexttrace_globalping_get_measurement` | Requires `measurement_id` |
 | Globalping rate budget | `nexttrace_globalping_limits` | Call before wide jobs |
 
+## Common Wrong Tool Choices
+
+| User intent | Use | Do not use |
+| --- | --- | --- |
+| Trace from worldwide countries, cities, ASNs, ISPs, or cloud regions | `nexttrace_globalping_trace` | Local `source_device` / `source_address` parameters |
+| Trace from this machine, specific source IP, or specific network device | `nexttrace_traceroute`, `nexttrace_mtr_report`, `nexttrace_mtr_raw`, or `nexttrace_mtu_trace` | Globalping |
+| Annotate pasted logs or text containing IPs | `nexttrace_annotate_ips` | `nexttrace_geo_lookup` per token unless single-IP lookup is requested |
+| Look up one known IP address | `nexttrace_geo_lookup` | Traceroute, MTR, or Globalping |
+| Measure CDN/download throughput | `nexttrace_speed_test` | Traceroute or Globalping |
+
+Do not translate local source/device/TOS requirements into Globalping requests. Globalping probes are remote machines selected by location magic strings.
+
 ## Supported vs Not Applicable vs Not Yet Supported
 
 Each tool reports parameter boundaries in output:

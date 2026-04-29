@@ -6,6 +6,8 @@
 
 They do not apply to Globalping.
 
+If local source or device selection fails, report the platform or permission error and ask before trying a different source, device, or Globalping. Do not silently replace a requested local source/device run with remote probes.
+
 ## TOS / Traffic Class
 
 Use `tos` only with local traceroute/MTR tools.
@@ -14,6 +16,8 @@ Do not pass `tos` to:
 
 - Globalping tools
 - MTU tool
+
+If TOS fails because of platform privileges or socket support, report that limitation. Do not remove `tos` or switch tools unless the user asks for a fallback.
 
 ## Packet Size
 
@@ -27,6 +31,8 @@ Do not pass `packet_size` to:
 ## Windows
 
 Windows device selection is source-address-based for many paths. Treat `source_device` as a hint unless the returned source path proves otherwise.
+
+Do not summarize Windows `source_device` as guaranteed device binding. Say it is source-address-based behavior unless the result proves otherwise.
 
 ## Privileges
 
