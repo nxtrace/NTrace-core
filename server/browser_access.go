@@ -46,7 +46,7 @@ func browserAccessMiddleware() gin.HandlerFunc {
 				h.Set("Access-Control-Allow-Origin", origin)
 				h.Add("Vary", "Origin")
 				h.Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-				h.Set("Access-Control-Allow-Headers", "Content-Type")
+				h.Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-NextTrace-Token")
 			}
 		}
 

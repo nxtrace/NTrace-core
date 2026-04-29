@@ -187,7 +187,7 @@ Document Language: [English](README.md) | 简体中文
 | MTR 宽报告（`-w`）      |          ✅           |        —         |     ✅     |
 | MTR 原始输出（`--raw`） |          ✅           |        —         |     ✅     |
 | Globalping（`--from`）  |          ✅           |        —         |     —      |
-| WebUI（`--deploy`）     |          ✅           |        —         |     —      |
+| WebUI/MCP（`--deploy`） |          ✅           |        —         |     —      |
 | 快速跟踪（`-F`）        |          ✅           |        ✅        |     —      |
 | 默认运行模式            |      traceroute       |    traceroute    |  MTR TUI   |
 | 二进制名                |      `nexttrace`      | `nexttrace-tiny` |   `ntr`    |
@@ -196,9 +196,9 @@ Document Language: [English](README.md) | 简体中文
 
 ### 功能对比
 
-- **`nexttrace`** — 完整版。包含 traceroute、独立 MTU、CDN 测速、IP 文本标注、MTR、Globalping、Fast Trace 与 WebUI。
-- **`nexttrace-tiny`** — 精简版。保留常规 traceroute、独立 MTU 和 Fast Trace；不含 CDN 测速 / IP 文本标注 / MTR / Globalping / WebUI。适合嵌入式或极简环境。
-- **`ntr`** — MTR 专用版。默认启动 MTR TUI。不含常规 traceroute、独立 `--mtu`、CDN 测速、IP 文本标注、Globalping、Fast Trace 与 WebUI。
+- **`nexttrace`** — 完整版。包含 traceroute、独立 MTU、CDN 测速、IP 文本标注、MTR、Globalping、Fast Trace、WebUI 与 deploy MCP。
+- **`nexttrace-tiny`** — 精简版。保留常规 traceroute、独立 MTU 和 Fast Trace；不含 CDN 测速 / IP 文本标注 / MTR / Globalping / WebUI / MCP。适合嵌入式或极简环境。
+- **`ntr`** — MTR 专用版。默认启动 MTR TUI。不含常规 traceroute、独立 `--mtu`、CDN 测速、IP 文本标注、Globalping、Fast Trace、WebUI 或 MCP。
 
 ### 手动编译
 
@@ -677,6 +677,7 @@ NextTrace 当前会读取下列环境变量。对于布尔开关，只识别 `1`
 | `NEXTTRACE_TOKEN` | 未设置 | 预置 LeoMoeAPI Bearer Token；设置后将跳过 PoW 取 token 流程。 |
 | `NEXTTRACE_POWPROVIDER` | `api.nxtrace.org` | 指定 PoW 服务提供方；当前内置的非默认别名为 `sakura`。 |
 | `NEXTTRACE_DEPLOY_ADDR` | 未设置 | `--deploy` 模式下，当未传 `--listen` 时使用的默认监听地址。 |
+| `NEXTTRACE_DEPLOY_TOKEN` | 未设置 | `--deploy` WebUI/API/WebSocket/MCP 访问 token。CLI `--deploy-token` 优先级更高。 |
 | `NEXTTRACE_ALLOW_CROSS_ORIGIN` | `0` | 仅对 `--deploy` 生效：是否允许跨站浏览器访问 Web UI / API。默认关闭以保证安全。 |
 
 #### IP 数据库 / 第三方服务
@@ -714,8 +715,9 @@ Usage: nexttrace [-h|--help] [--init] [-4|--ipv4] [-6|--ipv6] [-T|--tcp]
                  [-j|--json] [-c|--classic] [-f|--first <integer>] [-M|--map]
                  [-e|--disable-mpls] [-V|--version]
                  [-s|--source "<value>"] [--source-port <integer>] [-D|--dev
-                 "<value>"] [--listen "<value>"] [--deploy] [-z|--send-time
-                 <integer>] [-i|--ttl-time <integer>] [--timeout <integer>]
+                 "<value>"] [--listen "<value>"] [--deploy-token "<value>"]
+                 [--mcp] [--deploy] [-z|--send-time <integer>]
+                 [-i|--ttl-time <integer>] [--timeout <integer>]
                  [--psize <integer>] [--dot-server
                  (dnssb|aliyun|dnspod|google|cloudflare)] [-g|--language
                  (en|cn)] [-C|--no-color] [--from "<value>"] [-t|--mtr]
@@ -798,6 +800,10 @@ Arguments:
                                      interface
       --listen                       Set listen address for web console (e.g.
                                      127.0.0.1:30080)
+      --deploy-token                 Set bearer token for --deploy
+                                     WebUI/API/WebSocket/MCP access
+      --mcp                          Enable MCP endpoint under --deploy at
+                                     /mcp
       --deploy                       Start the Gin powered web console
   -z  --send-time                    Advanced: per-packet gap [ms] inside the
                                      same TTL group. Lower is faster; raise to
@@ -894,6 +900,23 @@ nexttrace --pow-provider sakura
 在 WebSocket 持续探测模式中，MTR 现改为逐事件推送 `type: "mtr_raw"`（不再使用周期性 `mtr` 快照消息）。
 
 [https://github.com/nxtrace/nexttracewebapi](https://github.com/nxtrace/nexttracewebapi)
+
+## Deploy WebUI 与 MCP
+
+完整版 `nexttrace` 可以启动本机 WebUI/API/WebSocket 服务：
+
+```bash
+nexttrace --deploy
+```
+
+MCP 是 deploy 的子模式，复用同一套网络服务栈并暴露在 `/mcp`：
+
+```bash
+nexttrace --deploy --mcp
+nexttrace --deploy --mcp --listen 0.0.0.0:1080 --deploy-token "$TOKEN"
+```
+
+监听 loopback 地址（`127.0.0.1`、`::1`、`localhost`）时默认免 token。监听外网地址时必须启用 token；如果没有通过 `--deploy-token` 或 `NEXTTRACE_DEPLOY_TOKEN` 设置，NextTrace 会启动时随机生成 token 并输出到 stdout。API、WebSocket 与 MCP 客户端可使用 `Authorization: Bearer <token>` 或 `X-NextTrace-Token`；浏览器 WebUI 用户可访问 `/auth/login` 登录。
 
 ## NextTraceroute
 

@@ -17,6 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/nxtrace/NTrace-core/config"
+	"github.com/nxtrace/NTrace-core/internal/service"
 	"github.com/nxtrace/NTrace-core/ipgeo"
 	"github.com/nxtrace/NTrace-core/trace"
 	"github.com/nxtrace/NTrace-core/tracemap"
@@ -24,7 +25,7 @@ import (
 	"github.com/nxtrace/NTrace-core/wshandle"
 )
 
-var traceMu sync.Mutex
+var traceMu = &service.RuntimeMu
 var leoConnMu sync.Mutex
 var traceMapURLFn = tracemap.GetMapUrlWithContext
 var traceDomainLookupFn = util.DomainLookUpWithContext

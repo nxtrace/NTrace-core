@@ -263,6 +263,47 @@
 - `server/trace_handler.go`：traceroute handler
 - `server/cache_handler.go`：缓存
 
+## Deploy WebUI / MCP / Agent Skill（2026-04 追加）
+
+- MCP 只属于完整版 `nexttrace`，`nexttrace-tiny` / `ntr` 不注册 WebUI/MCP flags。
+- `--mcp` 只能与 `--deploy` 同用；单独传 `--mcp` 必须报错。
+- `--deploy --mcp` 不提供 stdio MCP，只通过 deploy 网络服务在 `/mcp` 暴露 Streamable HTTP，使用官方 `github.com/modelcontextprotocol/go-sdk`。
+- `server.RunWithOptions(options, onReady)` 是 deploy 新入口；`server.Options` 包含 `ListenAddr`、`EnableMCP`、`AuthEnabled`、`DeployToken`。
+- deploy 鉴权规则：
+  - 监听 `127.0.0.1`、`::1`、`localhost` 默认免 token。
+  - 监听 `0.0.0.0`、`::`、非 loopback IP/host 时默认启用 token。
+  - 外网监听且用户未提供 token 时启动生成随机 token 并输出到 stdout。
+  - `--deploy-token` 优先于 `NEXTTRACE_DEPLOY_TOKEN`；手动 token 不回显。
+  - `AuthEnabled=true` 但 token 为空时必须 fail closed。
+  - WebUI 走 `/auth/login`，成功后写 HttpOnly cookie。
+  - API/MCP/WS 支持 `Authorization: Bearer <token>`、`X-NextTrace-Token` 和 cookie。
+  - 不支持 URL query token，尤其 WebSocket 不允许 query token。
+- auth middleware 覆盖 `/`、`/assets/*`、`/api/*`、`/ws/trace`、`/mcp`。
+- `/mcp` 不要用 `router.Any("/mcp")`，会与 Gin 的静态资源 wildcard `/*path` 冲突；当前只注册 `GET`、`POST`、`DELETE`。
+- MCP 与 Web 共用 `internal/service`，不要在 MCP tool 中拼 CLI 参数再反调 CLI。
+- MCP tool 输出以 `structuredContent` 为主；schema 要把参数状态分成 `supported`、`not_applicable`、`not_yet_supported`。
+- 当前 MCP tools：
+  - `nexttrace_capabilities`
+  - `nexttrace_traceroute`
+  - `nexttrace_mtr_report`
+  - `nexttrace_mtr_raw`
+  - `nexttrace_mtu_trace`
+  - `nexttrace_speed_test`
+  - `nexttrace_annotate_ips`
+  - `nexttrace_geo_lookup`
+  - `nexttrace_globalping_trace`
+  - `nexttrace_globalping_limits`
+  - `nexttrace_globalping_get_measurement`
+- Globalping MCP 使用 service 专用模型，不复用 CLI `--from` 的单结果输出模型；`nexttrace_globalping_trace` 应返回 `measurement_id`、`status`、`probes_count` 和按 probe 展开的 `results[]`。
+- Globalping MCP 当前支持 `target`、`locations[]`、`limit`、`protocol`、`port`、`packets`、`ip_version`；不支持本地 `source/dev/dot_server/packet_size/tos/ttl_interval`。
+- Repo Skill 位于 `skills/nexttrace/`，入口是 `skills/nexttrace/SKILL.md`；更新 MCP tool 或参数时必须同步 skill references。
+- deploy/MCP 相关回归建议至少覆盖：
+  - `go test ./...`
+  - `node --test server/web/assets/*.test.cjs`
+  - `go test -tags flavor_tiny ./cmd ./server`
+  - `go test -tags flavor_ntr ./cmd ./server`
+  - 本地 MCP smoke，traceroute 在 macOS 可显式传 `source_device`（例如 `en8`）。
+
 ## DoT 与 Geo DNS
 
 - `--dot-server` 不仅影响目标域名解析，也影响 GeoIP API / LeoMoe FastIP 的域名解析链路。
@@ -321,6 +362,10 @@
 - MTR TUI 颜色：`printer/mtr_tui_color.go`
 - WS handler：`server/ws_handler.go`（~449 行）
 - 前端：`server/web/assets/app.js`
+- deploy auth：`server/auth.go`
+- deploy MCP：`server/mcp.go`
+- Web/MCP 共享服务层：`internal/service/`
+- Repo Agent Skill：`skills/nexttrace/`
 - Geo DoT 解析：`util/dns_resolver.go`
 - Geo HTTP 客户端：`util/http_client_geo.go`
 - FastIP：`util/latency.go`
