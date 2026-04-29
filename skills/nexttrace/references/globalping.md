@@ -81,6 +81,8 @@ Each `results[]` item includes:
 
 Use `raw_output` when Globalping has formatting or platform-specific details that are not represented in decoded hops.
 
+For final answers, prefer the probe-by-probe template in [output-templates.md](output-templates.md#nexttrace_globalping_trace).
+
 ## Boundaries
 
 Globalping does not use local network stack controls:

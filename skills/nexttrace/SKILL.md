@@ -45,13 +45,15 @@ Auth:
 5. On errors or missing results, report the exact failure and suggested next step. Do not automatically switch protocol, port, location, ASN, tool, or local/Globalping mode.
 6. For full tool schemas and boundaries, read [references/mcp-tools.md](references/mcp-tools.md) and [references/capability-matrix.md](references/capability-matrix.md).
 7. For Globalping, read [references/globalping.md](references/globalping.md). For local source/device/TOS behavior, read [references/platform-notes.md](references/platform-notes.md). Use [references/cli-fallback.md](references/cli-fallback.md) only when MCP is unavailable, unsupported, or the user asks for CLI output.
-8. Keep this skill and its references synced with `server/mcp.go` whenever MCP tools or parameters change.
+8. Before writing the final answer, use [references/output-templates.md](references/output-templates.md) for a concise Markdown shape.
+9. Keep this skill and its references synced with `server/mcp.go` whenever MCP tools or parameters change.
 
 ## References
 
 - [MCP tools](references/mcp-tools.md): tool names, inputs, outputs, unsupported parameter families.
 - [Globalping](references/globalping.md): worldwide traceroute workflow and comparison guidance.
 - [Capability matrix](references/capability-matrix.md): local vs Globalping vs CLI fallback.
+- [Output templates](references/output-templates.md): bilingual Markdown report shapes for each MCP tool.
 - [CLI fallback](references/cli-fallback.md): commands to use when MCP is unavailable.
 - [Platform notes](references/platform-notes.md): OS-specific source, device, TOS, raw-socket details.
 - [Validation](references/validation.md): smoke checks and expected behavior.
