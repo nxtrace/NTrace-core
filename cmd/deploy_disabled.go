@@ -7,6 +7,6 @@ import (
 	"net"
 )
 
-func runDeploy(_ string, _ func(net.Addr)) error {
+func runDeploy(_ deployRunOptions, _ func(net.Addr)) error {
 	return fmt.Errorf("WebUI (--deploy) is not available in %s; please use the full nexttrace build", appBinName)
 }

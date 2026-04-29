@@ -186,7 +186,7 @@ Starting from this release, NextTrace is published in **three flavors** under th
 | MTR wide (`-w`)       |         ✅         |        —         |      ✅      |
 | MTR raw (`--raw`)     |         ✅         |        —         |      ✅      |
 | Globalping (`--from`) |         ✅         |        —         |      —       |
-| WebUI (`--deploy`)    |         ✅         |        —         |      —       |
+| WebUI/MCP (`--deploy`) |        ✅         |        —         |      —       |
 | Fast Trace (`-F`)     |         ✅         |        ✅        |      —       |
 | Default mode          |     traceroute     |    traceroute    |   MTR TUI    |
 | Binary name           |    `nexttrace`     | `nexttrace-tiny` |    `ntr`     |
@@ -195,9 +195,9 @@ Starting from this release, NextTrace is published in **three flavors** under th
 
 ### Feature Matrix
 
-- **`nexttrace`** — Full-featured build. Includes traceroute, standalone MTU, CDN speed test, IP annotation, MTR, Globalping, Fast Trace, and WebUI.
-- **`nexttrace-tiny`** — Lightweight build. Keeps normal traceroute, standalone MTU, and Fast Trace. No CDN speed test / IP annotation / MTR / Globalping / WebUI. Suitable for embedded or minimal environments.
-- **`ntr`** — MTR-focused build. Runs MTR TUI by default. No normal traceroute mode, standalone `--mtu`, CDN speed test, IP annotation, Globalping, Fast Trace, or WebUI.
+- **`nexttrace`** — Full-featured build. Includes traceroute, standalone MTU, CDN speed test, IP annotation, MTR, Globalping, Fast Trace, WebUI, and deploy MCP.
+- **`nexttrace-tiny`** — Lightweight build. Keeps normal traceroute, standalone MTU, and Fast Trace. No CDN speed test / IP annotation / MTR / Globalping / WebUI / MCP. Suitable for embedded or minimal environments.
+- **`ntr`** — MTR-focused build. Runs MTR TUI by default. No normal traceroute mode, standalone `--mtu`, CDN speed test, IP annotation, Globalping, Fast Trace, WebUI, or MCP.
 
 ### Manual Build
 
@@ -701,6 +701,7 @@ NextTrace currently reads the following environment variables. For boolean switc
 | `NEXTTRACE_TOKEN` | unset | Pre-supplied LeoMoeAPI bearer token; when present, token fetching via PoW is skipped. |
 | `NEXTTRACE_POWPROVIDER` | `api.nxtrace.org` | Select the PoW provider. The built-in non-default alias is `sakura`. |
 | `NEXTTRACE_DEPLOY_ADDR` | unset | Default listen address for `--deploy` when `--listen` is not provided. |
+| `NEXTTRACE_DEPLOY_TOKEN` | unset | Token for `--deploy` WebUI/API/WebSocket/MCP access. CLI `--deploy-token` takes precedence. |
 | `NEXTTRACE_ALLOW_CROSS_ORIGIN` | `0` | Only for `--deploy`: allow cross-origin browser access to the Web UI / API. Disabled by default for safety. |
 
 #### IP Database / Third-Party Providers
@@ -738,8 +739,9 @@ Usage: nexttrace [-h|--help] [--init] [-4|--ipv4] [-6|--ipv6] [-T|--tcp]
                  [-j|--json] [-c|--classic] [-f|--first <integer>] [-M|--map]
                  [-e|--disable-mpls] [-V|--version]
                  [-s|--source "<value>"] [--source-port <integer>] [-D|--dev
-                 "<value>"] [--listen "<value>"] [--deploy] [-z|--send-time
-                 <integer>] [-i|--ttl-time <integer>] [--timeout <integer>]
+                 "<value>"] [--listen "<value>"] [--deploy-token "<value>"]
+                 [--mcp] [--deploy] [-z|--send-time <integer>]
+                 [-i|--ttl-time <integer>] [--timeout <integer>]
                  [--psize <integer>] [--dot-server
                  (dnssb|aliyun|dnspod|google|cloudflare)] [-g|--language
                  (en|cn)] [-C|--no-color] [--from "<value>"] [-t|--mtr]
@@ -822,6 +824,10 @@ Arguments:
                                      interface
       --listen                       Set listen address for web console (e.g.
                                      127.0.0.1:30080)
+      --deploy-token                 Set bearer token for --deploy
+                                     WebUI/API/WebSocket/MCP access
+      --mcp                          Enable MCP endpoint under --deploy at
+                                     /mcp
       --deploy                       Start the Gin powered web console
   -z  --send-time                    Advanced: per-packet gap [ms] inside the
                                      same TTL group. Lower is faster; raise to
@@ -894,6 +900,23 @@ This software is still in the early stages of development and may have many flaw
 For WebSocket continuous tracing, MTR now streams per-event payloads with `type: "mtr_raw"` (instead of periodic `mtr` snapshots).
 
 [https://github.com/nxtrace/nexttracewebapi](https://github.com/nxtrace/nexttracewebapi)
+
+## Deploy WebUI and MCP
+
+The full `nexttrace` binary can expose the local WebUI/API/WebSocket server:
+
+```bash
+nexttrace --deploy
+```
+
+MCP is a deploy submode and is exposed over the same network stack at `/mcp`:
+
+```bash
+nexttrace --deploy --mcp
+nexttrace --deploy --mcp --listen 0.0.0.0:1080 --deploy-token "$TOKEN"
+```
+
+Loopback listen addresses (`127.0.0.1`, `::1`, `localhost`) are tokenless by default. External listen addresses require a token; if none is set with `--deploy-token` or `NEXTTRACE_DEPLOY_TOKEN`, NextTrace generates one and prints it to stdout. API, WebSocket, and MCP clients may use `Authorization: Bearer <token>` or `X-NextTrace-Token`; browser WebUI users can sign in at `/auth/login`.
 
 ## NextTraceroute
 
