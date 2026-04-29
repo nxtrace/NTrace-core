@@ -33,15 +33,17 @@ Auth:
 ## Workflow
 
 1. Call `nexttrace_capabilities` first when available.
-2. Pick the narrowest tool for the job:
+2. Pick the narrowest common tool for the job:
    - Local route: `nexttrace_traceroute`
    - Repeated loss/latency stats: `nexttrace_mtr_report`
    - Probe-level stream records: `nexttrace_mtr_raw`
    - Path MTU: `nexttrace_mtu_trace`
    - Global vantage points: `nexttrace_globalping_trace`
+   - Other tools: `nexttrace_speed_test`, `nexttrace_annotate_ips`, `nexttrace_geo_lookup`, `nexttrace_globalping_limits`, `nexttrace_globalping_get_measurement`
 3. Prefer `structuredContent`; use text content only as a fallback.
 4. For Globalping, read [references/globalping.md](references/globalping.md).
 5. For full tool schemas and boundaries, read [references/mcp-tools.md](references/mcp-tools.md) and [references/capability-matrix.md](references/capability-matrix.md).
+6. Keep this skill and its references synced with `server/mcp.go` whenever MCP tools or parameters change.
 
 ## References
 

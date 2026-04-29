@@ -55,8 +55,11 @@ func (s *Service) GlobalpingGetMeasurement(ctx context.Context, req GlobalpingGe
 		return GlobalpingMeasurementResponse{}, err
 	}
 	out, err := translateGlobalpingMeasurement(measurement)
+	if err != nil {
+		return GlobalpingMeasurementResponse{}, err
+	}
 	out.Parameters = globalpingGetParameterBoundaries()
-	return out, err
+	return out, nil
 }
 
 func buildGlobalpingCreate(req GlobalpingTraceRequest) (*globalping.MeasurementCreate, error) {
@@ -76,6 +79,10 @@ func buildGlobalpingCreate(req GlobalpingTraceRequest) (*globalping.MeasurementC
 	if req.Port < 0 || req.Port > 65535 {
 		return nil, errors.New("port must be within range 0-65535")
 	}
+	port := req.Port
+	if port == 0 {
+		port = defaultGlobalpingPort(protocol)
+	}
 	locations := make([]globalping.Locations, 0, len(req.Locations))
 	for _, loc := range req.Locations {
 		if trimmed := strings.TrimSpace(loc); trimmed != "" {
@@ -94,7 +101,7 @@ func buildGlobalpingCreate(req GlobalpingTraceRequest) (*globalping.MeasurementC
 	}
 	options := &globalping.MeasurementOptions{
 		Protocol: protocol,
-		Port:     uint16(req.Port),
+		Port:     uint16(port),
 		Packets:  positiveOrDefault(req.Packets, defaultQueries),
 	}
 	switch req.IPVersion {
@@ -113,6 +120,17 @@ func buildGlobalpingCreate(req GlobalpingTraceRequest) (*globalping.MeasurementC
 		Locations: locations,
 		Options:   options,
 	}, nil
+}
+
+func defaultGlobalpingPort(protocol string) int {
+	switch protocol {
+	case "TCP":
+		return 80
+	case "UDP":
+		return 33494
+	default:
+		return 0
+	}
 }
 
 func translateGlobalpingMeasurement(measurement *globalping.Measurement) (GlobalpingMeasurementResponse, error) {

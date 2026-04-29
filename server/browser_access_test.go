@@ -86,4 +86,7 @@ func TestBrowserAccessMiddleware_CanEnableCORSViaEnv(t *testing.T) {
 	if got := resp.Header().Get("Access-Control-Allow-Origin"); got != "https://evil.example" {
 		t.Fatalf("allow-origin = %q, want %q", got, "https://evil.example")
 	}
+	if got := resp.Header().Get("Access-Control-Allow-Methods"); got != "GET, POST, DELETE, OPTIONS" {
+		t.Fatalf("allow-methods = %q, want DELETE included", got)
+	}
 }

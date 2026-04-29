@@ -28,7 +28,15 @@ func TestNextTraceSkillFilesAndToolNames(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read mcp-tools.md: %v", err)
 	}
-	for _, name := range []string{
+	skillDoc, err := os.ReadFile(filepath.Join(root, "SKILL.md"))
+	if err != nil {
+		t.Fatalf("read SKILL.md: %v", err)
+	}
+	matrixDoc, err := os.ReadFile(filepath.Join(root, "references", "capability-matrix.md"))
+	if err != nil {
+		t.Fatalf("read capability-matrix.md: %v", err)
+	}
+	toolNames := []string{
 		"nexttrace_capabilities",
 		"nexttrace_traceroute",
 		"nexttrace_mtr_report",
@@ -40,9 +48,19 @@ func TestNextTraceSkillFilesAndToolNames(t *testing.T) {
 		"nexttrace_globalping_trace",
 		"nexttrace_globalping_limits",
 		"nexttrace_globalping_get_measurement",
-	} {
+	}
+	for _, name := range toolNames {
 		if !strings.Contains(string(toolsDoc), name) {
 			t.Fatalf("mcp-tools.md missing tool name %s", name)
 		}
+		if !strings.Contains(string(skillDoc), name) {
+			t.Fatalf("SKILL.md missing tool name %s", name)
+		}
+		if !strings.Contains(string(matrixDoc), name) {
+			t.Fatalf("capability-matrix.md missing tool name %s", name)
+		}
+	}
+	if !strings.Contains(string(skillDoc), "server/mcp.go") {
+		t.Fatal("SKILL.md missing server/mcp.go sync reminder")
 	}
 }

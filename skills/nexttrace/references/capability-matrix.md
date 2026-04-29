@@ -2,6 +2,7 @@
 
 | Need | MCP Tool | Notes |
 | --- | --- | --- |
+| List tools and parameter support | `nexttrace_capabilities` | Call first to discover available tools |
 | One local path trace | `nexttrace_traceroute` | ICMP/TCP/UDP, GeoIP, RDNS, MPLS, source controls |
 | Repeated local loss/latency stats | `nexttrace_mtr_report` | Bounded MTR report, structured stats |
 | Probe-level local stream records | `nexttrace_mtr_raw` | Bound with `max_per_hop` or `duration_ms` |

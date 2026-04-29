@@ -103,6 +103,43 @@ func TestDeployAuthLoginSetsCookieForBrowserAccess(t *testing.T) {
 	}
 }
 
+func TestDeployAuthLoginCookieSecureFollowsHTTPS(t *testing.T) {
+	router := newDeployAuthTestRouter(deployAuth{Enabled: true, Token: "secret"})
+	form := url.Values{"token": {"secret"}}
+	tests := []struct {
+		name       string
+		target     string
+		headerName string
+		headerVal  string
+		wantSecure bool
+	}{
+		{name: "plain http", target: "/auth/login"},
+		{name: "direct https", target: "https://nexttrace.local/auth/login", wantSecure: true},
+		{name: "forwarded proto", target: "/auth/login", headerName: "X-Forwarded-Proto", headerVal: "https", wantSecure: true},
+		{name: "forwarded header", target: "/auth/login", headerName: "Forwarded", headerVal: "for=192.0.2.1;proto=https", wantSecure: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, tt.target, strings.NewReader(form.Encode()))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			if tt.headerName != "" {
+				req.Header.Set(tt.headerName, tt.headerVal)
+			}
+
+			router.ServeHTTP(resp, req)
+
+			cookies := resp.Result().Cookies()
+			if len(cookies) == 0 {
+				t.Fatal("login did not set cookie")
+			}
+			if got := cookies[0].Secure; got != tt.wantSecure {
+				t.Fatalf("cookie Secure = %t, want %t", got, tt.wantSecure)
+			}
+		})
+	}
+}
+
 func TestDeployAuthDoesNotAcceptQueryToken(t *testing.T) {
 	router := newDeployAuthTestRouter(deployAuth{Enabled: true, Token: "secret"})
 	resp := httptest.NewRecorder()

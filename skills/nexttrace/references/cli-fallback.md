@@ -20,6 +20,8 @@ nexttrace --mtr --raw -q 5 example.com
 
 ## MTU
 
+`--mtu` is available in the `nexttrace` and `nexttrace-tiny` flavors. It is not supported by `ntr`.
+
 ```bash
 nexttrace --mtu example.com
 nexttrace --mtu --json example.com

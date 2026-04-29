@@ -76,6 +76,43 @@ func deployCookieValue(token string) string {
 	return base64.RawURLEncoding.EncodeToString(sum[:])
 }
 
+func deployRequestIsHTTPS(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	if r.TLS != nil {
+		return true
+	}
+	if forwardedProtoIsHTTPS(r.Header.Get("X-Forwarded-Proto")) {
+		return true
+	}
+	return forwardedHeaderProtoIsHTTPS(r.Header.Get("Forwarded"))
+}
+
+func forwardedProtoIsHTTPS(value string) bool {
+	for _, part := range strings.Split(value, ",") {
+		if strings.EqualFold(strings.TrimSpace(part), "https") {
+			return true
+		}
+	}
+	return false
+}
+
+func forwardedHeaderProtoIsHTTPS(value string) bool {
+	for _, forwarded := range strings.Split(value, ",") {
+		for _, part := range strings.Split(forwarded, ";") {
+			key, val, ok := strings.Cut(strings.TrimSpace(part), "=")
+			if !ok || !strings.EqualFold(key, "proto") {
+				continue
+			}
+			if strings.EqualFold(strings.Trim(strings.TrimSpace(val), `"`), "https") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func registerDeployAuthRoutes(router *gin.Engine, auth deployAuth) {
 	router.GET("/auth/login", func(c *gin.Context) {
 		if !auth.valid() {
@@ -111,6 +148,7 @@ func registerDeployAuthRoutes(router *gin.Engine, auth deployAuth) {
 			Path:     "/",
 			HttpOnly: true,
 			SameSite: http.SameSiteLaxMode,
+			Secure:   deployRequestIsHTTPS(c.Request),
 		})
 		if strings.Contains(c.GetHeader("Accept"), "text/html") {
 			c.Redirect(http.StatusFound, "/")

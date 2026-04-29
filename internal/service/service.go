@@ -42,6 +42,7 @@ const (
 	defaultSpeedLatency     = 5
 )
 
+// RuntimeMu serializes process-global runtime mutations shared by Web, WebSocket, and MCP traces.
 var RuntimeMu sync.Mutex
 
 type Service struct{}
@@ -155,8 +156,8 @@ func (s *Service) MTRRaw(ctx context.Context, req MTRRawRequest) (MTRRawResponse
 	}
 
 	runCtx := ctx
-	cancel := func() {}
 	if req.DurationMs > 0 {
+		var cancel context.CancelFunc
 		runCtx, cancel = context.WithTimeout(ctx, time.Duration(req.DurationMs)*time.Millisecond)
 		defer cancel()
 	}

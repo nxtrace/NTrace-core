@@ -36,6 +36,31 @@ func TestBuildGlobalpingCreateUsesLocationsAndOptions(t *testing.T) {
 	}
 }
 
+func TestBuildGlobalpingCreateDefaultsTCPUDPPorts(t *testing.T) {
+	tests := []struct {
+		protocol string
+		wantPort uint16
+	}{
+		{protocol: "icmp", wantPort: 0},
+		{protocol: "tcp", wantPort: 80},
+		{protocol: "udp", wantPort: 33494},
+	}
+	for _, tt := range tests {
+		t.Run(tt.protocol, func(t *testing.T) {
+			req, err := buildGlobalpingCreate(GlobalpingTraceRequest{
+				Target:   "example.com",
+				Protocol: tt.protocol,
+			})
+			if err != nil {
+				t.Fatalf("buildGlobalpingCreate returned error: %v", err)
+			}
+			if req.Options.Port != tt.wantPort {
+				t.Fatalf("Port = %d, want %d", req.Options.Port, tt.wantPort)
+			}
+		})
+	}
+}
+
 func TestTranslateGlobalpingMeasurementPreservesAllProbeResults(t *testing.T) {
 	hopsRaw, err := json.Marshal([]globalping.MTRHop{
 		{

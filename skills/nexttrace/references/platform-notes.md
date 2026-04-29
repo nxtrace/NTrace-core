@@ -26,7 +26,7 @@ Do not pass `packet_size` to:
 
 ## Windows
 
-Windows device selection is source-address based for many paths. Treat `source_device` as a hint unless the returned source path proves otherwise.
+Windows device selection is source-address-based for many paths. Treat `source_device` as a hint unless the returned source path proves otherwise.
 
 ## Privileges
 
