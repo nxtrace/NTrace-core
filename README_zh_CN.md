@@ -187,7 +187,7 @@ Document Language: [English](README.md) | 简体中文
 | MTR 宽报告（`-w`）      |          ✅           |        —         |     ✅     |
 | MTR 原始输出（`--raw`） |          ✅           |        —         |     ✅     |
 | Globalping（`--from`）  |          ✅           |        —         |     —      |
-| WebUI/MCP（`--deploy`） |          ✅           |        —         |     —      |
+| WebUI（`--deploy`）/ MCP（`--deploy --mcp`） |          ✅           |        —         |     —      |
 | 快速跟踪（`-F`）        |          ✅           |        ✅        |     —      |
 | 默认运行模式            |      traceroute       |    traceroute    |  MTR TUI   |
 | 二进制名                |      `nexttrace`      | `nexttrace-tiny` |   `ntr`    |
@@ -196,7 +196,7 @@ Document Language: [English](README.md) | 简体中文
 
 ### 功能对比
 
-- **`nexttrace`** — 完整版。包含 traceroute、独立 MTU、CDN 测速、IP 文本标注、MTR、Globalping、Fast Trace、WebUI 与 deploy MCP。
+- **`nexttrace`** — 完整版。包含 traceroute、独立 MTU、CDN 测速、IP 文本标注、MTR、Globalping、Fast Trace、WebUI（`--deploy`）与 MCP（`--deploy --mcp`）。
 - **`nexttrace-tiny`** — 精简版。保留常规 traceroute、独立 MTU 和 Fast Trace；不含 CDN 测速 / IP 文本标注 / MTR / Globalping / WebUI / MCP。适合嵌入式或极简环境。
 - **`ntr`** — MTR 专用版。默认启动 MTR TUI。不含常规 traceroute、独立 `--mtu`、CDN 测速、IP 文本标注、Globalping、Fast Trace、WebUI 或 MCP。
 
@@ -916,7 +916,7 @@ nexttrace --deploy --mcp
 nexttrace --deploy --mcp --listen 0.0.0.0:1080 --deploy-token "$TOKEN"
 ```
 
-监听 loopback 地址（`127.0.0.1`、`::1`、`localhost`）时默认免 token。监听外网地址时必须启用 token；如果没有通过 `--deploy-token` 或 `NEXTTRACE_DEPLOY_TOKEN` 设置，NextTrace 会启动时随机生成 token 并输出到 stdout。API、WebSocket 与 MCP 客户端可使用 `Authorization: Bearer <token>` 或 `X-NextTrace-Token`；浏览器 WebUI 用户可访问 `/auth/login` 登录。
+监听 loopback 地址（`127.0.0.1`、`::1`、`localhost`）时默认免 token。监听外网地址时必须启用 token；如果没有通过 `--deploy-token` 或 `NEXTTRACE_DEPLOY_TOKEN` 设置，NextTrace 会启动时随机生成 token 并输出到 stdout。若 stdout 会被日志系统、CI 控制台或平台采集，建议通过 `--deploy-token` 或 `NEXTTRACE_DEPLOY_TOKEN` 显式提供 token，避免泄漏。API、WebSocket 与 MCP 客户端可使用 `Authorization: Bearer <token>` 或 `X-NextTrace-Token`；浏览器 WebUI 用户可访问 `/auth/login` 登录。
 
 ### 在 Agent 客户端注册 MCP
 
@@ -946,6 +946,8 @@ http://127.0.0.1:1080/mcp
 }
 ```
 
+也可以把 `headers` 改为使用 `X-NextTrace-Token: <token>`，与 `Authorization: Bearer <token>` 等价。
+
 OpenClaw 可通过 [`openclaw mcp set`](https://docs.openclaw.ai/zh-CN/cli/mcp) 保存同样的 server 定义：
 
 ```bash
@@ -960,7 +962,7 @@ openclaw mcp set nexttrace '{
 
 `openclaw mcp set` 只保存 MCP server 定义；它不会启动 NextTrace，也不会验证 endpoint 是否可达，所以需要先运行 `nexttrace --deploy --mcp`。
 
-Agent 接入后可先调用这些工具：
+下面列出的项为 MCP 协议中 `tools[].name` 的工具名/ID，客户端在 MCP Tool Calling 中引用这些 ID，而不是把它们当作 HTTP path。Agent 接入后可先调用：
 
 - `nexttrace_capabilities`
 - `nexttrace_traceroute`

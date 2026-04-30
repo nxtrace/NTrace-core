@@ -49,6 +49,7 @@ Then call:
 ## Repo Tests
 
 ```bash
+go build ./...
 go test ./...
 node --test server/web/assets/*.test.cjs
 ```

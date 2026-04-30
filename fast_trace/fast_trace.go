@@ -67,9 +67,18 @@ func resolveTraceMethod(traceMode trace.Method) trace.Method {
 	}
 }
 
-type fastTraceChoiceResult struct {
-	choice string
-	err    error
+func isContextStop(err error) bool {
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
+}
+
+func shouldStopFastTrace(err error) bool {
+	if err == nil {
+		return false
+	}
+	if !isContextStop(err) {
+		log.Println(err)
+	}
+	return true
 }
 
 func promptFastTraceChoice(ctx context.Context, prompt, defaultChoice string) (string, bool) {
@@ -82,32 +91,21 @@ func promptFastTraceChoice(ctx context.Context, prompt, defaultChoice string) (s
 
 	fmt.Print(prompt)
 
-	resultCh := make(chan fastTraceChoiceResult, 1)
-	go func() {
-		var choice string
-		_, err := fmt.Scanln(&choice)
-		if err != nil {
-			if ctxErr := ctx.Err(); ctxErr != nil {
-				err = ctxErr
-			}
-			resultCh <- fastTraceChoiceResult{err: err}
-			return
-		}
-		resultCh <- fastTraceChoiceResult{choice: choice}
-	}()
-
-	select {
-	case result := <-resultCh:
-		if result.err != nil {
-			if errors.Is(result.err, context.Canceled) {
-				return "", false
-			}
-			return defaultChoice, true
-		}
-		return result.choice, true
-	case <-ctx.Done():
+	choice, err := util.ReadStdinLine(ctx)
+	if ctxErr := ctx.Err(); ctxErr != nil {
 		return "", false
 	}
+	if err != nil {
+		if isContextStop(err) {
+			return "", false
+		}
+		return defaultChoice, true
+	}
+	choice = strings.TrimSpace(choice)
+	if choice == "" {
+		return defaultChoice, true
+	}
+	return choice, true
 }
 
 func initFastTraceWS(ctx context.Context) *wshandle.WsConn {
@@ -223,7 +221,7 @@ func printFileTraceHeader(ip IpListElement, params ParamsFastTrace, tracerouteMe
 	fmt.Printf("traceroute to %s, %d hops max, %s, %s mode\n", dst, params.MaxHops, trace.FormatPacketSizeLabel(displayPacketSize), strings.ToUpper(string(tracerouteMethod)))
 }
 
-func buildFileTraceConfig(params ParamsFastTrace, tracerouteMethod trace.Method, ip IpListElement) trace.Config {
+func buildFileTraceConfig(params ParamsFastTrace, tracerouteMethod trace.Method, ip IpListElement) (trace.Config, error) {
 	dstIP := net.ParseIP(ip.Ip)
 	packetSize := params.PktSize
 	if !params.PacketSizeSet {
@@ -231,7 +229,7 @@ func buildFileTraceConfig(params ParamsFastTrace, tracerouteMethod trace.Method,
 	}
 	packetSizeSpec, err := trace.NormalizePacketSize(tracerouteMethod, dstIP, packetSize)
 	if err != nil {
-		log.Fatal(err)
+		return trace.Config{}, err
 	}
 	return trace.Config{
 		Context:          params.Context,
@@ -255,7 +253,7 @@ func buildFileTraceConfig(params ParamsFastTrace, tracerouteMethod trace.Method,
 		RandomPacketSize: packetSizeSpec.Random,
 		TOS:              params.TOS,
 		Lang:             params.Lang,
-	}
+	}, nil
 }
 
 func normalizeFastTraceConfig(method trace.Method, conf trace.Config) (trace.Config, error) {
@@ -287,10 +285,12 @@ func configureFastTraceRealtimePrinter(conf *trace.Config, outputPath, header st
 func runFileTraceTarget(params ParamsFastTrace, tracerouteMethod trace.Method, ip IpListElement) {
 	printFileTraceHeader(ip, params, tracerouteMethod)
 
-	conf := buildFileTraceConfig(params, tracerouteMethod, ip)
-	conf, err := normalizeFastTraceConfig(tracerouteMethod, conf)
-	if err != nil {
-		log.Println(err)
+	conf, err := buildFileTraceConfig(params, tracerouteMethod, ip)
+	if shouldStopFastTrace(err) {
+		return
+	}
+	conf, err = normalizeFastTraceConfig(tracerouteMethod, conf)
+	if shouldStopFastTrace(err) {
 		return
 	}
 	displayPacketSize := params.PktSize
@@ -311,11 +311,7 @@ func runFileTraceTarget(params ParamsFastTrace, tracerouteMethod trace.Method, i
 		}()
 	}
 
-	if _, err := trace.Traceroute(tracerouteMethod, conf); err != nil {
-		if errors.Is(err, context.Canceled) {
-			return
-		}
-		log.Println(err)
+	if _, err := trace.Traceroute(tracerouteMethod, conf); shouldStopFastTrace(err) {
 		return
 	}
 	fmt.Println()
@@ -331,19 +327,16 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 
 	// ip, err := util.DomainLookUp(ispCollection.IP, "4", "", true)
 	ip, err := util.DomainLookUpWithContext(f.ParamsFastTrace.Context, ispCollection.IP, "4", f.ParamsFastTrace.Dot, true)
-	if err != nil {
-		if errors.Is(err, context.Canceled) {
-			return
-		}
-		log.Fatal(err)
+	if shouldStopFastTrace(err) {
+		return
 	}
 	packetSize := f.ParamsFastTrace.PktSize
 	if !f.ParamsFastTrace.PacketSizeSet {
 		packetSize = trace.DefaultPacketSize(f.TracerouteMethod, ip)
 	}
 	packetSizeSpec, err := trace.NormalizePacketSize(f.TracerouteMethod, ip, packetSize)
-	if err != nil {
-		log.Fatal(err)
+	if shouldStopFastTrace(err) {
+		return
 	}
 	var conf = trace.Config{
 		Context:          f.ParamsFastTrace.Context,
@@ -370,11 +363,7 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 		Lang:             f.ParamsFastTrace.Lang,
 	}
 	conf, err = normalizeFastTraceConfig(f.TracerouteMethod, conf)
-	if err != nil {
-		if errors.Is(err, context.Canceled) {
-			return
-		}
-		log.Println(err)
+	if shouldStopFastTrace(err) {
 		return
 	}
 
@@ -395,11 +384,7 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 
 	_, err = trace.Traceroute(f.TracerouteMethod, conf)
 
-	if err != nil {
-		if errors.Is(err, context.Canceled) {
-			return
-		}
-		log.Println(err)
+	if shouldStopFastTrace(err) {
 		return
 	}
 	fmt.Println()

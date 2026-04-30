@@ -380,13 +380,20 @@ func newTestMCPSession(t *testing.T, svc nexttraceMCPService) (*mcp.ClientSessio
 	ts := httptest.NewServer(newMCPHTTPHandlerWithService(svc))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	connectOK := false
+	defer func() {
+		if !connectOK {
+			cancel()
+			ts.Close()
+		}
+	}()
 
 	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "1.0.0"}, nil)
 	session, err := client.Connect(ctx, &mcp.StreamableClientTransport{Endpoint: ts.URL}, nil)
 	if err != nil {
 		t.Fatalf("Connect returned error: %v", err)
 	}
+	connectOK = true
 
 	return session, func() {
 		session.Close()

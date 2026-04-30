@@ -2,7 +2,6 @@ package fastTrace
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -30,22 +29,16 @@ func (f *FastTracer) tracert_v6(location string, ispCollection ISPCollection) {
 
 	// ip, err := util.DomainLookUp(ispCollection.IPv6, "6", "", true)
 	ip, err := util.DomainLookUpWithContext(f.ParamsFastTrace.Context, ispCollection.IPv6, "6", f.ParamsFastTrace.Dot, true)
-	if err != nil {
-		if errors.Is(err, context.Canceled) {
-			return
-		}
-		log.Fatal(err)
+	if shouldStopFastTrace(err) {
+		return
 	}
 	packetSize := f.ParamsFastTrace.PktSize
 	if !f.ParamsFastTrace.PacketSizeSet {
 		packetSize = trace.DefaultPacketSize(f.TracerouteMethod, ip)
 	}
 	packetSizeSpec, err := trace.NormalizePacketSize(f.TracerouteMethod, ip, packetSize)
-	if err != nil {
-		if errors.Is(err, context.Canceled) {
-			return
-		}
-		log.Fatal(err)
+	if shouldStopFastTrace(err) {
+		return
 	}
 	var conf = trace.Config{
 		Context:          f.ParamsFastTrace.Context,
@@ -72,11 +65,7 @@ func (f *FastTracer) tracert_v6(location string, ispCollection ISPCollection) {
 		Lang:             f.ParamsFastTrace.Lang,
 	}
 	conf, err = normalizeFastTraceConfig(f.TracerouteMethod, conf)
-	if err != nil {
-		if errors.Is(err, context.Canceled) {
-			return
-		}
-		log.Println(err)
+	if shouldStopFastTrace(err) {
 		return
 	}
 
@@ -95,12 +84,8 @@ func (f *FastTracer) tracert_v6(location string, ispCollection ISPCollection) {
 	}
 
 	_, err = trace.Traceroute(f.TracerouteMethod, conf)
-
-	if err != nil {
-		if errors.Is(err, context.Canceled) {
-			return
-		}
-		log.Fatal(err)
+	if shouldStopFastTrace(err) {
+		return
 	}
 
 	fmt.Println()

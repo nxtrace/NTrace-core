@@ -59,6 +59,20 @@ type traceSetup struct {
 	Config       trace.Config
 }
 
+type runtimeOptions struct {
+	DotServer   string
+	NeedsLeoWS  bool
+	PowProvider string
+}
+
+var (
+	ensureLeoMoeConnectionFn = ensureLeoMoeConnection
+	lookupIPGeoFn            = trace.LookupIPGeo
+	runMTRFn                 = trace.RunMTR
+	runMTRRawFn              = trace.RunMTRRaw
+	runMTUTraceFn            = mtutrace.Run
+)
+
 func New() *Service {
 	return &Service{}
 }
@@ -68,8 +82,8 @@ func (s *Service) Capabilities(context.Context, CapabilitiesRequest) (Capabiliti
 		Tools: []ToolCapability{
 			toolCapability("nexttrace_capabilities", "List NextTrace MCP tools and parameter boundaries.", []string{}),
 			toolCapability("nexttrace_traceroute", "Run local ICMP/TCP/UDP traceroute and return structured hops.", traceSupportedParams()),
-			toolCapability("nexttrace_mtr_report", "Run bounded local MTR report and return per-hop statistics.", append(traceSupportedParams(), "hop_interval_ms", "max_per_hop")),
-			toolCapability("nexttrace_mtr_raw", "Run bounded local MTR raw stream and return probe-level records.", append(traceSupportedParams(), "hop_interval_ms", "max_per_hop", "duration_ms")),
+			toolCapabilityWithBoundaries("nexttrace_mtr_report", "Run bounded local MTR report and return per-hop statistics.", mtrReportParameterBoundaries()),
+			toolCapabilityWithBoundaries("nexttrace_mtr_raw", "Run bounded local MTR raw stream and return probe-level records.", mtrRawParameterBoundaries()),
 			toolCapability("nexttrace_mtu_trace", "Run local UDP path-MTU discovery.", []string{"target", "port", "queries", "max_hops", "begin_hop", "timeout_ms", "ttl_interval_ms", "ipv4_only", "ipv6_only", "data_provider", "dot_server", "disable_rdns", "always_rdns", "language", "source_address", "source_port", "source_device"}),
 			toolCapability("nexttrace_speed_test", "Run a conservative local speed test.", []string{"provider", "max", "timeout_ms", "threads", "latency_count", "endpoint_ip", "no_metadata", "language", "dot_server", "source_address", "source_device"}),
 			toolCapability("nexttrace_annotate_ips", "Annotate IPv4/IPv6 literals in text with GeoIP metadata.", []string{"text", "data_provider", "timeout_ms", "language", "ipv4_only", "ipv6_only"}),
@@ -125,7 +139,7 @@ func (s *Service) MTRReport(ctx context.Context, req MTRReportRequest) (MTRRepor
 	maxPerHop := positiveOrDefault(req.MaxPerHop, 10)
 	var latest []trace.MTRHopStat
 	err = withTraceRuntimeNoResult(ctx, setup, func() error {
-		return trace.RunMTR(ctx, setup.Method, setup.Config, trace.MTROptions{
+		return runMTRFn(ctx, setup.Method, setup.Config, trace.MTROptions{
 			HopInterval: time.Duration(hopInterval) * time.Millisecond,
 			MaxPerHop:   maxPerHop,
 		}, func(_ int, stats []trace.MTRHopStat) {
@@ -142,7 +156,7 @@ func (s *Service) MTRReport(ctx context.Context, req MTRReportRequest) (MTRRepor
 		Protocol:   setup.Protocol,
 		Stats:      latest,
 		DurationMs: durationMs(start),
-		Parameters: traceParameterBoundaries(),
+		Parameters: mtrReportParameterBoundaries(),
 	}, nil
 }
 
@@ -169,15 +183,21 @@ func (s *Service) MTRRaw(ctx context.Context, req MTRRawRequest) (MTRRawResponse
 
 	var records []trace.MTRRawRecord
 	err = withTraceRuntimeNoResult(runCtx, setup, func() error {
-		return trace.RunMTRRaw(runCtx, setup.Method, setup.Config, trace.MTRRawOptions{
+		return runMTRRawFn(runCtx, setup.Method, setup.Config, trace.MTRRawOptions{
 			HopInterval: time.Duration(hopInterval) * time.Millisecond,
 			MaxPerHop:   maxPerHop,
 		}, func(rec trace.MTRRawRecord) {
 			records = append(records, rec)
 		})
 	})
-	if err != nil && !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
-		return MTRRawResponse{}, err
+	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return MTRRawResponse{}, ctxErr
+		}
+		timedOutByLocalLimit := req.DurationMs > 0 && ctx.Err() == nil && errors.Is(err, context.DeadlineExceeded)
+		if !timedOutByLocalLimit {
+			return MTRRawResponse{}, err
+		}
 	}
 
 	warnings := []string{}
@@ -191,36 +211,42 @@ func (s *Service) MTRRaw(ctx context.Context, req MTRRawRequest) (MTRRawResponse
 		Records:    records,
 		DurationMs: durationMs(start),
 		Warnings:   warnings,
-		Parameters: traceParameterBoundaries(),
+		Parameters: mtrRawParameterBoundaries(),
 	}, nil
 }
 
 func (s *Service) MTUTrace(ctx context.Context, req MTUTraceRequest) (MTUTraceResponse, error) {
 	start := time.Now()
-	cfg, err := s.buildMTUConfig(ctx, req)
-	if err != nil {
-		return MTUTraceResponse{}, err
-	}
-	res, err := mtutrace.Run(ctx, cfg)
-	if err != nil {
-		return MTUTraceResponse{}, err
-	}
-	hops := sanitizeMTUHops(res.Hops, cfg.Lang)
-	return MTUTraceResponse{
-		Target:     res.Target,
-		ResolvedIP: res.ResolvedIP,
-		Protocol:   res.Protocol,
-		IPVersion:  res.IPVersion,
-		StartMTU:   res.StartMTU,
-		ProbeSize:  res.ProbeSize,
-		PathMTU:    res.PathMTU,
-		Hops:       hops,
-		DurationMs: durationMs(start),
-		Parameters: ParameterBoundaries{
-			Supported:     []string{"target", "port", "queries", "max_hops", "begin_hop", "timeout_ms", "ttl_interval_ms", "ipv4_only", "ipv6_only", "data_provider", "dot_server", "disable_rdns", "always_rdns", "language", "source_address", "source_port", "source_device"},
-			NotApplicable: []string{"protocol", "packet_size", "tos"},
-		},
-	}, nil
+	_, needsLeo := resolveMTUDataProvider(req.DataProvider)
+	return withServiceRuntime(ctx, runtimeOptions{
+		DotServer:  req.DotServer,
+		NeedsLeoWS: needsLeo,
+	}, func() (MTUTraceResponse, error) {
+		cfg, err := s.buildMTUConfig(ctx, req)
+		if err != nil {
+			return MTUTraceResponse{}, err
+		}
+		res, err := runMTUTraceFn(ctx, cfg)
+		if err != nil {
+			return MTUTraceResponse{}, err
+		}
+		hops := sanitizeMTUHops(res.Hops, cfg.Lang)
+		return MTUTraceResponse{
+			Target:     res.Target,
+			ResolvedIP: res.ResolvedIP,
+			Protocol:   res.Protocol,
+			IPVersion:  res.IPVersion,
+			StartMTU:   res.StartMTU,
+			ProbeSize:  res.ProbeSize,
+			PathMTU:    res.PathMTU,
+			Hops:       hops,
+			DurationMs: durationMs(start),
+			Parameters: ParameterBoundaries{
+				Supported:     []string{"target", "port", "queries", "max_hops", "begin_hop", "timeout_ms", "ttl_interval_ms", "ipv4_only", "ipv6_only", "data_provider", "dot_server", "disable_rdns", "always_rdns", "language", "source_address", "source_port", "source_device"},
+				NotApplicable: []string{"protocol", "packet_size", "tos"},
+			},
+		}, nil
+	})
 }
 
 func (s *Service) SpeedTest(ctx context.Context, req SpeedTestRequest) (SpeedTestResponse, error) {
@@ -250,18 +276,21 @@ func (s *Service) AnnotateIPs(ctx context.Context, req AnnotateIPsRequest) (Anno
 		family = nali.Family6
 	}
 	timeout := positiveOrDefault(req.TimeoutMs, defaultTimeoutMs)
-	annotator := nali.New(nali.Config{
-		Source:  ipgeo.GetSource(normalizeDataProvider(req.DataProvider, "")),
-		Timeout: time.Duration(timeout) * time.Millisecond,
-		Lang:    normalizeLanguage(req.Language),
-		Family:  family,
+	provider, needsLeo := resolveStandaloneDataProvider(req.DataProvider)
+	return withServiceRuntime(ctx, runtimeOptions{NeedsLeoWS: needsLeo}, func() (AnnotateIPsResponse, error) {
+		annotator := nali.New(nali.Config{
+			Source:  ipgeo.GetSource(provider),
+			Timeout: time.Duration(timeout) * time.Millisecond,
+			Lang:    normalizeLanguage(req.Language),
+			Family:  family,
+		})
+		return AnnotateIPsResponse{
+			Text: annotator.AnnotateLine(ctx, req.Text),
+			Parameters: ParameterBoundaries{
+				Supported: []string{"text", "data_provider", "timeout_ms", "language", "ipv4_only", "ipv6_only"},
+			},
+		}, nil
 	})
-	return AnnotateIPsResponse{
-		Text: annotator.AnnotateLine(ctx, req.Text),
-		Parameters: ParameterBoundaries{
-			Supported: []string{"text", "data_provider", "timeout_ms", "language", "ipv4_only", "ipv6_only"},
-		},
-	}, nil
 }
 
 func (s *Service) GeoLookup(ctx context.Context, req GeoLookupRequest) (GeoLookupResponse, error) {
@@ -269,21 +298,20 @@ func (s *Service) GeoLookup(ctx context.Context, req GeoLookupRequest) (GeoLooku
 	if query == "" {
 		return GeoLookupResponse{}, errors.New("query is required")
 	}
-	provider := normalizeDataProvider(req.DataProvider, "")
-	if provider == "" {
-		provider = defaultDataProvider
-	}
-	geo, err := trace.LookupIPGeo(ctx, ipgeo.GetSource(provider), normalizeLanguage(req.Language), false, defaultQueries, query)
-	if err != nil {
-		return GeoLookupResponse{}, err
-	}
-	return GeoLookupResponse{
-		Query: query,
-		Geo:   localizeGeo(geo, normalizeLanguage(req.Language)),
-		Parameters: ParameterBoundaries{
-			Supported: []string{"query", "data_provider", "language"},
-		},
-	}, nil
+	provider, needsLeo := resolveStandaloneDataProvider(req.DataProvider)
+	return withServiceRuntime(ctx, runtimeOptions{NeedsLeoWS: needsLeo}, func() (GeoLookupResponse, error) {
+		geo, err := lookupIPGeoFn(ctx, ipgeo.GetSource(provider), normalizeLanguage(req.Language), false, defaultQueries, query)
+		if err != nil {
+			return GeoLookupResponse{}, err
+		}
+		return GeoLookupResponse{
+			Query: query,
+			Geo:   localizeGeo(geo, normalizeLanguage(req.Language)),
+			Parameters: ParameterBoundaries{
+				Supported: []string{"query", "data_provider", "language"},
+			},
+		}, nil
+	})
 }
 
 func (s *Service) prepareTrace(ctx context.Context, req TraceRequest) (*traceSetup, error) {
@@ -364,10 +392,7 @@ func (s *Service) buildMTUConfig(ctx context.Context, req MTUTraceRequest) (mtut
 	if port <= 0 {
 		port = 33494
 	}
-	provider := normalizeDataProvider(req.DataProvider, "")
-	if provider == "" {
-		provider = defaultDataProvider
-	}
+	provider, _ := resolveMTUDataProvider(req.DataProvider)
 	return mtutrace.Config{
 		Target:         target,
 		DstIP:          ip,
@@ -388,22 +413,34 @@ func (s *Service) buildMTUConfig(ctx context.Context, req MTUTraceRequest) (mtut
 }
 
 func withTraceRuntime[T any](ctx context.Context, setup *traceSetup, fn func() (T, error)) (T, error) {
+	if setup == nil {
+		var zero T
+		return zero, nil
+	}
+	return withServiceRuntime(ctx, runtimeOptions{
+		DotServer:   setup.Request.DotServer,
+		NeedsLeoWS:  setup.NeedsLeoWS,
+		PowProvider: setup.PowProvider,
+	}, fn)
+}
+
+func withServiceRuntime[T any](ctx context.Context, opts runtimeOptions, fn func() (T, error)) (T, error) {
 	RuntimeMu.Lock()
 	defer RuntimeMu.Unlock()
 
 	var zero T
-	if setup == nil || fn == nil {
+	if fn == nil {
 		return zero, nil
 	}
 	prevPowProvider := util.PowProviderParam
-	util.PowProviderParam = setup.PowProvider
+	util.PowProviderParam = opts.PowProvider
 	defer func() {
 		util.PowProviderParam = prevPowProvider
 	}()
 
-	return util.WithGeoDNSResolver(strings.ToLower(strings.TrimSpace(setup.Request.DotServer)), func() (T, error) {
-		if setup.NeedsLeoWS {
-			ensureLeoMoeConnection(ctx)
+	return util.WithGeoDNSResolver(strings.ToLower(strings.TrimSpace(opts.DotServer)), func() (T, error) {
+		if opts.NeedsLeoWS {
+			ensureLeoMoeConnectionFn(ctx)
 		}
 		return fn()
 	})
@@ -465,6 +502,23 @@ func resolveDataProvider(req *TraceRequest) (string, bool) {
 		config.InitConfig()
 		req.DisableMaptrace = true
 		provider = "DN42"
+	}
+	needsLeo := strings.EqualFold(provider, "LEOMOEAPI")
+	if needsLeo && util.EnvDataProvider != "" {
+		provider = util.EnvDataProvider
+		needsLeo = strings.EqualFold(provider, "LEOMOEAPI")
+	}
+	return provider, needsLeo
+}
+
+func resolveMTUDataProvider(raw string) (string, bool) {
+	return resolveStandaloneDataProvider(raw)
+}
+
+func resolveStandaloneDataProvider(raw string) (string, bool) {
+	provider := normalizeDataProvider(raw, "")
+	if provider == "" {
+		provider = defaultDataProvider
 	}
 	needsLeo := strings.EqualFold(provider, "LEOMOEAPI")
 	if needsLeo && util.EnvDataProvider != "" {
@@ -845,6 +899,55 @@ func traceParameterBoundaries() ParameterBoundaries {
 			"globalping_limit",
 		},
 	}
+}
+
+func mtrReportParameterBoundaries() ParameterBoundaries {
+	return ParameterBoundaries{
+		Supported: append(withoutParams(traceSupportedParams(),
+			"queries",
+			"packet_interval",
+			"ttl_interval",
+		), "hop_interval_ms", "max_per_hop"),
+		NotApplicable: []string{
+			"queries",
+			"packet_interval",
+			"ttl_interval",
+			"globalping_locations",
+			"globalping_limit",
+		},
+	}
+}
+
+func mtrRawParameterBoundaries() ParameterBoundaries {
+	return ParameterBoundaries{
+		Supported: append(withoutParams(traceSupportedParams(),
+			"queries",
+			"packet_interval",
+			"ttl_interval",
+		), "hop_interval_ms", "max_per_hop", "duration_ms"),
+		NotApplicable: []string{
+			"queries",
+			"packet_interval",
+			"ttl_interval",
+			"globalping_locations",
+			"globalping_limit",
+		},
+	}
+}
+
+func withoutParams(params []string, names ...string) []string {
+	excluded := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		excluded[name] = struct{}{}
+	}
+	out := make([]string, 0, len(params))
+	for _, param := range params {
+		if _, skip := excluded[param]; skip {
+			continue
+		}
+		out = append(out, param)
+	}
+	return out
 }
 
 func toolCapability(name, description string, supported []string) ToolCapability {

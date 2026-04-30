@@ -18,14 +18,19 @@ type deployAuth struct {
 	Token   string
 }
 
-func (a deployAuth) valid() bool {
-	return a.Enabled && strings.TrimSpace(a.Token) != ""
+func (a deployAuth) tokenConfigured() bool {
+	return strings.TrimSpace(a.Token) != ""
 }
 
 func deployAuthMiddleware(auth deployAuth) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if !auth.valid() || c.Request.Method == http.MethodOptions || isDeployAuthRoute(c.Request.URL.Path) {
+		if !auth.Enabled || c.Request.Method == http.MethodOptions || isDeployAuthRoute(c.Request.URL.Path) {
 			c.Next()
+			return
+		}
+		if !auth.tokenConfigured() {
+			writeDeployUnauthorized(c)
+			c.Abort()
 			return
 		}
 		if deployRequestAuthorized(c.Request, auth.Token) {
@@ -115,15 +120,23 @@ func forwardedHeaderProtoIsHTTPS(value string) bool {
 
 func registerDeployAuthRoutes(router *gin.Engine, auth deployAuth) {
 	router.GET("/auth/login", func(c *gin.Context) {
-		if !auth.valid() {
+		if !auth.Enabled {
 			c.Redirect(http.StatusFound, "/")
+			return
+		}
+		if !auth.tokenConfigured() {
+			writeDeployAuthConfigError(c)
 			return
 		}
 		c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(deployLoginPage("")))
 	})
 	router.POST("/auth/login", func(c *gin.Context) {
-		if !auth.valid() {
+		if !auth.Enabled {
 			c.JSON(http.StatusOK, gin.H{"ok": true})
+			return
+		}
+		if !auth.tokenConfigured() {
+			writeDeployAuthConfigError(c)
 			return
 		}
 		token := strings.TrimSpace(c.PostForm("token"))
@@ -135,7 +148,7 @@ func registerDeployAuthRoutes(router *gin.Engine, auth deployAuth) {
 			token = strings.TrimSpace(body.Token)
 		}
 		if !deployTokenMatches(token, auth.Token) {
-			if strings.Contains(c.GetHeader("Accept"), "text/html") {
+			if acceptsHTML(c.Request) {
 				c.Data(http.StatusUnauthorized, "text/html; charset=utf-8", []byte(deployLoginPage("Invalid token")))
 				return
 			}
@@ -150,12 +163,20 @@ func registerDeployAuthRoutes(router *gin.Engine, auth deployAuth) {
 			SameSite: http.SameSiteLaxMode,
 			Secure:   deployRequestIsHTTPS(c.Request),
 		})
-		if strings.Contains(c.GetHeader("Accept"), "text/html") {
+		if acceptsHTML(c.Request) {
 			c.Redirect(http.StatusFound, "/")
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 	})
+}
+
+func writeDeployAuthConfigError(c *gin.Context) {
+	if c.Request.Method == http.MethodGet && acceptsHTML(c.Request) {
+		c.Data(http.StatusInternalServerError, "text/html; charset=utf-8", []byte(deployLoginPage("Deploy auth token is not configured")))
+		return
+	}
+	c.JSON(http.StatusInternalServerError, gin.H{"error": "deploy auth token is not configured"})
 }
 
 func writeDeployUnauthorized(c *gin.Context) {

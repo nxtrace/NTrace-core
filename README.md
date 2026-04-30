@@ -186,7 +186,7 @@ Starting from this release, NextTrace is published in **three flavors** under th
 | MTR wide (`-w`)       |         ✅         |        —         |      ✅      |
 | MTR raw (`--raw`)     |         ✅         |        —         |      ✅      |
 | Globalping (`--from`) |         ✅         |        —         |      —       |
-| WebUI/MCP (`--deploy`) |        ✅         |        —         |      —       |
+| WebUI (`--deploy`) / MCP (`--deploy --mcp`) |        ✅         |        —         |      —       |
 | Fast Trace (`-F`)     |         ✅         |        ✅        |      —       |
 | Default mode          |     traceroute     |    traceroute    |   MTR TUI    |
 | Binary name           |    `nexttrace`     | `nexttrace-tiny` |    `ntr`     |

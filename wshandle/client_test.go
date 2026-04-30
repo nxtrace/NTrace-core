@@ -105,6 +105,55 @@ func TestNewClosesPreviousGlobalWsConn(t *testing.T) {
 	}
 }
 
+func TestReplaceGlobalWsConnKeepsOldConnForCanceledContext(t *testing.T) {
+	saveAndRestoreGlobalWsConn(t)
+
+	oldConn := newStartedTestWsConn()
+	wsconnMu.Lock()
+	wsconn = oldConn
+	wsconnMu.Unlock()
+
+	newConn := newStartedTestWsConn()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	got := replaceGlobalWsConn(newConn, ctx)
+	if got != oldConn {
+		t.Fatal("replaceGlobalWsConn should return existing connection for canceled context")
+	}
+	if GetWsConn() != oldConn {
+		t.Fatal("canceled replacement should not overwrite global connection")
+	}
+	if oldConn.isClosed() {
+		t.Fatal("existing connection should remain open")
+	}
+	if !newConn.isClosed() {
+		t.Fatal("canceled replacement connection should be closed")
+	}
+}
+
+func TestReplaceGlobalWsConnDoesNotRewriteBaseContext(t *testing.T) {
+	saveAndRestoreGlobalWsConn(t)
+
+	originalCtx, originalCancel := context.WithCancel(context.Background())
+	defer originalCancel()
+	replacementCtx, replacementCancel := context.WithCancel(context.Background())
+	defer replacementCancel()
+
+	newConn := newStartedTestWsConn()
+	newConn.baseCtx = originalCtx
+
+	got := replaceGlobalWsConn(newConn, replacementCtx)
+	defer got.Close()
+
+	if got != newConn {
+		t.Fatal("replaceGlobalWsConn should install the supplied connection")
+	}
+	if newConn.baseCtx != originalCtx {
+		t.Fatal("replaceGlobalWsConn should not rewrite baseCtx after construction")
+	}
+}
+
 func TestGetWsConnDoesNotBlockWhileNewClosesPreviousConn(t *testing.T) {
 	oldCreateFn := createWsConnFn
 	defer func() {
@@ -438,6 +487,22 @@ func TestKeepAliveStopsOnCanceledBaseContext(t *testing.T) {
 	case <-done:
 	case <-time.After(200 * time.Millisecond):
 		t.Fatal("keepAlive did not stop after base context cancel")
+	}
+}
+
+func TestBaseContextWatcherClosesConnection(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	conn := newWsConn(nil, make(chan os.Signal, 1))
+	conn.baseCtx = ctx
+	conn.setDoneChan(make(chan struct{}))
+	conn.startBaseContextWatcher()
+
+	cancel()
+
+	select {
+	case <-conn.closeCh:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("base context watcher did not close connection")
 	}
 }
 

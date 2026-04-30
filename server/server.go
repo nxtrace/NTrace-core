@@ -61,11 +61,12 @@ func RunWithOptions(opts Options, onReady func(net.Addr)) error {
 	if listenAddr == "" {
 		listenAddr = defaultListenAddr
 	}
-	if opts.AuthEnabled && strings.TrimSpace(opts.DeployToken) == "" {
+	deployToken := strings.TrimSpace(opts.DeployToken)
+	if opts.AuthEnabled && deployToken == "" {
 		return errors.New("deploy auth enabled without token")
 	}
 
-	auth := deployAuth{Enabled: opts.AuthEnabled, Token: opts.DeployToken}
+	auth := deployAuth{Enabled: opts.AuthEnabled, Token: deployToken}
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 	router.Use(gin.Logger(), gin.Recovery())

@@ -41,28 +41,29 @@ const (
 )
 
 type WsConn struct {
-	Connecting   bool
-	Connected    bool            // 连接状态
-	MsgSendCh    chan string     // 消息发送通道
-	MsgReceiveCh chan string     // 消息接收通道
-	Done         chan struct{}   // 发送结束通道
-	Exit         chan bool       // 程序退出信号
-	Interrupt    chan os.Signal  // 终端中止信号
-	Conn         *websocket.Conn // 主连接
-	ConnMux      sync.Mutex      // 连接互斥锁
-	stateMu      sync.RWMutex
-	lifecycleMu  sync.Mutex
-	loopWG       sync.WaitGroup
-	closeOnce    sync.Once
-	writeCh      chan wsWriteJob // serialized write queue
-	writeStop    chan struct{}   // signals writeLoop to exit
-	closeCh      chan struct{}   // signals background loops to exit
-	closed       bool
-	baseCtx      context.Context
-	directIP     bool
-	apiHost      string
-	apiPort      string
-	apiFastIP    string
+	Connecting    bool
+	Connected     bool            // 连接状态
+	MsgSendCh     chan string     // 消息发送通道
+	MsgReceiveCh  chan string     // 消息接收通道
+	Done          chan struct{}   // 发送结束通道
+	Exit          chan bool       // 程序退出信号
+	Interrupt     chan os.Signal  // 终端中止信号
+	Conn          *websocket.Conn // 主连接
+	ConnMux       sync.Mutex      // 连接互斥锁
+	stateMu       sync.RWMutex
+	lifecycleMu   sync.Mutex
+	loopWG        sync.WaitGroup
+	closeOnce     sync.Once
+	baseWatchOnce sync.Once
+	writeCh       chan wsWriteJob // serialized write queue
+	writeStop     chan struct{}   // signals writeLoop to exit
+	closeCh       chan struct{}   // signals background loops to exit
+	closed        bool
+	baseCtx       context.Context
+	directIP      bool
+	apiHost       string
+	apiPort       string
+	apiFastIP     string
 }
 
 func (c *WsConn) getConn() *websocket.Conn {
@@ -228,6 +229,25 @@ func (c *WsConn) startLoop(fn func()) {
 		defer c.loopWG.Done()
 		fn()
 	}()
+}
+
+func (c *WsConn) startBaseContextWatcher() {
+	if c == nil {
+		return
+	}
+	c.baseWatchOnce.Do(func() {
+		done := c.baseContextDone()
+		if done == nil {
+			return
+		}
+		go func() {
+			select {
+			case <-done:
+				c.Close()
+			case <-c.closeCh:
+			}
+		}()
+	})
 }
 
 func (c *WsConn) isClosed() bool {
@@ -699,6 +719,7 @@ func newReconnectableWsConn(ctx context.Context, interrupt chan os.Signal, endpo
 	ws.apiFastIP = endpoint.fastIP
 	ws.setDoneChan(make(chan struct{}))
 	ws.setConnectionState(false, false)
+	ws.startBaseContextWatcher()
 	if contextErr(ctx) != nil {
 		return ws
 	}
@@ -772,6 +793,7 @@ func createWsConn(ctx context.Context) *WsConn {
 	ws.apiPort = endpoint.port
 	ws.apiFastIP = endpoint.fastIP
 	ws.setConnectionState(err == nil, false)
+	ws.startBaseContextWatcher()
 
 	if err != nil {
 		if !suppressCanceledContextLog(ctx, err) {
@@ -803,12 +825,16 @@ func createWsConnAsync(ctx context.Context) *WsConn {
 }
 
 func replaceGlobalWsConn(newConn *WsConn, ctx context.Context) *WsConn {
-	if newConn != nil {
-		newConn.baseCtx = normalizeContext(ctx)
-	}
-
+	normalizedCtx := normalizeContext(ctx)
 	wsconnMu.Lock()
 	oldConn := wsconn
+	if contextErr(normalizedCtx) != nil || (newConn != nil && newConn.isClosed()) {
+		wsconnMu.Unlock()
+		if newConn != nil && newConn != oldConn {
+			newConn.Close()
+		}
+		return oldConn
+	}
 	wsconn = newConn
 	wsconnMu.Unlock()
 
@@ -822,6 +848,7 @@ func NewWithContext(ctx context.Context) *WsConn {
 	wsconnNewMu.Lock()
 	defer wsconnNewMu.Unlock()
 
+	ctx = normalizeContext(ctx)
 	newConn := createWsConnFn(ctx)
 	return replaceGlobalWsConn(newConn, ctx)
 }
@@ -829,6 +856,7 @@ func NewWithContext(ctx context.Context) *WsConn {
 func NewWithContextAsync(ctx context.Context) *WsConn {
 	wsconnNewMu.Lock()
 	defer wsconnNewMu.Unlock()
+	ctx = normalizeContext(ctx)
 	return replaceGlobalWsConn(createWsConnAsync(ctx), ctx)
 }
 
