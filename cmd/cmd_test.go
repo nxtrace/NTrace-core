@@ -35,6 +35,39 @@ func TestLookupTargetIPHonorsContextCancellation(t *testing.T) {
 	}
 }
 
+func TestLookupTargetIPOrExitReturnsFalseOnContextCancellation(t *testing.T) {
+	oldLookup := domainLookupFn
+	domainLookupFn = func(ctx context.Context, host, ipVersion, dotServer string, disableOutput bool) (net.IP, error) {
+		return nil, context.Canceled
+	}
+	defer func() { domainLookupFn = oldLookup }()
+
+	ip, ok := lookupTargetIPOrExit(context.Background(), "example.com", false, false, "", true)
+	if ok {
+		t.Fatal("lookupTargetIPOrExit ok = true, want false for canceled context")
+	}
+	if ip != nil {
+		t.Fatalf("lookupTargetIPOrExit ip = %v, want nil", ip)
+	}
+}
+
+func TestMaybeRunUninterruptedRawReturnsOnCanceledContext(t *testing.T) {
+	oldUninterrupted := util.Uninterrupted
+	util.Uninterrupted = true
+	defer func() { util.Uninterrupted = oldUninterrupted }()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	start := time.Now()
+	if !maybeRunUninterruptedRaw(true, trace.ICMPTrace, trace.Config{Context: ctx}) {
+		t.Fatal("maybeRunUninterruptedRaw returned false, want true when raw loop is active")
+	}
+	if elapsed := time.Since(start); elapsed > 100*time.Millisecond {
+		t.Fatalf("maybeRunUninterruptedRaw returned too slowly after cancel: %v", elapsed)
+	}
+}
+
 func TestRegisterGlobalpingFlagWithAvailability_DisabledStillParses(t *testing.T) {
 	parser := argparse.NewParser("ntr", "")
 	from := registerGlobalpingFlagWithAvailability(parser, false)

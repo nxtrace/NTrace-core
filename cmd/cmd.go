@@ -919,15 +919,18 @@ func lookupTargetIP(ctx context.Context, domain string, ipv4Only, ipv6Only bool,
 	}
 }
 
-func lookupTargetIPOrExit(ctx context.Context, domain string, ipv4Only, ipv6Only bool, dot string, jsonPrint bool) net.IP {
+func lookupTargetIPOrExit(ctx context.Context, domain string, ipv4Only, ipv6Only bool, dot string, jsonPrint bool) (net.IP, bool) {
 	ip, err := lookupTargetIP(ctx, domain, ipv4Only, ipv6Only, dot, jsonPrint)
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return nil, false
+		}
 		if util.EnvDevMode {
 			panic(err)
 		}
 		log.Fatal(err)
 	}
-	return ip
+	return ip, true
 }
 
 func resolveConfiguredSrcAddr(dstIP net.IP, srcAddr, srcDev string) (resolved string, explicit bool, err error) {
@@ -1094,12 +1097,20 @@ func applyJSONOutputMode(conf *trace.Config, jsonPrint bool) {
 	}
 }
 
-func maybeRunUninterruptedRaw(rawPrint bool, method trace.Method, conf trace.Config) {
+func maybeRunUninterruptedRaw(rawPrint bool, method trace.Method, conf trace.Config) bool {
 	if !(util.Uninterrupted && rawPrint) {
-		return
+		return false
 	}
 	for {
+		if conf.Context != nil {
+			if err := conf.Context.Err(); err != nil {
+				return true
+			}
+		}
 		if _, err := trace.Traceroute(method, conf); err != nil {
+			if errors.Is(err, context.Canceled) {
+				return true
+			}
 			fmt.Println(err)
 		}
 	}
@@ -1402,7 +1413,10 @@ func Execute() {
 		if domain == "" {
 			return
 		}
-		ip := lookupTargetIPOrExit(rootCtx, domain, *ipv4Only, *ipv6Only, *dot, *jsonPrint)
+		ip, ok := lookupTargetIPOrExit(rootCtx, domain, *ipv4Only, *ipv6Only, *dot, *jsonPrint)
+		if !ok {
+			return
+		}
 		// ResolveConfiguredSrcAddr is used for display/source-IP fallback before MTU-specific source normalization.
 		resolvedSrcAddr, _, srcResolveErr := trace.ResolveConfiguredSrcAddr(ip, *srcAddr, *srcDev)
 		if srcResolveErr != nil {
@@ -1539,7 +1553,10 @@ func Execute() {
 		return
 	}
 
-	ip := lookupTargetIPOrExit(rootCtx, domain, *ipv4Only, *ipv6Only, *dot, *jsonPrint)
+	ip, ok := lookupTargetIPOrExit(rootCtx, domain, *ipv4Only, *ipv6Only, *dot, *jsonPrint)
+	if !ok {
+		return
+	}
 
 	// ResolveConfiguredSrcAddr is used for display/source-IP fallback before tracer runtime normalization.
 	resolvedSrcAddr, _, srcResolveErr := trace.ResolveConfiguredSrcAddr(ip, *srcAddr, *srcDev)
@@ -1618,7 +1635,9 @@ func Execute() {
 		}()
 	}
 	applyJSONOutputMode(&conf, *jsonPrint)
-	maybeRunUninterruptedRaw(*rawPrint, method, conf)
+	if maybeRunUninterruptedRaw(*rawPrint, method, conf) {
+		return
+	}
 
 	res, ok := runTraceOnce(method, conf)
 	if !ok {

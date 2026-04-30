@@ -311,16 +311,25 @@ func TestFilterByFamily_PicksFirstMatchingAddress(t *testing.T) {
 
 func TestSelectResolvedIP_PromptErrorFallsBackToFirst(t *testing.T) {
 	ips := []net.IP{net.ParseIP("1.1.1.1"), net.ParseIP("8.8.8.8")}
-	selected, err := selectResolvedIP(ips, false, func([]net.IP) (int, error) {
+	selected, err := selectResolvedIP(context.Background(), ips, false, func(context.Context, []net.IP) (int, error) {
 		return 0, errors.New("stdin closed")
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "1.1.1.1", selected.String())
 }
 
+func TestSelectResolvedIP_PromptContextCanceled(t *testing.T) {
+	ips := []net.IP{net.ParseIP("1.1.1.1"), net.ParseIP("8.8.8.8")}
+	_, err := selectResolvedIP(context.Background(), ips, false, func(context.Context, []net.IP) (int, error) {
+		return 0, context.Canceled
+	})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.Canceled)
+}
+
 func TestSelectResolvedIP_InvalidIndex(t *testing.T) {
 	ips := []net.IP{net.ParseIP("1.1.1.1"), net.ParseIP("8.8.8.8")}
-	_, err := selectResolvedIP(ips, false, func([]net.IP) (int, error) {
+	_, err := selectResolvedIP(context.Background(), ips, false, func(context.Context, []net.IP) (int, error) {
 		return 10, nil
 	})
 	require.Error(t, err)

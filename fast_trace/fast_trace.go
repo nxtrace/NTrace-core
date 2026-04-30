@@ -3,6 +3,7 @@ package fastTrace
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -66,13 +67,47 @@ func resolveTraceMethod(traceMode trace.Method) trace.Method {
 	}
 }
 
-func promptFastTraceChoice(prompt, defaultChoice string) string {
-	fmt.Print(prompt)
-	var choice string
-	if _, err := fmt.Scanln(&choice); err != nil {
-		return defaultChoice
+type fastTraceChoiceResult struct {
+	choice string
+	err    error
+}
+
+func promptFastTraceChoice(ctx context.Context, prompt, defaultChoice string) (string, bool) {
+	if ctx == nil {
+		ctx = context.Background()
 	}
-	return choice
+	if err := ctx.Err(); err != nil {
+		return "", false
+	}
+
+	fmt.Print(prompt)
+
+	resultCh := make(chan fastTraceChoiceResult, 1)
+	go func() {
+		var choice string
+		_, err := fmt.Scanln(&choice)
+		if err != nil {
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				err = ctxErr
+			}
+			resultCh <- fastTraceChoiceResult{err: err}
+			return
+		}
+		resultCh <- fastTraceChoiceResult{choice: choice}
+	}()
+
+	select {
+	case result := <-resultCh:
+		if result.err != nil {
+			if errors.Is(result.err, context.Canceled) {
+				return "", false
+			}
+			return defaultChoice, true
+		}
+		return result.choice, true
+	case <-ctx.Done():
+		return "", false
+	}
 }
 
 func initFastTraceWS(ctx context.Context) *wshandle.WsConn {
@@ -277,6 +312,9 @@ func runFileTraceTarget(params ParamsFastTrace, tracerouteMethod trace.Method, i
 	}
 
 	if _, err := trace.Traceroute(tracerouteMethod, conf); err != nil {
+		if errors.Is(err, context.Canceled) {
+			return
+		}
 		log.Println(err)
 		return
 	}
@@ -294,6 +332,9 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 	// ip, err := util.DomainLookUp(ispCollection.IP, "4", "", true)
 	ip, err := util.DomainLookUpWithContext(f.ParamsFastTrace.Context, ispCollection.IP, "4", f.ParamsFastTrace.Dot, true)
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return
+		}
 		log.Fatal(err)
 	}
 	packetSize := f.ParamsFastTrace.PktSize
@@ -330,6 +371,9 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 	}
 	conf, err = normalizeFastTraceConfig(f.TracerouteMethod, conf)
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return
+		}
 		log.Println(err)
 		return
 	}
@@ -352,6 +396,9 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 	_, err = trace.Traceroute(f.TracerouteMethod, conf)
 
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return
+		}
 		log.Println(err)
 		return
 	}
@@ -366,13 +413,20 @@ func FastTest(traceMode trace.Method, paramsFastTrace ParamsFastTrace) {
 
 	fmt.Println("Hi，欢迎使用 Fast Trace 功能，请注意 Fast Trace 功能只适合新手使用\n因为国内网络复杂，我们设置的测试目标有限，建议普通用户自测以获得更加精准的路由情况")
 	fmt.Println("请您选择要测试的 IP 类型\n1. IPv4\n2. IPv6")
-	if promptFastTraceChoice("请选择选项：", "1") == "2" {
+	ipChoice, ok := promptFastTraceChoice(paramsFastTrace.Context, "请选择选项：", "1")
+	if !ok {
+		return
+	}
+	if ipChoice == "2" {
 		FastTestv6(traceMode, paramsFastTrace)
 		return
 	}
 
 	fmt.Println("您想测试哪些ISP的路由？\n1. 北京三网快速测试\n2. 上海三网快速测试\n3. 广州三网快速测试\n4. 全国电信\n5. 全国联通\n6. 全国移动\n7. 全国教育网\n8. 全国五网")
-	choice := promptFastTraceChoice("请选择选项：", "1")
+	choice, ok := promptFastTraceChoice(paramsFastTrace.Context, "请选择选项：", "1")
+	if !ok {
+		return
+	}
 
 	w := initFastTraceWS(paramsFastTrace.Context)
 	defer closeFastTraceWS(w)

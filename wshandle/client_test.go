@@ -388,6 +388,59 @@ func TestRecreateWsConnCloseCancelsFastIP(t *testing.T) {
 	}
 }
 
+func TestRecreateWsConnCanceledBaseContextSkipsReconnect(t *testing.T) {
+	oldFastIPFn := wsGetFastIPFn
+	defer func() {
+		wsGetFastIPFn = oldFastIPFn
+	}()
+
+	var fastIPCalls int32
+	wsGetFastIPFn = func(ctx context.Context, domain string, port string, enableOutput bool) (string, error) {
+		atomic.AddInt32(&fastIPCalls, 1)
+		return "127.0.0.1", nil
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	conn := newWsConn(nil, make(chan os.Signal, 1))
+	conn.baseCtx = ctx
+	conn.apiHost = "example.com"
+	conn.apiPort = "443"
+	conn.setConnectionState(false, true)
+	defer conn.Close()
+
+	conn.recreateWsConn()
+
+	if got := atomic.LoadInt32(&fastIPCalls); got != 0 {
+		t.Fatalf("FastIP refresh calls = %d, want 0 after base context cancel", got)
+	}
+	if conn.IsConnecting() {
+		t.Fatal("connection should not remain connecting after base context cancel")
+	}
+}
+
+func TestKeepAliveStopsOnCanceledBaseContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	conn := newWsConn(nil, make(chan os.Signal, 1))
+	conn.baseCtx = ctx
+	defer conn.Close()
+
+	done := make(chan struct{})
+	go func() {
+		conn.keepAlive()
+		close(done)
+	}()
+
+	cancel()
+
+	select {
+	case <-done:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("keepAlive did not stop after base context cancel")
+	}
+}
+
 func TestCreateWsConnAsyncPreservesDirectIPOnReconnect(t *testing.T) {
 	saveAndRestoreGlobalWsConn(t)
 

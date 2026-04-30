@@ -248,7 +248,12 @@ type hostLookupResolver interface {
 	LookupHost(ctx context.Context, host string) ([]string, error)
 }
 
-type resolvedIPPrompt func([]net.IP) (int, error)
+type resolvedIPPrompt func(context.Context, []net.IP) (int, error)
+
+type resolvedIPPromptResult struct {
+	index int
+	err   error
+}
 
 func resolverFactory(dotServer string) hostLookupResolver {
 	switch dotServer {
@@ -313,7 +318,14 @@ func resolveFamilyLabel(ipVersion string) string {
 	}
 }
 
-func promptResolvedIPChoice(ips []net.IP) (int, error) {
+func promptResolvedIPChoice(ctx context.Context, ips []net.IP) (int, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+
 	fmt.Println("Please Choose the IP You Want To TraceRoute")
 	for i, ip := range ips {
 		_, _ = fmt.Fprintf(color.Output, "%s %s\n",
@@ -323,15 +335,32 @@ func promptResolvedIPChoice(ips []net.IP) (int, error) {
 	}
 	fmt.Printf("Your Option: ")
 
-	var index int
-	_, err := fmt.Scanln(&index)
-	if err != nil {
-		return 0, err
+	resultCh := make(chan resolvedIPPromptResult, 1)
+	go func() {
+		var index int
+		_, err := fmt.Scanln(&index)
+		if err != nil {
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				err = ctxErr
+			}
+			resultCh <- resolvedIPPromptResult{err: err}
+			return
+		}
+		resultCh <- resolvedIPPromptResult{index: index}
+	}()
+
+	select {
+	case result := <-resultCh:
+		if result.err != nil {
+			return 0, result.err
+		}
+		return result.index, nil
+	case <-ctx.Done():
+		return 0, ctx.Err()
 	}
-	return index, nil
 }
 
-func selectResolvedIP(ips []net.IP, disableOutput bool, prompt resolvedIPPrompt) (net.IP, error) {
+func selectResolvedIP(ctx context.Context, ips []net.IP, disableOutput bool, prompt resolvedIPPrompt) (net.IP, error) {
 	if len(ips) == 0 {
 		return nil, errors.New("no IPs available")
 	}
@@ -342,8 +371,11 @@ func selectResolvedIP(ips []net.IP, disableOutput bool, prompt resolvedIPPrompt)
 		prompt = promptResolvedIPChoice
 	}
 
-	index, err := prompt(ips)
+	index, err := prompt(ctx, ips)
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return nil, err
+		}
 		index = 0
 	}
 	if index < 0 || index >= len(ips) {
@@ -360,10 +392,10 @@ func DomainLookUpWithContext(ctx context.Context, host string, ipVersion string,
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	child, cancel := context.WithTimeout(ctx, dnsLookupTimeout)
-	defer cancel()
+	lookupCtx, cancel := context.WithTimeout(ctx, dnsLookupTimeout)
 
-	ips, err := lookupIPs(child, domainResolverFactory(dotServer), host)
+	ips, err := lookupIPs(lookupCtx, domainResolverFactory(dotServer), host)
+	cancel()
 	if err != nil {
 		return nil, err
 	}
@@ -373,9 +405,15 @@ func DomainLookUpWithContext(ctx context.Context, host string, ipVersion string,
 		return nil, fmt.Errorf("no %s DNS records found for %s", resolveFamilyLabel(ipVersion), host)
 	}
 
-	selected, err := selectResolvedIP(ips, disableOutput, promptResolvedIPChoice)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	selected, err := selectResolvedIP(ctx, ips, disableOutput, promptResolvedIPChoice)
 	if err != nil {
-		fmt.Println("Your Option is invalid")
+		if !errors.Is(err, context.Canceled) {
+			fmt.Println("Your Option is invalid")
+		}
 		return nil, err
 	}
 	return selected, nil
