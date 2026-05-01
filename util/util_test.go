@@ -3,7 +3,9 @@ package util
 import (
 	"context"
 	"errors"
+	"io"
 	"net"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -311,20 +313,184 @@ func TestFilterByFamily_PicksFirstMatchingAddress(t *testing.T) {
 
 func TestSelectResolvedIP_PromptErrorFallsBackToFirst(t *testing.T) {
 	ips := []net.IP{net.ParseIP("1.1.1.1"), net.ParseIP("8.8.8.8")}
-	selected, err := selectResolvedIP(ips, false, func([]net.IP) (int, error) {
+	selected, err := selectResolvedIP(context.Background(), ips, false, func(context.Context, []net.IP) (int, error) {
 		return 0, errors.New("stdin closed")
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "1.1.1.1", selected.String())
 }
 
+func TestSelectResolvedIP_PromptContextCanceled(t *testing.T) {
+	ips := []net.IP{net.ParseIP("1.1.1.1"), net.ParseIP("8.8.8.8")}
+	_, err := selectResolvedIP(context.Background(), ips, false, func(context.Context, []net.IP) (int, error) {
+		return 0, context.Canceled
+	})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.Canceled)
+}
+
+func TestSelectResolvedIP_PromptContextDeadlineExceeded(t *testing.T) {
+	ips := []net.IP{net.ParseIP("1.1.1.1"), net.ParseIP("8.8.8.8")}
+	_, err := selectResolvedIP(context.Background(), ips, false, func(context.Context, []net.IP) (int, error) {
+		return 0, context.DeadlineExceeded
+	})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+}
+
 func TestSelectResolvedIP_InvalidIndex(t *testing.T) {
 	ips := []net.IP{net.ParseIP("1.1.1.1"), net.ParseIP("8.8.8.8")}
-	_, err := selectResolvedIP(ips, false, func([]net.IP) (int, error) {
+	_, err := selectResolvedIP(context.Background(), ips, false, func(context.Context, []net.IP) (int, error) {
 		return 10, nil
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid selection")
+}
+
+func TestReadStdinLineReadsBufferedInputInOrder(t *testing.T) {
+	reader := newStdinLineReader(strings.NewReader("first\nsecond\n"))
+
+	line, err := reader.read(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "first", line)
+
+	line, err = reader.read(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "second", line)
+
+	_, err = reader.read(context.Background())
+	assert.ErrorIs(t, err, io.EOF)
+}
+
+func TestReadStdinLineReturnsFinalLineBeforeEOF(t *testing.T) {
+	reader := newStdinLineReader(strings.NewReader("last"))
+
+	line, err := reader.read(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "last", line)
+
+	_, err = reader.read(context.Background())
+	assert.ErrorIs(t, err, io.EOF)
+}
+
+func TestReadStdinLineRepeatsTerminalError(t *testing.T) {
+	reader := newStdinLineReader(strings.NewReader(""))
+
+	_, err := reader.read(context.Background())
+	assert.ErrorIs(t, err, io.EOF)
+
+	_, err = reader.read(context.Background())
+	assert.ErrorIs(t, err, io.EOF)
+}
+
+func TestReadStdinLineCanceledContextDoesNotConsumeInput(t *testing.T) {
+	reader := newStdinLineReader(strings.NewReader("value\n"))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := reader.read(ctx)
+	assert.ErrorIs(t, err, context.Canceled)
+
+	line, err := reader.read(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "value", line)
+}
+
+func TestReadStdinLineDeadlineContextDoesNotConsumeInput(t *testing.T) {
+	reader := newStdinLineReader(strings.NewReader("value\n"))
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+
+	_, err := reader.read(ctx)
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+
+	line, err := reader.read(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "value", line)
+}
+
+type blockingLineReader struct {
+	lines chan string
+}
+
+func newBlockingLineReader() *blockingLineReader {
+	return &blockingLineReader{lines: make(chan string)}
+}
+
+func (r *blockingLineReader) Read(p []byte) (int, error) {
+	line, ok := <-r.lines
+	if !ok {
+		return 0, io.EOF
+	}
+	return copy(p, line), nil
+}
+
+func TestReadStdinLineDoesNotReadAheadWhileIdle(t *testing.T) {
+	source := newBlockingLineReader()
+	reader := newStdinLineReader(source)
+
+	firstDone := make(chan struct{})
+	go func() {
+		source.lines <- "first\n"
+		close(firstDone)
+	}()
+	line, err := reader.read(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "first", line)
+	<-firstDone
+
+	select {
+	case source.lines <- "second\n":
+		t.Fatal("stdin reader consumed another line without a ReadStdinLine request")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	secondDone := make(chan struct{})
+	go func() {
+		source.lines <- "second\n"
+		close(secondDone)
+	}()
+	line, err = reader.read(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "second", line)
+	<-secondDone
+}
+
+func TestReadStdinLineConcurrentCallsUseOwnResponses(t *testing.T) {
+	source := newBlockingLineReader()
+	reader := newStdinLineReader(source)
+
+	type readResult struct {
+		line string
+		err  error
+	}
+	results := make(chan readResult, 2)
+	start := make(chan struct{})
+	for range 2 {
+		go func() {
+			<-start
+			line, err := reader.read(context.Background())
+			results <- readResult{line: line, err: err}
+		}()
+	}
+	close(start)
+
+	go func() {
+		source.lines <- "first\n"
+		source.lines <- "second\n"
+	}()
+
+	got := make([]string, 0, 2)
+	for range 2 {
+		select {
+		case result := <-results:
+			require.NoError(t, result.err)
+			got = append(got, result.line)
+		case <-time.After(time.Second):
+			t.Fatal("timed out waiting for concurrent stdin read")
+		}
+	}
+	assert.ElementsMatch(t, []string{"first", "second"}, got)
 }
 
 func TestResolveFamilyLabel(t *testing.T) {

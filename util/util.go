@@ -1,13 +1,17 @@
 package util
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/url"
+	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -248,7 +252,140 @@ type hostLookupResolver interface {
 	LookupHost(ctx context.Context, host string) ([]string, error)
 }
 
-type resolvedIPPrompt func([]net.IP) (int, error)
+type resolvedIPPrompt func(context.Context, []net.IP) (int, error)
+
+type stdinLineResult struct {
+	line string
+	err  error
+}
+
+type stdinLineRequest struct {
+	result chan stdinLineResult
+}
+
+type stdinLineReader struct {
+	once         sync.Once
+	reader       io.Reader
+	requests     chan stdinLineRequest
+	terminalDone chan struct{}
+	terminalMu   sync.Mutex
+	terminalErr  error
+}
+
+var sharedStdinLineReader = newStdinLineReader(os.Stdin)
+
+func newStdinLineReader(reader io.Reader) *stdinLineReader {
+	return &stdinLineReader{
+		reader:       reader,
+		requests:     make(chan stdinLineRequest),
+		terminalDone: make(chan struct{}),
+	}
+}
+
+func (r *stdinLineReader) start() {
+	r.once.Do(func() {
+		go func() {
+			br := bufio.NewReader(r.reader)
+			for req := range r.requests {
+				line, err := br.ReadString('\n')
+				if line != "" {
+					req.send(stdinLineResult{line: strings.TrimRight(line, "\r\n")})
+				}
+				if err != nil {
+					if line == "" {
+						req.send(stdinLineResult{err: err})
+					}
+					r.setTerminalErr(err)
+					return
+				}
+			}
+		}()
+	})
+}
+
+func (r stdinLineRequest) send(result stdinLineResult) {
+	r.result <- result
+}
+
+func (r *stdinLineReader) setTerminalErr(err error) {
+	if err == nil {
+		err = io.EOF
+	}
+	r.terminalMu.Lock()
+	if r.terminalErr == nil {
+		r.terminalErr = err
+		close(r.terminalDone)
+	}
+	r.terminalMu.Unlock()
+}
+
+func (r *stdinLineReader) getTerminalErr() error {
+	r.terminalMu.Lock()
+	defer r.terminalMu.Unlock()
+	return r.terminalErr
+}
+
+func (r *stdinLineReader) read(ctx context.Context) (string, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	r.start()
+
+	if err := r.getTerminalErr(); err != nil {
+		return "", err
+	}
+
+	response := make(chan stdinLineResult, 1)
+	select {
+	case r.requests <- stdinLineRequest{result: response}:
+	case <-r.terminalDone:
+		if err := r.getTerminalErr(); err != nil {
+			return "", err
+		}
+		return "", io.EOF
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
+
+	return r.waitResult(ctx, response)
+}
+
+func (r *stdinLineReader) waitResult(ctx context.Context, response <-chan stdinLineResult) (string, error) {
+	select {
+	case result := <-response:
+		return r.resultLine(ctx, result)
+	case <-r.terminalDone:
+		select {
+		case result := <-response:
+			return r.resultLine(ctx, result)
+		default:
+			if err := r.getTerminalErr(); err != nil {
+				return "", err
+			}
+			return "", io.EOF
+		}
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
+}
+
+func (r *stdinLineReader) resultLine(ctx context.Context, result stdinLineResult) (string, error) {
+	if result.err != nil {
+		return "", result.err
+	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	return result.line, nil
+}
+
+// ReadStdinLine reads one line from a process-wide stdin reader.
+func ReadStdinLine(ctx context.Context) (string, error) {
+	return sharedStdinLineReader.read(ctx)
+}
 
 func resolverFactory(dotServer string) hostLookupResolver {
 	switch dotServer {
@@ -313,7 +450,14 @@ func resolveFamilyLabel(ipVersion string) string {
 	}
 }
 
-func promptResolvedIPChoice(ips []net.IP) (int, error) {
+func promptResolvedIPChoice(ctx context.Context, ips []net.IP) (int, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+
 	fmt.Println("Please Choose the IP You Want To TraceRoute")
 	for i, ip := range ips {
 		_, _ = fmt.Fprintf(color.Output, "%s %s\n",
@@ -323,15 +467,18 @@ func promptResolvedIPChoice(ips []net.IP) (int, error) {
 	}
 	fmt.Printf("Your Option: ")
 
-	var index int
-	_, err := fmt.Scanln(&index)
+	line, err := ReadStdinLine(ctx)
+	if err != nil {
+		return 0, err
+	}
+	index, err := strconv.Atoi(strings.TrimSpace(line))
 	if err != nil {
 		return 0, err
 	}
 	return index, nil
 }
 
-func selectResolvedIP(ips []net.IP, disableOutput bool, prompt resolvedIPPrompt) (net.IP, error) {
+func selectResolvedIP(ctx context.Context, ips []net.IP, disableOutput bool, prompt resolvedIPPrompt) (net.IP, error) {
 	if len(ips) == 0 {
 		return nil, errors.New("no IPs available")
 	}
@@ -342,8 +489,11 @@ func selectResolvedIP(ips []net.IP, disableOutput bool, prompt resolvedIPPrompt)
 		prompt = promptResolvedIPChoice
 	}
 
-	index, err := prompt(ips)
+	index, err := prompt(ctx, ips)
 	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, err
+		}
 		index = 0
 	}
 	if index < 0 || index >= len(ips) {
@@ -360,10 +510,10 @@ func DomainLookUpWithContext(ctx context.Context, host string, ipVersion string,
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	child, cancel := context.WithTimeout(ctx, dnsLookupTimeout)
-	defer cancel()
+	lookupCtx, cancel := context.WithTimeout(ctx, dnsLookupTimeout)
 
-	ips, err := lookupIPs(child, domainResolverFactory(dotServer), host)
+	ips, err := lookupIPs(lookupCtx, domainResolverFactory(dotServer), host)
+	cancel()
 	if err != nil {
 		return nil, err
 	}
@@ -373,9 +523,15 @@ func DomainLookUpWithContext(ctx context.Context, host string, ipVersion string,
 		return nil, fmt.Errorf("no %s DNS records found for %s", resolveFamilyLabel(ipVersion), host)
 	}
 
-	selected, err := selectResolvedIP(ips, disableOutput, promptResolvedIPChoice)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	selected, err := selectResolvedIP(ctx, ips, disableOutput, promptResolvedIPChoice)
 	if err != nil {
-		fmt.Println("Your Option is invalid")
+		if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+			fmt.Println("Your Option is invalid")
+		}
 		return nil, err
 	}
 	return selected, nil

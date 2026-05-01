@@ -105,6 +105,55 @@ func TestNewClosesPreviousGlobalWsConn(t *testing.T) {
 	}
 }
 
+func TestReplaceGlobalWsConnKeepsOldConnForCanceledContext(t *testing.T) {
+	saveAndRestoreGlobalWsConn(t)
+
+	oldConn := newStartedTestWsConn()
+	wsconnMu.Lock()
+	wsconn = oldConn
+	wsconnMu.Unlock()
+
+	newConn := newStartedTestWsConn()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	got := replaceGlobalWsConn(newConn, ctx)
+	if got != oldConn {
+		t.Fatal("replaceGlobalWsConn should return existing connection for canceled context")
+	}
+	if GetWsConn() != oldConn {
+		t.Fatal("canceled replacement should not overwrite global connection")
+	}
+	if oldConn.isClosed() {
+		t.Fatal("existing connection should remain open")
+	}
+	if !newConn.isClosed() {
+		t.Fatal("canceled replacement connection should be closed")
+	}
+}
+
+func TestReplaceGlobalWsConnDoesNotRewriteBaseContext(t *testing.T) {
+	saveAndRestoreGlobalWsConn(t)
+
+	originalCtx, originalCancel := context.WithCancel(context.Background())
+	defer originalCancel()
+	replacementCtx, replacementCancel := context.WithCancel(context.Background())
+	defer replacementCancel()
+
+	newConn := newStartedTestWsConn()
+	newConn.baseCtx = originalCtx
+
+	got := replaceGlobalWsConn(newConn, replacementCtx)
+	defer got.Close()
+
+	if got != newConn {
+		t.Fatal("replaceGlobalWsConn should install the supplied connection")
+	}
+	if newConn.baseCtx != originalCtx {
+		t.Fatal("replaceGlobalWsConn should not rewrite baseCtx after construction")
+	}
+}
+
 func TestGetWsConnDoesNotBlockWhileNewClosesPreviousConn(t *testing.T) {
 	oldCreateFn := createWsConnFn
 	defer func() {
@@ -354,6 +403,34 @@ func TestWaitUntilConnectedHonorsContext(t *testing.T) {
 	}
 }
 
+func TestSuppressCanceledContextLogTreatsDeadlineAsStop(t *testing.T) {
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+
+	if !suppressCanceledContextLog(ctx, errors.New("dial failed")) {
+		t.Fatal("suppressCanceledContextLog should suppress logs when parent context hit deadline")
+	}
+	if !suppressCanceledContextLog(context.Background(), context.DeadlineExceeded) {
+		t.Fatal("suppressCanceledContextLog should suppress direct deadline errors")
+	}
+}
+
+func TestWsConnSuppressCanceledContextLogTreatsDeadlineAsStop(t *testing.T) {
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+
+	conn := newWsConn(nil, make(chan os.Signal, 1))
+	conn.baseCtx = ctx
+	defer conn.Close()
+
+	if !conn.suppressCanceledContextLog(errors.New("dial failed")) {
+		t.Fatal("WsConn suppressCanceledContextLog should suppress logs when base context hit deadline")
+	}
+	if !conn.suppressCanceledContextLog(context.DeadlineExceeded) {
+		t.Fatal("WsConn suppressCanceledContextLog should suppress direct deadline errors")
+	}
+}
+
 func TestRecreateWsConnCloseCancelsFastIP(t *testing.T) {
 	oldFastIPFn := wsGetFastIPFn
 	defer func() {
@@ -385,6 +462,75 @@ func TestRecreateWsConnCloseCancelsFastIP(t *testing.T) {
 	case <-done:
 	case <-time.After(100 * time.Millisecond):
 		t.Fatal("recreateWsConn did not stop promptly after Close")
+	}
+}
+
+func TestRecreateWsConnCanceledBaseContextSkipsReconnect(t *testing.T) {
+	oldFastIPFn := wsGetFastIPFn
+	defer func() {
+		wsGetFastIPFn = oldFastIPFn
+	}()
+
+	var fastIPCalls int32
+	wsGetFastIPFn = func(ctx context.Context, domain string, port string, enableOutput bool) (string, error) {
+		atomic.AddInt32(&fastIPCalls, 1)
+		return "127.0.0.1", nil
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	conn := newWsConn(nil, make(chan os.Signal, 1))
+	conn.baseCtx = ctx
+	conn.apiHost = "example.com"
+	conn.apiPort = "443"
+	conn.setConnectionState(false, true)
+	defer conn.Close()
+
+	conn.recreateWsConn()
+
+	if got := atomic.LoadInt32(&fastIPCalls); got != 0 {
+		t.Fatalf("FastIP refresh calls = %d, want 0 after base context cancel", got)
+	}
+	if conn.IsConnecting() {
+		t.Fatal("connection should not remain connecting after base context cancel")
+	}
+}
+
+func TestKeepAliveStopsOnCanceledBaseContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	conn := newWsConn(nil, make(chan os.Signal, 1))
+	conn.baseCtx = ctx
+	defer conn.Close()
+
+	done := make(chan struct{})
+	go func() {
+		conn.keepAlive()
+		close(done)
+	}()
+
+	cancel()
+
+	select {
+	case <-done:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("keepAlive did not stop after base context cancel")
+	}
+}
+
+func TestBaseContextWatcherClosesConnection(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	conn := newWsConn(nil, make(chan os.Signal, 1))
+	conn.baseCtx = ctx
+	conn.setDoneChan(make(chan struct{}))
+	conn.startBaseContextWatcher()
+
+	cancel()
+
+	select {
+	case <-conn.closeCh:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("base context watcher did not close connection")
 	}
 }
 

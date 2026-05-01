@@ -25,6 +25,13 @@ const defaultListenAddr = ":1080"
 var indexPage []byte
 var assetsFS fs.FS
 
+type Options struct {
+	ListenAddr  string
+	EnableMCP   bool
+	AuthEnabled bool
+	DeployToken string
+}
+
 func init() {
 	var err error
 	indexPage, err = webContent.ReadFile("web/index.html")
@@ -46,14 +53,26 @@ func Run(listenAddr string) error {
 // RunWithReady starts the Gin HTTP server and invokes onReady after the listener
 // has been successfully bound.
 func RunWithReady(listenAddr string, onReady func(net.Addr)) error {
+	return RunWithOptions(Options{ListenAddr: listenAddr}, onReady)
+}
+
+func RunWithOptions(opts Options, onReady func(net.Addr)) error {
+	listenAddr := opts.ListenAddr
 	if listenAddr == "" {
 		listenAddr = defaultListenAddr
 	}
+	deployToken := strings.TrimSpace(opts.DeployToken)
+	if opts.AuthEnabled && deployToken == "" {
+		return errors.New("deploy auth enabled without token")
+	}
 
+	auth := deployAuth{Enabled: opts.AuthEnabled, Token: deployToken}
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 	router.Use(gin.Logger(), gin.Recovery())
 	router.Use(browserAccessMiddleware())
+	registerDeployAuthRoutes(router, auth)
+	router.Use(deployAuthMiddleware(auth))
 
 	router.OPTIONS("/*path", func(c *gin.Context) {
 		c.Status(http.StatusNoContent)
@@ -69,6 +88,12 @@ func RunWithReady(listenAddr string, onReady func(net.Addr)) error {
 	router.POST("/api/trace", traceHandler)
 	router.POST("/api/cache/clear", cacheClearHandler)
 	router.GET("/ws/trace", traceWebsocketHandler)
+	if opts.EnableMCP {
+		mcpHandler := gin.WrapH(newMCPHTTPHandler())
+		router.GET("/mcp", mcpHandler)
+		router.POST("/mcp", mcpHandler)
+		router.DELETE("/mcp", mcpHandler)
+	}
 
 	srv := &http.Server{Addr: listenAddr, Handler: router}
 	listener, err := listenHTTP(listenAddr)

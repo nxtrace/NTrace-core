@@ -52,6 +52,10 @@ func newGlobalpingClient(ctx context.Context) globalping.Client {
 	return globalping.NewClient(cfg)
 }
 
+func NewGlobalpingClient(ctx context.Context) globalping.Client {
+	return newGlobalpingClient(ctx)
+}
+
 func newContextBoundTransport(ctx context.Context) http.RoundTripper {
 	base := http.DefaultTransport
 	if base == nil {
@@ -117,6 +121,10 @@ func createGlobalpingMeasurement(ctx context.Context, client globalping.Client, 
 	return awaitGlobalpingMeasurement(ctx, client, res.ID)
 }
 
+func CreateGlobalpingMeasurement(ctx context.Context, client globalping.Client, req *globalping.MeasurementCreate) (*globalping.Measurement, error) {
+	return createGlobalpingMeasurement(ctx, client, req)
+}
+
 func awaitGlobalpingMeasurement(ctx context.Context, client globalping.Client, id string) (*globalping.Measurement, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -140,6 +148,10 @@ func awaitGlobalpingMeasurement(ctx context.Context, client globalping.Client, i
 		case <-timer.C:
 		}
 	}
+}
+
+func AwaitGlobalpingMeasurement(ctx context.Context, client globalping.Client, id string) (*globalping.Measurement, error) {
+	return awaitGlobalpingMeasurement(ctx, client, id)
 }
 
 func decodeGlobalpingMeasurementHops(measurement *globalping.Measurement) ([]globalping.MTRHop, error) {

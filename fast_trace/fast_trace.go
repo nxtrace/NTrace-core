@@ -3,6 +3,7 @@ package fastTrace
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -66,13 +67,45 @@ func resolveTraceMethod(traceMode trace.Method) trace.Method {
 	}
 }
 
-func promptFastTraceChoice(prompt, defaultChoice string) string {
-	fmt.Print(prompt)
-	var choice string
-	if _, err := fmt.Scanln(&choice); err != nil {
-		return defaultChoice
+func isContextStop(err error) bool {
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
+}
+
+func shouldStopFastTrace(err error) bool {
+	if err == nil {
+		return false
 	}
-	return choice
+	if !isContextStop(err) {
+		log.Println(err)
+	}
+	return true
+}
+
+func promptFastTraceChoice(ctx context.Context, prompt, defaultChoice string) (string, bool) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return "", false
+	}
+
+	fmt.Print(prompt)
+
+	choice, err := util.ReadStdinLine(ctx)
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return "", false
+	}
+	if err != nil {
+		if isContextStop(err) {
+			return "", false
+		}
+		return defaultChoice, true
+	}
+	choice = strings.TrimSpace(choice)
+	if choice == "" {
+		return defaultChoice, true
+	}
+	return choice, true
 }
 
 func initFastTraceWS(ctx context.Context) *wshandle.WsConn {
@@ -188,7 +221,7 @@ func printFileTraceHeader(ip IpListElement, params ParamsFastTrace, tracerouteMe
 	fmt.Printf("traceroute to %s, %d hops max, %s, %s mode\n", dst, params.MaxHops, trace.FormatPacketSizeLabel(displayPacketSize), strings.ToUpper(string(tracerouteMethod)))
 }
 
-func buildFileTraceConfig(params ParamsFastTrace, tracerouteMethod trace.Method, ip IpListElement) trace.Config {
+func buildFileTraceConfig(params ParamsFastTrace, tracerouteMethod trace.Method, ip IpListElement) (trace.Config, error) {
 	dstIP := net.ParseIP(ip.Ip)
 	packetSize := params.PktSize
 	if !params.PacketSizeSet {
@@ -196,7 +229,7 @@ func buildFileTraceConfig(params ParamsFastTrace, tracerouteMethod trace.Method,
 	}
 	packetSizeSpec, err := trace.NormalizePacketSize(tracerouteMethod, dstIP, packetSize)
 	if err != nil {
-		log.Fatal(err)
+		return trace.Config{}, err
 	}
 	return trace.Config{
 		Context:          params.Context,
@@ -220,7 +253,7 @@ func buildFileTraceConfig(params ParamsFastTrace, tracerouteMethod trace.Method,
 		RandomPacketSize: packetSizeSpec.Random,
 		TOS:              params.TOS,
 		Lang:             params.Lang,
-	}
+	}, nil
 }
 
 func normalizeFastTraceConfig(method trace.Method, conf trace.Config) (trace.Config, error) {
@@ -252,10 +285,12 @@ func configureFastTraceRealtimePrinter(conf *trace.Config, outputPath, header st
 func runFileTraceTarget(params ParamsFastTrace, tracerouteMethod trace.Method, ip IpListElement) {
 	printFileTraceHeader(ip, params, tracerouteMethod)
 
-	conf := buildFileTraceConfig(params, tracerouteMethod, ip)
-	conf, err := normalizeFastTraceConfig(tracerouteMethod, conf)
-	if err != nil {
-		log.Println(err)
+	conf, err := buildFileTraceConfig(params, tracerouteMethod, ip)
+	if shouldStopFastTrace(err) {
+		return
+	}
+	conf, err = normalizeFastTraceConfig(tracerouteMethod, conf)
+	if shouldStopFastTrace(err) {
 		return
 	}
 	displayPacketSize := params.PktSize
@@ -276,8 +311,7 @@ func runFileTraceTarget(params ParamsFastTrace, tracerouteMethod trace.Method, i
 		}()
 	}
 
-	if _, err := trace.Traceroute(tracerouteMethod, conf); err != nil {
-		log.Println(err)
+	if _, err := trace.Traceroute(tracerouteMethod, conf); shouldStopFastTrace(err) {
 		return
 	}
 	fmt.Println()
@@ -293,16 +327,16 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 
 	// ip, err := util.DomainLookUp(ispCollection.IP, "4", "", true)
 	ip, err := util.DomainLookUpWithContext(f.ParamsFastTrace.Context, ispCollection.IP, "4", f.ParamsFastTrace.Dot, true)
-	if err != nil {
-		log.Fatal(err)
+	if shouldStopFastTrace(err) {
+		return
 	}
 	packetSize := f.ParamsFastTrace.PktSize
 	if !f.ParamsFastTrace.PacketSizeSet {
 		packetSize = trace.DefaultPacketSize(f.TracerouteMethod, ip)
 	}
 	packetSizeSpec, err := trace.NormalizePacketSize(f.TracerouteMethod, ip, packetSize)
-	if err != nil {
-		log.Fatal(err)
+	if shouldStopFastTrace(err) {
+		return
 	}
 	var conf = trace.Config{
 		Context:          f.ParamsFastTrace.Context,
@@ -329,8 +363,7 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 		Lang:             f.ParamsFastTrace.Lang,
 	}
 	conf, err = normalizeFastTraceConfig(f.TracerouteMethod, conf)
-	if err != nil {
-		log.Println(err)
+	if shouldStopFastTrace(err) {
 		return
 	}
 
@@ -351,8 +384,7 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 
 	_, err = trace.Traceroute(f.TracerouteMethod, conf)
 
-	if err != nil {
-		log.Println(err)
+	if shouldStopFastTrace(err) {
 		return
 	}
 	fmt.Println()
@@ -366,13 +398,20 @@ func FastTest(traceMode trace.Method, paramsFastTrace ParamsFastTrace) {
 
 	fmt.Println("Hi，欢迎使用 Fast Trace 功能，请注意 Fast Trace 功能只适合新手使用\n因为国内网络复杂，我们设置的测试目标有限，建议普通用户自测以获得更加精准的路由情况")
 	fmt.Println("请您选择要测试的 IP 类型\n1. IPv4\n2. IPv6")
-	if promptFastTraceChoice("请选择选项：", "1") == "2" {
+	ipChoice, ok := promptFastTraceChoice(paramsFastTrace.Context, "请选择选项：", "1")
+	if !ok {
+		return
+	}
+	if ipChoice == "2" {
 		FastTestv6(traceMode, paramsFastTrace)
 		return
 	}
 
 	fmt.Println("您想测试哪些ISP的路由？\n1. 北京三网快速测试\n2. 上海三网快速测试\n3. 广州三网快速测试\n4. 全国电信\n5. 全国联通\n6. 全国移动\n7. 全国教育网\n8. 全国五网")
-	choice := promptFastTraceChoice("请选择选项：", "1")
+	choice, ok := promptFastTraceChoice(paramsFastTrace.Context, "请选择选项：", "1")
+	if !ok {
+		return
+	}
 
 	w := initFastTraceWS(paramsFastTrace.Context)
 	defer closeFastTraceWS(w)

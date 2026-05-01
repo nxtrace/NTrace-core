@@ -1,7 +1,9 @@
 package fastTrace
 
 import (
+	"context"
 	"testing"
+	"time"
 )
 
 func TestTrace(t *testing.T) {
@@ -33,4 +35,43 @@ func TestTrace(t *testing.T) {
 	//ft.tracert(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.EDU)
 	//fmt.Println("ICMP v6")
 	//ft.tracert_v6(TestIPsCollection.Beijing.Location, TestIPsCollection.Beijing.EDU)
+}
+
+func TestPromptFastTraceChoiceCanceledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	choice, ok := promptFastTraceChoice(ctx, "请选择选项：", "1")
+	if ok {
+		t.Fatal("promptFastTraceChoice ok = true, want false for canceled context")
+	}
+	if choice != "" {
+		t.Fatalf("promptFastTraceChoice choice = %q, want empty", choice)
+	}
+}
+
+func TestPromptFastTraceChoiceDeadlineExceededContext(t *testing.T) {
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+
+	choice, ok := promptFastTraceChoice(ctx, "请选择选项：", "1")
+	if ok {
+		t.Fatal("promptFastTraceChoice ok = true, want false for deadline exceeded context")
+	}
+	if choice != "" {
+		t.Fatalf("promptFastTraceChoice choice = %q, want empty", choice)
+	}
+}
+
+func TestReadFastTestv6ChoiceCanceledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	choice, ok := readFastTestv6Choice(ctx)
+	if ok {
+		t.Fatal("readFastTestv6Choice ok = true, want false for canceled context")
+	}
+	if choice != "" {
+		t.Fatalf("readFastTestv6Choice choice = %q, want empty", choice)
+	}
 }

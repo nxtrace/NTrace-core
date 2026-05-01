@@ -35,6 +35,55 @@ func TestLookupTargetIPHonorsContextCancellation(t *testing.T) {
 	}
 }
 
+func TestLookupTargetIPOrExitReturnsFalseOnContextCancellation(t *testing.T) {
+	oldLookup := domainLookupFn
+	domainLookupFn = func(ctx context.Context, host, ipVersion, dotServer string, disableOutput bool) (net.IP, error) {
+		return nil, context.Canceled
+	}
+	defer func() { domainLookupFn = oldLookup }()
+
+	ip, ok := lookupTargetIPOrExit(context.Background(), "example.com", false, false, "", true)
+	if ok {
+		t.Fatal("lookupTargetIPOrExit ok = true, want false for canceled context")
+	}
+	if ip != nil {
+		t.Fatalf("lookupTargetIPOrExit ip = %v, want nil", ip)
+	}
+}
+
+func TestLookupTargetIPOrExitReturnsFalseOnContextDeadline(t *testing.T) {
+	oldLookup := domainLookupFn
+	domainLookupFn = func(ctx context.Context, host, ipVersion, dotServer string, disableOutput bool) (net.IP, error) {
+		return nil, context.DeadlineExceeded
+	}
+	defer func() { domainLookupFn = oldLookup }()
+
+	ip, ok := lookupTargetIPOrExit(context.Background(), "example.com", false, false, "", true)
+	if ok {
+		t.Fatal("lookupTargetIPOrExit ok = true, want false for deadline context")
+	}
+	if ip != nil {
+		t.Fatalf("lookupTargetIPOrExit ip = %v, want nil", ip)
+	}
+}
+
+func TestMaybeRunUninterruptedRawReturnsOnCanceledContext(t *testing.T) {
+	oldUninterrupted := util.Uninterrupted
+	util.Uninterrupted = true
+	defer func() { util.Uninterrupted = oldUninterrupted }()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	start := time.Now()
+	if !maybeRunUninterruptedRaw(true, trace.ICMPTrace, trace.Config{Context: ctx}) {
+		t.Fatal("maybeRunUninterruptedRaw returned false, want true when raw loop is active")
+	}
+	if elapsed := time.Since(start); elapsed > 100*time.Millisecond {
+		t.Fatalf("maybeRunUninterruptedRaw returned too slowly after cancel: %v", elapsed)
+	}
+}
+
 func TestRegisterGlobalpingFlagWithAvailability_DisabledStillParses(t *testing.T) {
 	parser := argparse.NewParser("ntr", "")
 	from := registerGlobalpingFlagWithAvailability(parser, false)
@@ -47,18 +96,137 @@ func TestRegisterGlobalpingFlagWithAvailability_DisabledStillParses(t *testing.T
 	}
 }
 
-func TestRegisterWebUIFlagsWithAvailability_DisabledStillParses(t *testing.T) {
+func TestRegisterWebUIFlagsWithAvailability_DisabledDoesNotRegister(t *testing.T) {
 	parser := argparse.NewParser("ntr", "")
 	flags := registerWebUIFlagsWithAvailability(parser, false)
 
-	if err := parser.Parse([]string{"ntr", "--deploy", "--listen", "127.0.0.1:1080"}); err != nil {
+	if err := parser.Parse([]string{"ntr", "--deploy"}); err == nil {
+		t.Fatal("Parse returned nil, want --deploy to be unregistered")
+	}
+	if *flags.deploy {
+		t.Fatal("disabled --deploy pointer should remain false")
+	}
+	if *flags.mcp {
+		t.Fatal("disabled --mcp pointer should remain false")
+	}
+	if got := strings.TrimSpace(*flags.deployListen); got != "" {
+		t.Fatalf("disabled --listen pointer = %q, want empty", got)
+	}
+	if got := strings.TrimSpace(*flags.deployToken); got != "" {
+		t.Fatalf("disabled --deploy-token pointer = %q, want empty", got)
+	}
+}
+
+func TestRegisterWebUIFlagsWithAvailability_EnabledParsesMCPAndToken(t *testing.T) {
+	parser := argparse.NewParser("nexttrace", "")
+	flags := registerWebUIFlagsWithAvailability(parser, true)
+
+	if err := parser.Parse([]string{"nexttrace", "--deploy", "--mcp", "--listen", "127.0.0.1:1080", "--deploy-token", "secret"}); err != nil {
 		t.Fatalf("Parse returned error: %v", err)
 	}
-	if !*flags.deploy {
-		t.Fatal("--deploy should parse as true")
+	if !*flags.deploy || !*flags.mcp {
+		t.Fatalf("deploy=%t mcp=%t, want both true", *flags.deploy, *flags.mcp)
 	}
 	if got := strings.TrimSpace(*flags.deployListen); got != "127.0.0.1:1080" {
 		t.Fatalf("--listen = %q, want 127.0.0.1:1080", got)
+	}
+	if got := strings.TrimSpace(*flags.deployToken); got != "secret" {
+		t.Fatalf("--deploy-token = %q, want secret", got)
+	}
+}
+
+func TestMCPEndpointURLPrefersAccessAddress(t *testing.T) {
+	got := mcpEndpointURL(listenInfo{
+		Binding: "http://0.0.0.0:1080",
+		Access:  "http://192.0.2.10:1080",
+	})
+	if got != "http://192.0.2.10:1080/mcp" {
+		t.Fatalf("mcpEndpointURL wildcard = %q, want access endpoint", got)
+	}
+
+	got = mcpEndpointURL(listenInfo{Binding: "http://127.0.0.1:1080"})
+	if got != "http://127.0.0.1:1080/mcp" {
+		t.Fatalf("mcpEndpointURL loopback = %q, want binding endpoint", got)
+	}
+}
+
+func TestValidateDeployMCPModeRequiresDeploy(t *testing.T) {
+	if err := validateDeployMCPMode(false, true); err == nil {
+		t.Fatal("validateDeployMCPMode(false, true) error = nil, want error")
+	}
+	if err := validateDeployMCPMode(true, true); err != nil {
+		t.Fatalf("validateDeployMCPMode(true, true) error = %v", err)
+	}
+	if err := validateDeployMCPMode(false, false); err != nil {
+		t.Fatalf("validateDeployMCPMode(false, false) error = %v", err)
+	}
+}
+
+func TestDeployListenRequiresToken(t *testing.T) {
+	tests := []struct {
+		addr string
+		want bool
+	}{
+		{"127.0.0.1:1080", false},
+		{"[::1]:1080", false},
+		{"localhost:1080", false},
+		{"0.0.0.0:1080", true},
+		{"[::]:1080", true},
+		{":1080", true},
+		{"192.0.2.10:1080", true},
+		{"example.com:1080", true},
+	}
+	for _, tt := range tests {
+		if got := deployListenRequiresToken(tt.addr); got != tt.want {
+			t.Fatalf("deployListenRequiresToken(%q) = %t, want %t", tt.addr, got, tt.want)
+		}
+	}
+}
+
+func TestResolveDeployAuthPlan(t *testing.T) {
+	oldEnvToken := util.EnvDeployToken
+	util.EnvDeployToken = ""
+	defer func() { util.EnvDeployToken = oldEnvToken }()
+
+	loopback, err := resolveDeployAuthPlan("127.0.0.1:1080", "")
+	if err != nil {
+		t.Fatalf("resolveDeployAuthPlan(loopback) error = %v", err)
+	}
+	if loopback.Enabled {
+		t.Fatalf("loopback plan enabled = true, want false")
+	}
+
+	external, err := resolveDeployAuthPlan("0.0.0.0:1080", "")
+	if err != nil {
+		t.Fatalf("resolveDeployAuthPlan(external) error = %v", err)
+	}
+	if !external.Enabled || !external.AutoGenerated || strings.TrimSpace(external.Token) == "" {
+		t.Fatalf("external plan = %+v, want enabled autogenerated token", external)
+	}
+
+	manual, err := resolveDeployAuthPlan("127.0.0.1:1080", "manual-token")
+	if err != nil {
+		t.Fatalf("resolveDeployAuthPlan(manual) error = %v", err)
+	}
+	if !manual.Enabled || manual.AutoGenerated || manual.Token != "manual-token" {
+		t.Fatalf("manual plan = %+v, want manual token auth", manual)
+	}
+
+	util.EnvDeployToken = "env-token"
+	envPlan, err := resolveDeployAuthPlan("127.0.0.1:1080", "")
+	if err != nil {
+		t.Fatalf("resolveDeployAuthPlan(env) error = %v", err)
+	}
+	if !envPlan.Enabled || envPlan.Token != "env-token" {
+		t.Fatalf("env plan = %+v, want env token auth", envPlan)
+	}
+
+	cliPlan, err := resolveDeployAuthPlan("127.0.0.1:1080", "cli-token")
+	if err != nil {
+		t.Fatalf("resolveDeployAuthPlan(cli) error = %v", err)
+	}
+	if cliPlan.Token != "cli-token" {
+		t.Fatalf("cli plan token = %q, want cli-token", cliPlan.Token)
 	}
 }
 

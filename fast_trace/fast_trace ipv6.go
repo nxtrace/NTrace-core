@@ -1,6 +1,7 @@
 package fastTrace
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
@@ -28,16 +29,16 @@ func (f *FastTracer) tracert_v6(location string, ispCollection ISPCollection) {
 
 	// ip, err := util.DomainLookUp(ispCollection.IPv6, "6", "", true)
 	ip, err := util.DomainLookUpWithContext(f.ParamsFastTrace.Context, ispCollection.IPv6, "6", f.ParamsFastTrace.Dot, true)
-	if err != nil {
-		log.Fatal(err)
+	if shouldStopFastTrace(err) {
+		return
 	}
 	packetSize := f.ParamsFastTrace.PktSize
 	if !f.ParamsFastTrace.PacketSizeSet {
 		packetSize = trace.DefaultPacketSize(f.TracerouteMethod, ip)
 	}
 	packetSizeSpec, err := trace.NormalizePacketSize(f.TracerouteMethod, ip, packetSize)
-	if err != nil {
-		log.Fatal(err)
+	if shouldStopFastTrace(err) {
+		return
 	}
 	var conf = trace.Config{
 		Context:          f.ParamsFastTrace.Context,
@@ -64,8 +65,7 @@ func (f *FastTracer) tracert_v6(location string, ispCollection ISPCollection) {
 		Lang:             f.ParamsFastTrace.Lang,
 	}
 	conf, err = normalizeFastTraceConfig(f.TracerouteMethod, conf)
-	if err != nil {
-		log.Println(err)
+	if shouldStopFastTrace(err) {
 		return
 	}
 
@@ -84,9 +84,8 @@ func (f *FastTracer) tracert_v6(location string, ispCollection ISPCollection) {
 	}
 
 	_, err = trace.Traceroute(f.TracerouteMethod, conf)
-
-	if err != nil {
-		log.Fatal(err)
+	if shouldStopFastTrace(err) {
+		return
 	}
 
 	fmt.Println()
@@ -155,7 +154,10 @@ func (f *FastTracer) testFastGZ_v6() {
 }
 
 func FastTestv6(traceMode trace.Method, paramsFastTrace ParamsFastTrace) {
-	choice := readFastTestv6Choice()
+	choice, ok := readFastTestv6Choice(paramsFastTrace.Context)
+	if !ok {
+		return
+	}
 	ft := FastTracer{
 		ParamsFastTrace:  paramsFastTrace,
 		TracerouteMethod: fastTestMethod(traceMode),
@@ -172,14 +174,9 @@ func FastTestv6(traceMode trace.Method, paramsFastTrace ParamsFastTrace) {
 	runFastTestv6Selection(&ft, choice)
 }
 
-func readFastTestv6Choice() string {
-	var choice string
+func readFastTestv6Choice(ctx context.Context) (string, bool) {
 	fmt.Println("您想测试哪些ISP的路由？\n1. 北京三网快速测试\n2. 上海三网快速测试\n3. 广州三网快速测试\n4. 全国电信\n5. 全国联通\n6. 全国移动\n7. 全国教育网\n8. 全国五网")
-	fmt.Print("请选择选项：")
-	if _, err := fmt.Scanln(&choice); err != nil {
-		return "1"
-	}
-	return choice
+	return promptFastTraceChoice(ctx, "请选择选项：", "1")
 }
 
 func fastTestMethod(traceMode trace.Method) trace.Method {
