@@ -403,6 +403,34 @@ func TestWaitUntilConnectedHonorsContext(t *testing.T) {
 	}
 }
 
+func TestSuppressCanceledContextLogTreatsDeadlineAsStop(t *testing.T) {
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+
+	if !suppressCanceledContextLog(ctx, errors.New("dial failed")) {
+		t.Fatal("suppressCanceledContextLog should suppress logs when parent context hit deadline")
+	}
+	if !suppressCanceledContextLog(context.Background(), context.DeadlineExceeded) {
+		t.Fatal("suppressCanceledContextLog should suppress direct deadline errors")
+	}
+}
+
+func TestWsConnSuppressCanceledContextLogTreatsDeadlineAsStop(t *testing.T) {
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+
+	conn := newWsConn(nil, make(chan os.Signal, 1))
+	conn.baseCtx = ctx
+	defer conn.Close()
+
+	if !conn.suppressCanceledContextLog(errors.New("dial failed")) {
+		t.Fatal("WsConn suppressCanceledContextLog should suppress logs when base context hit deadline")
+	}
+	if !conn.suppressCanceledContextLog(context.DeadlineExceeded) {
+		t.Fatal("WsConn suppressCanceledContextLog should suppress direct deadline errors")
+	}
+}
+
 func TestRecreateWsConnCloseCancelsFastIP(t *testing.T) {
 	oldFastIPFn := wsGetFastIPFn
 	defer func() {

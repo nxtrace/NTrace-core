@@ -919,10 +919,14 @@ func lookupTargetIP(ctx context.Context, domain string, ipv4Only, ipv6Only bool,
 	}
 }
 
+func isContextStop(err error) bool {
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
+}
+
 func lookupTargetIPOrExit(ctx context.Context, domain string, ipv4Only, ipv6Only bool, dot string, jsonPrint bool) (net.IP, bool) {
 	ip, err := lookupTargetIP(ctx, domain, ipv4Only, ipv6Only, dot, jsonPrint)
 	if err != nil {
-		if errors.Is(err, context.Canceled) {
+		if isContextStop(err) {
 			return nil, false
 		}
 		if util.EnvDevMode {

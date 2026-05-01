@@ -197,8 +197,12 @@ func contextDone(ctx context.Context) <-chan struct{} {
 	return ctx.Done()
 }
 
+func isContextStop(err error) bool {
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
+}
+
 func suppressCanceledContextLog(ctx context.Context, err error) bool {
-	return errors.Is(err, context.Canceled) || errors.Is(contextErr(ctx), context.Canceled)
+	return isContextStop(err) || contextErr(ctx) != nil
 }
 
 func deriveOperationContext(parent context.Context, stopCh <-chan struct{}, timeout time.Duration) (context.Context, context.CancelFunc) {
@@ -285,7 +289,7 @@ func (c *WsConn) stopIfBaseContextCanceled() bool {
 }
 
 func (c *WsConn) suppressCanceledContextLog(err error) bool {
-	return errors.Is(err, context.Canceled) || errors.Is(c.baseContextErr(), context.Canceled)
+	return isContextStop(err) || c.baseContextErr() != nil
 }
 
 func closeSignalChan(ch chan struct{}) {
