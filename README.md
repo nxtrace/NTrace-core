@@ -109,7 +109,7 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
 
   - Linuxbrew's installation command
 
-    Same as the macOS Homebrew's installation method (homebrew-core version only supports amd64)
+    Same as the macOS Homebrew installation method. The homebrew-core version only supports amd64; the `nxtrace/nexttrace` tap provides all three flavors.
 
   - deepin installation command
     ```shell
@@ -137,9 +137,12 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
       ```shell
       brew install nexttrace
       ```
-    - This repository's ACTIONS automatically built version (updates faster)
+    - `nxtrace/nexttrace` tap version (periodically synced from the latest NTrace-core release)
       ```shell
-      brew tap nxtrace/nexttrace && brew install nxtrace/nexttrace/nexttrace
+      brew tap nxtrace/nexttrace
+      brew install nxtrace/nexttrace/nexttrace
+      brew install nxtrace/nexttrace/nexttrace-tiny
+      brew install nxtrace/nexttrace/ntr
       ```
     - The homebrew-core build is maintained by chenrui333, please note that this version's updates may lag behind the repository Action automatically version
 
@@ -191,7 +194,7 @@ Starting from this release, NextTrace is published in **three flavors** under th
 | Default mode          |     traceroute     |    traceroute    |   MTR TUI    |
 | Binary name           |    `nexttrace`     | `nexttrace-tiny` |    `ntr`     |
 
-> **Note:** `APT (nexttrace-debs)` provides all three flavors: **Full** (`nexttrace`), **Tiny** (`nexttrace-tiny`), and **NTR** (`ntr`). Other package managers (Homebrew, AUR, Scoop, etc.) currently install the **Full** (`nexttrace`) version only.
+> **Note:** `APT (nexttrace-debs)` and the `Homebrew tap (nxtrace/nexttrace)` provide all three flavors: **Full** (`nexttrace`), **Tiny** (`nexttrace-tiny`), and **NTR** (`ntr`). `homebrew-core`, AUR, Scoop, and other package managers currently install the **Full** (`nexttrace`) version only.
 
 ### Feature Matrix
 

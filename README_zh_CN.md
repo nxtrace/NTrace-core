@@ -107,7 +107,7 @@ Document Language: [English](README.md) | 简体中文
 
   - Linuxbrew 安装命令
 
-    同macOS Homebrew安装方法(homebrew-core版仅支持amd64)
+    同 macOS Homebrew 安装方法；homebrew-core 版仅支持 amd64，`nxtrace/nexttrace` tap 提供三种 flavor。
 
   - deepin 安装命令
 
@@ -137,9 +137,12 @@ Document Language: [English](README.md) | 简体中文
       ```shell
       brew install nexttrace
       ```
-    - 本仓库ACTIONS自动构建版(更新更快)
+    - `nxtrace/nexttrace` tap 版（按 NTrace-core 最新 release 定期同步）
       ```shell
-      brew tap nxtrace/nexttrace && brew install nxtrace/nexttrace/nexttrace
+      brew tap nxtrace/nexttrace
+      brew install nxtrace/nexttrace/nexttrace
+      brew install nxtrace/nexttrace/nexttrace-tiny
+      brew install nxtrace/nexttrace/ntr
       ```
     - homebrew-core 构建由 chenrui333 维护，请注意该版本更新可能会落后仓库Action自动构建版本
 
@@ -192,7 +195,7 @@ Document Language: [English](README.md) | 简体中文
 | 默认运行模式            |      traceroute       |    traceroute    |  MTR TUI   |
 | 二进制名                |      `nexttrace`      | `nexttrace-tiny` |   `ntr`    |
 
-> **注意：** `APT (nexttrace-debs)` 目前提供 **Full**（`nexttrace`）、**Tiny**（`nexttrace-tiny`）和 **NTR**（`ntr`）三种包；其它包管理器（Homebrew、AUR、Scoop 等）目前仍仅提供 **完整版**（`nexttrace`）。
+> **注意：** `APT (nexttrace-debs)` 与 `Homebrew tap (nxtrace/nexttrace)` 目前提供 **Full**（`nexttrace`）、**Tiny**（`nexttrace-tiny`）和 **NTR**（`ntr`）三种包；`homebrew-core`、AUR、Scoop 等其它包管理器目前仍仅提供 **完整版**（`nexttrace`）。
 
 ### 功能对比
 
