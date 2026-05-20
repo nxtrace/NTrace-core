@@ -109,7 +109,7 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
 
   - Linuxbrew's installation command
 
-    Same as the macOS Homebrew installation method. The homebrew-core version only supports amd64; the `nxtrace/nexttrace` tap provides all three flavors.
+    Same as the macOS Homebrew installation method. The homebrew-core formula provides the Full flavor (`nexttrace`); the `nxtrace/nexttrace` tap provides all three flavors.
 
   - deepin installation command
     ```shell

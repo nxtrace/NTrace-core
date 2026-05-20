@@ -86,18 +86,7 @@ func runMTRTUI(method trace.Method, conf trace.Config, hopIntervalMs int, maxPer
 	roundConf := normalizeMTRTraceConfig(conf)
 
 	opts := buildMTRInteractiveOptions(ui, hopIntervalMs, maxPerHop)
-	history := printer.NewMTRHistoryStore(printer.MTRHistoryWindow)
-	opts.OnProbe = history.AddProbeEvent
-	if opts.IsResetRequested != nil {
-		resetRequested := opts.IsResetRequested
-		opts.IsResetRequested = func() bool {
-			if !resetRequested() {
-				return false
-			}
-			history.Reset()
-			return true
-		}
-	}
+	history := attachMTRHistoryIfTTY(ui, &opts)
 
 	// TTY 模式下使用 TUI 渲染器 + 暂停支持，非 TTY 使用简单表格
 	var onSnapshot trace.MTROnSnapshot
@@ -131,6 +120,25 @@ func buildMTRInteractiveOptions(ui *mtrUI, hopIntervalMs int, maxPerHop int) tra
 	opts.IsResetRequested = ui.ConsumeRestartRequest
 	opts.AsyncMetadata = ui.IsTTY()
 	return opts
+}
+
+func attachMTRHistoryIfTTY(ui *mtrUI, opts *trace.MTROptions) *printer.MTRHistoryStore {
+	if ui == nil || opts == nil || !ui.IsTTY() {
+		return nil
+	}
+	history := printer.NewMTRHistoryStore(printer.MTRHistoryWindow)
+	opts.OnProbe = history.AddProbeEvent
+	if opts.IsResetRequested != nil {
+		resetRequested := opts.IsResetRequested
+		opts.IsResetRequested = func() bool {
+			if !resetRequested() {
+				return false
+			}
+			history.Reset()
+			return true
+		}
+	}
+	return history
 }
 
 // runMTRReport 执行 MTR 非全屏报告模式（对齐 mtr -rzw 风格）。

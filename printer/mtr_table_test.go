@@ -2189,12 +2189,12 @@ func TestMTRTUI_ColorDisabled_NoANSI(t *testing.T) {
 
 func TestMTRHistoryStore_WindowAndReset(t *testing.T) {
 	store := NewMTRHistoryStore(MTRHistoryWindow)
-	now := time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC)
+	now := time.Now()
 	store.AddProbeEvent(trace.MTRProbeEvent{TTL: 1, Success: true, RTT: 20 * time.Millisecond, Timestamp: now.Add(-4 * time.Minute)})
 	store.AddProbeEvent(trace.MTRProbeEvent{TTL: 1, Success: true, RTT: 40 * time.Millisecond, Timestamp: now.Add(-2 * time.Minute)})
 	store.AddProbeEvent(trace.MTRProbeEvent{TTL: 2, Success: false, Timestamp: now.Add(-time.Minute)})
 
-	snap := store.Snapshot(now)
+	snap := store.Snapshot(time.Now())
 	if len(snap) != 2 {
 		t.Fatalf("snapshot TTL count=%d, want 2", len(snap))
 	}
@@ -2206,8 +2206,27 @@ func TestMTRHistoryStore_WindowAndReset(t *testing.T) {
 	}
 
 	store.Reset()
-	if got := store.Snapshot(now); len(got) != 0 {
+	if got := store.Snapshot(time.Now()); len(got) != 0 {
 		t.Fatalf("snapshot after reset length=%d, want 0", len(got))
+	}
+}
+
+func TestMTRHistoryStore_AddPrunesOnlyAffectedTTLWithCurrentTime(t *testing.T) {
+	store := NewMTRHistoryStore(time.Minute)
+	stale := time.Now().Add(-10 * time.Minute)
+	store.byTTL[2] = []MTRHistorySample{{At: stale, RTT: 20 * time.Millisecond}}
+
+	store.AddProbeEvent(trace.MTRProbeEvent{TTL: 1, Success: true, RTT: 10 * time.Millisecond, Timestamp: stale})
+
+	if _, ok := store.byTTL[1]; ok {
+		t.Fatalf("stale added event should be pruned using current time: %+v", store.byTTL[1])
+	}
+	if got := len(store.byTTL[2]); got != 1 {
+		t.Fatalf("add-time pruning should not scan unrelated TTLs, TTL2 samples=%d", got)
+	}
+
+	if snap := store.Snapshot(time.Now()); len(snap) != 0 {
+		t.Fatalf("snapshot should still prune stale TTLs globally: %+v", snap)
 	}
 }
 

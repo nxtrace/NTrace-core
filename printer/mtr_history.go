@@ -49,9 +49,14 @@ func (s *MTRHistoryStore) AddProbeEvent(event trace.MTRProbeEvent) {
 	if s == nil || event.TTL <= 0 {
 		return
 	}
+	now := time.Now()
 	at := event.Timestamp
 	if at.IsZero() {
-		at = time.Now()
+		at = now
+	}
+	pruneAt := now
+	if at.After(pruneAt) {
+		pruneAt = at
 	}
 	sample := MTRHistorySample{
 		At:      at,
@@ -61,7 +66,7 @@ func (s *MTRHistoryStore) AddProbeEvent(event trace.MTRProbeEvent) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.byTTL[event.TTL] = append(s.byTTL[event.TTL], sample)
-	s.pruneLocked(at)
+	s.pruneTTLLocked(event.TTL, pruneAt)
 }
 
 func (s *MTRHistoryStore) Reset() {
@@ -101,18 +106,23 @@ func (s *MTRHistoryStore) Snapshot(now time.Time) []MTRHistoryTTL {
 }
 
 func (s *MTRHistoryStore) pruneLocked(now time.Time) {
-	cutoff := now.Add(-s.window)
-	for ttl, samples := range s.byTTL {
-		kept := samples[:0]
-		for _, sample := range samples {
-			if !sample.At.Before(cutoff) {
-				kept = append(kept, sample)
-			}
-		}
-		if len(kept) == 0 {
-			delete(s.byTTL, ttl)
-			continue
-		}
-		s.byTTL[ttl] = kept
+	for ttl := range s.byTTL {
+		s.pruneTTLLocked(ttl, now)
 	}
+}
+
+func (s *MTRHistoryStore) pruneTTLLocked(ttl int, now time.Time) {
+	cutoff := now.Add(-s.window)
+	samples := s.byTTL[ttl]
+	kept := samples[:0]
+	for _, sample := range samples {
+		if !sample.At.Before(cutoff) {
+			kept = append(kept, sample)
+		}
+	}
+	if len(kept) == 0 {
+		delete(s.byTTL, ttl)
+		return
+	}
+	s.byTTL[ttl] = kept
 }

@@ -78,7 +78,8 @@ type mtrCompletedProbe struct {
 // ParallelRequests. Iteration is defined as min(Snt) over active TTLs.
 //
 // onSnapshot is called periodically with aggregated stats (for TUI / report).
-// onProbe is called per completed probe (for raw streaming mode).
+// onProbe is called per counted probe; at is the probe completion timestamp,
+// not the callback emission time.
 func runMTRScheduler(
 	ctx context.Context,
 	prober mtrTTLProber,

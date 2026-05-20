@@ -107,7 +107,7 @@ Document Language: [English](README.md) | 简体中文
 
   - Linuxbrew 安装命令
 
-    同 macOS Homebrew 安装方法；homebrew-core 版仅支持 amd64，`nxtrace/nexttrace` tap 提供三种 flavor。
+    同 macOS Homebrew 安装方法；homebrew-core formula 提供 Full flavor（`nexttrace`），`nxtrace/nexttrace` tap 提供三种 flavor。
 
   - deepin 安装命令
 

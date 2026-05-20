@@ -354,6 +354,41 @@ func TestBuildMTRInteractiveOptions_AsyncMetadataFollowsTTY(t *testing.T) {
 	}
 }
 
+func TestAttachMTRHistoryIfTTY(t *testing.T) {
+	nonTTYUI := &mtrUI{isTTY: false}
+	nonTTYOpts := buildMTRInteractiveOptions(nonTTYUI, 1000, 0)
+	if history := attachMTRHistoryIfTTY(nonTTYUI, &nonTTYOpts); history != nil {
+		t.Fatal("non-TTY MTR should not allocate history store")
+	}
+	if nonTTYOpts.OnProbe != nil {
+		t.Fatal("non-TTY MTR should not attach OnProbe history collection")
+	}
+
+	ttyUI := &mtrUI{isTTY: true}
+	ttyOpts := buildMTRInteractiveOptions(ttyUI, 1000, 0)
+	history := attachMTRHistoryIfTTY(ttyUI, &ttyOpts)
+	if history == nil {
+		t.Fatal("TTY MTR should allocate history store")
+	}
+	if ttyOpts.OnProbe == nil {
+		t.Fatal("TTY MTR should attach OnProbe history collection")
+	}
+
+	now := time.Now()
+	ttyOpts.OnProbe(trace.MTRProbeEvent{TTL: 1, Success: true, RTT: 10 * time.Millisecond, Timestamp: now})
+	if snap := history.Snapshot(now); len(snap) != 1 || len(snap[0].Samples) != 1 {
+		t.Fatalf("history did not collect TTY probe event: %+v", snap)
+	}
+
+	atomic.StoreInt32(&ttyUI.restartReq, 1)
+	if ttyOpts.IsResetRequested == nil || !ttyOpts.IsResetRequested() {
+		t.Fatal("wrapped reset callback should consume reset request")
+	}
+	if snap := history.Snapshot(now); len(snap) != 0 {
+		t.Fatalf("history should be cleared on reset, got %+v", snap)
+	}
+}
+
 func TestDefaultConstants_NormalVsMTR(t *testing.T) {
 	if defaultPacketIntervalMs != 50 {
 		t.Fatalf("defaultPacketIntervalMs = %d, want 50", defaultPacketIntervalMs)
