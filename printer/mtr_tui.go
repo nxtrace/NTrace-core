@@ -1104,7 +1104,7 @@ func MTRTUIPrinter(target, domain, targetIP, version string, startTime time.Time
 		}
 		now := time.Now()
 		var history []MTRHistoryTTL
-		if historySnapshot != nil {
+		if historyMode && historySnapshot != nil {
 			history = historySnapshot(now)
 		}
 		headerAPIInfo := getAPIInfo()

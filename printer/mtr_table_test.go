@@ -2230,6 +2230,50 @@ func TestMTRHistoryStore_AddPrunesOnlyAffectedTTLWithCurrentTime(t *testing.T) {
 	}
 }
 
+func TestMTRHistoryStore_ClampsFutureTimestampAndPrunesByNow(t *testing.T) {
+	store := NewMTRHistoryStore(time.Minute)
+	stale := time.Now().Add(-10 * time.Minute)
+	future := time.Now().Add(time.Hour)
+	store.byTTL[1] = []MTRHistorySample{{At: stale, RTT: 20 * time.Millisecond}}
+
+	beforeAdd := time.Now()
+	store.AddProbeEvent(trace.MTRProbeEvent{TTL: 1, Success: true, RTT: 10 * time.Millisecond, Timestamp: future})
+	afterAdd := time.Now()
+
+	samples := store.byTTL[1]
+	if len(samples) != 1 {
+		t.Fatalf("future event add should prune stale sample and keep one current sample: %+v", samples)
+	}
+	if samples[0].At.Before(beforeAdd) || samples[0].At.After(afterAdd) {
+		t.Fatalf("future timestamp should be clamped to add-time wall clock, got %s outside [%s, %s]", samples[0].At, beforeAdd, afterAdd)
+	}
+}
+
+func TestMTRTUIPrinter_SnapshotsHistoryOnlyInHistoryMode(t *testing.T) {
+	stats := []trace.MTRHopStat{{TTL: 1, Host: "r1", IP: "10.0.0.1", Snt: 1, Received: 1}}
+	historyCalls := 0
+	historySnapshot := func(time.Time) []MTRHistoryTTL {
+		historyCalls++
+		return []MTRHistoryTTL{{TTL: 1, Samples: []MTRHistorySample{{At: time.Now(), RTT: 10 * time.Millisecond}}}}
+	}
+
+	printer := MTRTUIPrinter("1.1.1.1", "", "1.1.1.1", "test", time.Now(),
+		"host", "127.0.0.1", "en", nil, false,
+		nil, nil, nil, nil, func() bool { return false }, nil, historySnapshot)
+	_ = captureStdout(t, func() { printer(1, stats) })
+	if historyCalls != 0 {
+		t.Fatalf("classic mode should not snapshot history, calls=%d", historyCalls)
+	}
+
+	printer = MTRTUIPrinter("1.1.1.1", "", "1.1.1.1", "test", time.Now(),
+		"host", "127.0.0.1", "en", nil, false,
+		nil, nil, nil, nil, func() bool { return true }, nil, historySnapshot)
+	_ = captureStdout(t, func() { printer(1, stats) })
+	if historyCalls != 1 {
+		t.Fatalf("history mode should snapshot history once, calls=%d", historyCalls)
+	}
+}
+
 func TestMTRTUIHistoryRender_NoColorTimeoutAndModes(t *testing.T) {
 	orig := color.NoColor
 	t.Cleanup(func() { color.NoColor = orig })
