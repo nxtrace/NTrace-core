@@ -50,3 +50,27 @@ func mtrColorPacketsByLoss(lossCell, sntCell string, loss float64, waiting bool)
 	}
 	return lossCell, sntCell
 }
+
+func mtrTUIPlainHistory() bool {
+	return color.NoColor
+}
+
+func mtrTUIHistoryLatencyColor(s string, level int) string {
+	sty := color.New(mtrHistoryLatencyColorAttr(level)).SprintFunc()
+	return sty(s)
+}
+
+func mtrHistoryLatencyColorAttr(level int) color.Attribute {
+	switch {
+	case level <= 3:
+		return color.FgHiGreen
+	case level <= 6:
+		return color.FgHiYellow
+	default:
+		return color.FgHiRed
+	}
+}
+
+func mtrTUIHistoryTimeoutColor(s string) string {
+	return color.New(color.FgHiBlack).Sprint(s)
+}

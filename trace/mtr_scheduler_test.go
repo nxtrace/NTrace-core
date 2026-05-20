@@ -435,7 +435,7 @@ func TestScheduler_OnProbeCallback(t *testing.T) {
 		ParallelRequests: 5,
 		ProgressThrottle: time.Millisecond,
 		DstIP:            dstIP,
-	}, nil, func(result mtrProbeResult, _ int) {
+	}, nil, func(result mtrProbeResult, _ int, _ time.Time) {
 		mu.Lock()
 		callbackResults = append(callbackResults, result)
 		mu.Unlock()
@@ -596,7 +596,7 @@ func TestScheduler_ErrorBudgetEmitsOnProbe(t *testing.T) {
 		MaxConsecErrors:  3,
 		ParallelRequests: 1,
 		ProgressThrottle: time.Millisecond,
-	}, nil, func(result mtrProbeResult, _ int) {
+	}, nil, func(result mtrProbeResult, _ int, _ time.Time) {
 		mu.Lock()
 		rawRecords = append(rawRecords, result)
 		mu.Unlock()
@@ -620,6 +620,187 @@ func TestScheduler_ErrorBudgetEmitsOnProbe(t *testing.T) {
 		if r.Success {
 			t.Errorf("record[%d]: expected Success=false for timeout", i)
 		}
+	}
+}
+
+func TestMTROptionsOnProbeEmitsCountedProbeEvents(t *testing.T) {
+	errAlways := errors.New("always fail")
+	prober := &mockTTLProber{
+		probeFn: func(_ context.Context, ttl int) (mtrProbeResult, error) {
+			if ttl == 1 {
+				return mtrProbeResult{
+					TTL:     ttl,
+					Success: true,
+					Addr:    &net.IPAddr{IP: net.ParseIP("10.0.0.1")},
+					RTT:     50 * time.Millisecond,
+				}, nil
+			}
+			return mtrProbeResult{TTL: ttl}, errAlways
+		},
+	}
+
+	var mu sync.Mutex
+	var events []MTRProbeEvent
+	onProbe := mtrProbeCallbackFromOptions(MTROptions{
+		OnProbe: func(event MTRProbeEvent) {
+			mu.Lock()
+			events = append(events, event)
+			mu.Unlock()
+		},
+	})
+
+	agg := NewMTRAggregator()
+	err := runMTRScheduler(context.Background(), prober, agg, mtrSchedulerConfig{
+		BeginHop:         1,
+		MaxHops:          2,
+		HopInterval:      time.Millisecond,
+		MaxPerHop:        2,
+		MaxConsecErrors:  1,
+		ParallelRequests: 2,
+		ProgressThrottle: time.Millisecond,
+	}, nil, onProbe)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	totalSnt := 0
+	for _, s := range agg.Snapshot() {
+		totalSnt += s.Snt
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(events) != totalSnt {
+		t.Fatalf("events=%d, want total Snt=%d", len(events), totalSnt)
+	}
+	var success, timeout int
+	for _, event := range events {
+		if event.Timestamp.IsZero() {
+			t.Fatalf("event timestamp should be set: %+v", event)
+		}
+		if event.TTL == 1 && event.Success && event.RTT == 50*time.Millisecond {
+			success++
+		}
+		if event.TTL == 2 && !event.Success {
+			timeout++
+		}
+	}
+	if success != 2 || timeout != 2 {
+		t.Fatalf("success events=%d timeout events=%d, want 2 and 2", success, timeout)
+	}
+}
+
+func TestMTROptionsOnProbeUsesCompletionTimestampBeforeSyncMetadata(t *testing.T) {
+	ClearCaches()
+
+	probeDone := make(chan time.Time, 1)
+	geoStarted := make(chan struct{}, 1)
+	releaseGeo := make(chan struct{})
+	prober := &mockTTLProber{
+		probeFn: func(_ context.Context, ttl int) (mtrProbeResult, error) {
+			probeDone <- time.Now()
+			return mtrProbeResult{
+				TTL:     ttl,
+				Success: true,
+				Addr:    &net.IPAddr{IP: net.ParseIP("9.9.9.246")},
+				RTT:     50 * time.Millisecond,
+			}, nil
+		},
+	}
+
+	events := make(chan MTRProbeEvent, 1)
+	done := make(chan error, 1)
+	go func() {
+		done <- runMTRScheduler(context.Background(), prober, NewMTRAggregator(), mtrSchedulerConfig{
+			BeginHop:         1,
+			MaxHops:          1,
+			HopInterval:      time.Millisecond,
+			MaxPerHop:        1,
+			ParallelRequests: 1,
+			ProgressThrottle: time.Millisecond,
+			FillGeo:          true,
+			BaseConfig: Config{
+				IPGeoSource: func(ip string, timeout time.Duration, lang string, maptrace bool) (*ipgeo.IPGeoData, error) {
+					select {
+					case geoStarted <- struct{}{}:
+					default:
+					}
+					<-releaseGeo
+					return &ipgeo.IPGeoData{Asnumber: "64512"}, nil
+				},
+			},
+		}, nil, mtrProbeCallbackFromOptions(MTROptions{
+			OnProbe: func(event MTRProbeEvent) {
+				events <- event
+			},
+		}))
+	}()
+
+	var returnedAt time.Time
+	select {
+	case returnedAt = <-probeDone:
+	case <-time.After(time.Second):
+		t.Fatal("probe did not complete")
+	}
+	select {
+	case <-geoStarted:
+	case <-time.After(time.Second):
+		t.Fatal("sync metadata lookup did not start")
+	}
+	time.Sleep(20 * time.Millisecond)
+	releaseAt := time.Now()
+	close(releaseGeo)
+
+	var event MTRProbeEvent
+	select {
+	case event = <-events:
+	case <-time.After(time.Second):
+		t.Fatal("OnProbe event was not emitted")
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("runMTRScheduler error: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("scheduler did not finish")
+	}
+
+	if event.Timestamp.Before(returnedAt) {
+		t.Fatalf("event timestamp %s is before ProbeTTL returned at %s", event.Timestamp, returnedAt)
+	}
+	if !event.Timestamp.Before(releaseAt) {
+		t.Fatalf("event timestamp %s should precede metadata release at %s", event.Timestamp, releaseAt)
+	}
+}
+
+func TestSchedulerSyntheticTimeoutOnProbeUsesDoneAt(t *testing.T) {
+	doneAt := time.Date(2026, 5, 20, 12, 0, 0, 123, time.UTC)
+	var event MTRProbeEvent
+	rt, err := newMTRSchedulerRuntime(context.Background(), &mockTTLProber{}, NewMTRAggregator(), mtrSchedulerConfig{
+		BeginHop:         1,
+		MaxHops:          1,
+		HopInterval:      time.Millisecond,
+		ParallelRequests: 1,
+		ProgressThrottle: time.Millisecond,
+	}, nil, mtrProbeCallbackFromOptions(MTROptions{
+		OnProbe: func(e MTRProbeEvent) {
+			event = e
+		},
+	}))
+	if err != nil {
+		t.Fatalf("newMTRSchedulerRuntime error: %v", err)
+	}
+
+	rt.recordSyntheticTimeout(1, doneAt)
+
+	if event.TTL != 1 || event.Success {
+		t.Fatalf("synthetic timeout event = %+v, want TTL=1 Success=false", event)
+	}
+	if !event.Timestamp.Equal(doneAt) {
+		t.Fatalf("event timestamp = %s, want %s", event.Timestamp, doneAt)
+	}
+	if stats := rt.agg.Snapshot(); len(stats) != 1 || stats[0].Snt != 1 {
+		t.Fatalf("synthetic timeout stats = %+v, want one counted send", stats)
 	}
 }
 
@@ -1242,7 +1423,7 @@ func TestScheduler_RawRecordCountMatchesAggSnt_ErrorBudget(t *testing.T) {
 		MaxConsecErrors:  2,
 		ParallelRequests: 1,
 		ProgressThrottle: time.Millisecond,
-	}, nil, func(result mtrProbeResult, _ int) {
+	}, nil, func(result mtrProbeResult, _ int, _ time.Time) {
 		mu.Lock()
 		rawCountByTTL[result.TTL]++
 		mu.Unlock()
@@ -1366,7 +1547,7 @@ func TestScheduler_HigherTTLDestinationRepliesDiscarded(t *testing.T) {
 		ParallelRequests: 6, // enough to launch TTLs 1-6 simultaneously
 		ProgressThrottle: time.Millisecond,
 		DstIP:            dstIP,
-	}, nil, func(result mtrProbeResult, _ int) {
+	}, nil, func(result mtrProbeResult, _ int, _ time.Time) {
 		mu.Lock()
 		probeByTTL[result.TTL]++
 		mu.Unlock()
@@ -1522,7 +1703,7 @@ func TestScheduler_NonDestinationRepliesOnDisabledHigherTTLDiscarded(t *testing.
 		ParallelRequests: 6, // all TTLs may launch before destination detected
 		ProgressThrottle: time.Millisecond,
 		DstIP:            dstIP,
-	}, nil, func(result mtrProbeResult, _ int) {
+	}, nil, func(result mtrProbeResult, _ int, _ time.Time) {
 		mu.Lock()
 		probeResults = append(probeResults, result)
 		mu.Unlock()
@@ -1760,7 +1941,7 @@ func TestScheduler_LateHigherTTLDestinationReply_Discarded_NoSntBump(t *testing.
 		ParallelRequests: 6,
 		ProgressThrottle: time.Millisecond,
 		DstIP:            dstIP,
-	}, nil, func(result mtrProbeResult, _ int) {
+	}, nil, func(result mtrProbeResult, _ int, _ time.Time) {
 		mu.Lock()
 		callbackCount++
 		mu.Unlock()
@@ -1832,7 +2013,14 @@ func TestScheduler_DiscardedOverFinal_DoesNotEmitOnProbe(t *testing.T) {
 	agg := NewMTRAggregator()
 
 	var mu sync.Mutex
-	var records []mtrProbeResult
+	var records []MTRProbeEvent
+	onProbe := mtrProbeCallbackFromOptions(MTROptions{
+		OnProbe: func(event MTRProbeEvent) {
+			mu.Lock()
+			records = append(records, event)
+			mu.Unlock()
+		},
+	})
 
 	err := runMTRScheduler(context.Background(), prober, agg, mtrSchedulerConfig{
 		BeginHop:         1,
@@ -1842,11 +2030,7 @@ func TestScheduler_DiscardedOverFinal_DoesNotEmitOnProbe(t *testing.T) {
 		ParallelRequests: 5,
 		ProgressThrottle: time.Millisecond,
 		DstIP:            dstIP,
-	}, nil, func(result mtrProbeResult, _ int) {
-		mu.Lock()
-		records = append(records, result)
-		mu.Unlock()
-	})
+	}, nil, onProbe)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

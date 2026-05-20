@@ -37,14 +37,18 @@ type MTRTUIHeader struct {
 	TargetIP string // 解析后的目标 IP
 	Version  string // 软件版本，如 "v1.3.0"
 	// 以下为 v3 新增字段
-	SrcHost     string // 源主机名
-	SrcIP       string // 源 IP
-	Lang        string // 语言（"en" / "cn"）
-	DisplayMode int    // 显示模式 0-4
-	NameMode    int    // Host 基础显示 0=PTR/IP, 1=IP only
-	ShowIPs     bool   // 是否显示 PTR+IP（nameMode=0 时生效）
-	APIInfo     string // preferred API 信息（纯文本，可为空）
-	DisableMPLS bool   // 是否隐藏 MPLS 行（运行时 toggle）
+	SrcHost          string // 源主机名
+	SrcIP            string // 源 IP
+	Lang             string // 语言（"en" / "cn"）
+	DisplayMode      int    // 显示模式 0-4
+	NameMode         int    // Host 基础显示 0=PTR/IP, 1=IP only
+	ShowIPs          bool   // 是否显示 PTR+IP（nameMode=0 时生效）
+	APIInfo          string // preferred API 信息（纯文本，可为空）
+	DisableMPLS      bool   // 是否隐藏 MPLS 行（运行时 toggle）
+	HistoryMode      bool
+	HistoryChartMode int
+	History          []MTRHistoryTTL
+	HistoryNow       time.Time
 }
 
 // ---------------------------------------------------------------------------
@@ -373,6 +377,11 @@ func mtrTUIRenderWithWidth(w io.Writer, header MTRTUIHeader, stats []trace.MTRHo
 
 	writeMTRTUIFramePrefix(&b)
 	renderMTRTUIHeader(&b, header, lo.termWidth)
+	if header.HistoryMode {
+		renderMTRTUIHistory(&b, header, stats, lo.termWidth)
+		fmt.Fprint(w, b.String())
+		return
+	}
 	renderDualHeader(&b, lo)
 	renderMTRTUIRows(&b, header, stats, lo)
 	fmt.Fprint(w, b.String())
@@ -504,7 +513,7 @@ func buildMTRTUIControlsLine(header MTRTUIHeader, termWidth int) string {
 }
 
 func buildMTRTUIKeyItems(header MTRTUIHeader) []string {
-	return []string{
+	items := []string{
 		mtrTUIKeyHiColor("Q") + "uit",
 		mtrTUIKeyHiColor("P") + "ause",
 		mtrTUIKeyHiColor("Space") + "-resume",
@@ -512,7 +521,12 @@ func buildMTRTUIKeyItems(header MTRTUIHeader) []string {
 		mtrTUIKeyHiColor("Y") + "-display(" + mtrTUIDisplayModeLabel(header.DisplayMode) + ")",
 		mtrTUIKeyHiColor("N") + "-host(" + mtrTUINameModeLabel(header.NameMode, header.ShowIPs) + ")",
 		mtrTUIKeyHiColor("E") + "-mpls(" + mtrTUIMPLSLabel(header.DisableMPLS) + ")",
+		mtrTUIKeyHiColor("D") + "-history(" + mtrTUIHistoryModeLabel(header.HistoryMode) + ")",
 	}
+	if header.HistoryMode {
+		items = append(items, mtrTUIKeyHiColor("G")+"-chart("+mtrTUIHistoryChartLabel(header.HistoryChartMode)+")")
+	}
+	return items
 }
 
 func mtrTUIStatusText(status MTRTUIStatus) string {
@@ -545,6 +559,24 @@ func mtrTUIMPLSLabel(disabled bool) string {
 		return "show"
 	}
 	return "hide"
+}
+
+func mtrTUIHistoryModeLabel(enabled bool) string {
+	if enabled {
+		return "on"
+	}
+	return "off"
+}
+
+func mtrTUIHistoryChartLabel(mode int) string {
+	switch MTRHistoryChartMode(mode) {
+	case MTRHistoryBars:
+		return "bars"
+	case MTRHistorySparkline:
+		return "sparkline"
+	default:
+		return "heatmap"
+	}
 }
 
 func renderMTRTUIRows(b *strings.Builder, header MTRTUIHeader, stats []trace.MTRHopStat, lo mtrTUILayout) {
@@ -724,6 +756,237 @@ func renderDataRow(b *strings.Builder, lo mtrTUILayout, hopPrefix, host string, 
 	tuiLine(b, "%s", row.String())
 }
 
+type mtrTUIHistoryLayout struct {
+	termWidth int
+	prefixW   int
+	hostW     int
+	lastW     int
+	avgW      int
+	lossW     int
+	historyW  int
+	ok        bool
+}
+
+const (
+	tuiHistoryMinW   = 16
+	tuiHistoryHostW  = 40
+	tuiHistoryLastW  = 7
+	tuiHistoryAvgW   = 7
+	tuiHistoryLossW  = 5
+	tuiHistoryGap    = 1
+	tuiHistoryRTTMax = 100 * time.Millisecond
+)
+
+func renderMTRTUIHistory(b *strings.Builder, header MTRTUIHeader, stats []trace.MTRHopStat, termWidth int) {
+	lo := buildMTRTUIHistoryLayout(stats, termWidth)
+	if !lo.ok {
+		renderMTRTUIHistoryNarrowNotice(b, lo.termWidth)
+		return
+	}
+	renderMTRTUIHistoryHeader(b, lo)
+	renderMTRTUIHistoryRows(b, header, stats, lo)
+}
+
+func buildMTRTUIHistoryLayout(stats []trace.MTRHopStat, termWidth int) mtrTUIHistoryLayout {
+	if termWidth <= 0 {
+		termWidth = tuiDefaultTerm
+	}
+	maxTTL, _ := scanMTRTUIStats(stats)
+	prefixW := tuiPrefixWidthForMaxTTL(maxTTL)
+	lo := mtrTUIHistoryLayout{
+		termWidth: termWidth,
+		prefixW:   prefixW,
+		hostW:     tuiHistoryHostW,
+		lastW:     tuiHistoryLastW,
+		avgW:      tuiHistoryAvgW,
+		lossW:     tuiHistoryLossW,
+		historyW:  tuiHistoryMinW,
+	}
+	fixedWithoutHost := prefixW + lo.lastW + lo.avgW + lo.lossW + lo.historyW + 4*tuiHistoryGap
+	hostW := termWidth - fixedWithoutHost
+	if hostW < 1 {
+		return lo
+	}
+	if hostW > tuiHistoryHostW {
+		lo.hostW = tuiHistoryHostW
+		lo.historyW += hostW - tuiHistoryHostW
+	} else {
+		lo.hostW = hostW
+	}
+	lo.ok = lo.historyW >= tuiHistoryMinW
+	return lo
+}
+
+func renderMTRTUIHistoryNarrowNotice(b *strings.Builder, termWidth int) {
+	msg := "MTR history view needs a wider terminal"
+	tuiLine(b, "%s", centerIn(truncateByDisplayWidth(msg, termWidth), termWidth))
+}
+
+func renderMTRTUIHistoryHeader(b *strings.Builder, lo mtrTUIHistoryLayout) {
+	row := strings.Repeat(" ", lo.prefixW)
+	row += mtrTUIHeaderColor(fitLeft("Host", lo.hostW))
+	row += strings.Repeat(" ", tuiHistoryGap)
+	row += mtrTUIHeaderColor(fitRight("Last", lo.lastW))
+	row += strings.Repeat(" ", tuiHistoryGap)
+	row += mtrTUIHeaderColor(fitRight("Avg", lo.avgW))
+	row += strings.Repeat(" ", tuiHistoryGap)
+	row += mtrTUIHeaderColor(fitRight("Loss", lo.lossW))
+	row += strings.Repeat(" ", tuiHistoryGap)
+	row += mtrTUIHeaderColor(fitLeft("History", lo.historyW))
+	tuiLine(b, "%s", row)
+}
+
+func renderMTRTUIHistoryRows(b *strings.Builder, header MTRTUIHeader, stats []trace.MTRHopStat, lo mtrTUIHistoryLayout) {
+	allParts := buildTUIHostPartSet(stats, header)
+	asnW := computeTUIASNWidthFromParts(allParts)
+	history := mtrHistoryByTTL(header.History)
+	now := header.HistoryNow
+	if now.IsZero() {
+		now = time.Now()
+	}
+	prevTTL := 0
+	for i, s := range stats {
+		hopPrefix := formatTUIHopPrefix(s.TTL, prevTTL, lo.prefixW)
+		prevTTL = s.TTL
+		host := formatTUIHost(allParts[i], asnW)
+		renderMTRTUIHistoryRow(b, header, lo, hopPrefix, host, s, history[s.TTL], now)
+	}
+}
+
+func mtrHistoryByTTL(items []MTRHistoryTTL) map[int][]MTRHistorySample {
+	out := make(map[int][]MTRHistorySample, len(items))
+	for _, item := range items {
+		out[item.TTL] = item.Samples
+	}
+	return out
+}
+
+func renderMTRTUIHistoryRow(
+	b *strings.Builder,
+	header MTRTUIHeader,
+	lo mtrTUIHistoryLayout,
+	hopPrefix string,
+	host string,
+	stat trace.MTRHopStat,
+	samples []MTRHistorySample,
+	now time.Time,
+) {
+	waiting := isWaitingHopStat(stat)
+	hostSty := mtrTUIHostColor
+	if waiting {
+		hostSty = mtrTUIWaitColor
+	}
+	row := mtrTUIHopColor(hopPrefix) + hostSty(fitLeft(host, lo.hostW))
+
+	m := formatMTRMetricStrings(stat)
+	row += strings.Repeat(" ", tuiHistoryGap)
+	row += fitRight(m.last, lo.lastW)
+	row += strings.Repeat(" ", tuiHistoryGap)
+	row += fitRight(m.avg, lo.avgW)
+	row += strings.Repeat(" ", tuiHistoryGap)
+	row += fitRight(strings.TrimSuffix(m.loss, "%"), lo.lossW)
+	row += strings.Repeat(" ", tuiHistoryGap)
+	row += renderMTRHistoryChart(samples, now, MTRHistoryChartMode(header.HistoryChartMode), lo.historyW)
+	tuiLine(b, "%s", row)
+}
+
+func renderMTRHistoryChart(samples []MTRHistorySample, now time.Time, mode MTRHistoryChartMode, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	bins := make([]*MTRHistorySample, width)
+	windowStart := now.Add(-MTRHistoryWindow)
+	for i := range samples {
+		s := samples[i]
+		if s.At.Before(windowStart) || s.At.After(now) {
+			continue
+		}
+		pos := int(s.At.Sub(windowStart) * time.Duration(width) / MTRHistoryWindow)
+		if pos < 0 {
+			pos = 0
+		}
+		if pos >= width {
+			pos = width - 1
+		}
+		cp := s
+		if bins[pos] == nil || bins[pos].At.Before(s.At) {
+			bins[pos] = &cp
+		}
+	}
+
+	var row strings.Builder
+	for _, sample := range bins {
+		if sample == nil {
+			row.WriteByte(' ')
+			continue
+		}
+		row.WriteString(renderMTRHistorySample(*sample, mode))
+	}
+	return row.String()
+}
+
+func renderMTRHistorySample(sample MTRHistorySample, mode MTRHistoryChartMode) string {
+	if sample.Timeout {
+		if mtrTUIPlainHistory() {
+			return "x"
+		}
+		if mode == MTRHistorySparkline {
+			return mtrTUIHistoryTimeoutColor("·")
+		}
+		return mtrTUIHistoryTimeoutColor("▪")
+	}
+	level := mtrHistoryLevel(sample.RTT)
+	if mtrTUIPlainHistory() {
+		return mtrHistoryASCIISample(level, mode)
+	}
+	switch mode {
+	case MTRHistoryBars:
+		return mtrTUIHistoryLatencyColor(mtrHistoryBarSample(level), level)
+	case MTRHistorySparkline:
+		return mtrTUIHistoryLatencyColor(mtrHistorySparkSample(level), level)
+	default:
+		return mtrTUIHistoryLatencyColor("■", level)
+	}
+}
+
+func mtrHistoryLevel(rtt time.Duration) int {
+	if rtt <= 0 {
+		return 0
+	}
+	level := int(rtt * 7 / tuiHistoryRTTMax)
+	if level < 0 {
+		return 0
+	}
+	if level > 7 {
+		return 7
+	}
+	return level
+}
+
+func mtrHistoryBarSample(level int) string {
+	bars := []string{"▏", "▎", "▍", "▌", "▋", "▊", "▉", "█"}
+	return bars[level]
+}
+
+func mtrHistorySparkSample(level int) string {
+	sparks := []string{"▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"}
+	return sparks[level]
+}
+
+func mtrHistoryASCIISample(level int, mode MTRHistoryChartMode) string {
+	switch mode {
+	case MTRHistoryBars:
+		chars := "._:-=+*#"
+		return string(chars[level])
+	case MTRHistorySparkline:
+		chars := "._,-~^*#"
+		return string(chars[level])
+	default:
+		chars := ".:-=+*##"
+		return string(chars[level])
+	}
+}
+
 // MTRTUIRenderString 将 MTR TUI 帧渲染为字符串（方便测试）。
 func MTRTUIRenderString(header MTRTUIHeader, stats []trace.MTRHopStat) string {
 	var sb strings.Builder
@@ -769,7 +1032,8 @@ func truncateStr(s string, maxLen int) string {
 // 将帧渲染到 os.Stdout。
 func MTRTUIPrinter(target, domain, targetIP, version string, startTime time.Time,
 	srcHost, srcIP, lang string, apiInfo func() string, showIPs bool,
-	isPaused func() bool, displayMode func() int, nameMode func() int, isMPLSDisabled func() bool) func(iteration int, stats []trace.MTRHopStat) {
+	isPaused func() bool, displayMode func() int, nameMode func() int, isMPLSDisabled func() bool,
+	isHistoryMode func() bool, historyChartMode func() int, historySnapshot func(time.Time) []MTRHistoryTTL) func(iteration int, stats []trace.MTRHopStat) {
 	var apiInfoMu sync.Mutex
 	var cachedAPIInfo string
 	var cachedAPIInfoAt time.Time
@@ -806,23 +1070,40 @@ func MTRTUIPrinter(target, domain, targetIP, version string, startTime time.Time
 		if isMPLSDisabled != nil {
 			noMPLS = isMPLSDisabled()
 		}
+		historyMode := false
+		if isHistoryMode != nil {
+			historyMode = isHistoryMode()
+		}
+		chartMode := 0
+		if historyChartMode != nil {
+			chartMode = historyChartMode()
+		}
+		now := time.Now()
+		var history []MTRHistoryTTL
+		if historySnapshot != nil {
+			history = historySnapshot(now)
+		}
 		headerAPIInfo := getAPIInfo()
 		MTRTUIRender(os.Stdout, MTRTUIHeader{
-			Target:      target,
-			StartTime:   startTime,
-			Status:      status,
-			Iteration:   iteration,
-			Domain:      domain,
-			TargetIP:    targetIP,
-			Version:     version,
-			SrcHost:     srcHost,
-			SrcIP:       srcIP,
-			Lang:        lang,
-			DisplayMode: mode,
-			NameMode:    nm,
-			ShowIPs:     showIPs,
-			APIInfo:     headerAPIInfo,
-			DisableMPLS: noMPLS,
+			Target:           target,
+			StartTime:        startTime,
+			Status:           status,
+			Iteration:        iteration,
+			Domain:           domain,
+			TargetIP:         targetIP,
+			Version:          version,
+			SrcHost:          srcHost,
+			SrcIP:            srcIP,
+			Lang:             lang,
+			DisplayMode:      mode,
+			NameMode:         nm,
+			ShowIPs:          showIPs,
+			APIInfo:          headerAPIInfo,
+			DisableMPLS:      noMPLS,
+			HistoryMode:      historyMode,
+			HistoryChartMode: chartMode,
+			History:          history,
+			HistoryNow:       now,
 		}, stats)
 	}
 }

@@ -19,7 +19,7 @@ type mtrSchedulerRuntime struct {
 	agg              *MTRAggregator
 	cfg              mtrSchedulerConfig
 	onSnapshot       MTROnSnapshot
-	onProbe          func(result mtrProbeResult, iteration int)
+	onProbe          func(result mtrProbeResult, iteration int, at time.Time)
 	beginHop         int
 	maxHops          int
 	parallelism      int
@@ -50,7 +50,7 @@ func newMTRSchedulerRuntime(
 	agg *MTRAggregator,
 	cfg mtrSchedulerConfig,
 	onSnapshot MTROnSnapshot,
-	onProbe func(result mtrProbeResult, iteration int),
+	onProbe func(result mtrProbeResult, iteration int, at time.Time),
 ) (*mtrSchedulerRuntime, error) {
 	beginHop := cfg.BeginHop
 	if beginHop <= 0 {
@@ -237,13 +237,13 @@ func (rt *mtrSchedulerRuntime) processResult(cp mtrCompletedProbe) {
 		return
 	}
 	if cp.err != nil {
-		rt.processProbeError(cp.ttl, cp.err)
+		rt.processProbeError(cp.ttl, cp.err, cp.doneAt)
 		return
 	}
-	rt.processProbeSuccess(cp.ttl, cp.result)
+	rt.processProbeSuccess(cp.ttl, cp.result, cp.doneAt)
 }
 
-func (rt *mtrSchedulerRuntime) processProbeError(ttl int, err error) {
+func (rt *mtrSchedulerRuntime) processProbeError(ttl int, err error, doneAt time.Time) {
 	if rt.ctx.Err() != nil {
 		return
 	}
@@ -257,13 +257,13 @@ func (rt *mtrSchedulerRuntime) processProbeError(ttl int, err error) {
 
 	state.consecutiveErrs = 0
 	state.completed++
-	rt.recordSyntheticTimeout(ttl)
+	rt.recordSyntheticTimeout(ttl, doneAt)
 }
 
-func (rt *mtrSchedulerRuntime) recordSyntheticTimeout(ttl int) {
+func (rt *mtrSchedulerRuntime) recordSyntheticTimeout(ttl int, doneAt time.Time) {
 	rt.agg.Update(rt.timeoutProbeResult(ttl), 1)
 	if rt.onProbe != nil {
-		rt.onProbe(mtrProbeResult{TTL: ttl}, rt.computeIteration())
+		rt.onProbe(mtrProbeResult{TTL: ttl}, rt.computeIteration(), doneAt)
 	}
 	rt.maybeSnapshot(false)
 }
@@ -287,7 +287,7 @@ func (rt *mtrSchedulerRuntime) timeoutProbeResult(ttl int) *Result {
 	return singleRes
 }
 
-func (rt *mtrSchedulerRuntime) processProbeSuccess(ttl int, result mtrProbeResult) {
+func (rt *mtrSchedulerRuntime) processProbeSuccess(ttl int, result mtrProbeResult, doneAt time.Time) {
 	rt.detectDestination(ttl, result)
 	if rt.probeBudgetReached(ttl) {
 		rt.states[ttl].consecutiveErrs = 0
@@ -305,7 +305,7 @@ func (rt *mtrSchedulerRuntime) processProbeSuccess(ttl int, result mtrProbeResul
 
 	rt.agg.Update(singleRes, 1)
 	if rt.onProbe != nil {
-		rt.onProbe(result, rt.computeIteration())
+		rt.onProbe(result, rt.computeIteration(), doneAt)
 	}
 	rt.maybeSnapshot(false)
 }

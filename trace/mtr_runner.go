@@ -42,11 +42,22 @@ type MTROptions struct {
 	// AsyncMetadata causes interactive per-hop MTR to render bare hops first,
 	// then patch Geo/RDNS metadata into existing rows asynchronously.
 	AsyncMetadata bool
+	// OnProbe is called for each per-hop probe that is counted into Snt.
+	// It is only used by per-hop MTR; discarded probes are not emitted.
+	OnProbe func(MTRProbeEvent)
 }
 
 // MTROnSnapshot 每轮完成后的回调，用于刷新 CLI 表格。
 // iteration 是当前轮次（从 1 开始），stats 是截至当前的聚合快照。
 type MTROnSnapshot func(iteration int, stats []MTRHopStat)
+
+// MTRProbeEvent is a minimal per-probe event emitted after scheduler accounting.
+type MTRProbeEvent struct {
+	TTL       int
+	Success   bool
+	RTT       time.Duration
+	Timestamp time.Time
+}
 
 // mtrBackoffCfg 控制连续错误时的指数退避行为。
 type mtrBackoffCfg struct {
@@ -146,7 +157,16 @@ func runMTRPerHop(ctx context.Context, method Method, baseConfig Config, opts MT
 		DstIP:            baseConfig.DstIP,
 		IsPaused:         opts.IsPaused,
 		IsResetRequested: opts.IsResetRequested,
-	}, onSnapshot, nil)
+	}, onSnapshot, mtrProbeCallbackFromOptions(opts))
+}
+
+func mtrProbeCallbackFromOptions(opts MTROptions) func(mtrProbeResult, int, time.Time) {
+	if opts.OnProbe == nil {
+		return nil
+	}
+	return func(result mtrProbeResult, _ int, at time.Time) {
+		opts.OnProbe(mtrProbeEventFromResult(result, at))
+	}
 }
 
 // runMTRRoundBased 使用 legacy round-based 调度模式（Web MTR 兼容）。

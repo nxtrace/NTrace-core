@@ -725,6 +725,19 @@ func TestParseMTRKey_NameToggle(t *testing.T) {
 	}
 }
 
+func TestParseMTRKey_HistoryControls(t *testing.T) {
+	for _, b := range []byte{'d', 'D'} {
+		if got := ParseMTRKey(b); got != "history_toggle" {
+			t.Errorf("ParseMTRKey(%q) = %q, want %q", b, got, "history_toggle")
+		}
+	}
+	for _, b := range []byte{'g', 'G'} {
+		if got := ParseMTRKey(b); got != "history_chart" {
+			t.Errorf("ParseMTRKey(%q) = %q, want %q", b, got, "history_chart")
+		}
+	}
+}
+
 func TestMTRUI_NameModeToggle(t *testing.T) {
 	_, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -766,6 +779,37 @@ func TestMTRUI_NameModeNotResetByRestart(t *testing.T) {
 	// nameMode 不应被重置
 	if got := ui.CurrentNameMode(); got != 1 {
 		t.Errorf("name mode after restart = %d, want 1 (unchanged)", got)
+	}
+}
+
+func TestMTRUI_HistoryModeAndChartCycle(t *testing.T) {
+	_, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ui := newMTRUI(cancel, 0)
+
+	if ui.IsHistoryMode() {
+		t.Fatal("history mode should default to classic/off")
+	}
+	ui.CycleHistoryChartMode()
+	if got := ui.CurrentHistoryChartMode(); got != 0 {
+		t.Fatalf("chart mode should not change outside history mode, got %d", got)
+	}
+
+	ui.ToggleHistoryMode()
+	if !ui.IsHistoryMode() {
+		t.Fatal("history mode should be enabled after toggle")
+	}
+	ui.CycleHistoryChartMode()
+	if got := ui.CurrentHistoryChartMode(); got != 1 {
+		t.Fatalf("chart mode after first cycle = %d, want 1", got)
+	}
+	ui.CycleHistoryChartMode()
+	if got := ui.CurrentHistoryChartMode(); got != 2 {
+		t.Fatalf("chart mode after second cycle = %d, want 2", got)
+	}
+	ui.CycleHistoryChartMode()
+	if got := ui.CurrentHistoryChartMode(); got != 0 {
+		t.Fatalf("chart mode after wrap = %d, want 0", got)
 	}
 }
 
@@ -851,13 +895,16 @@ func TestMTRInputParser_RecognizesNormalKeysAfterEscapeNoise(t *testing.T) {
 	}
 
 	// 现在喂入正常快捷键序列
-	keys := []byte{'p', ' ', 'r', 'y', 'n', 'q'}
+	keys := []byte{'p', ' ', 'r', 'y', 'n', 'e', 'd', 'g', 'q'}
 	expected := []mtrInputAction{
 		mtrActionPause,
 		mtrActionResume,
 		mtrActionRestart,
 		mtrActionDisplayMode,
 		mtrActionNameToggle,
+		mtrActionMPLSToggle,
+		mtrActionHistoryToggle,
+		mtrActionHistoryChart,
 		mtrActionQuit,
 	}
 	actions := feedAll(&p, keys)

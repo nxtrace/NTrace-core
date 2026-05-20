@@ -86,13 +86,27 @@ func runMTRTUI(method trace.Method, conf trace.Config, hopIntervalMs int, maxPer
 	roundConf := normalizeMTRTraceConfig(conf)
 
 	opts := buildMTRInteractiveOptions(ui, hopIntervalMs, maxPerHop)
+	history := printer.NewMTRHistoryStore(printer.MTRHistoryWindow)
+	opts.OnProbe = history.AddProbeEvent
+	if opts.IsResetRequested != nil {
+		resetRequested := opts.IsResetRequested
+		opts.IsResetRequested = func() bool {
+			if !resetRequested() {
+				return false
+			}
+			history.Reset()
+			return true
+		}
+	}
 
 	// TTY 模式下使用 TUI 渲染器 + 暂停支持，非 TTY 使用简单表格
 	var onSnapshot trace.MTROnSnapshot
 	if ui.IsTTY() {
 		opts.IsPaused = ui.IsPaused
 		onSnapshot = printer.MTRTUIPrinter(target, domain, target, config.Version, startTime,
-			srcHost, srcIP, lang, func() string { return buildAPIInfo(dataOrigin) }, showIPs, ui.IsPaused, ui.CurrentDisplayMode, ui.CurrentNameMode, ui.IsMPLSDisabled)
+			srcHost, srcIP, lang, func() string { return buildAPIInfo(dataOrigin) }, showIPs, ui.IsPaused,
+			ui.CurrentDisplayMode, ui.CurrentNameMode, ui.IsMPLSDisabled,
+			ui.IsHistoryMode, ui.CurrentHistoryChartMode, history.Snapshot)
 	} else {
 		onSnapshot = func(iteration int, stats []trace.MTRHopStat) {
 			printer.MTRTablePrinter(stats, iteration, ui.CurrentDisplayMode(), ui.CurrentNameMode(), lang, showIPs)

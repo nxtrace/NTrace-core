@@ -548,10 +548,16 @@ nexttrace -t --tcp --max-hops 20 --first 3 --no-rdns 8.8.8.8
   - 默认：PTR（无 PTR 时回退 IP）↔ 仅 IP
   - 启用 `--show-ips`：PTR (IP) ↔ 仅 IP
 - **`e`** — 切换 MPLS 标签显示开/关
+- **`d` / `D`** — 切换可选历史显示；默认 TUI 仍是经典指标表
+- **`g` / `G`** — 仅在历史显示中循环切换 History 图表：heatmap → bars → sparkline
 - TUI 标题栏显示**源 → 目标**路由信息，指定 `--source`/`--dev` 时会展示对应信息。
 - 使用 LeoMoeAPI 时，标题栏会显示首选 API IP 地址。
 - 使用**备用屏幕缓冲区**，退出后恢复之前的终端历史记录。
 - 当 stdin 非 TTY（如管道输入）时，降级为简单表格刷新模式。
+
+历史显示会在经典表格显示期间同步收集最近 3 分钟、按探测时间戳归窗的历史样本，按 `d` 后显示 `Host`、`Last`、`Avg`、`Loss`、`History`。History 列使用固定 100ms 延迟刻度。默认使用 Unicode block/sparkline；启用 `--no-color` 时使用 ASCII，超时样本显示为 `x`。
+
+致谢：可选 MTR 历史显示参考了 [TraceBar](https://github.com/tracebar-app/tracebar) 的连续 traceroute 历史可视化体验；TraceBar 使用 [MIT License](https://github.com/tracebar-app/tracebar/blob/main/LICENSE)。
 
 **报告模式**（`-r`/`--report`）在所有探测完成后一次性输出统计，适合脚本使用：
 

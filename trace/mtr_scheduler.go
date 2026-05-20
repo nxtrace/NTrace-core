@@ -85,7 +85,7 @@ func runMTRScheduler(
 	agg *MTRAggregator,
 	cfg mtrSchedulerConfig,
 	onSnapshot MTROnSnapshot,
-	onProbe func(result mtrProbeResult, iteration int),
+	onProbe func(result mtrProbeResult, iteration int, at time.Time),
 ) error {
 	defer prober.Close()
 	rt, err := newMTRSchedulerRuntime(ctx, prober, agg, cfg, onSnapshot, onProbe)
@@ -93,6 +93,15 @@ func runMTRScheduler(
 		return err
 	}
 	return rt.run()
+}
+
+func mtrProbeEventFromResult(result mtrProbeResult, at time.Time) MTRProbeEvent {
+	return MTRProbeEvent{
+		TTL:       result.TTL,
+		Success:   result.Success && result.Addr != nil,
+		RTT:       result.RTT,
+		Timestamp: at,
+	}
 }
 
 // mtrAddrToIP extracts net.IP from net.Addr.

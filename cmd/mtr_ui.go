@@ -23,6 +23,8 @@ type mtrUI struct {
 	displayMode int32       // 显示模式 0-4（atomic）
 	nameMode    int32       // Host 基础显示 0=PTR/IP, 1=IP only（atomic）
 	disableMPLS int32       // 0=显示 MPLS, 1=隐藏 MPLS（atomic）
+	historyMode int32       // 0=classic, 1=history（atomic）
+	chartMode   int32       // history chart mode 0-2（atomic）
 	cancel      context.CancelFunc
 }
 
@@ -71,6 +73,41 @@ func (u *mtrUI) CycleDisplayMode() {
 // CurrentDisplayMode 返回当前显示模式 (0-4)。
 func (u *mtrUI) CurrentDisplayMode() int {
 	return int(atomic.LoadInt32(&u.displayMode))
+}
+
+// ToggleHistoryMode 在 classic 和 history TUI 之间切换。
+func (u *mtrUI) ToggleHistoryMode() {
+	for {
+		old := atomic.LoadInt32(&u.historyMode)
+		next := int32(1) - old
+		if atomic.CompareAndSwapInt32(&u.historyMode, old, next) {
+			return
+		}
+	}
+}
+
+// IsHistoryMode 返回当前是否显示 history TUI。
+func (u *mtrUI) IsHistoryMode() bool {
+	return atomic.LoadInt32(&u.historyMode) != 0
+}
+
+// CycleHistoryChartMode 仅在 history TUI 下循环切换图表模式。
+func (u *mtrUI) CycleHistoryChartMode() {
+	if !u.IsHistoryMode() {
+		return
+	}
+	for {
+		old := atomic.LoadInt32(&u.chartMode)
+		next := (old + 1) % 3
+		if atomic.CompareAndSwapInt32(&u.chartMode, old, next) {
+			return
+		}
+	}
+}
+
+// CurrentHistoryChartMode 返回 history 图表模式。
+func (u *mtrUI) CurrentHistoryChartMode() int {
+	return int(atomic.LoadInt32(&u.chartMode))
 }
 
 // ToggleNameMode 在 PTR/IP (0) 和 IP only (1) 之间切换。
@@ -175,14 +212,16 @@ func (u *mtrUI) Leave() {
 type mtrInputAction int
 
 const (
-	mtrActionNone        mtrInputAction = iota // 无动作（序列被吞掉或 buffer 不足）
-	mtrActionQuit                              // q / Q / Ctrl-C
-	mtrActionPause                             // p
-	mtrActionResume                            // 空格
-	mtrActionRestart                           // r
-	mtrActionDisplayMode                       // y
-	mtrActionNameToggle                        // n
-	mtrActionMPLSToggle                        // e
+	mtrActionNone          mtrInputAction = iota // 无动作（序列被吞掉或 buffer 不足）
+	mtrActionQuit                                // q / Q / Ctrl-C
+	mtrActionPause                               // p
+	mtrActionResume                              // 空格
+	mtrActionRestart                             // r
+	mtrActionDisplayMode                         // y
+	mtrActionNameToggle                          // n
+	mtrActionMPLSToggle                          // e
+	mtrActionHistoryToggle                       // d
+	mtrActionHistoryChart                        // g
 )
 
 // mtrInputParser 是一个字节级状态机，能区分普通按键与
@@ -319,6 +358,10 @@ func mapKeyToAction(b byte) mtrInputAction {
 		return mtrActionNameToggle
 	case 'e', 'E':
 		return mtrActionMPLSToggle
+	case 'd', 'D':
+		return mtrActionHistoryToggle
+	case 'g', 'G':
+		return mtrActionHistoryChart
 	default:
 		return mtrActionNone
 	}
@@ -333,6 +376,8 @@ func mapKeyToAction(b byte) mtrInputAction {
 //	y     → 切换显示模式
 //	n     → 切换 Host 显示
 //	e     → 切换 MPLS 显示
+//	d     → 切换 classic/history TUI
+//	g     → history 模式下切换图表
 //
 // 使用 mtrInputParser 字节流状态机解析输入，
 // 自动吞掉 CSI/SS3/OSC/鼠标/焦点等转义序列。
@@ -376,6 +421,10 @@ func (u *mtrUI) ReadKeysLoop(ctx context.Context) {
 				u.ToggleNameMode()
 			case mtrActionMPLSToggle:
 				u.ToggleMPLS()
+			case mtrActionHistoryToggle:
+				u.ToggleHistoryMode()
+			case mtrActionHistoryChart:
+				u.CycleHistoryChartMode()
 			}
 		}
 	}
@@ -405,6 +454,10 @@ func ParseMTRKey(b byte) string {
 		return "name_toggle"
 	case 'e', 'E':
 		return "mpls_toggle"
+	case 'd', 'D':
+		return "history_toggle"
+	case 'g', 'G':
+		return "history_chart"
 	default:
 		return ""
 	}

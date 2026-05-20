@@ -556,10 +556,16 @@ When running in a terminal (TTY), MTR mode uses an **interactive full-screen TUI
   - default: PTR (or IP fallback) ↔ IP only
   - with `--show-ips`: PTR (IP) ↔ IP only
 - **`e`** — toggle MPLS label display on/off
+- **`d` / `D`** — toggle the optional history display; the default TUI remains the classic metric table
+- **`g` / `G`** — in history display only, cycle History chart mode: heatmap → bars → sparkline
 - The TUI header displays **source → destination**, with `--source`/`--dev` information when specified.
 - When using LeoMoeAPI, the preferred API IP address is shown in the header.
 - Uses the **alternate screen buffer**, so your previous terminal history is preserved on exit.
 - When stdin is not a TTY (e.g. piped), it falls back to a simple table refresh.
+
+History display keeps a rolling 3-minute, timestamp-based probe history while the classic table is shown, then renders `Host`, `Last`, `Avg`, `Loss`, and `History` when toggled with `d`. The History column uses a fixed 100ms latency scale. Unicode blocks/sparklines are used by default; with `--no-color`, plain ASCII is used and timeouts are shown as `x`.
+
+Acknowledgement: the optional MTR history display is inspired by [TraceBar](https://github.com/tracebar-app/tracebar), a macOS continuous traceroute monitor licensed under the [MIT License](https://github.com/tracebar-app/tracebar/blob/main/LICENSE).
 
 The **report mode** (`-r`/`--report`) produces a one-shot summary after all probes complete, suitable for scripting:
 

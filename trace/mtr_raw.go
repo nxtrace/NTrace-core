@@ -117,7 +117,7 @@ func runMTRRawPerHop(ctx context.Context, method Method, cfg Config, opts MTRRaw
 		FillGeo:          true,
 		BaseConfig:       roundCfg,
 		DstIP:            roundCfg.DstIP,
-	}, nil, func(result mtrProbeResult, iteration int) {
+	}, nil, func(result mtrProbeResult, iteration int, _ time.Time) {
 		if onRecord == nil {
 			return
 		}
