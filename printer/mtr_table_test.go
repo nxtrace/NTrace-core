@@ -2351,6 +2351,62 @@ func TestMTRTUIHistoryRender_CJKHostCompressionKeepsHistoryWidth(t *testing.T) {
 	}
 }
 
+func TestMTRTUIHistoryLayoutUltraWideExpandsHost(t *testing.T) {
+	stats := []trace.MTRHopStat{{TTL: 20, Host: "router.example", IP: "10.0.0.1", Snt: 1, Received: 1}}
+
+	normal := buildMTRTUIHistoryLayout(stats, 120)
+	if !normal.ok {
+		t.Fatal("normal-width history layout should fit")
+	}
+	if normal.hostW != tuiHistoryHostW {
+		t.Fatalf("normal host width=%d, want %d", normal.hostW, tuiHistoryHostW)
+	}
+	if normal.historyW >= tuiHistoryPreferredW {
+		t.Fatalf("normal history width=%d, want below preferred %d", normal.historyW, tuiHistoryPreferredW)
+	}
+
+	wide := buildMTRTUIHistoryLayout(stats, 180)
+	if !wide.ok {
+		t.Fatal("wide history layout should fit")
+	}
+	if wide.historyW != tuiHistoryPreferredW {
+		t.Fatalf("wide history width=%d, want preferred %d before expanding host", wide.historyW, tuiHistoryPreferredW)
+	}
+	if wide.hostW <= tuiHistoryHostW || wide.hostW >= tuiHistoryHostMaxW {
+		t.Fatalf("wide host width=%d, want between %d and %d", wide.hostW, tuiHistoryHostW, tuiHistoryHostMaxW)
+	}
+
+	veryWide := buildMTRTUIHistoryLayout(stats, 240)
+	if !veryWide.ok {
+		t.Fatal("very-wide history layout should fit")
+	}
+	if veryWide.hostW != tuiHistoryHostMaxW {
+		t.Fatalf("very-wide host width=%d, want cap %d", veryWide.hostW, tuiHistoryHostMaxW)
+	}
+	if veryWide.historyW <= tuiHistoryPreferredW {
+		t.Fatalf("very-wide history width=%d, want above preferred %d", veryWide.historyW, tuiHistoryPreferredW)
+	}
+}
+
+func TestMTRTUIHistoryRender_UltraWideShowsMoreHostText(t *testing.T) {
+	orig := color.NoColor
+	t.Cleanup(func() { color.NoColor = orig })
+	color.NoColor = true
+
+	now := time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC)
+	stats := []trace.MTRHopStat{{
+		TTL: 1, Host: "router-prefix-aaaaaaaaaaaaaaaaaaaaaaaa-wide-tail.example", IP: "10.0.0.1",
+		Snt: 1, Received: 1, Last: 80, Avg: 80,
+	}}
+	out := mtrTUIRenderStringWithWidth(MTRTUIHeader{
+		Target: "1.1.1.1", StartTime: now, Iteration: 1, HistoryMode: true, HistoryNow: now,
+		History: []MTRHistoryTTL{{TTL: 1, Samples: []MTRHistorySample{{At: now.Add(-time.Second), RTT: 80 * time.Millisecond}}}},
+	}, stats, 180)
+	if !strings.Contains(out, "wide-tail") {
+		t.Fatalf("ultra-wide history row should preserve deeper host text:\n%s", out)
+	}
+}
+
 func TestMTRTUIClassicHeaderKeepsTableWithHistoryHint(t *testing.T) {
 	orig := color.NoColor
 	t.Cleanup(func() { color.NoColor = orig })

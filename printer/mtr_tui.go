@@ -768,13 +768,15 @@ type mtrTUIHistoryLayout struct {
 }
 
 const (
-	tuiHistoryMinW   = 16
-	tuiHistoryHostW  = 40
-	tuiHistoryLastW  = 7
-	tuiHistoryAvgW   = 7
-	tuiHistoryLossW  = 5
-	tuiHistoryGap    = 1
-	tuiHistoryRTTMax = 100 * time.Millisecond
+	tuiHistoryMinW       = 16
+	tuiHistoryPreferredW = 96
+	tuiHistoryHostW      = 40
+	tuiHistoryHostMaxW   = 96
+	tuiHistoryLastW      = 7
+	tuiHistoryAvgW       = 7
+	tuiHistoryLossW      = 5
+	tuiHistoryGap        = 1
+	tuiHistoryRTTMax     = 100 * time.Millisecond
 )
 
 func renderMTRTUIHistory(b *strings.Builder, header MTRTUIHeader, stats []trace.MTRHopStat, termWidth int) {
@@ -802,18 +804,40 @@ func buildMTRTUIHistoryLayout(stats []trace.MTRHopStat, termWidth int) mtrTUIHis
 		lossW:     tuiHistoryLossW,
 		historyW:  tuiHistoryMinW,
 	}
-	fixedWithoutHost := prefixW + lo.lastW + lo.avgW + lo.lossW + lo.historyW + 4*tuiHistoryGap
-	hostW := termWidth - fixedWithoutHost
-	if hostW < 1 {
+	fixedWithoutHostAndHistory := prefixW + lo.lastW + lo.avgW + lo.lossW + 4*tuiHistoryGap
+	available := termWidth - fixedWithoutHostAndHistory
+	if available < tuiHistoryMinW+1 {
 		return lo
 	}
-	if hostW > tuiHistoryHostW {
-		lo.hostW = tuiHistoryHostW
-		lo.historyW += hostW - tuiHistoryHostW
-	} else {
-		lo.hostW = hostW
+
+	lo.historyW = tuiHistoryMinW
+	if available <= tuiHistoryHostW+tuiHistoryMinW {
+		lo.hostW = available - tuiHistoryMinW
+		lo.ok = true
+		return lo
 	}
-	lo.ok = lo.historyW >= tuiHistoryMinW
+
+	lo.hostW = tuiHistoryHostW
+	remaining := available - lo.hostW - lo.historyW
+	fillHistory := tuiHistoryPreferredW - lo.historyW
+	if remaining < fillHistory {
+		fillHistory = remaining
+	}
+	lo.historyW += fillHistory
+	remaining -= fillHistory
+
+	if remaining > 0 {
+		fillHost := tuiHistoryHostMaxW - lo.hostW
+		if remaining < fillHost {
+			fillHost = remaining
+		}
+		lo.hostW += fillHost
+		remaining -= fillHost
+	}
+	if remaining > 0 {
+		lo.historyW += remaining
+	}
+	lo.ok = true
 	return lo
 }
 
