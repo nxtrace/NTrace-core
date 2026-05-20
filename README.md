@@ -109,7 +109,7 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
 
   - Linuxbrew's installation command
 
-    Same as the macOS Homebrew's installation method (homebrew-core version only supports amd64)
+    Same as the macOS Homebrew installation method. The homebrew-core formula provides the Full flavor (`nexttrace`); the `nxtrace/nexttrace` tap provides all three flavors.
 
   - deepin installation command
     ```shell
@@ -137,9 +137,12 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
       ```shell
       brew install nexttrace
       ```
-    - This repository's ACTIONS automatically built version (updates faster)
+    - `nxtrace/nexttrace` tap version (periodically synced from the latest NTrace-core release)
       ```shell
-      brew tap nxtrace/nexttrace && brew install nxtrace/nexttrace/nexttrace
+      brew tap nxtrace/nexttrace
+      brew install nxtrace/nexttrace/nexttrace
+      brew install nxtrace/nexttrace/nexttrace-tiny
+      brew install nxtrace/nexttrace/ntr
       ```
     - The homebrew-core build is maintained by chenrui333, please note that this version's updates may lag behind the repository Action automatically version
 
@@ -191,7 +194,7 @@ Starting from this release, NextTrace is published in **three flavors** under th
 | Default mode          |     traceroute     |    traceroute    |   MTR TUI    |
 | Binary name           |    `nexttrace`     | `nexttrace-tiny` |    `ntr`     |
 
-> **Note:** `APT (nexttrace-debs)` provides all three flavors: **Full** (`nexttrace`), **Tiny** (`nexttrace-tiny`), and **NTR** (`ntr`). Other package managers (Homebrew, AUR, Scoop, etc.) currently install the **Full** (`nexttrace`) version only.
+> **Note:** `APT (nexttrace-debs)` and the `Homebrew tap (nxtrace/nexttrace)` provide all three flavors: **Full** (`nexttrace`), **Tiny** (`nexttrace-tiny`), and **NTR** (`ntr`). `homebrew-core`, AUR, Scoop, and other package managers currently install the **Full** (`nexttrace`) version only.
 
 ### Feature Matrix
 
@@ -553,10 +556,16 @@ When running in a terminal (TTY), MTR mode uses an **interactive full-screen TUI
   - default: PTR (or IP fallback) ↔ IP only
   - with `--show-ips`: PTR (IP) ↔ IP only
 - **`e`** — toggle MPLS label display on/off
+- **`d` / `D`** — toggle the optional history display; the default TUI remains the classic metric table
+- **`g` / `G`** — in history display only, cycle History chart mode: heatmap → bars → sparkline
 - The TUI header displays **source → destination**, with `--source`/`--dev` information when specified.
 - When using LeoMoeAPI, the preferred API IP address is shown in the header.
 - Uses the **alternate screen buffer**, so your previous terminal history is preserved on exit.
 - When stdin is not a TTY (e.g. piped), it falls back to a simple table refresh.
+
+History display keeps a rolling 3-minute, timestamp-based probe history while the classic table is shown, then renders `Host`, `Last`, `Avg`, `Loss`, and `History` when toggled with `d`. The History column uses a fixed 100ms latency scale. Unicode blocks/sparklines are used by default; with `--no-color`, plain ASCII is used and timeouts are shown as `x`.
+
+Acknowledgement: the optional MTR history display is inspired by [TraceBar](https://github.com/tracebar-app/tracebar), a macOS continuous traceroute monitor licensed under the [MIT License](https://github.com/tracebar-app/tracebar/blob/main/LICENSE).
 
 The **report mode** (`-r`/`--report`) produces a one-shot summary after all probes complete, suitable for scripting:
 

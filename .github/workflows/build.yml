@@ -348,29 +348,3 @@ jobs:
           files: dist_release/*
           token: ${{ secrets.GT_TOKEN }}
           fail_on_unmatched_files: true
-
-  publish-new-formula:
-    runs-on: ubuntu-latest
-    needs: [ release ]
-    if: startsWith(github.ref, 'refs/tags/v')
-    steps:
-      - name: config git
-        run: |
-          git config --global user.email "${{ secrets.GIT_MAIL }}"
-          git config --global user.name "${{ secrets.GIT_NAME }}"
-      - name: Clone repo
-        run: git clone https://github.com/nxtrace/homebrew-nexttrace.git
-      - name: Exec script
-        run: |
-          set -Eeuo pipefail
-          cd homebrew-nexttrace
-          bash genFormula.sh
-      - name: Git Push
-        run: |
-          set -Eeuo pipefail
-          cd homebrew-nexttrace
-          git add -A
-          git commit -m 'Publish a new version with Formula' || true
-          git remote set-url origin https://${{ secrets.GT_TOKEN }}@github.com/nxtrace/homebrew-nexttrace.git
-          git push
-      - run: echo "🍏 This job's status is ${{ job.status }}."

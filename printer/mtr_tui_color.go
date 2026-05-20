@@ -21,6 +21,20 @@ var (
 	mtrTUIWaitColor = color.New(color.FgHiBlack).SprintFunc()
 )
 
+var (
+	mtrTUIHistoryLatencyColors = [8]func(a ...interface{}) string{
+		color.New(mtrHistoryLatencyColorAttr(0)).SprintFunc(),
+		color.New(mtrHistoryLatencyColorAttr(1)).SprintFunc(),
+		color.New(mtrHistoryLatencyColorAttr(2)).SprintFunc(),
+		color.New(mtrHistoryLatencyColorAttr(3)).SprintFunc(),
+		color.New(mtrHistoryLatencyColorAttr(4)).SprintFunc(),
+		color.New(mtrHistoryLatencyColorAttr(5)).SprintFunc(),
+		color.New(mtrHistoryLatencyColorAttr(6)).SprintFunc(),
+		color.New(mtrHistoryLatencyColorAttr(7)).SprintFunc(),
+	}
+	mtrTUIHistoryTimeoutColorFunc = color.New(color.FgHiBlack).SprintFunc()
+)
+
 func mtrColorLossBucket(loss float64, waiting bool) color.Attribute {
 	if waiting {
 		return color.FgHiBlack
@@ -49,4 +63,33 @@ func mtrColorPacketsByLoss(lossCell, sntCell string, loss float64, waiting bool)
 		sntCell = sty(sntCell)
 	}
 	return lossCell, sntCell
+}
+
+func mtrTUIPlainHistory() bool {
+	return color.NoColor
+}
+
+func mtrTUIHistoryLatencyColor(s string, level int) string {
+	if level < 0 {
+		level = 0
+	}
+	if level >= len(mtrTUIHistoryLatencyColors) {
+		level = len(mtrTUIHistoryLatencyColors) - 1
+	}
+	return mtrTUIHistoryLatencyColors[level](s)
+}
+
+func mtrHistoryLatencyColorAttr(level int) color.Attribute {
+	switch {
+	case level <= 3:
+		return color.FgHiGreen
+	case level <= 6:
+		return color.FgHiYellow
+	default:
+		return color.FgHiRed
+	}
+}
+
+func mtrTUIHistoryTimeoutColor(s string) string {
+	return mtrTUIHistoryTimeoutColorFunc(s)
 }

@@ -2186,3 +2186,285 @@ func TestMTRTUI_ColorDisabled_NoANSI(t *testing.T) {
 		t.Fatalf("NoColor=true should not emit ANSI, got loss=%q snt=%q", lossCell, sntCell)
 	}
 }
+
+func TestMTRHistoryStore_WindowAndReset(t *testing.T) {
+	store := NewMTRHistoryStore(MTRHistoryWindow)
+	now := time.Now()
+	store.AddProbeEvent(trace.MTRProbeEvent{TTL: 1, Success: true, RTT: 20 * time.Millisecond, Timestamp: now.Add(-4 * time.Minute)})
+	store.AddProbeEvent(trace.MTRProbeEvent{TTL: 1, Success: true, RTT: 40 * time.Millisecond, Timestamp: now.Add(-2 * time.Minute)})
+	store.AddProbeEvent(trace.MTRProbeEvent{TTL: 2, Success: false, Timestamp: now.Add(-time.Minute)})
+
+	snap := store.Snapshot(time.Now())
+	if len(snap) != 2 {
+		t.Fatalf("snapshot TTL count=%d, want 2", len(snap))
+	}
+	if len(snap[0].Samples) != 1 || snap[0].Samples[0].RTT != 40*time.Millisecond {
+		t.Fatalf("old timestamp should be pruned by 3-minute window: %+v", snap[0].Samples)
+	}
+	if !snap[1].Samples[0].Timeout {
+		t.Fatalf("timeout sample not preserved: %+v", snap[1].Samples[0])
+	}
+
+	store.Reset()
+	if got := store.Snapshot(time.Now()); len(got) != 0 {
+		t.Fatalf("snapshot after reset length=%d, want 0", len(got))
+	}
+}
+
+func TestMTRHistoryStore_AddPrunesOnlyAffectedTTLWithCurrentTime(t *testing.T) {
+	store := NewMTRHistoryStore(time.Minute)
+	stale := time.Now().Add(-10 * time.Minute)
+	store.byTTL[2] = []MTRHistorySample{{At: stale, RTT: 20 * time.Millisecond}}
+
+	store.AddProbeEvent(trace.MTRProbeEvent{TTL: 1, Success: true, RTT: 10 * time.Millisecond, Timestamp: stale})
+
+	if _, ok := store.byTTL[1]; ok {
+		t.Fatalf("stale added event should be pruned using current time: %+v", store.byTTL[1])
+	}
+	if got := len(store.byTTL[2]); got != 1 {
+		t.Fatalf("add-time pruning should not scan unrelated TTLs, TTL2 samples=%d", got)
+	}
+
+	if snap := store.Snapshot(time.Now()); len(snap) != 0 {
+		t.Fatalf("snapshot should still prune stale TTLs globally: %+v", snap)
+	}
+}
+
+func TestMTRHistoryStore_ClampsFutureTimestampAndPrunesByNow(t *testing.T) {
+	store := NewMTRHistoryStore(time.Minute)
+	stale := time.Now().Add(-10 * time.Minute)
+	future := time.Now().Add(time.Hour)
+	store.byTTL[1] = []MTRHistorySample{{At: stale, RTT: 20 * time.Millisecond}}
+
+	beforeAdd := time.Now()
+	store.AddProbeEvent(trace.MTRProbeEvent{TTL: 1, Success: true, RTT: 10 * time.Millisecond, Timestamp: future})
+	afterAdd := time.Now()
+
+	samples := store.byTTL[1]
+	if len(samples) != 1 {
+		t.Fatalf("future event add should prune stale sample and keep one current sample: %+v", samples)
+	}
+	if samples[0].At.Before(beforeAdd) || samples[0].At.After(afterAdd) {
+		t.Fatalf("future timestamp should be clamped to add-time wall clock, got %s outside [%s, %s]", samples[0].At, beforeAdd, afterAdd)
+	}
+}
+
+func TestMTRTUIPrinter_SnapshotsHistoryOnlyInHistoryMode(t *testing.T) {
+	stats := []trace.MTRHopStat{{TTL: 1, Host: "r1", IP: "10.0.0.1", Snt: 1, Received: 1}}
+	historyCalls := 0
+	historySnapshot := func(time.Time) []MTRHistoryTTL {
+		historyCalls++
+		return []MTRHistoryTTL{{TTL: 1, Samples: []MTRHistorySample{{At: time.Now(), RTT: 10 * time.Millisecond}}}}
+	}
+
+	printer := MTRTUIPrinter("1.1.1.1", "", "1.1.1.1", "test", time.Now(),
+		"host", "127.0.0.1", "en", nil, false,
+		nil, nil, nil, nil, func() bool { return false }, nil, historySnapshot)
+	_ = captureStdout(t, func() { printer(1, stats) })
+	if historyCalls != 0 {
+		t.Fatalf("classic mode should not snapshot history, calls=%d", historyCalls)
+	}
+
+	printer = MTRTUIPrinter("1.1.1.1", "", "1.1.1.1", "test", time.Now(),
+		"host", "127.0.0.1", "en", nil, false,
+		nil, nil, nil, nil, func() bool { return true }, nil, historySnapshot)
+	_ = captureStdout(t, func() { printer(1, stats) })
+	if historyCalls != 1 {
+		t.Fatalf("history mode should snapshot history once, calls=%d", historyCalls)
+	}
+}
+
+func TestMTRTUIHistoryRender_NoColorTimeoutAndModes(t *testing.T) {
+	orig := color.NoColor
+	t.Cleanup(func() { color.NoColor = orig })
+	color.NoColor = true
+
+	now := time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC)
+	stats := []trace.MTRHopStat{{
+		TTL: 1, Host: "router.example", IP: "10.0.0.1", Snt: 3, Received: 2,
+		Last: 50, Avg: 75, Loss: 33.3,
+	}}
+	history := []MTRHistoryTTL{{
+		TTL: 1,
+		Samples: []MTRHistorySample{
+			{At: now.Add(-150 * time.Second), RTT: 50 * time.Millisecond},
+			{At: now.Add(-60 * time.Second), Timeout: true},
+			{At: now.Add(-10 * time.Second), RTT: 200 * time.Millisecond},
+		},
+	}}
+
+	for _, mode := range []MTRHistoryChartMode{MTRHistoryHeatmap, MTRHistoryBars, MTRHistorySparkline} {
+		header := MTRTUIHeader{
+			Target: "1.1.1.1", StartTime: now, Iteration: 1, HistoryMode: true,
+			HistoryChartMode: int(mode), History: history, HistoryNow: now,
+		}
+		out := mtrTUIRenderStringWithWidth(header, stats, 96)
+		for _, want := range []string{"Host", "Last", "Avg", "Loss", "History", "x", mtrTUIHistoryChartLabel(int(mode))} {
+			if !strings.Contains(out, want) {
+				t.Fatalf("history mode %v output missing %q:\n%s", mode, want, out)
+			}
+		}
+		withoutFramePrefix := strings.TrimPrefix(out, "\x1b[H\x1b[2J")
+		if strings.Contains(withoutFramePrefix, "\x1b[") {
+			t.Fatalf("NoColor history output should not emit color ANSI:\n%s", out)
+		}
+	}
+}
+
+func TestMTRTUIHistoryRender_ColorTimeoutAndThreshold(t *testing.T) {
+	orig := color.NoColor
+	t.Cleanup(func() { color.NoColor = orig })
+	color.NoColor = false
+
+	now := time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC)
+	out := mtrTUIRenderStringWithWidth(MTRTUIHeader{
+		Target: "1.1.1.1", StartTime: now, Iteration: 1, HistoryMode: true,
+		HistoryChartMode: int(MTRHistoryHeatmap),
+		HistoryNow:       now,
+		History: []MTRHistoryTTL{{
+			TTL: 1,
+			Samples: []MTRHistorySample{
+				{At: now.Add(-120 * time.Second), RTT: 100 * time.Millisecond},
+				{At: now.Add(-60 * time.Second), Timeout: true},
+			},
+		}},
+	}, []trace.MTRHopStat{{TTL: 1, Host: "r1", IP: "10.0.0.1", Snt: 2, Received: 1, Last: 100, Avg: 100, Loss: 50}}, 96)
+
+	if !strings.Contains(out, "\x1b[") {
+		t.Fatalf("colored history output should include ANSI:\n%s", out)
+	}
+	if !strings.Contains(out, "▪") {
+		t.Fatalf("colored timeout should render as dark block/dot:\n%s", out)
+	}
+	cases := []struct {
+		rtt  time.Duration
+		want color.Attribute
+	}{
+		{50 * time.Millisecond, color.FgHiGreen},
+		{99 * time.Millisecond, color.FgHiYellow},
+		{100 * time.Millisecond, color.FgHiRed},
+		{150 * time.Millisecond, color.FgHiRed},
+	}
+	for _, tc := range cases {
+		if got := mtrHistoryLatencyColorAttr(mtrHistoryLevel(tc.rtt)); got != tc.want {
+			t.Fatalf("threshold color for %s=%v, want %v", tc.rtt, got, tc.want)
+		}
+	}
+}
+
+func TestMTRTUIHistoryRender_NarrowNoticeAndCRLF(t *testing.T) {
+	orig := color.NoColor
+	t.Cleanup(func() { color.NoColor = orig })
+	color.NoColor = true
+
+	out := mtrTUIRenderStringWithWidth(MTRTUIHeader{
+		Target: "1.1.1.1", StartTime: time.Now(), Iteration: 1, HistoryMode: true,
+	}, []trace.MTRHopStat{{TTL: 1, Host: "r1", Snt: 1, Loss: 100}}, 24)
+	if !strings.Contains(out, "history view") {
+		t.Fatalf("narrow history view should show fallback notice:\n%s", out)
+	}
+	if strings.Contains(strings.ReplaceAll(out, "\r\n", ""), "\n") {
+		t.Fatalf("TUI frame contains bare LF: %q", out)
+	}
+}
+
+func TestMTRTUIHistoryRender_CJKHostCompressionKeepsHistoryWidth(t *testing.T) {
+	orig := color.NoColor
+	t.Cleanup(func() { color.NoColor = orig })
+	color.NoColor = true
+
+	stats := []trace.MTRHopStat{{TTL: 1, Host: "非常长的主机名.example", IP: "10.0.0.1", Snt: 1, Received: 1, Last: 80, Avg: 80}}
+	lo := buildMTRTUIHistoryLayout(stats, 48)
+	if !lo.ok {
+		t.Fatal("layout should fit at width 48")
+	}
+	if lo.historyW < tuiHistoryMinW {
+		t.Fatalf("history width=%d, want >=%d", lo.historyW, tuiHistoryMinW)
+	}
+	if lo.hostW >= tuiHistoryHostW {
+		t.Fatalf("host should be compressed before history, hostW=%d", lo.hostW)
+	}
+
+	now := time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC)
+	out := mtrTUIRenderStringWithWidth(MTRTUIHeader{
+		Target: "1.1.1.1", StartTime: now, Iteration: 1, HistoryMode: true, HistoryNow: now,
+		History: []MTRHistoryTTL{{TTL: 1, Samples: []MTRHistorySample{{At: now.Add(-time.Second), RTT: 80 * time.Millisecond}}}},
+	}, stats, 48)
+	if !strings.Contains(out, ".") {
+		t.Fatalf("CJK-compressed no-color history row should still render ASCII history:\n%s", out)
+	}
+}
+
+func TestMTRTUIHistoryLayoutUltraWideExpandsHost(t *testing.T) {
+	stats := []trace.MTRHopStat{{TTL: 20, Host: "router.example", IP: "10.0.0.1", Snt: 1, Received: 1}}
+
+	normal := buildMTRTUIHistoryLayout(stats, 120)
+	if !normal.ok {
+		t.Fatal("normal-width history layout should fit")
+	}
+	if normal.hostW != tuiHistoryHostW {
+		t.Fatalf("normal host width=%d, want %d", normal.hostW, tuiHistoryHostW)
+	}
+	if normal.historyW >= tuiHistoryPreferredW {
+		t.Fatalf("normal history width=%d, want below preferred %d", normal.historyW, tuiHistoryPreferredW)
+	}
+
+	wide := buildMTRTUIHistoryLayout(stats, 180)
+	if !wide.ok {
+		t.Fatal("wide history layout should fit")
+	}
+	if wide.historyW != tuiHistoryPreferredW {
+		t.Fatalf("wide history width=%d, want preferred %d before expanding host", wide.historyW, tuiHistoryPreferredW)
+	}
+	if wide.hostW <= tuiHistoryHostW || wide.hostW >= tuiHistoryHostMaxW {
+		t.Fatalf("wide host width=%d, want between %d and %d", wide.hostW, tuiHistoryHostW, tuiHistoryHostMaxW)
+	}
+
+	veryWide := buildMTRTUIHistoryLayout(stats, 240)
+	if !veryWide.ok {
+		t.Fatal("very-wide history layout should fit")
+	}
+	if veryWide.hostW != tuiHistoryHostMaxW {
+		t.Fatalf("very-wide host width=%d, want cap %d", veryWide.hostW, tuiHistoryHostMaxW)
+	}
+	if veryWide.historyW <= tuiHistoryPreferredW {
+		t.Fatalf("very-wide history width=%d, want above preferred %d", veryWide.historyW, tuiHistoryPreferredW)
+	}
+}
+
+func TestMTRTUIHistoryRender_UltraWideShowsMoreHostText(t *testing.T) {
+	orig := color.NoColor
+	t.Cleanup(func() { color.NoColor = orig })
+	color.NoColor = true
+
+	now := time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC)
+	stats := []trace.MTRHopStat{{
+		TTL: 1, Host: "router-prefix-aaaaaaaaaaaaaaaaaaaaaaaa-wide-tail.example", IP: "10.0.0.1",
+		Snt: 1, Received: 1, Last: 80, Avg: 80,
+	}}
+	out := mtrTUIRenderStringWithWidth(MTRTUIHeader{
+		Target: "1.1.1.1", StartTime: now, Iteration: 1, HistoryMode: true, HistoryNow: now,
+		History: []MTRHistoryTTL{{TTL: 1, Samples: []MTRHistorySample{{At: now.Add(-time.Second), RTT: 80 * time.Millisecond}}}},
+	}, stats, 180)
+	if !strings.Contains(out, "wide-tail") {
+		t.Fatalf("ultra-wide history row should preserve deeper host text:\n%s", out)
+	}
+}
+
+func TestMTRTUIClassicHeaderKeepsTableWithHistoryHint(t *testing.T) {
+	orig := color.NoColor
+	t.Cleanup(func() { color.NoColor = orig })
+	color.NoColor = true
+
+	out := mtrTUIRenderStringWithWidth(MTRTUIHeader{
+		Target: "1.1.1.1", StartTime: time.Now(), Iteration: 1,
+	}, []trace.MTRHopStat{{TTL: 1, Host: "r1", IP: "10.0.0.1", Snt: 1, Received: 1, Last: 1, Avg: 1}}, 120)
+	for _, want := range []string{"Packets", "Pings", "Snt", "StDev", "D-history(off)"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("classic output missing %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "G-chart") {
+		t.Fatalf("classic output should not show chart key:\n%s", out)
+	}
+}

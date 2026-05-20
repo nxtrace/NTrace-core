@@ -78,14 +78,15 @@ type mtrCompletedProbe struct {
 // ParallelRequests. Iteration is defined as min(Snt) over active TTLs.
 //
 // onSnapshot is called periodically with aggregated stats (for TUI / report).
-// onProbe is called per completed probe (for raw streaming mode).
+// onProbe is called per counted probe; at is the probe completion timestamp,
+// not the callback emission time.
 func runMTRScheduler(
 	ctx context.Context,
 	prober mtrTTLProber,
 	agg *MTRAggregator,
 	cfg mtrSchedulerConfig,
 	onSnapshot MTROnSnapshot,
-	onProbe func(result mtrProbeResult, iteration int),
+	onProbe func(result mtrProbeResult, iteration int, at time.Time),
 ) error {
 	defer prober.Close()
 	rt, err := newMTRSchedulerRuntime(ctx, prober, agg, cfg, onSnapshot, onProbe)
@@ -93,6 +94,15 @@ func runMTRScheduler(
 		return err
 	}
 	return rt.run()
+}
+
+func mtrProbeEventFromResult(result mtrProbeResult, at time.Time) MTRProbeEvent {
+	return MTRProbeEvent{
+		TTL:       result.TTL,
+		Success:   result.Success && result.Addr != nil,
+		RTT:       result.RTT,
+		Timestamp: at,
+	}
 }
 
 // mtrAddrToIP extracts net.IP from net.Addr.

@@ -1,52 +1,51 @@
 name: Publish New Formula
 
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# Controls when the action will run. Workflow runs when manually triggered using the UI
-# or API.
 on:
   workflow_dispatch:
+  schedule:
+    # Sunday 20:00 UTC = Monday 04:00 Asia/Shanghai
+    - cron: "0 20 * * 0"
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # This workflow contains a single job called "greet"
   publish-new-formula:
-    # The type of runner that the job will run on
     runs-on: ubuntu-latest
-
-    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      # Runs a single command using the runners shell
-      - name: config git
+      - name: Configure git
         run: |
           git config --global user.email "${{ secrets.GIT_MAIL }}"
           git config --global user.name "${{ secrets.GIT_NAME }}"
-      - name: Clone repo
-        run: |
-          git clone https://github.com/nxtrace/homebrew-nexttrace.git
-      - name: Exec script
-        run: |
-          set -Eeuo pipefail
-          cd homebrew-nexttrace
-          bash genFormula.sh
-      # - name: setup SSH keys and known_hosts
-      #   run: |
-      #     mkdir -p ~/.ssh
-      #     ssh-keyscan github.com >> ~/.ssh/known_hosts
-      #     ssh-agent -a $SSH_AUTH_SOCK > /dev/null
-      #     ssh-add - <<< "${{ secrets.ID_RSA }}"
-      #   env:
-      #     SSH_AUTH_SOCK: /tmp/ssh_agent.sock
-      - name: Git Push
+
+      - name: Clone Homebrew tap
+        run: git clone https://github.com/nxtrace/homebrew-nexttrace.git
+
+      - name: Generate formulae from NTrace-core latest release
         run: |
           set -Eeuo pipefail
           cd homebrew-nexttrace
-          git add -A
-          git commit -m 'Publish a new version with Formula' || true
+          RELEASE_REPO=nxtrace/NTrace-core bash genFormula.sh
+
+      - name: Commit and push if changed
+        run: |
+          set -Eeuo pipefail
+          cd homebrew-nexttrace
+          git add Formula README.md genFormula.sh
+          if git diff --cached --quiet; then
+            echo "No Homebrew formula update needed."
+            exit 0
+          fi
+          git commit -m 'Publish a new version with Formula'
           git remote set-url origin https://${{ secrets.GT_TOKEN }}@github.com/nxtrace/homebrew-nexttrace.git
           git push
-        # env:
-        #   SSH_AUTH_SOCK: /tmp/ssh_agent.sock
-      - run: echo "🍏 This job's status is ${{ job.status }}."
+
+      - run: echo "This job's status is ${{ job.status }}."

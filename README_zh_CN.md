@@ -107,7 +107,7 @@ Document Language: [English](README.md) | 简体中文
 
   - Linuxbrew 安装命令
 
-    同macOS Homebrew安装方法(homebrew-core版仅支持amd64)
+    同 macOS Homebrew 安装方法；homebrew-core formula 提供 Full flavor（`nexttrace`），`nxtrace/nexttrace` tap 提供三种 flavor。
 
   - deepin 安装命令
 
@@ -137,9 +137,12 @@ Document Language: [English](README.md) | 简体中文
       ```shell
       brew install nexttrace
       ```
-    - 本仓库ACTIONS自动构建版(更新更快)
+    - `nxtrace/nexttrace` tap 版（按 NTrace-core 最新 release 定期同步）
       ```shell
-      brew tap nxtrace/nexttrace && brew install nxtrace/nexttrace/nexttrace
+      brew tap nxtrace/nexttrace
+      brew install nxtrace/nexttrace/nexttrace
+      brew install nxtrace/nexttrace/nexttrace-tiny
+      brew install nxtrace/nexttrace/ntr
       ```
     - homebrew-core 构建由 chenrui333 维护，请注意该版本更新可能会落后仓库Action自动构建版本
 
@@ -192,7 +195,7 @@ Document Language: [English](README.md) | 简体中文
 | 默认运行模式            |      traceroute       |    traceroute    |  MTR TUI   |
 | 二进制名                |      `nexttrace`      | `nexttrace-tiny` |   `ntr`    |
 
-> **注意：** `APT (nexttrace-debs)` 目前提供 **Full**（`nexttrace`）、**Tiny**（`nexttrace-tiny`）和 **NTR**（`ntr`）三种包；其它包管理器（Homebrew、AUR、Scoop 等）目前仍仅提供 **完整版**（`nexttrace`）。
+> **注意：** `APT (nexttrace-debs)` 与 `Homebrew tap (nxtrace/nexttrace)` 目前提供 **Full**（`nexttrace`）、**Tiny**（`nexttrace-tiny`）和 **NTR**（`ntr`）三种包；`homebrew-core`、AUR、Scoop 等其它包管理器目前仍仅提供 **完整版**（`nexttrace`）。
 
 ### 功能对比
 
@@ -545,10 +548,16 @@ nexttrace -t --tcp --max-hops 20 --first 3 --no-rdns 8.8.8.8
   - 默认：PTR（无 PTR 时回退 IP）↔ 仅 IP
   - 启用 `--show-ips`：PTR (IP) ↔ 仅 IP
 - **`e`** — 切换 MPLS 标签显示开/关
+- **`d` / `D`** — 切换可选历史显示；默认 TUI 仍是经典指标表
+- **`g` / `G`** — 仅在历史显示中循环切换 History 图表：heatmap → bars → sparkline
 - TUI 标题栏显示**源 → 目标**路由信息，指定 `--source`/`--dev` 时会展示对应信息。
 - 使用 LeoMoeAPI 时，标题栏会显示首选 API IP 地址。
 - 使用**备用屏幕缓冲区**，退出后恢复之前的终端历史记录。
 - 当 stdin 非 TTY（如管道输入）时，降级为简单表格刷新模式。
+
+历史显示会在经典表格显示期间同步收集最近 3 分钟、按探测时间戳归窗的历史样本，按 `d` 后显示 `Host`、`Last`、`Avg`、`Loss`、`History`。History 列使用固定 100ms 延迟刻度。默认使用 Unicode block/sparkline；启用 `--no-color` 时使用 ASCII，超时样本显示为 `x`。
+
+致谢：可选 MTR 历史显示参考了 [TraceBar](https://github.com/tracebar-app/tracebar) 的连续 traceroute 历史可视化体验；TraceBar 使用 [MIT License](https://github.com/tracebar-app/tracebar/blob/main/LICENSE)。
 
 **报告模式**（`-r`/`--report`）在所有探测完成后一次性输出统计，适合脚本使用：
 
