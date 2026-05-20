@@ -918,7 +918,8 @@ func renderMTRHistoryChart(samples []MTRHistorySample, now time.Time, mode MTRHi
 	if width <= 0 {
 		return ""
 	}
-	bins := make([]*MTRHistorySample, width)
+	bins := make([]MTRHistorySample, width)
+	binSet := make([]bool, width)
 	windowStart := now.Add(-MTRHistoryWindow)
 	for i := range samples {
 		s := samples[i]
@@ -932,19 +933,19 @@ func renderMTRHistoryChart(samples []MTRHistorySample, now time.Time, mode MTRHi
 		if pos >= width {
 			pos = width - 1
 		}
-		cp := s
-		if bins[pos] == nil || bins[pos].At.Before(s.At) {
-			bins[pos] = &cp
+		if !binSet[pos] || bins[pos].At.Before(s.At) {
+			bins[pos] = s
+			binSet[pos] = true
 		}
 	}
 
 	var row strings.Builder
-	for _, sample := range bins {
-		if sample == nil {
+	for i, sample := range bins {
+		if !binSet[i] {
 			row.WriteByte(' ')
 			continue
 		}
-		row.WriteString(renderMTRHistorySample(*sample, mode))
+		row.WriteString(renderMTRHistorySample(sample, mode))
 	}
 	return row.String()
 }
