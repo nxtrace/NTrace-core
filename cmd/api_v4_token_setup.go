@@ -1,14 +1,11 @@
 package cmd
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"os"
 	"runtime"
 	"strings"
-
-	"golang.org/x/term"
 
 	"github.com/nxtrace/NTrace-core/ipgeo"
 	"github.com/nxtrace/NTrace-core/util"
@@ -21,12 +18,10 @@ const (
 )
 
 type apiV4TokenSetupOptions struct {
-	stdin       *os.File
 	stdout      io.Writer
 	stderr      io.Writer
 	stdoutIsTTY bool
 	shell       string
-	readToken   func() (string, error)
 }
 
 func resolveAPIV4SetupShell(requested string) string {
@@ -53,28 +48,12 @@ func runAPIV4TokenSetup(opts apiV4TokenSetupOptions) error {
 
 	printAPIV4TokenSetupIntro(stderr, shell)
 	if opts.stdoutIsTTY {
-		fmt.Fprintln(stderr, "stdout is a terminal; not printing a token-bearing shell command.")
+		fmt.Fprintln(stderr, "Run the command below; it will prompt for the token and set the environment in the current shell.")
 		fmt.Fprintf(stderr, "Use: %s\n", apiV4SetupEvalCommand(shell))
 		return nil
 	}
 
-	readToken := opts.readToken
-	if readToken == nil {
-		readToken = func() (string, error) {
-			return readAPIV4Token(opts.stdin, stderr)
-		}
-	}
-	token, err := readToken()
-	if err != nil && err != io.EOF {
-		return err
-	}
-	token = strings.TrimSpace(token)
-	if token == "" {
-		fmt.Fprintln(stderr, "No token entered; no environment command was generated.")
-		return nil
-	}
-
-	_, err = fmt.Fprint(stdout, formatAPIV4TokenAssignment(shell, token))
+	_, err := fmt.Fprint(stdout, formatAPIV4TokenSetupScript(shell))
 	return err
 }
 
@@ -97,51 +76,58 @@ func apiV4SetupEvalCommand(shell string) string {
 	}
 }
 
-func readAPIV4Token(stdin *os.File, stderr io.Writer) (string, error) {
-	if stdin == nil {
-		stdin = os.Stdin
-	}
-	fmt.Fprint(stderr, "Paste v4 API token: ")
-	if CheckTTY(int(stdin.Fd())) {
-		tokenBytes, err := term.ReadPassword(int(stdin.Fd()))
-		fmt.Fprintln(stderr)
-		return string(tokenBytes), err
-	}
-	reader := bufio.NewReader(stdin)
-	line, err := reader.ReadString('\n')
-	if err != nil && err != io.EOF {
-		return "", err
-	}
-	return line, err
-}
-
-func formatAPIV4TokenAssignment(shell string, token string) string {
-	token = strings.TrimSpace(token)
+func formatAPIV4TokenSetupScript(shell string) string {
 	switch resolveAPIV4SetupShell(shell) {
 	case apiV4ShellPowerShell:
-		return fmt.Sprintf("$env:%s = '%s'\n", util.EnvAPIV4TokenKey, quotePowerShellSingle(token))
+		return formatAPIV4PowerShellSetupScript()
 	case apiV4ShellCMD:
-		return fmt.Sprintf("set \"%s=%s\"\r\n", util.EnvAPIV4TokenKey, quoteCMDSetValue(token))
+		return fmt.Sprintf("set /p %s=Paste v4 API token: \r\n", util.EnvAPIV4TokenKey)
 	default:
-		return fmt.Sprintf("export %s='%s'\n", util.EnvAPIV4TokenKey, quotePOSIXSingle(token))
+		return formatAPIV4POSIXSetupScript()
 	}
 }
 
-func quotePOSIXSingle(value string) string {
-	return strings.ReplaceAll(value, `'`, `'\''`)
+func formatAPIV4POSIXSetupScript() string {
+	return fmt.Sprintf(`printf 'Paste v4 API token: ' >&2
+if [ -t 0 ]; then
+  __nexttrace_api_v4_stty=$(stty -g 2>/dev/null || true)
+  stty -echo 2>/dev/null || true
+  IFS= read -r %s
+  __nexttrace_api_v4_status=$?
+  if [ -n "$__nexttrace_api_v4_stty" ]; then
+    stty "$__nexttrace_api_v4_stty" 2>/dev/null || true
+  fi
+  printf '\n' >&2
+else
+  IFS= read -r %s
+  __nexttrace_api_v4_status=$?
+fi
+if [ "$__nexttrace_api_v4_status" -ne 0 ] || [ -z "${%s}" ]; then
+  unset %s
+  printf 'No token entered; %s was not set.\n' >&2
+else
+  export %s
+fi
+unset __nexttrace_api_v4_stty __nexttrace_api_v4_status
+`, util.EnvAPIV4TokenKey, util.EnvAPIV4TokenKey, util.EnvAPIV4TokenKey, util.EnvAPIV4TokenKey, util.EnvAPIV4TokenKey, util.EnvAPIV4TokenKey)
 }
 
-func quotePowerShellSingle(value string) string {
-	return strings.ReplaceAll(value, `'`, `''`)
+func formatAPIV4PowerShellSetupScript() string {
+	return fmt.Sprintf(`$__nexttraceApiV4Token = Read-Host -AsSecureString 'Paste v4 API token'
+$__nexttraceApiV4BSTR = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($__nexttraceApiV4Token)
+try {
+    $env:%s = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($__nexttraceApiV4BSTR)
+    if ([string]::IsNullOrWhiteSpace($env:%s)) {
+        Remove-Item Env:%s -ErrorAction SilentlyContinue
+        [Console]::Error.WriteLine('No token entered; %s was not set.')
+    }
 }
-
-func quoteCMDSetValue(value string) string {
-	value = strings.ReplaceAll(value, "\r", "")
-	value = strings.ReplaceAll(value, "\n", "")
-	replacer := strings.NewReplacer(
-		`^`, `^^`,
-		`%`, `%%`,
-		`"`, `^"`,
-	)
-	return replacer.Replace(value)
+finally {
+    if ($__nexttraceApiV4BSTR -ne [IntPtr]::Zero) {
+        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($__nexttraceApiV4BSTR)
+    }
+    Remove-Variable __nexttraceApiV4Token -ErrorAction SilentlyContinue
+    Remove-Variable __nexttraceApiV4BSTR -ErrorAction SilentlyContinue
+}
+`, util.EnvAPIV4TokenKey, util.EnvAPIV4TokenKey, util.EnvAPIV4TokenKey, util.EnvAPIV4TokenKey)
 }

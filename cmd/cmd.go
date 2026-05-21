@@ -1265,7 +1265,6 @@ func Execute() {
 	util.SrcDev = ""
 	if *setupAPIV4Token {
 		if err := runAPIV4TokenSetup(apiV4TokenSetupOptions{
-			stdin:       os.Stdin,
 			stdout:      os.Stdout,
 			stderr:      os.Stderr,
 			stdoutIsTTY: CheckTTY(int(os.Stdout.Fd())),

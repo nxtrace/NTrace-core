@@ -652,7 +652,7 @@ eval "$(nexttrace -x)"
 iex (& nexttrace.exe -x)
 ```
 
-`nexttrace -x` writes prompts and the token page URL to stderr. Its stdout is reserved for the shell assignment consumed by `eval` / `iex`; when stdout is a terminal, it does not print a token-bearing command. The command does not write shell profiles, permanent environment variables, or `nt_config.yaml`.
+`nexttrace -x` writes guidance and the token page URL to stderr. Its stdout is shell code consumed by `eval` / `iex`; that shell code prompts for the token in the current shell and sets `NEXTTRACE_API_V4_TOKEN` there. Running `nexttrace -x` directly only prints the correct setup command, because a child process cannot modify its parent shell environment. The command does not write shell profiles, permanent environment variables, or `nt_config.yaml`.
 
 With `NEXTTRACE_API_V4_TOKEN` set and the active provider still `LeoMoeAPI`, NextTrace queries `GET https://api.nxtrace.org/v4/ipGeo?ip=<ip>` with `X-NextTrace-Token: <token>`. The request has no JSON body. Successful responses are direct GeoIP JSON mapped to the normal output fields; quota metadata is exposed only in headers (`X-NextTrace-Quota-Remaining`, `X-NextTrace-Quota-Expires-At`, `X-NextTrace-Quota-Cost`, `X-NextTrace-Quota-Source`) and does not change the default output format. Error responses prefer `{"error":{"message":"..."}}`; known statuses include `400` for empty/illegal IP, `401` unauthorized, `429` quota exhausted, and `500` internal server error. v4 token failures do not fall back to the old v3 WebSocket API.
 
