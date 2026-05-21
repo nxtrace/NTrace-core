@@ -1211,8 +1211,7 @@ func Execute() {
 	disableMaptrace := registerDisableMaptraceFlag(parser)
 	disableMPLS := parser.Flag("e", "disable-mpls", &argparse.Options{Help: "Disable MPLS"})
 	ver := parser.Flag("V", "version", &argparse.Options{Help: "Print version info and exit"})
-	setupNextTraceAPIV4Token := parser.Flag("x", "setup-api-v4-token", &argparse.Options{Help: "Set up a session-only NextTrace API v4 token environment command"})
-	setupNextTraceAPIV4Shell := parser.Selector("", "setup-api-v4-shell", []string{nextTraceAPIV4ShellPOSIX, nextTraceAPIV4ShellPowerShell, nextTraceAPIV4ShellCMD}, &argparse.Options{Help: "Shell syntax for --setup-api-v4-token [posix, powershell, cmd]"})
+	setupNextTraceAPIV4Token := parser.Flag("x", "setup-api-v4-token", &argparse.Options{Help: "Store a session-only NextTrace API v4 token in a temporary file"})
 	speedMode := registerSpeedFlag(parser)
 	naliMode := registerNaliFlag(parser)
 	srcAddr := parser.String("s", "source", &argparse.Options{Help: "Use source address src_addr for outgoing packets"})
@@ -1265,11 +1264,9 @@ func Execute() {
 	util.SrcDev = ""
 	if *setupNextTraceAPIV4Token {
 		if err := runNextTraceAPIV4TokenSetup(nextTraceAPIV4TokenSetupOptions{
-			stdout:      os.Stdout,
-			stderr:      os.Stderr,
-			stdin:       os.Stdin,
-			stdoutIsTTY: CheckTTY(int(os.Stdout.Fd())),
-			shell:       *setupNextTraceAPIV4Shell,
+			stdin:  os.Stdin,
+			stdout: os.Stdout,
+			stderr: os.Stderr,
 		}); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)

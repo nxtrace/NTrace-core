@@ -89,5 +89,21 @@ func AllowCrossOriginBrowserAccess() bool {
 }
 
 func GetNextTraceAPIV4Token() string {
-	return GetSecretEnvDefault(EnvNextTraceAPIV4TokenKey, "")
+	if token := GetSecretEnvDefault(EnvNextTraceAPIV4TokenKey, ""); token != "" {
+		return token
+	}
+	token, err := ReadNextTraceAPIV4SessionToken()
+	if err != nil {
+		if os.Getenv("NEXTTRACE_DEBUG") != "" {
+			fmt.Println("ENV", EnvNextTraceAPIV4TokenKey, "session token file read failed")
+		}
+		return ""
+	}
+	if token != "" {
+		_ = os.Setenv(EnvNextTraceAPIV4TokenKey, token)
+		if os.Getenv("NEXTTRACE_DEBUG") != "" {
+			fmt.Println("ENV", EnvNextTraceAPIV4TokenKey, "loaded from session token file")
+		}
+	}
+	return token
 }

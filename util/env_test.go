@@ -77,3 +77,41 @@ func TestAllowCrossOriginBrowserAccess(t *testing.T) {
 	t.Setenv(EnvAllowCrossOriginKey, "0")
 	assert.False(t, AllowCrossOriginBrowserAccess())
 }
+
+func TestGetNextTraceAPIV4TokenPrefersEnvOverSessionFile(t *testing.T) {
+	tokenPath := overrideNextTraceAPIV4SessionTokenPath(t)
+	require.NoError(t, os.WriteFile(tokenPath, []byte("file-token\n"), 0o600))
+	t.Setenv(EnvNextTraceAPIV4TokenKey, " env-token ")
+
+	assert.Equal(t, "env-token", GetNextTraceAPIV4Token())
+}
+
+func TestGetNextTraceAPIV4TokenLoadsSessionFileIntoEnv(t *testing.T) {
+	tokenPath := overrideNextTraceAPIV4SessionTokenPath(t)
+	require.NoError(t, os.WriteFile(tokenPath, []byte(" file-token \n"), 0o600))
+	t.Setenv(EnvNextTraceAPIV4TokenKey, "")
+
+	assert.Equal(t, "file-token", GetNextTraceAPIV4Token())
+	assert.Equal(t, "file-token", os.Getenv(EnvNextTraceAPIV4TokenKey))
+}
+
+func TestWriteNextTraceAPIV4SessionTokenWritesTempFile(t *testing.T) {
+	tokenPath := overrideNextTraceAPIV4SessionTokenPath(t)
+
+	path, err := WriteNextTraceAPIV4SessionToken(" file-token ")
+	require.NoError(t, err)
+	assert.Equal(t, tokenPath, path)
+
+	body, err := os.ReadFile(tokenPath)
+	require.NoError(t, err)
+	assert.Equal(t, "file-token\n", string(body))
+}
+
+func overrideNextTraceAPIV4SessionTokenPath(t *testing.T) string {
+	t.Helper()
+	path := t.TempDir() + string(os.PathSeparator) + "nexttrace-api-v4-token"
+	oldPathFunc := nextTraceAPIV4SessionTokenPath
+	nextTraceAPIV4SessionTokenPath = func() string { return path }
+	t.Cleanup(func() { nextTraceAPIV4SessionTokenPath = oldPathFunc })
+	return path
+}
