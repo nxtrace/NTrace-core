@@ -1,11 +1,15 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"runtime"
 	"strings"
+
+	"golang.org/x/term"
 
 	"github.com/nxtrace/NTrace-core/ipgeo"
 	"github.com/nxtrace/NTrace-core/util"
@@ -20,8 +24,19 @@ const (
 type nextTraceAPIV4TokenSetupOptions struct {
 	stdout      io.Writer
 	stderr      io.Writer
+	stdin       *os.File
 	stdoutIsTTY bool
 	shell       string
+	readToken   func(*os.File, io.Writer) (string, error)
+	startShell  func(nextTraceAPIV4TokenShellOptions) error
+}
+
+type nextTraceAPIV4TokenShellOptions struct {
+	stdout io.Writer
+	stderr io.Writer
+	stdin  *os.File
+	shell  string
+	token  string
 }
 
 func resolveNextTraceAPIV4SetupShell(requested string) string {
@@ -44,24 +59,50 @@ func runNextTraceAPIV4TokenSetup(opts nextTraceAPIV4TokenSetupOptions) error {
 	if stderr == nil {
 		stderr = os.Stderr
 	}
+	stdin := opts.stdin
+	if stdin == nil {
+		stdin = os.Stdin
+	}
 	shell := resolveNextTraceAPIV4SetupShell(opts.shell)
 
-	printNextTraceAPIV4TokenSetupIntro(stderr, shell)
+	printNextTraceAPIV4TokenSetupIntro(stderr, shell, !opts.stdoutIsTTY)
 	if opts.stdoutIsTTY {
-		fmt.Fprintln(stderr, "Run the command below; it will prompt for the token and set the environment in the current shell.")
-		fmt.Fprintf(stderr, "Use: %s\n", nextTraceAPIV4SetupEvalCommand(shell))
-		return nil
+		readToken := opts.readToken
+		if readToken == nil {
+			readToken = readNextTraceAPIV4Token
+		}
+		token, err := readToken(stdin, stderr)
+		if err != nil && err != io.EOF {
+			return err
+		}
+		token = strings.TrimSpace(token)
+		if token == "" {
+			fmt.Fprintf(stderr, "No token entered; %s was not set.\n", util.EnvNextTraceAPIV4TokenKey)
+			return nil
+		}
+		startShell := opts.startShell
+		if startShell == nil {
+			startShell = startNextTraceAPIV4TokenShell
+		}
+		fmt.Fprintf(stderr, "Starting a child shell with %s set. Run NextTrace commands there; type exit to return.\n", util.EnvNextTraceAPIV4TokenKey)
+		return startShell(nextTraceAPIV4TokenShellOptions{
+			stdout: stdout,
+			stderr: stderr,
+			stdin:  stdin,
+			shell:  shell,
+			token:  token,
+		})
 	}
 
 	_, err := fmt.Fprint(stdout, formatNextTraceAPIV4TokenSetupScript(shell))
 	return err
 }
 
-func printNextTraceAPIV4TokenSetupIntro(stderr io.Writer, shell string) {
+func printNextTraceAPIV4TokenSetupIntro(stderr io.Writer, shell string, includeScriptHint bool) {
 	fmt.Fprintf(stderr, "Open token page: GET %s\n", ipgeo.NextTraceAPIV4TokenPageURL)
-	fmt.Fprintf(stderr, "This writes only a session-scoped %s command to stdout.\n", util.EnvNextTraceAPIV4TokenKey)
-	if cmd := nextTraceAPIV4SetupEvalCommand(shell); cmd != "" {
-		fmt.Fprintf(stderr, "Recommended usage: %s\n", cmd)
+	if includeScriptHint {
+		cmd := nextTraceAPIV4SetupEvalCommand(shell)
+		fmt.Fprintf(stderr, "Non-interactive script mode: %s\n", cmd)
 	}
 }
 
@@ -73,6 +114,69 @@ func nextTraceAPIV4SetupEvalCommand(shell string) string {
 		return "for /f \"delims=\" %i in ('nexttrace.exe -x --setup-api-v4-shell=cmd') do %i"
 	default:
 		return `eval "$(nexttrace -x)"`
+	}
+}
+
+func readNextTraceAPIV4Token(stdin *os.File, stderr io.Writer) (string, error) {
+	if stdin == nil {
+		stdin = os.Stdin
+	}
+	if stderr == nil {
+		stderr = os.Stderr
+	}
+	fmt.Fprint(stderr, "Paste NextTrace API v4 token: ")
+	if CheckTTY(int(stdin.Fd())) {
+		tokenBytes, err := term.ReadPassword(int(stdin.Fd()))
+		fmt.Fprintln(stderr)
+		return string(tokenBytes), err
+	}
+	reader := bufio.NewReader(stdin)
+	line, err := reader.ReadString('\n')
+	if err != nil && err != io.EOF {
+		return "", err
+	}
+	return line, err
+}
+
+func startNextTraceAPIV4TokenShell(opts nextTraceAPIV4TokenShellOptions) error {
+	name, args := nextTraceAPIV4TokenShellCommand(opts.shell)
+	cmd := exec.Command(name, args...)
+	cmd.Env = append(os.Environ(), util.EnvNextTraceAPIV4TokenKey+"="+opts.token)
+	if opts.stdin != nil {
+		cmd.Stdin = opts.stdin
+	} else {
+		cmd.Stdin = os.Stdin
+	}
+	if opts.stdout != nil {
+		cmd.Stdout = opts.stdout
+	} else {
+		cmd.Stdout = os.Stdout
+	}
+	if opts.stderr != nil {
+		cmd.Stderr = opts.stderr
+	} else {
+		cmd.Stderr = os.Stderr
+	}
+	return cmd.Run()
+}
+
+func nextTraceAPIV4TokenShellCommand(shell string) (string, []string) {
+	switch resolveNextTraceAPIV4SetupShell(shell) {
+	case nextTraceAPIV4ShellPowerShell:
+		if runtime.GOOS == "windows" {
+			return "powershell.exe", nil
+		}
+		return "pwsh", nil
+	case nextTraceAPIV4ShellCMD:
+		if runtime.GOOS == "windows" {
+			return "cmd.exe", nil
+		}
+		return "cmd", nil
+	default:
+		if sh := strings.TrimSpace(os.Getenv("SHELL")); sh != "" {
+			return sh, nil
+		}
+		return "/bin/sh", nil
 	}
 }
 

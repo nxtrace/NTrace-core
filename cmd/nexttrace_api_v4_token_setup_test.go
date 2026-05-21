@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"strings"
 	"testing"
@@ -34,16 +35,35 @@ func TestFormatNextTraceAPIV4TokenSetupScriptPromptsInParentShell(t *testing.T) 
 	}
 }
 
-func TestRunNextTraceAPIV4TokenSetupStdoutTTYDoesNotPrintOrReadToken(t *testing.T) {
+func TestRunNextTraceAPIV4TokenSetupStdoutTTYReadsTokenAndStartsChildShell(t *testing.T) {
 	var stdout, stderr bytes.Buffer
+	var got nextTraceAPIV4TokenShellOptions
+	startCalled := false
 	err := runNextTraceAPIV4TokenSetup(nextTraceAPIV4TokenSetupOptions{
 		stdout:      &stdout,
 		stderr:      &stderr,
 		stdoutIsTTY: true,
 		shell:       nextTraceAPIV4ShellPOSIX,
+		readToken: func(*os.File, io.Writer) (string, error) {
+			return " secret-token ", nil
+		},
+		startShell: func(opts nextTraceAPIV4TokenShellOptions) error {
+			startCalled = true
+			got = opts
+			return nil
+		},
 	})
 	if err != nil {
 		t.Fatalf("runNextTraceAPIV4TokenSetup() error = %v", err)
+	}
+	if !startCalled {
+		t.Fatal("child shell was not started")
+	}
+	if got.token != "secret-token" {
+		t.Fatalf("token = %q, want trimmed token", got.token)
+	}
+	if got.shell != nextTraceAPIV4ShellPOSIX {
+		t.Fatalf("shell = %q, want posix", got.shell)
 	}
 	if stdout.Len() != 0 {
 		t.Fatalf("stdout = %q, want empty", stdout.String())
@@ -51,11 +71,41 @@ func TestRunNextTraceAPIV4TokenSetupStdoutTTYDoesNotPrintOrReadToken(t *testing.
 	if strings.Contains(stderr.String(), "secret-token") {
 		t.Fatalf("stderr leaked token: %q", stderr.String())
 	}
-	if !strings.Contains(stderr.String(), `eval "$(nexttrace -x)"`) {
-		t.Fatalf("stderr missing session setup usage: %q", stderr.String())
+	if strings.Contains(stderr.String(), "eval") {
+		t.Fatalf("stderr included eval guidance in direct mode: %q", stderr.String())
 	}
-	if !strings.Contains(stderr.String(), "will prompt for the token") {
-		t.Fatalf("stderr missing direct-run guidance: %q", stderr.String())
+	if !strings.Contains(stderr.String(), "Starting a child shell") {
+		t.Fatalf("stderr missing child-shell guidance: %q", stderr.String())
+	}
+}
+
+func TestRunNextTraceAPIV4TokenSetupStdoutTTYEmptyTokenDoesNotStartShell(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	startCalled := false
+	err := runNextTraceAPIV4TokenSetup(nextTraceAPIV4TokenSetupOptions{
+		stdout:      &stdout,
+		stderr:      &stderr,
+		stdoutIsTTY: true,
+		shell:       nextTraceAPIV4ShellPOSIX,
+		readToken: func(*os.File, io.Writer) (string, error) {
+			return "   ", nil
+		},
+		startShell: func(nextTraceAPIV4TokenShellOptions) error {
+			startCalled = true
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("runNextTraceAPIV4TokenSetup() error = %v", err)
+	}
+	if startCalled {
+		t.Fatal("child shell started for empty token")
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout = %q, want empty", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "was not set") {
+		t.Fatalf("stderr = %q, want no-token message", stderr.String())
 	}
 }
 
@@ -101,5 +151,16 @@ func TestRunNextTraceAPIV4TokenSetupGenerationDoesNotSetEnv(t *testing.T) {
 	}
 	if got := os.Getenv(util.EnvNextTraceAPIV4TokenKey); got != "" {
 		t.Fatalf("%s = %q, want unchanged empty", util.EnvNextTraceAPIV4TokenKey, got)
+	}
+}
+
+func TestNextTraceAPIV4TokenShellCommandUsesConfiguredPOSIXShell(t *testing.T) {
+	t.Setenv("SHELL", "/bin/zsh")
+	name, args := nextTraceAPIV4TokenShellCommand(nextTraceAPIV4ShellPOSIX)
+	if name != "/bin/zsh" {
+		t.Fatalf("shell command = %q, want /bin/zsh", name)
+	}
+	if len(args) != 0 {
+		t.Fatalf("shell args = %#v, want empty", args)
 	}
 }

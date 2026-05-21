@@ -1267,6 +1267,7 @@ func Execute() {
 		if err := runNextTraceAPIV4TokenSetup(nextTraceAPIV4TokenSetupOptions{
 			stdout:      os.Stdout,
 			stderr:      os.Stderr,
+			stdin:       os.Stdin,
 			stdoutIsTTY: CheckTTY(int(os.Stdout.Fd())),
 			shell:       *setupNextTraceAPIV4Shell,
 		}); err != nil {
