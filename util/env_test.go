@@ -95,23 +95,52 @@ func TestGetNextTraceAPIV4TokenLoadsSessionFileIntoEnv(t *testing.T) {
 	assert.Equal(t, "file-token", os.Getenv(EnvNextTraceAPIV4TokenKey))
 }
 
-func TestWriteNextTraceAPIV4SessionTokenWritesTempFile(t *testing.T) {
-	tokenPath := overrideNextTraceAPIV4SessionTokenPath(t)
+func TestGetNextTraceAPIV4TokenFallsBackToLatestFile(t *testing.T) {
+	paths := overrideNextTraceAPIV4TokenPaths(t)
+	require.NoError(t, os.WriteFile(paths.latest, []byte(" latest-token \n"), 0o600))
+	t.Setenv(EnvNextTraceAPIV4TokenKey, "")
+
+	assert.Equal(t, "latest-token", GetNextTraceAPIV4Token())
+	assert.Equal(t, "latest-token", os.Getenv(EnvNextTraceAPIV4TokenKey))
+}
+
+func TestWriteNextTraceAPIV4SessionTokenWritesTempFiles(t *testing.T) {
+	paths := overrideNextTraceAPIV4TokenPaths(t)
 
 	path, err := WriteNextTraceAPIV4SessionToken(" file-token ")
 	require.NoError(t, err)
-	assert.Equal(t, tokenPath, path)
+	assert.Equal(t, paths.session, path)
 
-	body, err := os.ReadFile(tokenPath)
-	require.NoError(t, err)
-	assert.Equal(t, "file-token\n", string(body))
+	for _, path := range []string{paths.session, paths.latest} {
+		body, err := os.ReadFile(path)
+		require.NoError(t, err)
+		assert.Equal(t, "file-token\n", string(body))
+	}
 }
 
 func overrideNextTraceAPIV4SessionTokenPath(t *testing.T) string {
 	t.Helper()
-	path := t.TempDir() + string(os.PathSeparator) + "nexttrace-api-v4-token"
+	return overrideNextTraceAPIV4TokenPaths(t).session
+}
+
+type nextTraceAPIV4TokenTestPaths struct {
+	session string
+	latest  string
+}
+
+func overrideNextTraceAPIV4TokenPaths(t *testing.T) nextTraceAPIV4TokenTestPaths {
+	t.Helper()
+	dir := t.TempDir()
+	tokenPath := dir + string(os.PathSeparator) + "nexttrace-api-v4-token"
+	latestPath := dir + string(os.PathSeparator) + "nexttrace-api-v4-token-latest"
+
 	oldPathFunc := nextTraceAPIV4SessionTokenPath
-	nextTraceAPIV4SessionTokenPath = func() string { return path }
-	t.Cleanup(func() { nextTraceAPIV4SessionTokenPath = oldPathFunc })
-	return path
+	oldLatestPathFunc := nextTraceAPIV4LatestTokenPath
+	nextTraceAPIV4SessionTokenPath = func() string { return tokenPath }
+	nextTraceAPIV4LatestTokenPath = func() string { return latestPath }
+	t.Cleanup(func() {
+		nextTraceAPIV4SessionTokenPath = oldPathFunc
+		nextTraceAPIV4LatestTokenPath = oldLatestPathFunc
+	})
+	return nextTraceAPIV4TokenTestPaths{session: tokenPath, latest: latestPath}
 }

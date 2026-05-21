@@ -8,15 +8,29 @@ import (
 	"strings"
 )
 
-var nextTraceAPIV4SessionTokenPath = defaultNextTraceAPIV4SessionTokenPath
+var (
+	nextTraceAPIV4SessionTokenPath = defaultNextTraceAPIV4SessionTokenPath
+	nextTraceAPIV4LatestTokenPath  = defaultNextTraceAPIV4LatestTokenPath
+)
 
 func NextTraceAPIV4SessionTokenPath() string {
 	return nextTraceAPIV4SessionTokenPath()
 }
 
+func NextTraceAPIV4LatestTokenPath() string {
+	return nextTraceAPIV4LatestTokenPath()
+}
+
 func defaultNextTraceAPIV4SessionTokenPath() string {
-	dir := filepath.Join(os.TempDir(), "nexttrace-"+nextTraceAPIV4TempUserKey())
-	return filepath.Join(dir, "nexttrace-api-v4-token-"+strconv.Itoa(os.Getppid()))
+	return filepath.Join(nextTraceAPIV4TokenDir(), "nexttrace-api-v4-token-"+strconv.Itoa(os.Getppid()))
+}
+
+func defaultNextTraceAPIV4LatestTokenPath() string {
+	return filepath.Join(nextTraceAPIV4TokenDir(), "nexttrace-api-v4-token-latest")
+}
+
+func nextTraceAPIV4TokenDir() string {
+	return filepath.Join(os.TempDir(), "nexttrace-"+nextTraceAPIV4TempUserKey())
 }
 
 func nextTraceAPIV4TempUserKey() string {
@@ -54,14 +68,23 @@ func sanitizeNextTraceAPIV4PathPart(value string) string {
 }
 
 func ReadNextTraceAPIV4SessionToken() (string, error) {
-	body, err := os.ReadFile(NextTraceAPIV4SessionTokenPath())
-	if os.IsNotExist(err) {
-		return "", nil
+	var firstErr error
+	for _, path := range []string{NextTraceAPIV4SessionTokenPath(), NextTraceAPIV4LatestTokenPath()} {
+		body, err := os.ReadFile(path)
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		if token := strings.TrimSpace(string(body)); token != "" {
+			return token, nil
+		}
 	}
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(string(body)), nil
+	return "", firstErr
 }
 
 func WriteNextTraceAPIV4SessionToken(token string) (string, error) {
@@ -71,6 +94,10 @@ func WriteNextTraceAPIV4SessionToken(token string) (string, error) {
 	}
 	if err := os.WriteFile(path, []byte(strings.TrimSpace(token)+"\n"), 0o600); err != nil {
 		return path, err
+	}
+	latestPath := NextTraceAPIV4LatestTokenPath()
+	if err := os.WriteFile(latestPath, []byte(strings.TrimSpace(token)+"\n"), 0o600); err != nil {
+		return latestPath, err
 	}
 	return path, nil
 }

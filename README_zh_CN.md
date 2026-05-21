@@ -639,7 +639,7 @@ export NEXTTRACE_DATAPROVIDER=ipinfo
 nexttrace -x
 ```
 
-`nexttrace -x` 会把 token 写入按父进程 PID 生成的临时文件；父进程通常就是当前 shell。之后从同一个 shell 启动的 `nexttrace` 会自动读取该文件，并把值加载到当前进程的 `NEXTTRACE_API_V4_TOKEN`。真实环境变量 `NEXTTRACE_API_V4_TOKEN` 仍优先。该命令不会写 shell profile、永久环境变量或 `nt_config.yaml`。
+`nexttrace -x` 会把 token 写入临时文件：一个按父进程 PID 区分（父进程通常就是当前 shell），另一个是同用户 fallback 文件，用于 `go run` 这类 wrapper 命令。之后启动的 `nexttrace` 会按真实 `NEXTTRACE_API_V4_TOKEN`、父 PID 文件、fallback 文件的顺序读取，并把值加载到当前进程环境。该命令不会写 shell profile、永久环境变量或 `nt_config.yaml`。
 
 设置 `NEXTTRACE_API_V4_TOKEN` 且当前数据源仍为 `LeoMoeAPI` 时，NextTrace 会请求 `GET https://api.nxtrace.org/v4/ipGeo?ip=<ip>`，并只通过 `X-NextTrace-Token: <token>` 请求头传 token；请求没有 JSON body。成功响应是直接映射到现有输出字段的 GeoIP JSON；配额信息只解析响应头（`X-NextTrace-Quota-Remaining`、`X-NextTrace-Quota-Expires-At`、`X-NextTrace-Quota-Cost`、`X-NextTrace-Quota-Source`），不改变默认输出格式。错误响应优先解析 `{"error":{"message":"..."}}`；已知状态包括 `400` 空/非法 IP、`401` unauthorized、`429` quota exhausted、`500` internal server error。NextTrace API v4 token 模式下的错误不会 fallback 到旧 v3 WebSocket API。
 
@@ -697,7 +697,7 @@ NextTrace 当前会读取下列环境变量。对于布尔开关，只识别 `1`
 | --- | --- | --- |
 | `NEXTTRACE_HOSTPORT` | `api.nxtrace.org` | 覆盖 LeoMoeAPI、tracemap、FastIP 等使用的后端地址，支持 `host` 或 `host:port`。 |
 | `NEXTTRACE_TOKEN` | 未设置 | 预置 LeoMoeAPI Bearer Token；设置后将跳过 PoW 取 token 流程。 |
-| `NEXTTRACE_API_V4_TOKEN` | 未设置 | LeoMoeAPI NextTrace API v4 HTTP GeoIP token。未设置时，NextTrace 还会检查 `nexttrace -x` 写入的当前 shell 临时 token 文件；两者都不存在时，LeoMoeAPI 仍使用旧 v3 WebSocket / PoW 流程。 |
+| `NEXTTRACE_API_V4_TOKEN` | 未设置 | LeoMoeAPI NextTrace API v4 HTTP GeoIP token。未设置时，NextTrace 还会检查 `nexttrace -x` 写入的临时 token 文件；两者都不存在时，LeoMoeAPI 仍使用旧 v3 WebSocket / PoW 流程。 |
 | `NEXTTRACE_POWPROVIDER` | `api.nxtrace.org` | 指定 PoW 服务提供方；当前内置的非默认别名为 `sakura`。 |
 | `NEXTTRACE_DEPLOY_ADDR` | 未设置 | `--deploy` 模式下，当未传 `--listen` 时使用的默认监听地址。 |
 | `NEXTTRACE_DEPLOY_TOKEN` | 未设置 | `--deploy` WebUI/API/WebSocket/MCP 访问 token。CLI `--deploy-token` 优先级更高。 |

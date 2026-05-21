@@ -65,7 +65,8 @@ func runNextTraceAPIV4TokenSetup(opts nextTraceAPIV4TokenSetupOptions) error {
 func printNextTraceAPIV4TokenSetupIntro(stderr io.Writer) {
 	fmt.Fprintf(stderr, "Open token page: GET %s\n", ipgeo.NextTraceAPIV4TokenPageURL)
 	fmt.Fprintf(stderr, "This stores a session-scoped %s token in a temporary file.\n", util.EnvNextTraceAPIV4TokenKey)
-	fmt.Fprintf(stderr, "Token file: %s\n", util.NextTraceAPIV4SessionTokenPath())
+	fmt.Fprintf(stderr, "Session token file: %s\n", util.NextTraceAPIV4SessionTokenPath())
+	fmt.Fprintf(stderr, "Fallback token file: %s\n", util.NextTraceAPIV4LatestTokenPath())
 }
 
 func readNextTraceAPIV4Token(stdin *os.File, stderr io.Writer) (string, error) {
