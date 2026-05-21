@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -19,11 +20,14 @@ const (
 	NextTraceAPIV4TokenPageURL = "https://api.nxtrace.org/v4/api-tokens"
 	nextTraceAPIV4TokenHeader  = "X-NextTrace-Token"
 	nextTraceAPIV4MaxErrorBody = 512
+	nextTraceAPIV4MinTimeout   = 2 * time.Second
+	nextTraceAPIV4MaxAttempts  = 3
 )
 
 var (
 	nextTraceAPIV4GeoEndpoint       = "https://api.nxtrace.org/v4/ipGeo"
 	nextTraceAPIV4HTTPClientFactory = util.NewGeoHTTPClient
+	nextTraceAPIV4RetryDelays       = []time.Duration{200 * time.Millisecond, 500 * time.Millisecond}
 )
 
 type NextTraceAPIV4Quota struct {
@@ -70,13 +74,9 @@ func LeoMoeAPISource() Source {
 func LeoIPNextTraceAPIV4HTTP(ip string, timeout time.Duration, lang string, maptrace bool) (*IPGeoData, error) {
 	_ = lang
 	_ = maptrace
-	if timeout <= 0 {
-		timeout = time.Second
-	}
+	timeout = normalizeNextTraceAPIV4Timeout(timeout)
 	client := NewNextTraceAPIV4Client(nextTraceAPIV4GeoEndpoint, util.GetNextTraceAPIV4Token(), nextTraceAPIV4HTTPClientFactory(timeout))
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	geo, _, err := client.Lookup(ctx, ip)
+	geo, _, err := client.Lookup(context.Background(), ip)
 	return geo, err
 }
 
@@ -87,22 +87,43 @@ func (c *NextTraceAPIV4Client) Lookup(ctx context.Context, ip string) (*IPGeoDat
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	req, err := c.newLookupRequest(ctx, ip)
+	var lastErr error
+	for attempt := 0; attempt < nextTraceAPIV4MaxAttempts; attempt++ {
+		geo, quota, err := c.lookupOnce(ctx, ip)
+		if err == nil {
+			return geo, quota, nil
+		}
+		lastErr = err
+		if !shouldRetryNextTraceAPIV4Lookup(err) || attempt == nextTraceAPIV4MaxAttempts-1 || ctx.Err() != nil {
+			return nil, NextTraceAPIV4Quota{}, lastErr
+		}
+		if err := sleepBeforeNextTraceAPIV4Retry(ctx, nextTraceAPIV4RetryDelay(attempt)); err != nil {
+			return nil, NextTraceAPIV4Quota{}, lastErr
+		}
+	}
+	return nil, NextTraceAPIV4Quota{}, lastErr
+}
+
+func (c *NextTraceAPIV4Client) lookupOnce(ctx context.Context, ip string) (*IPGeoData, NextTraceAPIV4Quota, error) {
+	attemptCtx, cancel := c.lookupAttemptContext(ctx)
+	defer cancel()
+
+	req, err := c.newLookupRequest(attemptCtx, ip)
 	if err != nil {
 		return nil, NextTraceAPIV4Quota{}, err
 	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, NextTraceAPIV4Quota{}, fmt.Errorf("NextTrace API v4 GeoIP request failed: %s", redactNextTraceAPIV4Token(err.Error(), c.token))
+		return nil, NextTraceAPIV4Quota{}, retryableNextTraceAPIV4Error("NextTrace API v4 GeoIP request failed: %s", err, c.token)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, NextTraceAPIV4Quota{}, fmt.Errorf("NextTrace API v4 GeoIP read failed: %s", redactNextTraceAPIV4Token(err.Error(), c.token))
+		return nil, NextTraceAPIV4Quota{}, retryableNextTraceAPIV4Error("NextTrace API v4 GeoIP read failed: %s", err, c.token)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, NextTraceAPIV4Quota{}, c.httpError(resp.Status, body)
+		return nil, NextTraceAPIV4Quota{}, c.httpError(resp.StatusCode, resp.Status, body)
 	}
 
 	geo, err := decodeNextTraceAPIV4Geo(body)
@@ -110,6 +131,13 @@ func (c *NextTraceAPIV4Client) Lookup(ctx context.Context, ip string) (*IPGeoDat
 		return nil, NextTraceAPIV4Quota{}, fmt.Errorf("NextTrace API v4 GeoIP returned invalid JSON: %w", err)
 	}
 	return geo, parseNextTraceAPIV4Quota(resp.Header), nil
+}
+
+func (c *NextTraceAPIV4Client) lookupAttemptContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	if c.httpClient == nil || c.httpClient.Timeout <= 0 {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, c.httpClient.Timeout)
 }
 
 func (c *NextTraceAPIV4Client) newLookupRequest(ctx context.Context, ip string) (*http.Request, error) {
@@ -131,7 +159,7 @@ func (c *NextTraceAPIV4Client) newLookupRequest(ctx context.Context, ip string) 
 	return req, nil
 }
 
-func (c *NextTraceAPIV4Client) httpError(status string, body []byte) error {
+func (c *NextTraceAPIV4Client) httpError(statusCode int, status string, body []byte) error {
 	msg := parseNextTraceAPIV4ErrorMessage(body)
 	if msg == "" {
 		msg = boundedNextTraceAPIV4Body(body)
@@ -140,7 +168,82 @@ func (c *NextTraceAPIV4Client) httpError(status string, body []byte) error {
 		msg = status
 	}
 	msg = redactNextTraceAPIV4Token(msg, c.token)
-	return fmt.Errorf("NextTrace API v4 GeoIP returned HTTP %s: %s", status, msg)
+	return &nextTraceAPIV4HTTPError{
+		statusCode: statusCode,
+		status:     status,
+		message:    msg,
+	}
+}
+
+type nextTraceAPIV4HTTPError struct {
+	statusCode int
+	status     string
+	message    string
+}
+
+func (e *nextTraceAPIV4HTTPError) Error() string {
+	return fmt.Sprintf("NextTrace API v4 GeoIP returned HTTP %s: %s", e.status, e.message)
+}
+
+type nextTraceAPIV4RetryableError struct {
+	message string
+}
+
+func (e *nextTraceAPIV4RetryableError) Error() string {
+	return e.message
+}
+
+func retryableNextTraceAPIV4Error(format string, err error, token string) error {
+	return &nextTraceAPIV4RetryableError{
+		message: fmt.Sprintf(format, redactNextTraceAPIV4Token(err.Error(), token)),
+	}
+}
+
+func shouldRetryNextTraceAPIV4Lookup(err error) bool {
+	if err == nil {
+		return false
+	}
+	var retryable *nextTraceAPIV4RetryableError
+	if errors.As(err, &retryable) {
+		return true
+	}
+	var httpErr *nextTraceAPIV4HTTPError
+	if errors.As(err, &httpErr) {
+		return httpErr.statusCode == http.StatusRequestTimeout || httpErr.statusCode >= 500
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	var netErr net.Error
+	return errors.As(err, &netErr) && netErr.Timeout()
+}
+
+func nextTraceAPIV4RetryDelay(attempt int) time.Duration {
+	if attempt < 0 || attempt >= len(nextTraceAPIV4RetryDelays) {
+		return 0
+	}
+	return nextTraceAPIV4RetryDelays[attempt]
+}
+
+func sleepBeforeNextTraceAPIV4Retry(ctx context.Context, delay time.Duration) error {
+	if delay <= 0 {
+		return nil
+	}
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func normalizeNextTraceAPIV4Timeout(timeout time.Duration) time.Duration {
+	if timeout < nextTraceAPIV4MinTimeout {
+		return nextTraceAPIV4MinTimeout
+	}
+	return timeout
 }
 
 type nextTraceAPIV4ErrorBody struct {

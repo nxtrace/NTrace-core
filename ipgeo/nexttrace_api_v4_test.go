@@ -7,15 +7,76 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/nxtrace/NTrace-core/util"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 	return f(req)
+}
+
+func withNextTraceAPIV4RetryDelays(t *testing.T, delays ...time.Duration) {
+	t.Helper()
+	old := nextTraceAPIV4RetryDelays
+	nextTraceAPIV4RetryDelays = delays
+	t.Cleanup(func() {
+		nextTraceAPIV4RetryDelays = old
+	})
+}
+
+func TestLeoIPNextTraceAPIV4HTTPNormalizesTimeout(t *testing.T) {
+	t.Setenv(util.EnvNextTraceAPIV4TokenKey, "test-token")
+	oldEndpoint := nextTraceAPIV4GeoEndpoint
+	oldFactory := nextTraceAPIV4HTTPClientFactory
+	t.Cleanup(func() {
+		nextTraceAPIV4GeoEndpoint = oldEndpoint
+		nextTraceAPIV4HTTPClientFactory = oldFactory
+	})
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = w.Write([]byte(`{"ip":"1.1.1.1"}`))
+	}))
+	defer srv.Close()
+	nextTraceAPIV4GeoEndpoint = srv.URL
+
+	tests := []struct {
+		name    string
+		timeout time.Duration
+		want    time.Duration
+	}{
+		{name: "below minimum", timeout: time.Second, want: 2 * time.Second},
+		{name: "zero", timeout: 0, want: 2 * time.Second},
+		{name: "above minimum", timeout: 3 * time.Second, want: 3 * time.Second},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got time.Duration
+			nextTraceAPIV4HTTPClientFactory = func(timeout time.Duration) *http.Client {
+				got = timeout
+				client := srv.Client()
+				client.Timeout = timeout
+				return client
+			}
+			geo, err := LeoIPNextTraceAPIV4HTTP("1.1.1.1", tt.timeout, "cn", false)
+			if err != nil {
+				t.Fatalf("LeoIPNextTraceAPIV4HTTP() error = %v", err)
+			}
+			if geo.IP != "1.1.1.1" {
+				t.Fatalf("IP = %q, want 1.1.1.1", geo.IP)
+			}
+			if got != tt.want {
+				t.Fatalf("timeout = %s, want %s", got, tt.want)
+			}
+		})
+	}
 }
 
 func TestNextTraceAPIV4ClientLookupBuildsRequestAndParsesResponse(t *testing.T) {
@@ -106,7 +167,134 @@ func TestDecodeNextTraceAPIV4GeoAllowsMissingOrEmptyRouter(t *testing.T) {
 	}
 }
 
+func TestNextTraceAPIV4ClientLookupRetriesNetworkErrors(t *testing.T) {
+	withNextTraceAPIV4RetryDelays(t, 0, 0)
+	attempts := 0
+	client := NewNextTraceAPIV4Client("https://api.nxtrace.org/v4/ipGeo", "secret-token", &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			attempts++
+			if attempts < 3 {
+				return nil, errors.New("network down")
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Status:     "200 OK",
+				Header:     make(http.Header),
+				Body:       io.NopCloser(strings.NewReader(`{"ip":"1.1.1.1"}`)),
+				Request:    req,
+			}, nil
+		}),
+	})
+
+	geo, _, err := client.Lookup(context.Background(), "1.1.1.1")
+	if err != nil {
+		t.Fatalf("Lookup() error = %v", err)
+	}
+	if attempts != 3 {
+		t.Fatalf("attempts = %d, want 3", attempts)
+	}
+	if geo.IP != "1.1.1.1" {
+		t.Fatalf("IP = %q, want 1.1.1.1", geo.IP)
+	}
+}
+
+func TestNextTraceAPIV4ClientLookupRetriesTransientHTTPStatuses(t *testing.T) {
+	for _, statusCode := range []int{
+		http.StatusRequestTimeout,
+		http.StatusInternalServerError,
+		http.StatusBadGateway,
+		http.StatusServiceUnavailable,
+		http.StatusGatewayTimeout,
+	} {
+		t.Run(http.StatusText(statusCode), func(t *testing.T) {
+			withNextTraceAPIV4RetryDelays(t, 0, 0)
+			attempts := 0
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				attempts++
+				if attempts < 3 {
+					w.WriteHeader(statusCode)
+					_, _ = w.Write([]byte(`{"error":{"message":"temporary failure"}}`))
+					return
+				}
+				w.Header().Set("Content-Type", "application/json; charset=utf-8")
+				_, _ = w.Write([]byte(`{"ip":"1.1.1.1"}`))
+			}))
+			defer srv.Close()
+
+			client := NewNextTraceAPIV4Client(srv.URL, "secret-token", srv.Client())
+			geo, _, err := client.Lookup(context.Background(), "1.1.1.1")
+			if err != nil {
+				t.Fatalf("Lookup() error = %v", err)
+			}
+			if attempts != 3 {
+				t.Fatalf("attempts = %d, want 3", attempts)
+			}
+			if geo.IP != "1.1.1.1" {
+				t.Fatalf("IP = %q, want 1.1.1.1", geo.IP)
+			}
+		})
+	}
+}
+
+func TestNextTraceAPIV4ClientLookupDoesNotRetryNonTransientHTTPStatuses(t *testing.T) {
+	for _, statusCode := range []int{
+		http.StatusBadRequest,
+		http.StatusUnauthorized,
+		http.StatusTooManyRequests,
+	} {
+		t.Run(http.StatusText(statusCode), func(t *testing.T) {
+			attempts := 0
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				attempts++
+				w.WriteHeader(statusCode)
+				_, _ = w.Write([]byte(`{"error":{"message":"non transient"}}`))
+			}))
+			defer srv.Close()
+
+			client := NewNextTraceAPIV4Client(srv.URL, "secret-token", srv.Client())
+			_, _, err := client.Lookup(context.Background(), "1.1.1.1")
+			if err == nil {
+				t.Fatal("Lookup() error = nil, want error")
+			}
+			if attempts != 1 {
+				t.Fatalf("attempts = %d, want 1", attempts)
+			}
+			if !strings.Contains(err.Error(), "non transient") {
+				t.Fatalf("error = %q, want non transient message", err.Error())
+			}
+		})
+	}
+}
+
+func TestNextTraceAPIV4ClientLookupReturnsLastRetryErrorRedacted(t *testing.T) {
+	withNextTraceAPIV4RetryDelays(t, 0, 0)
+	attempts := 0
+	client := NewNextTraceAPIV4Client("https://api.nxtrace.org/v4/ipGeo", "secret-token", &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			attempts++
+			return nil, errors.New("network down attempt " + strconv.Itoa(attempts) + " secret-token")
+		}),
+	})
+	_, _, err := client.Lookup(context.Background(), "1.1.1.1")
+	if err == nil {
+		t.Fatal("Lookup() error = nil, want error")
+	}
+	if attempts != 3 {
+		t.Fatalf("attempts = %d, want 3", attempts)
+	}
+	if !strings.Contains(err.Error(), "attempt 3") {
+		t.Fatalf("error = %q, want final attempt error", err.Error())
+	}
+	if strings.Contains(err.Error(), "secret-token") {
+		t.Fatalf("error leaked token: %q", err.Error())
+	}
+	if !strings.Contains(err.Error(), "[REDACTED]") {
+		t.Fatalf("error = %q, want redaction marker", err.Error())
+	}
+}
+
 func TestNextTraceAPIV4ClientLookupHTTPErrorMessages(t *testing.T) {
+	withNextTraceAPIV4RetryDelays(t, 0, 0)
 	tests := []struct {
 		name       string
 		statusCode int
@@ -162,14 +350,20 @@ func TestNextTraceAPIV4ClientLookupRedactsTokenFromErrorBody(t *testing.T) {
 }
 
 func TestNextTraceAPIV4ClientLookupNetworkErrorDoesNotFallback(t *testing.T) {
+	withNextTraceAPIV4RetryDelays(t, 0, 0)
+	attempts := 0
 	client := NewNextTraceAPIV4Client("https://api.nxtrace.org/v4/ipGeo", "secret-token", &http.Client{
 		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			attempts++
 			return nil, errors.New("network down secret-token")
 		}),
 	})
 	_, _, err := client.Lookup(context.Background(), "1.1.1.1")
 	if err == nil {
 		t.Fatal("Lookup() error = nil, want network error")
+	}
+	if attempts != 3 {
+		t.Fatalf("attempts = %d, want 3", attempts)
 	}
 	if !strings.Contains(err.Error(), "network down") {
 		t.Fatalf("error = %q, want network down", err.Error())

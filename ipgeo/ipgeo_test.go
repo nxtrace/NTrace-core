@@ -13,6 +13,7 @@ import (
 
 func TestGetSourceMappings(t *testing.T) {
 	t.Helper()
+	isolateNextTraceAPIV4TokenFiles(t)
 	t.Setenv(util.EnvNextTraceAPIV4TokenKey, "")
 	tests := []struct {
 		name  string
@@ -60,12 +61,21 @@ func TestGetSourceUsesNextTraceAPIV4ForLeoMoeOnlyWhenTokenConfigured(t *testing.
 }
 
 func TestNextTraceAPIV4TokenConfiguredReadsCurrentProcessEnv(t *testing.T) {
+	isolateNextTraceAPIV4TokenFiles(t)
 	t.Setenv(util.EnvNextTraceAPIV4TokenKey, "")
 	assert.False(t, NextTraceAPIV4TokenConfigured())
 
 	require.NoError(t, os.Setenv(util.EnvNextTraceAPIV4TokenKey, " runtime-token "))
 	t.Cleanup(func() { _ = os.Unsetenv(util.EnvNextTraceAPIV4TokenKey) })
 	assert.True(t, NextTraceAPIV4TokenConfigured())
+}
+
+func isolateNextTraceAPIV4TokenFiles(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	t.Setenv("TMPDIR", dir)
+	t.Setenv("TMP", dir)
+	t.Setenv("TEMP", dir)
 }
 
 func TestDisableGeoIP(t *testing.T) {
