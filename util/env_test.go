@@ -1,9 +1,13 @@
 package util
 
 import (
+	"io"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGetEnvTrimmed(t *testing.T) {
@@ -33,6 +37,27 @@ func TestGetEnvDefault(t *testing.T) {
 	assert.Equal(t, "custom", GetEnvDefault("TEST_DEFAULT_KEY", "fallback"))
 
 	assert.Equal(t, "fallback", GetEnvDefault("TEST_DEFAULT_MISSING", "fallback"))
+}
+
+func TestGetSecretEnvDefaultDoesNotPrintValueInDebugMode(t *testing.T) {
+	t.Setenv("NEXTTRACE_DEBUG", "1")
+	t.Setenv("TEST_SECRET_KEY", " secret-token ")
+
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	os.Stdout = w
+	defer func() { os.Stdout = oldStdout }()
+
+	got := GetSecretEnvDefault("TEST_SECRET_KEY", "")
+	require.NoError(t, w.Close())
+	out, err := io.ReadAll(r)
+	require.NoError(t, err)
+
+	assert.Equal(t, "secret-token", got)
+	assert.Contains(t, string(out), "TEST_SECRET_KEY")
+	assert.NotContains(t, string(out), "secret-token")
+	assert.False(t, strings.Contains(string(out), " secret-token "))
 }
 
 func TestGetEnvInt(t *testing.T) {

@@ -35,7 +35,7 @@ func GetSource(s string) Source {
 	case "DN42":
 		return DN42
 	case "LEOMOEAPI":
-		return LeoIP
+		return LeoMoeAPISource()
 	case "IP.SB":
 		return IPSB
 	case "IPINSIGHT":
@@ -55,7 +55,7 @@ func GetSource(s string) Source {
 	case "IPDB.ONE":
 		return IPDBOne
 	default:
-		return LeoIP
+		return LeoMoeAPISource()
 	}
 }
 

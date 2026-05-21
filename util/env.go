@@ -26,6 +26,7 @@ var (
 )
 
 const EnvAllowCrossOriginKey = "NEXTTRACE_ALLOW_CROSS_ORIGIN"
+const EnvAPIV4TokenKey = "NEXTTRACE_API_V4_TOKEN"
 
 func GetEnvTrimmed(key string) (string, bool) {
 	v, ok := os.LookupEnv(key)
@@ -60,6 +61,18 @@ func GetEnvDefault(key string, def string) string {
 	return def
 }
 
+func GetSecretEnvDefault(key string, def string) string {
+	v, ok := os.LookupEnv(key)
+	if !ok {
+		return def
+	}
+	val := strings.TrimSpace(v)
+	if os.Getenv("NEXTTRACE_DEBUG") != "" {
+		fmt.Println("ENV", key, "detected")
+	}
+	return val
+}
+
 func GetEnvInt(key string, def int) int {
 	if val, ok := GetEnvTrimmed(key); ok {
 		num, err := strconv.Atoi(val)
@@ -73,4 +86,8 @@ func GetEnvInt(key string, def int) int {
 
 func AllowCrossOriginBrowserAccess() bool {
 	return GetEnvBool(EnvAllowCrossOriginKey, false)
+}
+
+func GetAPIV4Token() string {
+	return GetSecretEnvDefault(EnvAPIV4TokenKey, "")
 }

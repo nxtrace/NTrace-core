@@ -1,16 +1,19 @@
 package ipgeo
 
 import (
+	"os"
 	"reflect"
 	"testing"
 	"time"
 
+	"github.com/nxtrace/NTrace-core/util"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestGetSourceMappings(t *testing.T) {
 	t.Helper()
+	t.Setenv(util.EnvAPIV4TokenKey, "")
 	tests := []struct {
 		name  string
 		input string
@@ -38,6 +41,31 @@ func TestGetSourceMappings(t *testing.T) {
 			assert.Equal(t, reflect.ValueOf(tc.want).Pointer(), reflect.ValueOf(got).Pointer())
 		})
 	}
+}
+
+func TestGetSourceUsesAPIV4ForLeoMoeOnlyWhenTokenConfigured(t *testing.T) {
+	t.Setenv(util.EnvAPIV4TokenKey, "v4-token")
+
+	got := GetSource("LeoMoeAPI")
+	require.NotNil(t, got)
+	assert.Equal(t, reflect.ValueOf(LeoIPV4HTTP).Pointer(), reflect.ValueOf(got).Pointer())
+
+	fallback := GetSource("unknown")
+	require.NotNil(t, fallback)
+	assert.Equal(t, reflect.ValueOf(LeoIPV4HTTP).Pointer(), reflect.ValueOf(fallback).Pointer())
+
+	nonLeo := GetSource("IPInfo")
+	require.NotNil(t, nonLeo)
+	assert.Equal(t, reflect.ValueOf(IPInfo).Pointer(), reflect.ValueOf(nonLeo).Pointer())
+}
+
+func TestAPIV4TokenConfiguredReadsCurrentProcessEnv(t *testing.T) {
+	t.Setenv(util.EnvAPIV4TokenKey, "")
+	assert.False(t, APIV4TokenConfigured())
+
+	require.NoError(t, os.Setenv(util.EnvAPIV4TokenKey, " runtime-token "))
+	t.Cleanup(func() { _ = os.Unsetenv(util.EnvAPIV4TokenKey) })
+	assert.True(t, APIV4TokenConfigured())
 }
 
 func TestDisableGeoIP(t *testing.T) {
