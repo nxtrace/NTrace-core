@@ -16,17 +16,17 @@ import (
 )
 
 const (
-	APIV4TokenPageURL = "https://api.nxtrace.org/v4/api-tokens"
-	apiV4TokenHeader  = "X-NextTrace-Token"
-	apiV4MaxErrorBody = 512
+	NextTraceAPIV4TokenPageURL = "https://api.nxtrace.org/v4/api-tokens"
+	nextTraceAPIV4TokenHeader  = "X-NextTrace-Token"
+	nextTraceAPIV4MaxErrorBody = 512
 )
 
 var (
-	apiV4GeoEndpoint       = "https://api.nxtrace.org/v4/ipGeo"
-	apiV4HTTPClientFactory = util.NewGeoHTTPClient
+	nextTraceAPIV4GeoEndpoint       = "https://api.nxtrace.org/v4/ipGeo"
+	nextTraceAPIV4HTTPClientFactory = util.NewGeoHTTPClient
 )
 
-type APIV4Quota struct {
+type NextTraceAPIV4Quota struct {
 	Remaining    uint64
 	HasRemaining bool
 	ExpiresAt    time.Time
@@ -36,86 +36,86 @@ type APIV4Quota struct {
 	Source       string
 }
 
-type APIV4Client struct {
+type NextTraceAPIV4Client struct {
 	endpoint   string
 	token      string
 	httpClient *http.Client
 }
 
-func NewAPIV4Client(endpoint string, token string, httpClient *http.Client) *APIV4Client {
+func NewNextTraceAPIV4Client(endpoint string, token string, httpClient *http.Client) *NextTraceAPIV4Client {
 	if strings.TrimSpace(endpoint) == "" {
-		endpoint = apiV4GeoEndpoint
+		endpoint = nextTraceAPIV4GeoEndpoint
 	}
 	if httpClient == nil {
 		httpClient = http.DefaultClient
 	}
-	return &APIV4Client{
+	return &NextTraceAPIV4Client{
 		endpoint:   endpoint,
 		token:      strings.TrimSpace(token),
 		httpClient: httpClient,
 	}
 }
 
-func APIV4TokenConfigured() bool {
-	return strings.TrimSpace(util.GetAPIV4Token()) != ""
+func NextTraceAPIV4TokenConfigured() bool {
+	return strings.TrimSpace(util.GetNextTraceAPIV4Token()) != ""
 }
 
 func LeoMoeAPISource() Source {
-	if APIV4TokenConfigured() {
-		return LeoIPV4HTTP
+	if NextTraceAPIV4TokenConfigured() {
+		return LeoIPNextTraceAPIV4HTTP
 	}
 	return LeoIP
 }
 
-func LeoIPV4HTTP(ip string, timeout time.Duration, lang string, maptrace bool) (*IPGeoData, error) {
+func LeoIPNextTraceAPIV4HTTP(ip string, timeout time.Duration, lang string, maptrace bool) (*IPGeoData, error) {
 	_ = lang
 	_ = maptrace
 	if timeout <= 0 {
 		timeout = time.Second
 	}
-	client := NewAPIV4Client(apiV4GeoEndpoint, util.GetAPIV4Token(), apiV4HTTPClientFactory(timeout))
+	client := NewNextTraceAPIV4Client(nextTraceAPIV4GeoEndpoint, util.GetNextTraceAPIV4Token(), nextTraceAPIV4HTTPClientFactory(timeout))
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	geo, _, err := client.Lookup(ctx, ip)
 	return geo, err
 }
 
-func (c *APIV4Client) Lookup(ctx context.Context, ip string) (*IPGeoData, APIV4Quota, error) {
+func (c *NextTraceAPIV4Client) Lookup(ctx context.Context, ip string) (*IPGeoData, NextTraceAPIV4Quota, error) {
 	if c == nil {
-		return nil, APIV4Quota{}, errors.New("v4 GeoIP API client is nil")
+		return nil, NextTraceAPIV4Quota{}, errors.New("NextTrace API v4 GeoIP client is nil")
 	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	req, err := c.newLookupRequest(ctx, ip)
 	if err != nil {
-		return nil, APIV4Quota{}, err
+		return nil, NextTraceAPIV4Quota{}, err
 	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, APIV4Quota{}, fmt.Errorf("v4 GeoIP API request failed: %s", redactAPIV4Token(err.Error(), c.token))
+		return nil, NextTraceAPIV4Quota{}, fmt.Errorf("NextTrace API v4 GeoIP request failed: %s", redactNextTraceAPIV4Token(err.Error(), c.token))
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, APIV4Quota{}, fmt.Errorf("v4 GeoIP API read failed: %s", redactAPIV4Token(err.Error(), c.token))
+		return nil, NextTraceAPIV4Quota{}, fmt.Errorf("NextTrace API v4 GeoIP read failed: %s", redactNextTraceAPIV4Token(err.Error(), c.token))
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, APIV4Quota{}, c.httpError(resp.Status, body)
+		return nil, NextTraceAPIV4Quota{}, c.httpError(resp.Status, body)
 	}
 
-	geo, err := decodeAPIV4Geo(body)
+	geo, err := decodeNextTraceAPIV4Geo(body)
 	if err != nil {
-		return nil, APIV4Quota{}, fmt.Errorf("v4 GeoIP API returned invalid JSON: %w", err)
+		return nil, NextTraceAPIV4Quota{}, fmt.Errorf("NextTrace API v4 GeoIP returned invalid JSON: %w", err)
 	}
-	return geo, parseAPIV4Quota(resp.Header), nil
+	return geo, parseNextTraceAPIV4Quota(resp.Header), nil
 }
 
-func (c *APIV4Client) newLookupRequest(ctx context.Context, ip string) (*http.Request, error) {
+func (c *NextTraceAPIV4Client) newLookupRequest(ctx context.Context, ip string) (*http.Request, error) {
 	u, err := url.Parse(c.endpoint)
 	if err != nil {
-		return nil, fmt.Errorf("v4 GeoIP API endpoint is invalid: %w", err)
+		return nil, fmt.Errorf("NextTrace API v4 GeoIP endpoint is invalid: %w", err)
 	}
 	q := u.Query()
 	q.Set("ip", ip)
@@ -123,49 +123,49 @@ func (c *APIV4Client) newLookupRequest(ctx context.Context, ip string) (*http.Re
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("v4 GeoIP API request build failed: %w", err)
+		return nil, fmt.Errorf("NextTrace API v4 GeoIP request build failed: %w", err)
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", util.UserAgent)
-	req.Header.Set(apiV4TokenHeader, c.token)
+	req.Header.Set(nextTraceAPIV4TokenHeader, c.token)
 	return req, nil
 }
 
-func (c *APIV4Client) httpError(status string, body []byte) error {
-	msg := parseAPIV4ErrorMessage(body)
+func (c *NextTraceAPIV4Client) httpError(status string, body []byte) error {
+	msg := parseNextTraceAPIV4ErrorMessage(body)
 	if msg == "" {
-		msg = boundedAPIV4Body(body)
+		msg = boundedNextTraceAPIV4Body(body)
 	}
 	if msg == "" {
 		msg = status
 	}
-	msg = redactAPIV4Token(msg, c.token)
-	return fmt.Errorf("v4 GeoIP API returned HTTP %s: %s", status, msg)
+	msg = redactNextTraceAPIV4Token(msg, c.token)
+	return fmt.Errorf("NextTrace API v4 GeoIP returned HTTP %s: %s", status, msg)
 }
 
-type apiV4ErrorBody struct {
+type nextTraceAPIV4ErrorBody struct {
 	Error struct {
 		Message string `json:"message"`
 	} `json:"error"`
 }
 
-func parseAPIV4ErrorMessage(body []byte) string {
-	var parsed apiV4ErrorBody
+func parseNextTraceAPIV4ErrorMessage(body []byte) string {
+	var parsed nextTraceAPIV4ErrorBody
 	if err := json.Unmarshal(body, &parsed); err != nil {
 		return ""
 	}
 	return strings.TrimSpace(parsed.Error.Message)
 }
 
-func boundedAPIV4Body(body []byte) string {
+func boundedNextTraceAPIV4Body(body []byte) string {
 	body = []byte(strings.TrimSpace(string(body)))
-	if len(body) > apiV4MaxErrorBody {
-		body = body[:apiV4MaxErrorBody]
+	if len(body) > nextTraceAPIV4MaxErrorBody {
+		body = body[:nextTraceAPIV4MaxErrorBody]
 	}
 	return string(body)
 }
 
-func redactAPIV4Token(s string, token string) string {
+func redactNextTraceAPIV4Token(s string, token string) string {
 	token = strings.TrimSpace(token)
 	if token == "" {
 		return s
@@ -173,7 +173,7 @@ func redactAPIV4Token(s string, token string) string {
 	return strings.ReplaceAll(s, token, "[REDACTED]")
 }
 
-type apiV4GeoWire struct {
+type nextTraceAPIV4GeoWire struct {
 	IP        string          `json:"ip"`
 	Asnumber  string          `json:"asnumber"`
 	Country   string          `json:"country"`
@@ -194,12 +194,12 @@ type apiV4GeoWire struct {
 	Source    string          `json:"source"`
 }
 
-func decodeAPIV4Geo(body []byte) (*IPGeoData, error) {
-	var wire apiV4GeoWire
+func decodeNextTraceAPIV4Geo(body []byte) (*IPGeoData, error) {
+	var wire nextTraceAPIV4GeoWire
 	if err := json.Unmarshal(body, &wire); err != nil {
 		return nil, err
 	}
-	router, err := decodeAPIV4Router(wire.Router)
+	router, err := decodeNextTraceAPIV4Router(wire.Router)
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +225,7 @@ func decodeAPIV4Geo(body []byte) (*IPGeoData, error) {
 	}, nil
 }
 
-func decodeAPIV4Router(raw json.RawMessage) (map[string][]string, error) {
+func decodeNextTraceAPIV4Router(raw json.RawMessage) (map[string][]string, error) {
 	trimmed := strings.TrimSpace(string(raw))
 	if trimmed == "" || trimmed == "null" || trimmed == `""` {
 		return nil, nil
@@ -237,13 +237,13 @@ func decodeAPIV4Router(raw json.RawMessage) (map[string][]string, error) {
 	return router, nil
 }
 
-func parseAPIV4Quota(header http.Header) APIV4Quota {
-	var quota APIV4Quota
-	if value, ok := parseAPIV4UintHeader(header, "X-NextTrace-Quota-Remaining"); ok {
+func parseNextTraceAPIV4Quota(header http.Header) NextTraceAPIV4Quota {
+	var quota NextTraceAPIV4Quota
+	if value, ok := parseNextTraceAPIV4UintHeader(header, "X-NextTrace-Quota-Remaining"); ok {
 		quota.Remaining = value
 		quota.HasRemaining = true
 	}
-	if value, ok := parseAPIV4UintHeader(header, "X-NextTrace-Quota-Cost"); ok {
+	if value, ok := parseNextTraceAPIV4UintHeader(header, "X-NextTrace-Quota-Cost"); ok {
 		quota.Cost = value
 		quota.HasCost = true
 	}
@@ -257,7 +257,7 @@ func parseAPIV4Quota(header http.Header) APIV4Quota {
 	return quota
 }
 
-func parseAPIV4UintHeader(header http.Header, key string) (uint64, bool) {
+func parseNextTraceAPIV4UintHeader(header http.Header, key string) (uint64, bool) {
 	raw := strings.TrimSpace(header.Get(key))
 	if raw == "" {
 		return 0, false

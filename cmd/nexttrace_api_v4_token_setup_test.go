@@ -9,19 +9,19 @@ import (
 	"github.com/nxtrace/NTrace-core/util"
 )
 
-func TestFormatAPIV4TokenSetupScriptPromptsInParentShell(t *testing.T) {
+func TestFormatNextTraceAPIV4TokenSetupScriptPromptsInParentShell(t *testing.T) {
 	tests := []struct {
 		name  string
 		shell string
 		want  []string
 	}{
-		{name: "posix", shell: apiV4ShellPOSIX, want: []string{"read -r NEXTTRACE_API_V4_TOKEN", "export NEXTTRACE_API_V4_TOKEN"}},
-		{name: "powershell", shell: apiV4ShellPowerShell, want: []string{"Read-Host -AsSecureString", "$env:NEXTTRACE_API_V4_TOKEN"}},
-		{name: "cmd", shell: apiV4ShellCMD, want: []string{"set /p NEXTTRACE_API_V4_TOKEN=Paste v4 API token:"}},
+		{name: "posix", shell: nextTraceAPIV4ShellPOSIX, want: []string{"read -r NEXTTRACE_API_V4_TOKEN", "export NEXTTRACE_API_V4_TOKEN"}},
+		{name: "powershell", shell: nextTraceAPIV4ShellPowerShell, want: []string{"Read-Host -AsSecureString", "$env:NEXTTRACE_API_V4_TOKEN"}},
+		{name: "cmd", shell: nextTraceAPIV4ShellCMD, want: []string{"set /p NEXTTRACE_API_V4_TOKEN=Paste NextTrace API v4 token:"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := formatAPIV4TokenSetupScript(tt.shell)
+			got := formatNextTraceAPIV4TokenSetupScript(tt.shell)
 			for _, want := range tt.want {
 				if !strings.Contains(got, want) {
 					t.Fatalf("setup script = %q, want containing %q", got, want)
@@ -34,16 +34,16 @@ func TestFormatAPIV4TokenSetupScriptPromptsInParentShell(t *testing.T) {
 	}
 }
 
-func TestRunAPIV4TokenSetupStdoutTTYDoesNotPrintOrReadToken(t *testing.T) {
+func TestRunNextTraceAPIV4TokenSetupStdoutTTYDoesNotPrintOrReadToken(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	err := runAPIV4TokenSetup(apiV4TokenSetupOptions{
+	err := runNextTraceAPIV4TokenSetup(nextTraceAPIV4TokenSetupOptions{
 		stdout:      &stdout,
 		stderr:      &stderr,
 		stdoutIsTTY: true,
-		shell:       apiV4ShellPOSIX,
+		shell:       nextTraceAPIV4ShellPOSIX,
 	})
 	if err != nil {
-		t.Fatalf("runAPIV4TokenSetup() error = %v", err)
+		t.Fatalf("runNextTraceAPIV4TokenSetup() error = %v", err)
 	}
 	if stdout.Len() != 0 {
 		t.Fatalf("stdout = %q, want empty", stdout.String())
@@ -59,16 +59,16 @@ func TestRunAPIV4TokenSetupStdoutTTYDoesNotPrintOrReadToken(t *testing.T) {
 	}
 }
 
-func TestRunAPIV4TokenSetupWritesOnlySetupScriptToStdout(t *testing.T) {
+func TestRunNextTraceAPIV4TokenSetupWritesOnlySetupScriptToStdout(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	err := runAPIV4TokenSetup(apiV4TokenSetupOptions{
+	err := runNextTraceAPIV4TokenSetup(nextTraceAPIV4TokenSetupOptions{
 		stdout:      &stdout,
 		stderr:      &stderr,
 		stdoutIsTTY: false,
-		shell:       apiV4ShellPowerShell,
+		shell:       nextTraceAPIV4ShellPowerShell,
 	})
 	if err != nil {
-		t.Fatalf("runAPIV4TokenSetup() error = %v", err)
+		t.Fatalf("runNextTraceAPIV4TokenSetup() error = %v", err)
 	}
 	if got := stdout.String(); !strings.Contains(got, "Read-Host -AsSecureString") || !strings.Contains(got, "$env:NEXTTRACE_API_V4_TOKEN") {
 		t.Fatalf("stdout = %q, want PowerShell setup script", got)
@@ -84,22 +84,22 @@ func TestRunAPIV4TokenSetupWritesOnlySetupScriptToStdout(t *testing.T) {
 	}
 }
 
-func TestRunAPIV4TokenSetupGenerationDoesNotSetEnv(t *testing.T) {
-	t.Setenv(util.EnvAPIV4TokenKey, "")
+func TestRunNextTraceAPIV4TokenSetupGenerationDoesNotSetEnv(t *testing.T) {
+	t.Setenv(util.EnvNextTraceAPIV4TokenKey, "")
 	var stdout, stderr bytes.Buffer
-	err := runAPIV4TokenSetup(apiV4TokenSetupOptions{
+	err := runNextTraceAPIV4TokenSetup(nextTraceAPIV4TokenSetupOptions{
 		stdout:      &stdout,
 		stderr:      &stderr,
 		stdoutIsTTY: false,
-		shell:       apiV4ShellPOSIX,
+		shell:       nextTraceAPIV4ShellPOSIX,
 	})
 	if err != nil {
-		t.Fatalf("runAPIV4TokenSetup() error = %v", err)
+		t.Fatalf("runNextTraceAPIV4TokenSetup() error = %v", err)
 	}
 	if !strings.Contains(stdout.String(), "read -r NEXTTRACE_API_V4_TOKEN") {
 		t.Fatalf("stdout = %q, want POSIX setup script", stdout.String())
 	}
-	if got := os.Getenv(util.EnvAPIV4TokenKey); got != "" {
-		t.Fatalf("%s = %q, want unchanged empty", util.EnvAPIV4TokenKey, got)
+	if got := os.Getenv(util.EnvNextTraceAPIV4TokenKey); got != "" {
+		t.Fatalf("%s = %q, want unchanged empty", util.EnvNextTraceAPIV4TokenKey, got)
 	}
 }

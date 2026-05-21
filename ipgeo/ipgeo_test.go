@@ -13,7 +13,7 @@ import (
 
 func TestGetSourceMappings(t *testing.T) {
 	t.Helper()
-	t.Setenv(util.EnvAPIV4TokenKey, "")
+	t.Setenv(util.EnvNextTraceAPIV4TokenKey, "")
 	tests := []struct {
 		name  string
 		input string
@@ -43,29 +43,29 @@ func TestGetSourceMappings(t *testing.T) {
 	}
 }
 
-func TestGetSourceUsesAPIV4ForLeoMoeOnlyWhenTokenConfigured(t *testing.T) {
-	t.Setenv(util.EnvAPIV4TokenKey, "v4-token")
+func TestGetSourceUsesNextTraceAPIV4ForLeoMoeOnlyWhenTokenConfigured(t *testing.T) {
+	t.Setenv(util.EnvNextTraceAPIV4TokenKey, "v4-token")
 
 	got := GetSource("LeoMoeAPI")
 	require.NotNil(t, got)
-	assert.Equal(t, reflect.ValueOf(LeoIPV4HTTP).Pointer(), reflect.ValueOf(got).Pointer())
+	assert.Equal(t, reflect.ValueOf(LeoIPNextTraceAPIV4HTTP).Pointer(), reflect.ValueOf(got).Pointer())
 
 	fallback := GetSource("unknown")
 	require.NotNil(t, fallback)
-	assert.Equal(t, reflect.ValueOf(LeoIPV4HTTP).Pointer(), reflect.ValueOf(fallback).Pointer())
+	assert.Equal(t, reflect.ValueOf(LeoIPNextTraceAPIV4HTTP).Pointer(), reflect.ValueOf(fallback).Pointer())
 
 	nonLeo := GetSource("IPInfo")
 	require.NotNil(t, nonLeo)
 	assert.Equal(t, reflect.ValueOf(IPInfo).Pointer(), reflect.ValueOf(nonLeo).Pointer())
 }
 
-func TestAPIV4TokenConfiguredReadsCurrentProcessEnv(t *testing.T) {
-	t.Setenv(util.EnvAPIV4TokenKey, "")
-	assert.False(t, APIV4TokenConfigured())
+func TestNextTraceAPIV4TokenConfiguredReadsCurrentProcessEnv(t *testing.T) {
+	t.Setenv(util.EnvNextTraceAPIV4TokenKey, "")
+	assert.False(t, NextTraceAPIV4TokenConfigured())
 
-	require.NoError(t, os.Setenv(util.EnvAPIV4TokenKey, " runtime-token "))
-	t.Cleanup(func() { _ = os.Unsetenv(util.EnvAPIV4TokenKey) })
-	assert.True(t, APIV4TokenConfigured())
+	require.NoError(t, os.Setenv(util.EnvNextTraceAPIV4TokenKey, " runtime-token "))
+	t.Cleanup(func() { _ = os.Unsetenv(util.EnvNextTraceAPIV4TokenKey) })
+	assert.True(t, NextTraceAPIV4TokenConfigured())
 }
 
 func TestDisableGeoIP(t *testing.T) {

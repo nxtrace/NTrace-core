@@ -630,7 +630,7 @@ export NEXTTRACE_CHUNZHENURL=http://127.0.0.1:2060
 export NEXTTRACE_DATAPROVIDER=ipinfo
 ```
 
-当 `NEXTTRACE_API_V4_TOKEN` 未设置时，LeoMoeAPI 默认仍使用旧 v3 WebSocket API。只想在当前 shell 会话启用 v4 HTTP GeoIP API 时，先打开 token 页面，再让 shell 执行设置命令：
+当 `NEXTTRACE_API_V4_TOKEN` 未设置时，LeoMoeAPI 默认仍使用旧 v3 WebSocket API。只想在当前 shell 会话启用 NextTrace API v4 HTTP GeoIP 接口时，先打开 token 页面，再让 shell 执行设置命令：
 
 ```bash
 # Token 页面：
@@ -645,7 +645,7 @@ iex (& nexttrace.exe -x)
 
 `nexttrace -x` 会把使用提示和 token 页面 URL 输出到 stderr；stdout 是给 `eval` / `iex` 消费的 shell 代码，这段代码会在当前 shell 中提示输入 token，并设置 `NEXTTRACE_API_V4_TOKEN`。直接运行 `nexttrace -x` 只会提示正确配置命令，因为子进程不能修改父 shell 的环境变量。该命令不会写 shell profile、永久环境变量或 `nt_config.yaml`。
 
-设置 `NEXTTRACE_API_V4_TOKEN` 且当前数据源仍为 `LeoMoeAPI` 时，NextTrace 会请求 `GET https://api.nxtrace.org/v4/ipGeo?ip=<ip>`，并只通过 `X-NextTrace-Token: <token>` 请求头传 token；请求没有 JSON body。成功响应是直接映射到现有输出字段的 GeoIP JSON；配额信息只解析响应头（`X-NextTrace-Quota-Remaining`、`X-NextTrace-Quota-Expires-At`、`X-NextTrace-Quota-Cost`、`X-NextTrace-Quota-Source`），不改变默认输出格式。错误响应优先解析 `{"error":{"message":"..."}}`；已知状态包括 `400` 空/非法 IP、`401` unauthorized、`429` quota exhausted、`500` internal server error。v4 token 模式下的错误不会 fallback 到旧 v3 WebSocket API。
+设置 `NEXTTRACE_API_V4_TOKEN` 且当前数据源仍为 `LeoMoeAPI` 时，NextTrace 会请求 `GET https://api.nxtrace.org/v4/ipGeo?ip=<ip>`，并只通过 `X-NextTrace-Token: <token>` 请求头传 token；请求没有 JSON body。成功响应是直接映射到现有输出字段的 GeoIP JSON；配额信息只解析响应头（`X-NextTrace-Quota-Remaining`、`X-NextTrace-Quota-Expires-At`、`X-NextTrace-Quota-Cost`、`X-NextTrace-Quota-Source`），不改变默认输出格式。错误响应优先解析 `{"error":{"message":"..."}}`；已知状态包括 `400` 空/非法 IP、`401` unauthorized、`429` quota exhausted、`500` internal server error。NextTrace API v4 token 模式下的错误不会 fallback 到旧 v3 WebSocket API。
 
 #### `NextTrace`支持使用混合参数和简略参数
 

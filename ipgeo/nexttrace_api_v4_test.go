@@ -18,7 +18,7 @@ func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 	return f(req)
 }
 
-func TestAPIV4ClientLookupBuildsRequestAndParsesResponse(t *testing.T) {
+func TestNextTraceAPIV4ClientLookupBuildsRequestAndParsesResponse(t *testing.T) {
 	expires := "2026-05-22T12:00:00Z"
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -30,8 +30,8 @@ func TestAPIV4ClientLookupBuildsRequestAndParsesResponse(t *testing.T) {
 		if got := r.URL.Query().Get("ip"); got != "2001:db8::1" {
 			t.Fatalf("query ip = %q, want escaped IPv6 value", got)
 		}
-		if got := r.Header.Get(apiV4TokenHeader); got != "test-token" {
-			t.Fatalf("%s = %q, want test-token", apiV4TokenHeader, got)
+		if got := r.Header.Get(nextTraceAPIV4TokenHeader); got != "test-token" {
+			t.Fatalf("%s = %q, want test-token", nextTraceAPIV4TokenHeader, got)
 		}
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
@@ -67,7 +67,7 @@ func TestAPIV4ClientLookupBuildsRequestAndParsesResponse(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client := NewAPIV4Client(srv.URL+"/v4/ipGeo", "test-token", srv.Client())
+	client := NewNextTraceAPIV4Client(srv.URL+"/v4/ipGeo", "test-token", srv.Client())
 	geo, quota, err := client.Lookup(context.Background(), "2001:db8::1")
 	if err != nil {
 		t.Fatalf("Lookup() error = %v", err)
@@ -89,16 +89,16 @@ func TestAPIV4ClientLookupBuildsRequestAndParsesResponse(t *testing.T) {
 	}
 }
 
-func TestDecodeAPIV4GeoAllowsMissingOrEmptyRouter(t *testing.T) {
+func TestDecodeNextTraceAPIV4GeoAllowsMissingOrEmptyRouter(t *testing.T) {
 	for _, body := range []string{
 		`{"ip":"1.1.1.1","router":null}`,
 		`{"ip":"1.1.1.1","router":""}`,
 		`{"ip":"1.1.1.1"}`,
 		`{"ip":"1.1.1.1","router":{}}`,
 	} {
-		geo, err := decodeAPIV4Geo([]byte(body))
+		geo, err := decodeNextTraceAPIV4Geo([]byte(body))
 		if err != nil {
-			t.Fatalf("decodeAPIV4Geo(%s) error = %v", body, err)
+			t.Fatalf("decodeNextTraceAPIV4Geo(%s) error = %v", body, err)
 		}
 		if geo.IP != "1.1.1.1" {
 			t.Fatalf("IP = %q, want 1.1.1.1", geo.IP)
@@ -106,7 +106,7 @@ func TestDecodeAPIV4GeoAllowsMissingOrEmptyRouter(t *testing.T) {
 	}
 }
 
-func TestAPIV4ClientLookupHTTPErrorMessages(t *testing.T) {
+func TestNextTraceAPIV4ClientLookupHTTPErrorMessages(t *testing.T) {
 	tests := []struct {
 		name       string
 		statusCode int
@@ -129,7 +129,7 @@ func TestAPIV4ClientLookupHTTPErrorMessages(t *testing.T) {
 			}))
 			defer srv.Close()
 
-			client := NewAPIV4Client(srv.URL, "secret-token", srv.Client())
+			client := NewNextTraceAPIV4Client(srv.URL, "secret-token", srv.Client())
 			_, _, err := client.Lookup(context.Background(), "1.1.1.1")
 			if err == nil {
 				t.Fatal("Lookup() error = nil, want error")
@@ -141,14 +141,14 @@ func TestAPIV4ClientLookupHTTPErrorMessages(t *testing.T) {
 	}
 }
 
-func TestAPIV4ClientLookupRedactsTokenFromErrorBody(t *testing.T) {
+func TestNextTraceAPIV4ClientLookupRedactsTokenFromErrorBody(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		_, _ = w.Write([]byte(`{"error":{"message":"bad token secret-token"}}`))
 	}))
 	defer srv.Close()
 
-	client := NewAPIV4Client(srv.URL, "secret-token", srv.Client())
+	client := NewNextTraceAPIV4Client(srv.URL, "secret-token", srv.Client())
 	_, _, err := client.Lookup(context.Background(), "1.1.1.1")
 	if err == nil {
 		t.Fatal("Lookup() error = nil, want error")
@@ -161,8 +161,8 @@ func TestAPIV4ClientLookupRedactsTokenFromErrorBody(t *testing.T) {
 	}
 }
 
-func TestAPIV4ClientLookupNetworkErrorDoesNotFallback(t *testing.T) {
-	client := NewAPIV4Client("https://api.nxtrace.org/v4/ipGeo", "secret-token", &http.Client{
+func TestNextTraceAPIV4ClientLookupNetworkErrorDoesNotFallback(t *testing.T) {
+	client := NewNextTraceAPIV4Client("https://api.nxtrace.org/v4/ipGeo", "secret-token", &http.Client{
 		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			return nil, errors.New("network down secret-token")
 		}),
