@@ -407,11 +407,16 @@ func TestDialNextTraceAPIV4FallsBackWhenCachedFastIPFails(t *testing.T) {
 		util.SetFastIPCacheState(oldCache, oldMeta)
 	})
 
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	listenConfig := net.ListenConfig{}
+	listener, err := listenConfig.Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
-		t.Fatalf("net.Listen() error = %v", err)
+		t.Fatalf("Listen() error = %v", err)
 	}
-	defer listener.Close()
+	defer func() {
+		if err := listener.Close(); err != nil {
+			t.Fatalf("listener.Close() error = %v", err)
+		}
+	}()
 	accepted := make(chan net.Conn, 1)
 	go func() {
 		conn, err := listener.Accept()

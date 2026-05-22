@@ -227,15 +227,19 @@ func nextTraceAPIV4APIEndpointHostPort(endpoint string) (string, string, bool) {
 }
 
 func newNextTraceAPIV4HTTPClient(endpoint string, timeout time.Duration) *http.Client {
+	client := util.NewGeoHTTPClient(timeout)
 	host, port, ok := nextTraceAPIV4APIEndpointHostPort(endpoint)
 	if !ok {
-		return util.NewGeoHTTPClient(timeout)
+		return client
+	}
+	transport, ok := client.Transport.(*http.Transport)
+	if !ok || transport == nil {
+		return client
 	}
 
-	transport := newNextTraceAPIV4BaseTransport()
 	if proxyURL := util.GetProxy(); proxyURL != nil {
 		transport.Proxy = http.ProxyURL(proxyURL)
-		return &http.Client{Timeout: timeout, Transport: transport}
+		return client
 	}
 
 	dialer := &net.Dialer{
@@ -245,14 +249,7 @@ func newNextTraceAPIV4HTTPClient(endpoint string, timeout time.Duration) *http.C
 	transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
 		return dialNextTraceAPIV4(ctx, dialer, network, addr, host, port)
 	}
-	return &http.Client{Timeout: timeout, Transport: transport}
-}
-
-func newNextTraceAPIV4BaseTransport() *http.Transport {
-	if base, ok := http.DefaultTransport.(*http.Transport); ok && base != nil {
-		return base.Clone()
-	}
-	return &http.Transport{}
+	return client
 }
 
 func dialNextTraceAPIV4(ctx context.Context, dialer *net.Dialer, network string, addr string, apiHost string, apiPort string) (net.Conn, error) {
