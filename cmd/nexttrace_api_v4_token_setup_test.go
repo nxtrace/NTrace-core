@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"bytes"
+	"fmt"
+	"io"
 	"os"
 	"strings"
 	"testing"
@@ -66,6 +68,34 @@ func TestRunNextTraceAPIV4TokenSetupEmptyTokenDoesNotWrite(t *testing.T) {
 	}
 	if wrote {
 		t.Fatal("writeToken called for empty token")
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout = %q, want empty", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "was not written") {
+		t.Fatalf("stderr = %q, want empty-token message", stderr.String())
+	}
+}
+
+func TestRunNextTraceAPIV4TokenSetupWrappedEOFDoesNotWrite(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	wrote := false
+	err := runNextTraceAPIV4TokenSetup(nextTraceAPIV4TokenSetupOptions{
+		stdout: &stdout,
+		stderr: &stderr,
+		readToken: func() (string, error) {
+			return "", fmt.Errorf("wrapped: %w", io.EOF)
+		},
+		writeToken: func(token string) (string, error) {
+			wrote = true
+			return "", nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("runNextTraceAPIV4TokenSetup() error = %v", err)
+	}
+	if wrote {
+		t.Fatal("writeToken called for wrapped EOF")
 	}
 	if stdout.Len() != 0 {
 		t.Fatalf("stdout = %q, want empty", stdout.String())

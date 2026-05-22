@@ -79,6 +79,44 @@ func TestLeoIPNextTraceAPIV4HTTPNormalizesTimeout(t *testing.T) {
 	}
 }
 
+func TestLeoIPNextTraceAPIV4HTTPUsesTimeoutAsTotalBudget(t *testing.T) {
+	t.Setenv(util.EnvNextTraceAPIV4TokenKey, "test-token")
+	withNextTraceAPIV4RetryDelays(t, 3*time.Second, 3*time.Second)
+	oldEndpoint := nextTraceAPIV4GeoEndpoint
+	oldFactory := nextTraceAPIV4HTTPClientFactory
+	t.Cleanup(func() {
+		nextTraceAPIV4GeoEndpoint = oldEndpoint
+		nextTraceAPIV4HTTPClientFactory = oldFactory
+	})
+
+	attempts := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error":{"message":"temporary failure"}}`))
+	}))
+	defer srv.Close()
+	nextTraceAPIV4GeoEndpoint = srv.URL
+	nextTraceAPIV4HTTPClientFactory = func(timeout time.Duration) *http.Client {
+		client := srv.Client()
+		client.Timeout = timeout
+		return client
+	}
+
+	start := time.Now()
+	_, err := LeoIPNextTraceAPIV4HTTP("1.1.1.1", 2*time.Second, "cn", false)
+	elapsed := time.Since(start)
+	if err == nil {
+		t.Fatal("LeoIPNextTraceAPIV4HTTP() error = nil, want error")
+	}
+	if attempts != 1 {
+		t.Fatalf("attempts = %d, want 1 before timeout budget stops retry", attempts)
+	}
+	if elapsed >= 2900*time.Millisecond {
+		t.Fatalf("elapsed = %s, want bounded by 2s timeout budget", elapsed)
+	}
+}
+
 func TestNextTraceAPIV4ClientLookupBuildsRequestAndParsesResponse(t *testing.T) {
 	expires := "2026-05-22T12:00:00Z"
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -147,6 +185,23 @@ func TestNextTraceAPIV4ClientLookupBuildsRequestAndParsesResponse(t *testing.T) 
 	}
 	if !quota.HasExpiresAt || quota.ExpiresAt.Format(time.RFC3339) != expires {
 		t.Fatalf("quota expires = %+v, want %s", quota, expires)
+	}
+}
+
+func TestNextTraceAPIV4ClientLookupRejectsOversizedSuccessBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = w.Write([]byte(`{"ip":"1.1.1.1","pad":"` + strings.Repeat("x", nextTraceAPIV4MaxGeoBody) + `"}`))
+	}))
+	defer srv.Close()
+
+	client := NewNextTraceAPIV4Client(srv.URL, "secret-token", srv.Client())
+	_, _, err := client.Lookup(context.Background(), "1.1.1.1")
+	if err == nil {
+		t.Fatal("Lookup() error = nil, want oversized response error")
+	}
+	if !strings.Contains(err.Error(), "response body exceeds") {
+		t.Fatalf("error = %q, want body limit message", err.Error())
 	}
 }
 
@@ -326,6 +381,34 @@ func TestNextTraceAPIV4ClientLookupHTTPErrorMessages(t *testing.T) {
 				t.Fatalf("error = %q, want containing %q", err.Error(), tt.want)
 			}
 		})
+	}
+}
+
+func TestNextTraceAPIV4ClientLookupTruncatesLargeErrorBodyAndRedactsToken(t *testing.T) {
+	withNextTraceAPIV4RetryDelays(t, 0, 0)
+	body := strings.Repeat("a", 100) + " secret-token " + strings.Repeat("b", nextTraceAPIV4MaxErrorBody)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	client := NewNextTraceAPIV4Client(srv.URL, "secret-token", srv.Client())
+	_, _, err := client.Lookup(context.Background(), "1.1.1.1")
+	if err == nil {
+		t.Fatal("Lookup() error = nil, want error")
+	}
+	if strings.Contains(err.Error(), "secret-token") {
+		t.Fatalf("error leaked token: %q", err.Error())
+	}
+	if !strings.Contains(err.Error(), "[REDACTED]") {
+		t.Fatalf("error = %q, want redaction marker", err.Error())
+	}
+	if !strings.Contains(err.Error(), "truncated at 512 bytes") {
+		t.Fatalf("error = %q, want truncated marker", err.Error())
+	}
+	if strings.Contains(err.Error(), strings.Repeat("b", nextTraceAPIV4MaxErrorBody)) {
+		t.Fatalf("error included unbounded body: %q", err.Error())
 	}
 }
 

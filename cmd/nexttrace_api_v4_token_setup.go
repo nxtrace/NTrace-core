@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -22,10 +23,6 @@ type nextTraceAPIV4TokenSetupOptions struct {
 }
 
 func runNextTraceAPIV4TokenSetup(opts nextTraceAPIV4TokenSetupOptions) error {
-	stdout := opts.stdout
-	if stdout == nil {
-		stdout = os.Stdout
-	}
 	stderr := opts.stderr
 	if stderr == nil {
 		stderr = os.Stderr
@@ -43,7 +40,7 @@ func runNextTraceAPIV4TokenSetup(opts nextTraceAPIV4TokenSetupOptions) error {
 
 	printNextTraceAPIV4TokenSetupIntro(stderr)
 	token, err := readToken()
-	if err != nil && err != io.EOF {
+	if err != nil && !errors.Is(err, io.EOF) {
 		return err
 	}
 	token = strings.TrimSpace(token)
@@ -56,7 +53,6 @@ func runNextTraceAPIV4TokenSetup(opts nextTraceAPIV4TokenSetupOptions) error {
 	if err != nil {
 		return fmt.Errorf("write NextTrace API v4 session token: %w", err)
 	}
-	_, _ = fmt.Fprint(stdout, "")
 	fmt.Fprintf(stderr, "Saved NextTrace API v4 token for this shell session: %s\n", path)
 	fmt.Fprintf(stderr, "NextTrace will load it into %s for processes started from this shell.\n", util.EnvNextTraceAPIV4TokenKey)
 	return nil
@@ -81,7 +77,7 @@ func readNextTraceAPIV4Token(stdin *os.File, stderr io.Writer) (string, error) {
 	}
 	reader := bufio.NewReader(stdin)
 	line, err := reader.ReadString('\n')
-	if err != nil && err != io.EOF {
+	if err != nil && !errors.Is(err, io.EOF) {
 		return "", err
 	}
 	return line, err

@@ -20,6 +20,7 @@ const (
 	NextTraceAPIV4TokenPageURL = "https://api.nxtrace.org/v4/api-tokens"
 	nextTraceAPIV4TokenHeader  = "X-NextTrace-Token"
 	nextTraceAPIV4MaxErrorBody = 512
+	nextTraceAPIV4MaxGeoBody   = 1 << 20
 	nextTraceAPIV4MinTimeout   = 2 * time.Second
 	nextTraceAPIV4MaxAttempts  = 3
 )
@@ -76,7 +77,9 @@ func LeoIPNextTraceAPIV4HTTP(ip string, timeout time.Duration, lang string, mapt
 	_ = maptrace
 	timeout = normalizeNextTraceAPIV4Timeout(timeout)
 	client := NewNextTraceAPIV4Client(nextTraceAPIV4GeoEndpoint, util.GetNextTraceAPIV4Token(), nextTraceAPIV4HTTPClientFactory(timeout))
-	geo, _, err := client.Lookup(context.Background(), ip)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	geo, _, err := client.Lookup(ctx, ip)
 	return geo, err
 }
 
@@ -118,12 +121,19 @@ func (c *NextTraceAPIV4Client) lookupOnce(ctx context.Context, ip string) (*IPGe
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	bodyLimit := int64(nextTraceAPIV4MaxGeoBody)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		bodyLimit = nextTraceAPIV4MaxErrorBody
+	}
+	body, truncated, err := readNextTraceAPIV4Body(resp.Body, bodyLimit)
 	if err != nil {
 		return nil, NextTraceAPIV4Quota{}, retryableNextTraceAPIV4Error("NextTrace API v4 GeoIP read failed: %s", err, c.token)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, NextTraceAPIV4Quota{}, c.httpError(resp.StatusCode, resp.Status, body)
+		return nil, NextTraceAPIV4Quota{}, c.httpError(resp.StatusCode, resp.Status, body, truncated)
+	}
+	if truncated {
+		return nil, NextTraceAPIV4Quota{}, fmt.Errorf("NextTrace API v4 GeoIP response body exceeds %d bytes", nextTraceAPIV4MaxGeoBody)
 	}
 
 	geo, err := decodeNextTraceAPIV4Geo(body)
@@ -159,10 +169,21 @@ func (c *NextTraceAPIV4Client) newLookupRequest(ctx context.Context, ip string) 
 	return req, nil
 }
 
-func (c *NextTraceAPIV4Client) httpError(statusCode int, status string, body []byte) error {
+func readNextTraceAPIV4Body(r io.Reader, limit int64) ([]byte, bool, error) {
+	body, err := io.ReadAll(io.LimitReader(r, limit+1))
+	if err != nil {
+		return nil, false, err
+	}
+	if int64(len(body)) <= limit {
+		return body, false, nil
+	}
+	return body[:limit], true, nil
+}
+
+func (c *NextTraceAPIV4Client) httpError(statusCode int, status string, body []byte, truncated bool) error {
 	msg := parseNextTraceAPIV4ErrorMessage(body)
 	if msg == "" {
-		msg = boundedNextTraceAPIV4Body(body)
+		msg = boundedNextTraceAPIV4Body(body, truncated)
 	}
 	if msg == "" {
 		msg = status
@@ -260,12 +281,19 @@ func parseNextTraceAPIV4ErrorMessage(body []byte) string {
 	return strings.TrimSpace(parsed.Error.Message)
 }
 
-func boundedNextTraceAPIV4Body(body []byte) string {
+func boundedNextTraceAPIV4Body(body []byte, truncated bool) string {
 	body = []byte(strings.TrimSpace(string(body)))
 	if len(body) > nextTraceAPIV4MaxErrorBody {
 		body = body[:nextTraceAPIV4MaxErrorBody]
 	}
-	return string(body)
+	msg := string(body)
+	if truncated {
+		if msg == "" {
+			return fmt.Sprintf("response body truncated at %d bytes", nextTraceAPIV4MaxErrorBody)
+		}
+		return fmt.Sprintf("%s... [truncated at %d bytes]", msg, nextTraceAPIV4MaxErrorBody)
+	}
+	return msg
 }
 
 func redactNextTraceAPIV4Token(s string, token string) string {

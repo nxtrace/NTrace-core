@@ -3,6 +3,8 @@ package util
 import (
 	"io"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -46,6 +48,8 @@ func TestGetSecretEnvDefaultDoesNotPrintValueInDebugMode(t *testing.T) {
 	oldStdout := os.Stdout
 	r, w, err := os.Pipe()
 	require.NoError(t, err)
+	defer r.Close()
+	defer w.Close()
 	os.Stdout = w
 	defer func() { os.Stdout = oldStdout }()
 
@@ -115,7 +119,54 @@ func TestWriteNextTraceAPIV4SessionTokenWritesTempFiles(t *testing.T) {
 		body, err := os.ReadFile(path)
 		require.NoError(t, err)
 		assert.Equal(t, "file-token\n", string(body))
+		info, err := os.Stat(path)
+		require.NoError(t, err)
+		assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
 	}
+	info, err := os.Stat(filepath.Dir(paths.session))
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o700), info.Mode().Perm())
+}
+
+func TestWriteNextTraceAPIV4SessionTokenRejectsSymlinkFile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("creating symlinks on Windows can require extra privileges")
+	}
+	paths := overrideNextTraceAPIV4TokenPaths(t)
+	outside := filepath.Join(t.TempDir(), "outside-token")
+	require.NoError(t, os.WriteFile(outside, []byte("outside\n"), 0o600))
+	require.NoError(t, os.Symlink(outside, paths.session))
+
+	_, err := WriteNextTraceAPIV4SessionToken(" file-token ")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "symlink")
+	body, readErr := os.ReadFile(outside)
+	require.NoError(t, readErr)
+	assert.Equal(t, "outside\n", string(body))
+}
+
+func TestWriteNextTraceAPIV4SessionTokenRejectsSymlinkDirectory(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("creating symlinks on Windows can require extra privileges")
+	}
+	parent := t.TempDir()
+	realDir := filepath.Join(parent, "real")
+	linkDir := filepath.Join(parent, "link")
+	require.NoError(t, os.Mkdir(realDir, 0o700))
+	require.NoError(t, os.Symlink(realDir, linkDir))
+
+	oldPathFunc := nextTraceAPIV4SessionTokenPath
+	oldLatestPathFunc := nextTraceAPIV4LatestTokenPath
+	nextTraceAPIV4SessionTokenPath = func() string { return filepath.Join(linkDir, "session") }
+	nextTraceAPIV4LatestTokenPath = func() string { return filepath.Join(linkDir, "latest") }
+	t.Cleanup(func() {
+		nextTraceAPIV4SessionTokenPath = oldPathFunc
+		nextTraceAPIV4LatestTokenPath = oldLatestPathFunc
+	})
+
+	_, err := WriteNextTraceAPIV4SessionToken(" file-token ")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "symlink")
 }
 
 func overrideNextTraceAPIV4SessionTokenPath(t *testing.T) string {
