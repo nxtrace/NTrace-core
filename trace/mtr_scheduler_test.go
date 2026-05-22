@@ -1282,7 +1282,7 @@ func TestScheduler_AsyncMetadataDN42EmptyHostFallsBackToIPGeo(t *testing.T) {
 	}
 	rt.agg.Update(rt.singleProbeResult(1, result), 1)
 	rt.maybeLaunchMetadataLookup(result)
-	processMetadataResults(t, rt, 2)
+	processMetadataResults(t, rt, mtrAsyncMetadataMaxRetries+2)
 
 	select {
 	case got := <-queryCh:
@@ -1550,7 +1550,7 @@ func TestScheduler_ResetCancelsMetadataGeneration(t *testing.T) {
 	}
 }
 
-func TestScheduler_AsyncMetadataBacksOffEmptyLookup(t *testing.T) {
+func TestScheduler_AsyncMetadataRetriesEmptyGeoLookupImmediatelyThenStops(t *testing.T) {
 	var lookupCount int32
 	rt, err := newMTRSchedulerRuntime(context.Background(), &mockTTLProber{}, NewMTRAggregator(), mtrSchedulerConfig{
 		BeginHop:         1,
@@ -1578,24 +1578,21 @@ func TestScheduler_AsyncMetadataBacksOffEmptyLookup(t *testing.T) {
 		Addr:    &net.IPAddr{IP: net.ParseIP("1.0.0.2")},
 	}
 	rt.maybeLaunchMetadataLookup(result)
+	processMetadataResults(t, rt, mtrAsyncMetadataMaxRetries+1)
 
-	select {
-	case mr := <-rt.metadataCh:
-		rt.processMetadataResult(mr)
-	case <-time.After(time.Second):
-		t.Fatal("metadata lookup did not finish")
+	if got, want := atomic.LoadInt32(&lookupCount), int32(mtrAsyncMetadataMaxRetries+1); got != want {
+		t.Fatalf("lookup count = %d, want %d", got, want)
 	}
-
-	if got := atomic.LoadInt32(&lookupCount); got != 1 {
-		t.Fatalf("lookup count = %d, want 1", got)
+	if !rt.metadataGeoRetriesExhausted("1.0.0.2") {
+		t.Fatal("empty geo result should exhaust geo retries")
 	}
 
 	rt.maybeLaunchMetadataLookup(result)
 	if len(rt.metadataGeoInFlight) != 0 {
-		t.Fatal("empty metadata result should suppress immediate retry")
+		t.Fatal("exhausted geo retries should suppress later retries")
 	}
-	if got := atomic.LoadInt32(&lookupCount); got != 1 {
-		t.Fatalf("lookup count after backoff = %d, want 1", got)
+	if got, want := atomic.LoadInt32(&lookupCount), int32(mtrAsyncMetadataMaxRetries+1); got != want {
+		t.Fatalf("lookup count after exhaustion = %d, want %d", got, want)
 	}
 }
 
@@ -1645,7 +1642,7 @@ func TestScheduler_AsyncMetadataGeoFailureDoesNotBlockHostPatch(t *testing.T) {
 	}
 	rt.agg.Update(rt.singleProbeResult(1, result), 1)
 	rt.maybeLaunchMetadataLookup(result)
-	processMetadataResults(t, rt, 2)
+	processMetadataResults(t, rt, mtrAsyncMetadataMaxRetries+2)
 
 	stats := rt.agg.Snapshot()
 	if len(stats) != 1 || stats[0].Host != "dns.example" {
@@ -1654,11 +1651,11 @@ func TestScheduler_AsyncMetadataGeoFailureDoesNotBlockHostPatch(t *testing.T) {
 	if stats[0].Geo != nil {
 		t.Fatalf("geo = %+v, want nil after geo failure", stats[0].Geo)
 	}
-	if !rt.metadataGeoBackoffActive("9.9.9.9", time.Now()) {
-		t.Fatal("geo failure should back off geo retries")
+	if !rt.metadataGeoRetriesExhausted("9.9.9.9") {
+		t.Fatal("geo failure should exhaust geo retries")
 	}
-	if rt.metadataHostBackoffActive("9.9.9.9", time.Now()) {
-		t.Fatal("geo failure should not back off host retries")
+	if rt.metadataHostRetriesExhausted("9.9.9.9") {
+		t.Fatal("geo failure should not exhaust host retries")
 	}
 }
 
@@ -1699,7 +1696,7 @@ func TestScheduler_AsyncMetadataHostFailureDoesNotBlockGeoPatch(t *testing.T) {
 	}
 	rt.agg.Update(rt.singleProbeResult(1, result), 1)
 	rt.maybeLaunchMetadataLookup(result)
-	processMetadataResults(t, rt, 2)
+	processMetadataResults(t, rt, mtrAsyncMetadataMaxRetries+2)
 
 	stats := rt.agg.Snapshot()
 	if len(stats) != 1 || stats[0].Geo == nil || stats[0].Geo.Asnumber != "64514" {
@@ -1708,11 +1705,11 @@ func TestScheduler_AsyncMetadataHostFailureDoesNotBlockGeoPatch(t *testing.T) {
 	if stats[0].Host != "" {
 		t.Fatalf("host = %q, want empty after host failure", stats[0].Host)
 	}
-	if !rt.metadataHostBackoffActive("9.9.9.9", time.Now()) {
-		t.Fatal("host failure should back off host retries")
+	if !rt.metadataHostRetriesExhausted("9.9.9.9") {
+		t.Fatal("host failure should exhaust host retries")
 	}
-	if rt.metadataGeoBackoffActive("9.9.9.9", time.Now()) {
-		t.Fatal("host failure should not back off geo retries")
+	if rt.metadataGeoRetriesExhausted("9.9.9.9") {
+		t.Fatal("host failure should not exhaust geo retries")
 	}
 }
 
@@ -1775,8 +1772,8 @@ func TestScheduler_AsyncMetadataNaturalCompletionUsesBoundedContext(t *testing.T
 	if elapsed < floor-500*time.Millisecond {
 		t.Fatalf("runMTRScheduler elapsed = %s, want metadata timeout floor near %s", elapsed, floor)
 	}
-	if elapsed > floor+900*time.Millisecond {
-		t.Fatalf("runMTRScheduler elapsed = %s, want async metadata timeout near %s", elapsed, floor)
+	if elapsed > floor+2*time.Second {
+		t.Fatalf("runMTRScheduler elapsed = %s, want async metadata bounded near slow source completion", elapsed)
 	}
 }
 
