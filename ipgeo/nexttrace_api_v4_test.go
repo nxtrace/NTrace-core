@@ -24,6 +24,24 @@ func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 	return f(req)
 }
 
+type closeIdleRoundTripper struct {
+	closed *int32
+}
+
+func (rt *closeIdleRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Status:     "200 OK",
+		Header:     make(http.Header),
+		Body:       io.NopCloser(strings.NewReader(`{"ip":"` + req.URL.Query().Get("ip") + `"}`)),
+		Request:    req,
+	}, nil
+}
+
+func (rt *closeIdleRoundTripper) CloseIdleConnections() {
+	atomic.AddInt32(rt.closed, 1)
+}
+
 func withNextTraceAPIV4RetryDelays(t *testing.T, delays ...time.Duration) {
 	t.Helper()
 	old := nextTraceAPIV4RetryDelays
@@ -36,7 +54,17 @@ func withNextTraceAPIV4RetryDelays(t *testing.T, delays ...time.Duration) {
 func resetNextTraceAPIV4ClientCache() {
 	nextTraceAPIV4ClientCacheMu.Lock()
 	defer nextTraceAPIV4ClientCacheMu.Unlock()
+	for _, client := range nextTraceAPIV4ClientCache {
+		closeNextTraceAPIV4ClientIdleConnections(client)
+	}
 	nextTraceAPIV4ClientCache = make(map[nextTraceAPIV4ClientCacheKey]*NextTraceAPIV4Client)
+	nextTraceAPIV4ClientCacheOrder = nil
+}
+
+func nextTraceAPIV4ClientCacheLen() int {
+	nextTraceAPIV4ClientCacheMu.RLock()
+	defer nextTraceAPIV4ClientCacheMu.RUnlock()
+	return len(nextTraceAPIV4ClientCache)
 }
 
 func TestLeoIPNextTraceAPIV4HTTPNormalizesTimeout(t *testing.T) {
@@ -230,6 +258,128 @@ func TestLeoIPNextTraceAPIV4HTTPCacheKeyIncludesTokenAndTimeout(t *testing.T) {
 	}
 	if got := atomic.LoadInt32(&factoryCalls); got != 3 {
 		t.Fatalf("factory calls after timeout change = %d, want 3", got)
+	}
+}
+
+func TestLeoIPNextTraceAPIV4HTTPCacheKeyIncludesGeoDNSResolver(t *testing.T) {
+	t.Setenv(util.EnvNextTraceAPIV4TokenKey, "test-token")
+	oldEndpoint := nextTraceAPIV4GeoEndpoint
+	oldFactory := nextTraceAPIV4HTTPClientFactory
+	oldResolver := util.CurrentGeoDNSResolver()
+	t.Cleanup(func() {
+		nextTraceAPIV4GeoEndpoint = oldEndpoint
+		nextTraceAPIV4HTTPClientFactory = oldFactory
+		util.SetGeoDNSResolver(oldResolver)
+		resetNextTraceAPIV4ClientCache()
+	})
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = w.Write([]byte(`{"ip":"` + r.URL.Query().Get("ip") + `"}`))
+	}))
+	defer srv.Close()
+
+	var factoryCalls int32
+	nextTraceAPIV4GeoEndpoint = srv.URL
+	nextTraceAPIV4HTTPClientFactory = func(timeout time.Duration) *http.Client {
+		atomic.AddInt32(&factoryCalls, 1)
+		client := srv.Client()
+		client.Timeout = timeout
+		return client
+	}
+	util.SetGeoDNSResolver("")
+	resetNextTraceAPIV4ClientCache()
+
+	if _, err := LeoIPNextTraceAPIV4HTTP("1.1.1.1", 2*time.Second, "cn", false); err != nil {
+		t.Fatalf("default resolver lookup error = %v", err)
+	}
+	if got := atomic.LoadInt32(&factoryCalls); got != 1 {
+		t.Fatalf("factory calls after default resolver = %d, want 1", got)
+	}
+
+	util.SetGeoDNSResolver("google")
+	if _, err := LeoIPNextTraceAPIV4HTTP("8.8.8.8", 2*time.Second, "cn", false); err != nil {
+		t.Fatalf("google resolver lookup error = %v", err)
+	}
+	if got := atomic.LoadInt32(&factoryCalls); got != 2 {
+		t.Fatalf("factory calls after google resolver = %d, want 2", got)
+	}
+
+	util.SetGeoDNSResolver("cloudflare")
+	if _, err := LeoIPNextTraceAPIV4HTTP("9.9.9.9", 2*time.Second, "cn", false); err != nil {
+		t.Fatalf("cloudflare resolver lookup error = %v", err)
+	}
+	if got := atomic.LoadInt32(&factoryCalls); got != 3 {
+		t.Fatalf("factory calls after cloudflare resolver = %d, want 3", got)
+	}
+
+	util.SetGeoDNSResolver("google")
+	if _, err := LeoIPNextTraceAPIV4HTTP("1.0.0.1", 2*time.Second, "cn", false); err != nil {
+		t.Fatalf("google resolver reuse lookup error = %v", err)
+	}
+	if got := atomic.LoadInt32(&factoryCalls); got != 3 {
+		t.Fatalf("factory calls after returning to google = %d, want 3", got)
+	}
+}
+
+func TestNextTraceAPIV4ClientCacheEvictsOldestEntry(t *testing.T) {
+	oldFactory := nextTraceAPIV4HTTPClientFactory
+	oldResolver := util.CurrentGeoDNSResolver()
+	t.Cleanup(func() {
+		nextTraceAPIV4HTTPClientFactory = oldFactory
+		util.SetGeoDNSResolver(oldResolver)
+		resetNextTraceAPIV4ClientCache()
+	})
+
+	var factoryCalls int32
+	var closeIdleCalls int32
+	nextTraceAPIV4HTTPClientFactory = func(timeout time.Duration) *http.Client {
+		atomic.AddInt32(&factoryCalls, 1)
+		return &http.Client{
+			Timeout:   timeout,
+			Transport: &closeIdleRoundTripper{closed: &closeIdleCalls},
+		}
+	}
+	util.SetGeoDNSResolver("")
+	resetNextTraceAPIV4ClientCache()
+
+	endpoint := "https://api.example.test/v4/ipGeo"
+	timeout := 2 * time.Second
+	firstKey := nextTraceAPIV4ClientCacheKey{
+		endpoint: endpoint,
+		token:    "token-0",
+		timeout:  timeout,
+	}
+	firstClient := cachedNextTraceAPIV4Client(endpoint, "token-0", timeout)
+	for i := 1; i <= nextTraceAPIV4CacheMaxSize; i++ {
+		_ = cachedNextTraceAPIV4Client(endpoint, "token-"+strconv.Itoa(i), timeout)
+	}
+
+	if got := nextTraceAPIV4ClientCacheLen(); got != nextTraceAPIV4CacheMaxSize {
+		t.Fatalf("cache size = %d, want %d", got, nextTraceAPIV4CacheMaxSize)
+	}
+	nextTraceAPIV4ClientCacheMu.RLock()
+	_, firstStillCached := nextTraceAPIV4ClientCache[firstKey]
+	nextTraceAPIV4ClientCacheMu.RUnlock()
+	if firstStillCached {
+		t.Fatal("oldest cache entry still present after exceeding cache size")
+	}
+	if got := atomic.LoadInt32(&closeIdleCalls); got != 1 {
+		t.Fatalf("CloseIdleConnections calls after first eviction = %d, want 1", got)
+	}
+
+	recreated := cachedNextTraceAPIV4Client(endpoint, "token-0", timeout)
+	if recreated == firstClient {
+		t.Fatal("evicted cache entry reused old client")
+	}
+	if got := nextTraceAPIV4ClientCacheLen(); got != nextTraceAPIV4CacheMaxSize {
+		t.Fatalf("cache size after recreating evicted entry = %d, want %d", got, nextTraceAPIV4CacheMaxSize)
+	}
+	if got := atomic.LoadInt32(&factoryCalls); got != int32(nextTraceAPIV4CacheMaxSize+2) {
+		t.Fatalf("factory calls = %d, want %d", got, nextTraceAPIV4CacheMaxSize+2)
+	}
+	if got := atomic.LoadInt32(&closeIdleCalls); got != 2 {
+		t.Fatalf("CloseIdleConnections calls after second eviction = %d, want 2", got)
 	}
 }
 

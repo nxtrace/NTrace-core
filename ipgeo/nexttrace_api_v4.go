@@ -24,6 +24,7 @@ const (
 	nextTraceAPIV4MaxGeoBody   = 1 << 20
 	nextTraceAPIV4MinTimeout   = 2 * time.Second
 	nextTraceAPIV4MaxAttempts  = 3
+	nextTraceAPIV4CacheMaxSize = 32
 )
 
 var (
@@ -31,13 +32,15 @@ var (
 	nextTraceAPIV4HTTPClientFactory = util.NewGeoHTTPClient
 	nextTraceAPIV4RetryDelays       = []time.Duration{200 * time.Millisecond, 500 * time.Millisecond}
 	nextTraceAPIV4ClientCache       = make(map[nextTraceAPIV4ClientCacheKey]*NextTraceAPIV4Client)
-	nextTraceAPIV4ClientCacheMu     sync.Mutex
+	nextTraceAPIV4ClientCacheOrder  []nextTraceAPIV4ClientCacheKey
+	nextTraceAPIV4ClientCacheMu     sync.RWMutex
 )
 
 type nextTraceAPIV4ClientCacheKey struct {
-	endpoint string
-	token    string
-	timeout  time.Duration
+	endpoint       string
+	token          string
+	timeout        time.Duration
+	geoDNSResolver string
 }
 
 type NextTraceAPIV4Quota struct {
@@ -100,19 +103,49 @@ func cachedNextTraceAPIV4Client(endpoint string, token string, timeout time.Dura
 	timeout = normalizeNextTraceAPIV4Timeout(timeout)
 
 	key := nextTraceAPIV4ClientCacheKey{
-		endpoint: endpoint,
-		token:    token,
-		timeout:  timeout,
+		endpoint:       endpoint,
+		token:          token,
+		timeout:        timeout,
+		geoDNSResolver: util.CurrentGeoDNSResolver(),
 	}
+
+	nextTraceAPIV4ClientCacheMu.RLock()
+	if client := nextTraceAPIV4ClientCache[key]; client != nil {
+		nextTraceAPIV4ClientCacheMu.RUnlock()
+		return client
+	}
+	nextTraceAPIV4ClientCacheMu.RUnlock()
+
 	nextTraceAPIV4ClientCacheMu.Lock()
 	defer nextTraceAPIV4ClientCacheMu.Unlock()
-
 	if client := nextTraceAPIV4ClientCache[key]; client != nil {
 		return client
 	}
+
 	client := NewNextTraceAPIV4Client(endpoint, token, nextTraceAPIV4HTTPClientFactory(timeout))
 	nextTraceAPIV4ClientCache[key] = client
+	nextTraceAPIV4ClientCacheOrder = append(nextTraceAPIV4ClientCacheOrder, key)
+	evictNextTraceAPIV4ClientCacheLocked()
 	return client
+}
+
+func evictNextTraceAPIV4ClientCacheLocked() {
+	for len(nextTraceAPIV4ClientCache) > nextTraceAPIV4CacheMaxSize && len(nextTraceAPIV4ClientCacheOrder) > 0 {
+		key := nextTraceAPIV4ClientCacheOrder[0]
+		copy(nextTraceAPIV4ClientCacheOrder, nextTraceAPIV4ClientCacheOrder[1:])
+		nextTraceAPIV4ClientCacheOrder[len(nextTraceAPIV4ClientCacheOrder)-1] = nextTraceAPIV4ClientCacheKey{}
+		nextTraceAPIV4ClientCacheOrder = nextTraceAPIV4ClientCacheOrder[:len(nextTraceAPIV4ClientCacheOrder)-1]
+		client := nextTraceAPIV4ClientCache[key]
+		delete(nextTraceAPIV4ClientCache, key)
+		closeNextTraceAPIV4ClientIdleConnections(client)
+	}
+}
+
+func closeNextTraceAPIV4ClientIdleConnections(client *NextTraceAPIV4Client) {
+	if client == nil || client.httpClient == nil {
+		return
+	}
+	client.httpClient.CloseIdleConnections()
 }
 
 func (c *NextTraceAPIV4Client) Lookup(ctx context.Context, ip string) (*IPGeoData, NextTraceAPIV4Quota, error) {
