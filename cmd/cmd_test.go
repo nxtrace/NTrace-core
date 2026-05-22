@@ -67,6 +67,16 @@ func TestLookupTargetIPOrExitReturnsFalseOnContextDeadline(t *testing.T) {
 	}
 }
 
+func TestInitLeoWebsocketSkipsV3WhenNextTraceAPIV4TokenConfigured(t *testing.T) {
+	t.Setenv(util.EnvNextTraceAPIV4TokenKey, "v4-token")
+	dataProvider := "LeoMoeAPI"
+	powProvider := "api.nxtrace.org"
+
+	if got := initLeoWebsocket(context.Background(), &dataProvider, &powProvider, false); got != nil {
+		t.Fatalf("initLeoWebsocket() = %+v, want nil when NextTrace API v4 token is configured", got)
+	}
+}
+
 func TestMaybeRunUninterruptedRawReturnsOnCanceledContext(t *testing.T) {
 	oldUninterrupted := util.Uninterrupted
 	util.Uninterrupted = true

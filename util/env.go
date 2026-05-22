@@ -26,6 +26,7 @@ var (
 )
 
 const EnvAllowCrossOriginKey = "NEXTTRACE_ALLOW_CROSS_ORIGIN"
+const EnvNextTraceAPIV4TokenKey = "NEXTTRACE_API_V4_TOKEN"
 
 func GetEnvTrimmed(key string) (string, bool) {
 	v, ok := os.LookupEnv(key)
@@ -34,7 +35,7 @@ func GetEnvTrimmed(key string) (string, bool) {
 	}
 	val := strings.TrimSpace(v)
 	if os.Getenv("NEXTTRACE_DEBUG") != "" {
-		fmt.Println("ENV", key, "detected as", val)
+		fmt.Fprintln(os.Stderr, "ENV", key, "detected as", val)
 	}
 	return val, true
 }
@@ -60,6 +61,18 @@ func GetEnvDefault(key string, def string) string {
 	return def
 }
 
+func GetSecretEnvDefault(key string, def string) string {
+	v, ok := os.LookupEnv(key)
+	if !ok {
+		return def
+	}
+	val := strings.TrimSpace(v)
+	if os.Getenv("NEXTTRACE_DEBUG") != "" {
+		fmt.Fprintln(os.Stderr, "ENV", key, "detected")
+	}
+	return val
+}
+
 func GetEnvInt(key string, def int) int {
 	if val, ok := GetEnvTrimmed(key); ok {
 		num, err := strconv.Atoi(val)
@@ -73,4 +86,24 @@ func GetEnvInt(key string, def int) int {
 
 func AllowCrossOriginBrowserAccess() bool {
 	return GetEnvBool(EnvAllowCrossOriginKey, false)
+}
+
+func GetNextTraceAPIV4Token() string {
+	if token := GetSecretEnvDefault(EnvNextTraceAPIV4TokenKey, ""); token != "" {
+		return token
+	}
+	token, err := ReadNextTraceAPIV4SessionToken()
+	if err != nil {
+		if os.Getenv("NEXTTRACE_DEBUG") != "" {
+			fmt.Fprintln(os.Stderr, "ENV", EnvNextTraceAPIV4TokenKey, "session token file read failed:", err, "paths:", NextTraceAPIV4SessionTokenPath(), NextTraceAPIV4LatestTokenPath())
+		}
+		return ""
+	}
+	if token != "" {
+		_ = os.Setenv(EnvNextTraceAPIV4TokenKey, token)
+		if os.Getenv("NEXTTRACE_DEBUG") != "" {
+			fmt.Fprintln(os.Stderr, "ENV", EnvNextTraceAPIV4TokenKey, "loaded from session token file")
+		}
+	}
+	return token
 }

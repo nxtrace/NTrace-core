@@ -884,6 +884,9 @@ func initLeoWebsocket(ctx context.Context, dataOrigin, powProvider *string, asyn
 	if !strings.EqualFold(*dataOrigin, "LEOMOEAPI") {
 		return nil
 	}
+	if ipgeo.NextTraceAPIV4TokenConfigured() {
+		return nil
+	}
 
 	var leoWs *wshandle.WsConn
 	if async {
@@ -1208,6 +1211,7 @@ func Execute() {
 	disableMaptrace := registerDisableMaptraceFlag(parser)
 	disableMPLS := parser.Flag("e", "disable-mpls", &argparse.Options{Help: "Disable MPLS"})
 	ver := parser.Flag("V", "version", &argparse.Options{Help: "Print version info and exit"})
+	setupNextTraceAPIV4Token := parser.Flag("x", "setup-api-v4-token", &argparse.Options{Help: "Store a session-only NextTrace API v4 token in a temporary file"})
 	speedMode := registerSpeedFlag(parser)
 	naliMode := registerNaliFlag(parser)
 	srcAddr := parser.String("s", "source", &argparse.Options{Help: "Use source address src_addr for outgoing packets"})
@@ -1258,6 +1262,16 @@ func Execute() {
 	rootCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	util.SrcDev = ""
+	if *setupNextTraceAPIV4Token {
+		if err := runNextTraceAPIV4TokenSetup(nextTraceAPIV4TokenSetupOptions{
+			stdin:  os.Stdin,
+			stdout: os.Stdout,
+			stderr: os.Stderr,
+		}); err != nil {
+			os.Exit(handleNextTraceAPIV4TokenSetupError(os.Stderr, err))
+		}
+		return
+	}
 
 	mtrModes := deriveEffectiveMTRModes(*mtrMode, *reportMode, *wideMode, *rawPrint)
 	if *naliMode {

@@ -639,6 +639,19 @@ export NEXTTRACE_CHUNZHENURL=http://127.0.0.1:2060
 export NEXTTRACE_DATAPROVIDER=ipinfo
 ```
 
+LeoMoeAPI keeps the old v3 WebSocket API as the default when no NextTrace API v4 token is available. To use the NextTrace API v4 HTTP GeoIP endpoint for the current shell session, run the setup command and paste your token:
+
+```bash
+# Token page:
+# GET https://api.nxtrace.org/v4/api-tokens
+
+nexttrace -x
+```
+
+`nexttrace -x` stores the token in temporary files: one scoped to the parent process ID, which is normally your current shell, and one same-user fallback file for wrapper commands such as `go run`. Later `nexttrace` commands first read the real `NEXTTRACE_API_V4_TOKEN`, then the parent-PID file, then the fallback file, and load the value into the process-local environment. The command does not write shell profiles, permanent environment variables, or `nt_config.yaml`.
+
+With `NEXTTRACE_API_V4_TOKEN` set and the active provider still `LeoMoeAPI`, NextTrace queries `GET https://api.nxtrace.org/v4/ipGeo?ip=<ip>` with `X-NextTrace-Token: <token>`. The request has no JSON body. Successful responses are direct GeoIP JSON mapped to the normal output fields; quota metadata is exposed only in headers (`X-NextTrace-Quota-Remaining`, `X-NextTrace-Quota-Expires-At`, `X-NextTrace-Quota-Cost`, `X-NextTrace-Quota-Source`) and does not change the default output format. Error responses prefer `{"error":{"message":"..."}}`; known statuses include `400` for empty/illegal IP, `401` unauthorized, `429` quota exhausted, and `500` internal server error. NextTrace API v4 token failures do not fall back to the old v3 WebSocket API.
+
 #### `NextTrace` supports mixed parameters and shortened parameters
 
 ```bash
@@ -708,6 +721,7 @@ NextTrace currently reads the following environment variables. For boolean switc
 | --- | --- | --- |
 | `NEXTTRACE_HOSTPORT` | `api.nxtrace.org` | Override the backend host or `host:port` used by LeoMoeAPI, tracemap, and FastIP flows. |
 | `NEXTTRACE_TOKEN` | unset | Pre-supplied LeoMoeAPI bearer token; when present, token fetching via PoW is skipped. |
+| `NEXTTRACE_API_V4_TOKEN` | unset | LeoMoeAPI NextTrace API v4 HTTP GeoIP token. When unset, NextTrace also checks the temporary token files written by `nexttrace -x`; if neither exists, LeoMoeAPI keeps using the old v3 WebSocket / PoW flow. |
 | `NEXTTRACE_POWPROVIDER` | `api.nxtrace.org` | Select the PoW provider. The built-in non-default alias is `sakura`. |
 | `NEXTTRACE_DEPLOY_ADDR` | unset | Default listen address for `--deploy` when `--listen` is not provided. |
 | `NEXTTRACE_DEPLOY_TOKEN` | unset | Token for `--deploy` WebUI/API/WebSocket/MCP access. CLI `--deploy-token` takes precedence. |
@@ -746,7 +760,7 @@ Usage: nexttrace [-h|--help] [--init] [-4|--ipv4] [-6|--ipv6] [-T|--tcp]
                  [-a|--always-rdns] [-P|--route-path] [--dn42] [-o|--output
                  "<value>"] [-O|--output-default] [--table] [--raw]
                  [-j|--json] [-c|--classic] [-f|--first <integer>] [-M|--map]
-                 [-e|--disable-mpls] [-V|--version]
+                 [-e|--disable-mpls] [-V|--version] [-x|--setup-api-v4-token]
                  [-s|--source "<value>"] [--source-port <integer>] [-D|--dev
                  "<value>"] [--listen "<value>"] [--deploy-token "<value>"]
                  [--mcp] [--deploy] [-z|--send-time <integer>]
@@ -822,6 +836,8 @@ Arguments:
   -M  --map                          Disable Print Trace Map
   -e  --disable-mpls                 Disable MPLS
   -V  --version                      Print version info and exit
+  -x  --setup-api-v4-token           Store a session-only NextTrace API v4
+                                     token in a temporary file and exit
   -s  --source                       Use source address src_addr for outgoing
                                      packets
       --source-port                  Use source port src_port for outgoing

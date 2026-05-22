@@ -630,6 +630,19 @@ export NEXTTRACE_CHUNZHENURL=http://127.0.0.1:2060
 export NEXTTRACE_DATAPROVIDER=ipinfo
 ```
 
+没有可用的 NextTrace API v4 token 时，LeoMoeAPI 默认仍使用旧 v3 WebSocket API。只想在当前 shell 会话启用 NextTrace API v4 HTTP GeoIP 接口时，运行设置命令并粘贴 token：
+
+```bash
+# Token 页面：
+# GET https://api.nxtrace.org/v4/api-tokens
+
+nexttrace -x
+```
+
+`nexttrace -x` 会把 token 写入临时文件：一个按父进程 PID 区分（父进程通常就是当前 shell），另一个是同用户 fallback 文件，用于 `go run` 这类 wrapper 命令。之后启动的 `nexttrace` 会按真实 `NEXTTRACE_API_V4_TOKEN`、父 PID 文件、fallback 文件的顺序读取，并把值加载到当前进程环境。该命令不会写 shell profile、永久环境变量或 `nt_config.yaml`。
+
+设置 `NEXTTRACE_API_V4_TOKEN` 且当前数据源仍为 `LeoMoeAPI` 时，NextTrace 会请求 `GET https://api.nxtrace.org/v4/ipGeo?ip=<ip>`，并只通过 `X-NextTrace-Token: <token>` 请求头传 token；请求没有 JSON body。成功响应是直接映射到现有输出字段的 GeoIP JSON；配额信息只解析响应头（`X-NextTrace-Quota-Remaining`、`X-NextTrace-Quota-Expires-At`、`X-NextTrace-Quota-Cost`、`X-NextTrace-Quota-Source`），不改变默认输出格式。错误响应优先解析 `{"error":{"message":"..."}}`；已知状态包括 `400` 空/非法 IP、`401` unauthorized、`429` quota exhausted、`500` internal server error。NextTrace API v4 token 模式下的错误不会 fallback 到旧 v3 WebSocket API。
+
 #### `NextTrace`支持使用混合参数和简略参数
 
 ```bash
@@ -684,6 +697,7 @@ NextTrace 当前会读取下列环境变量。对于布尔开关，只识别 `1`
 | --- | --- | --- |
 | `NEXTTRACE_HOSTPORT` | `api.nxtrace.org` | 覆盖 LeoMoeAPI、tracemap、FastIP 等使用的后端地址，支持 `host` 或 `host:port`。 |
 | `NEXTTRACE_TOKEN` | 未设置 | 预置 LeoMoeAPI Bearer Token；设置后将跳过 PoW 取 token 流程。 |
+| `NEXTTRACE_API_V4_TOKEN` | 未设置 | LeoMoeAPI NextTrace API v4 HTTP GeoIP token。未设置时，NextTrace 还会检查 `nexttrace -x` 写入的临时 token 文件；两者都不存在时，LeoMoeAPI 仍使用旧 v3 WebSocket / PoW 流程。 |
 | `NEXTTRACE_POWPROVIDER` | `api.nxtrace.org` | 指定 PoW 服务提供方；当前内置的非默认别名为 `sakura`。 |
 | `NEXTTRACE_DEPLOY_ADDR` | 未设置 | `--deploy` 模式下，当未传 `--listen` 时使用的默认监听地址。 |
 | `NEXTTRACE_DEPLOY_TOKEN` | 未设置 | `--deploy` WebUI/API/WebSocket/MCP 访问 token。CLI `--deploy-token` 优先级更高。 |
@@ -722,7 +736,7 @@ Usage: nexttrace [-h|--help] [--init] [-4|--ipv4] [-6|--ipv6] [-T|--tcp]
                  [-a|--always-rdns] [-P|--route-path] [--dn42] [-o|--output
                  "<value>"] [-O|--output-default] [--table] [--raw]
                  [-j|--json] [-c|--classic] [-f|--first <integer>] [-M|--map]
-                 [-e|--disable-mpls] [-V|--version]
+                 [-e|--disable-mpls] [-V|--version] [-x|--setup-api-v4-token]
                  [-s|--source "<value>"] [--source-port <integer>] [-D|--dev
                  "<value>"] [--listen "<value>"] [--deploy-token "<value>"]
                  [--mcp] [--deploy] [-z|--send-time <integer>]
@@ -798,6 +812,8 @@ Arguments:
   -M  --map                          Disable Print Trace Map
   -e  --disable-mpls                 Disable MPLS
   -V  --version                      Print version info and exit
+  -x  --setup-api-v4-token           Store a session-only NextTrace API v4
+                                     token in a temporary file and exit
   -s  --source                       Use source address src_addr for outgoing
                                      packets
       --source-port                  Use source port src_port for outgoing
