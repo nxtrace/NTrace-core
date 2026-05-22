@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -125,5 +126,81 @@ func TestRunNextTraceAPIV4TokenSetupDoesNotLeakWriteErrorsToken(t *testing.T) {
 	}
 	if strings.Contains(stdout.String(), "secret-token") || strings.Contains(stderr.String(), "secret-token") {
 		t.Fatalf("stderr leaked token: %q", stderr.String())
+	}
+}
+
+func TestRunNextTraceAPIV4TokenSetupInterruptedDoesNotWrite(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	wrote := false
+	err := runNextTraceAPIV4TokenSetup(nextTraceAPIV4TokenSetupOptions{
+		stdout: &stdout,
+		stderr: &stderr,
+		readToken: func() (string, error) {
+			return "", errNextTraceAPIV4TokenSetupInterrupted
+		},
+		writeToken: func(token string) (string, error) {
+			wrote = true
+			return "", nil
+		},
+	})
+	if !errors.Is(err, errNextTraceAPIV4TokenSetupInterrupted) {
+		t.Fatalf("runNextTraceAPIV4TokenSetup() error = %v, want interrupted", err)
+	}
+	if wrote {
+		t.Fatal("writeToken called after interrupted token read")
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout = %q, want empty", stdout.String())
+	}
+}
+
+func TestHandleNextTraceAPIV4TokenSetupInterruptedError(t *testing.T) {
+	var stderr bytes.Buffer
+	code := handleNextTraceAPIV4TokenSetupError(&stderr, errNextTraceAPIV4TokenSetupInterrupted)
+	if code != 130 {
+		t.Fatalf("exit code = %d, want 130", code)
+	}
+	if !strings.Contains(stderr.String(), "canceled") {
+		t.Fatalf("stderr = %q, want canceled message", stderr.String())
+	}
+}
+
+func TestReadNextTraceAPIV4HiddenTokenReadsLine(t *testing.T) {
+	token, err := readNextTraceAPIV4HiddenToken(strings.NewReader("token\n"))
+	if err != nil {
+		t.Fatalf("readNextTraceAPIV4HiddenToken() error = %v", err)
+	}
+	if token != "token" {
+		t.Fatalf("token = %q, want token", token)
+	}
+}
+
+func TestReadNextTraceAPIV4HiddenTokenHandlesBackspace(t *testing.T) {
+	token, err := readNextTraceAPIV4HiddenToken(strings.NewReader("abc\bd\n"))
+	if err != nil {
+		t.Fatalf("readNextTraceAPIV4HiddenToken() error = %v", err)
+	}
+	if token != "abd" {
+		t.Fatalf("token = %q, want abd", token)
+	}
+}
+
+func TestReadNextTraceAPIV4HiddenTokenInterruptsOnCtrlC(t *testing.T) {
+	token, err := readNextTraceAPIV4HiddenToken(strings.NewReader("secret\x03"))
+	if !errors.Is(err, errNextTraceAPIV4TokenSetupInterrupted) {
+		t.Fatalf("readNextTraceAPIV4HiddenToken() error = %v, want interrupted", err)
+	}
+	if token != "" {
+		t.Fatalf("token = %q, want empty", token)
+	}
+}
+
+func TestReadNextTraceAPIV4HiddenTokenReturnsEOFOnCtrlD(t *testing.T) {
+	token, err := readNextTraceAPIV4HiddenToken(strings.NewReader("\x04"))
+	if !errors.Is(err, io.EOF) {
+		t.Fatalf("readNextTraceAPIV4HiddenToken() error = %v, want EOF", err)
+	}
+	if token != "" {
+		t.Fatalf("token = %q, want empty", token)
 	}
 }

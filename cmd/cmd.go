@@ -1268,8 +1268,7 @@ func Execute() {
 			stdout: os.Stdout,
 			stderr: os.Stderr,
 		}); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
+			os.Exit(handleNextTraceAPIV4TokenSetupError(os.Stderr, err))
 		}
 		return
 	}

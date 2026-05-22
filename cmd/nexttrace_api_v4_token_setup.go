@@ -14,6 +14,8 @@ import (
 	"github.com/nxtrace/NTrace-core/util"
 )
 
+var errNextTraceAPIV4TokenSetupInterrupted = errors.New("NextTrace API v4 token setup interrupted")
+
 type nextTraceAPIV4TokenSetupOptions struct {
 	stdin      *os.File
 	stdout     io.Writer
@@ -58,6 +60,15 @@ func runNextTraceAPIV4TokenSetup(opts nextTraceAPIV4TokenSetupOptions) error {
 	return nil
 }
 
+func handleNextTraceAPIV4TokenSetupError(stderr io.Writer, err error) int {
+	if errors.Is(err, errNextTraceAPIV4TokenSetupInterrupted) {
+		fmt.Fprintln(stderr, "NextTrace API v4 token setup canceled.")
+		return 130
+	}
+	fmt.Fprintln(stderr, err)
+	return 1
+}
+
 func printNextTraceAPIV4TokenSetupIntro(stderr io.Writer) {
 	fmt.Fprintf(stderr, "Open token page: GET %s\n", ipgeo.NextTraceAPIV4TokenPageURL)
 	fmt.Fprintf(stderr, "This stores a session-scoped %s token in a temporary file.\n", util.EnvNextTraceAPIV4TokenKey)
@@ -71,9 +82,9 @@ func readNextTraceAPIV4Token(stdin *os.File, stderr io.Writer) (string, error) {
 	}
 	fmt.Fprint(stderr, "Paste NextTrace API v4 token: ")
 	if CheckTTY(int(stdin.Fd())) {
-		tokenBytes, err := term.ReadPassword(int(stdin.Fd()))
+		token, err := readNextTraceAPIV4TTYToken(stdin)
 		fmt.Fprintln(stderr)
-		return string(tokenBytes), err
+		return token, err
 	}
 	reader := bufio.NewReader(stdin)
 	line, err := reader.ReadString('\n')
@@ -81,4 +92,51 @@ func readNextTraceAPIV4Token(stdin *os.File, stderr io.Writer) (string, error) {
 		return "", err
 	}
 	return line, err
+}
+
+func readNextTraceAPIV4TTYToken(stdin *os.File) (string, error) {
+	fd := int(stdin.Fd())
+	oldState, err := term.MakeRaw(fd)
+	if err != nil {
+		return "", err
+	}
+	token, readErr := readNextTraceAPIV4HiddenToken(stdin)
+	restoreErr := term.Restore(fd, oldState)
+	if readErr != nil {
+		return token, readErr
+	}
+	if restoreErr != nil {
+		return "", restoreErr
+	}
+	return token, nil
+}
+
+func readNextTraceAPIV4HiddenToken(reader io.Reader) (string, error) {
+	var buf [1]byte
+	var token []byte
+	for {
+		n, err := reader.Read(buf[:])
+		if n > 0 {
+			switch buf[0] {
+			case 0x03:
+				return "", errNextTraceAPIV4TokenSetupInterrupted
+			case 0x04:
+				return string(token), io.EOF
+			case '\r', '\n':
+				return string(token), nil
+			case '\b', 0x7f:
+				if len(token) > 0 {
+					token = token[:len(token)-1]
+				}
+			default:
+				token = append(token, buf[0])
+			}
+		}
+		if err != nil {
+			if errors.Is(err, io.EOF) && len(token) > 0 {
+				return string(token), nil
+			}
+			return string(token), err
+		}
+	}
 }
