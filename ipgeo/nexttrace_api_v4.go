@@ -15,19 +15,21 @@ import (
 	"time"
 
 	"github.com/nxtrace/NTrace-core/util"
+	"golang.org/x/net/http/httpproxy"
 )
 
 const (
-	NextTraceAPIV4TokenPageURL = "https://api.nxtrace.org/v4/api-tokens"
-	nextTraceAPIV4APIHost      = "api.nxtrace.org"
-	nextTraceAPIV4DefaultPort  = "443"
-	nextTraceAPIV4GeoPath      = "/v4/ipGeo"
-	nextTraceAPIV4TokenHeader  = "X-NextTrace-Token"
-	nextTraceAPIV4MaxErrorBody = 512
-	nextTraceAPIV4MaxGeoBody   = 1 << 20
-	nextTraceAPIV4MinTimeout   = 2 * time.Second
-	nextTraceAPIV4MaxAttempts  = 3
-	nextTraceAPIV4CacheMaxSize = 32
+	NextTraceAPIV4TokenPageURL  = "https://api.nxtrace.org/v4/api-tokens"
+	nextTraceAPIV4APIHost       = "api.nxtrace.org"
+	nextTraceAPIV4DefaultPort   = "443"
+	nextTraceAPIV4GeoPath       = "/v4/ipGeo"
+	nextTraceAPIV4TokenHeader   = "X-NextTrace-Token"
+	nextTraceAPIV4MaxErrorBody  = 512
+	nextTraceAPIV4MaxGeoBody    = 1 << 20
+	nextTraceAPIV4MinTimeout    = 2 * time.Second
+	nextTraceAPIV4FastIPTimeout = time.Second
+	nextTraceAPIV4MaxAttempts   = 3
+	nextTraceAPIV4CacheMaxSize  = 32
 )
 
 var (
@@ -93,12 +95,9 @@ func LeoIPNextTraceAPIV4HTTP(ip string, timeout time.Duration, lang string, mapt
 	_ = lang
 	_ = maptrace
 	timeout = normalizeNextTraceAPIV4Timeout(timeout)
-	fastIPCtx, cancelFastIP := context.WithTimeout(context.Background(), timeout)
-	_ = prepareNextTraceAPIV4FastIP(fastIPCtx, nextTraceAPIV4GeoEndpoint, true)
-	cancelFastIP()
-
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
+	_ = prepareNextTraceAPIV4FastIP(ctx, nextTraceAPIV4GeoEndpoint, false)
 	client := cachedNextTraceAPIV4Client(nextTraceAPIV4GeoEndpoint, util.GetNextTraceAPIV4Token(), timeout)
 	geo, _, err := client.Lookup(ctx, ip)
 	return geo, err
@@ -180,14 +179,28 @@ func PrepareNextTraceAPIV4FastIP(ctx context.Context, enableOutput bool) error {
 
 func prepareNextTraceAPIV4FastIP(ctx context.Context, endpoint string, enableOutput bool) error {
 	host, port, ok := nextTraceAPIV4APIEndpointHostPort(endpoint)
-	if !ok || util.GetProxy() != nil {
+	if !ok || nextTraceAPIV4ProxyConfigured(endpoint) {
 		return nil
 	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	_, err := nextTraceAPIV4FastIPFn(ctx, host, port, enableOutput)
+	prewarmCtx, cancel := context.WithTimeout(ctx, nextTraceAPIV4FastIPTimeout)
+	defer cancel()
+	_, err := nextTraceAPIV4FastIPFn(prewarmCtx, host, port, enableOutput)
 	return err
+}
+
+func nextTraceAPIV4ProxyConfigured(endpoint string) bool {
+	if util.GetProxy() != nil {
+		return true
+	}
+	u, err := url.Parse(normalizeNextTraceAPIV4Endpoint(endpoint))
+	if err != nil {
+		return false
+	}
+	proxyURL, err := httpproxy.FromEnvironment().ProxyFunc()(u)
+	return err != nil || proxyURL != nil
 }
 
 func nextTraceAPIV4APIEndpointHostPort(endpoint string) (string, string, bool) {
@@ -204,7 +217,11 @@ func nextTraceAPIV4APIEndpointHostPort(endpoint string) (string, string, bool) {
 	}
 	port := u.Port()
 	if port == "" {
-		port = nextTraceAPIV4DefaultPort
+		if scheme == "http" {
+			port = "80"
+		} else {
+			port = nextTraceAPIV4DefaultPort
+		}
 	}
 	return nextTraceAPIV4APIHost, port, true
 }
@@ -245,7 +262,9 @@ func dialNextTraceAPIV4(ctx context.Context, dialer *net.Dialer, network string,
 	}
 	if strings.EqualFold(host, apiHost) && port == apiPort {
 		if fastIP := strings.Trim(util.GetFastIPCache(), "[]"); fastIP != "" {
-			return dialer.DialContext(ctx, network, net.JoinHostPort(fastIP, port))
+			if conn, dialErr := dialer.DialContext(ctx, network, net.JoinHostPort(fastIP, port)); dialErr == nil {
+				return conn, nil
+			}
 		}
 	}
 	return dialGeoResolved(ctx, dialer, network, host, port)
