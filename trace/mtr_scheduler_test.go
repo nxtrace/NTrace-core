@@ -1094,6 +1094,219 @@ func TestScheduler_AsyncMetadataDedupesAndCachesByIP(t *testing.T) {
 	}
 }
 
+func TestScheduler_AsyncMetadataGeoPatchesBeforeBlockedRDNS(t *testing.T) {
+	ClearCaches()
+	t.Cleanup(ClearCaches)
+
+	oldLookupPTR := lookupMTRPTR
+	releasePTR := make(chan struct{})
+	ptrStarted := make(chan struct{})
+	var releaseOnce sync.Once
+	var ptrStartedOnce sync.Once
+	lookupMTRPTR = func(ctx context.Context, _ string) []string {
+		ptrStartedOnce.Do(func() { close(ptrStarted) })
+		select {
+		case <-releasePTR:
+			return []string{"ptr.example."}
+		case <-ctx.Done():
+			return nil
+		}
+	}
+	t.Cleanup(func() {
+		lookupMTRPTR = oldLookupPTR
+		releaseOnce.Do(func() { close(releasePTR) })
+	})
+
+	prober := &mockTTLProber{
+		probeFn: func(_ context.Context, ttl int) (mtrProbeResult, error) {
+			return mtrProbeResult{
+				TTL:     ttl,
+				Success: true,
+				Addr:    &net.IPAddr{IP: net.ParseIP("8.8.8.81")},
+				RTT:     5 * time.Millisecond,
+			}, nil
+		},
+	}
+	agg := NewMTRAggregator()
+	done := make(chan error, 1)
+	go func() {
+		done <- runMTRScheduler(context.Background(), prober, agg, mtrSchedulerConfig{
+			BeginHop:         1,
+			MaxHops:          1,
+			HopInterval:      time.Millisecond,
+			MaxPerHop:        1,
+			ParallelRequests: 1,
+			ProgressThrottle: time.Millisecond,
+			FillGeo:          true,
+			AsyncMetadata:    true,
+			BaseConfig: Config{
+				RDNS: true,
+				IPGeoSource: func(ip string, timeout time.Duration, lang string, maptrace bool) (*ipgeo.IPGeoData, error) {
+					return &ipgeo.IPGeoData{Asnumber: "64512"}, nil
+				},
+				Timeout: time.Second,
+			},
+		}, nil, nil)
+	}()
+
+	select {
+	case <-ptrStarted:
+	case <-time.After(time.Second):
+		t.Fatal("PTR lookup did not start")
+	}
+	waitForMetadataGeo(t, agg, "64512")
+
+	select {
+	case err := <-done:
+		t.Fatalf("scheduler finished before PTR release: %v", err)
+	default:
+	}
+	releaseOnce.Do(func() { close(releasePTR) })
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("runMTRScheduler error: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("scheduler did not finish after PTR release")
+	}
+}
+
+func TestScheduler_AsyncMetadataLimitsGeoConcurrency(t *testing.T) {
+	ClearCaches()
+	t.Cleanup(ClearCaches)
+
+	var current int32
+	var maxSeen int32
+	var lookupCount int32
+	prober := &mockTTLProber{
+		probeFn: func(_ context.Context, ttl int) (mtrProbeResult, error) {
+			return mtrProbeResult{
+				TTL:     ttl,
+				Success: true,
+				Addr:    &net.IPAddr{IP: net.ParseIP(fmt.Sprintf("8.8.4.%d", ttl))},
+				RTT:     5 * time.Millisecond,
+			}, nil
+		},
+	}
+
+	err := runMTRScheduler(context.Background(), prober, NewMTRAggregator(), mtrSchedulerConfig{
+		BeginHop:         1,
+		MaxHops:          8,
+		HopInterval:      time.Millisecond,
+		MaxPerHop:        1,
+		ParallelRequests: 8,
+		ProgressThrottle: time.Millisecond,
+		FillGeo:          true,
+		AsyncMetadata:    true,
+		BaseConfig: Config{
+			IPGeoSource: func(ip string, timeout time.Duration, lang string, maptrace bool) (*ipgeo.IPGeoData, error) {
+				atomic.AddInt32(&lookupCount, 1)
+				inFlight := atomic.AddInt32(&current, 1)
+				for {
+					seen := atomic.LoadInt32(&maxSeen)
+					if inFlight <= seen || atomic.CompareAndSwapInt32(&maxSeen, seen, inFlight) {
+						break
+					}
+				}
+				time.Sleep(40 * time.Millisecond)
+				atomic.AddInt32(&current, -1)
+				return &ipgeo.IPGeoData{Asnumber: "64512"}, nil
+			},
+			Timeout: time.Second,
+		},
+	}, nil, nil)
+	if err != nil {
+		t.Fatalf("runMTRScheduler error: %v", err)
+	}
+	if got := atomic.LoadInt32(&lookupCount); got != 8 {
+		t.Fatalf("metadata lookup count = %d, want 8", got)
+	}
+	if got := atomic.LoadInt32(&maxSeen); got > mtrAsyncMetadataGeoConcurrency {
+		t.Fatalf("max concurrent geo lookups = %d, want <= %d", got, mtrAsyncMetadataGeoConcurrency)
+	}
+}
+
+func TestScheduler_AsyncMetadataUsesGeoCacheWithoutSourceLookup(t *testing.T) {
+	ClearCaches()
+	t.Cleanup(ClearCaches)
+
+	const ip = "8.8.8.82"
+	geoCache.Store(ip, &ipgeo.IPGeoData{Asnumber: "CACHE"})
+	var lookupCount int32
+	prober := &mockTTLProber{
+		probeFn: func(_ context.Context, ttl int) (mtrProbeResult, error) {
+			return mtrProbeResult{
+				TTL:     ttl,
+				Success: true,
+				Addr:    &net.IPAddr{IP: net.ParseIP(ip)},
+				RTT:     5 * time.Millisecond,
+			}, nil
+		},
+	}
+	agg := NewMTRAggregator()
+
+	err := runMTRScheduler(context.Background(), prober, agg, mtrSchedulerConfig{
+		BeginHop:         1,
+		MaxHops:          1,
+		HopInterval:      time.Millisecond,
+		MaxPerHop:        1,
+		ParallelRequests: 1,
+		ProgressThrottle: time.Millisecond,
+		FillGeo:          true,
+		AsyncMetadata:    true,
+		BaseConfig: Config{
+			IPGeoSource: func(ip string, timeout time.Duration, lang string, maptrace bool) (*ipgeo.IPGeoData, error) {
+				atomic.AddInt32(&lookupCount, 1)
+				return nil, errors.New("should use cache")
+			},
+			Timeout: time.Second,
+		},
+	}, nil, nil)
+	if err != nil {
+		t.Fatalf("runMTRScheduler error: %v", err)
+	}
+	if got := atomic.LoadInt32(&lookupCount); got != 0 {
+		t.Fatalf("metadata source lookup count = %d, want 0", got)
+	}
+	stats := agg.Snapshot()
+	if len(stats) != 1 || stats[0].Geo == nil || stats[0].Geo.Asnumber != "CACHE" {
+		t.Fatalf("cached geo stats = %+v, want CACHE", stats)
+	}
+}
+
+func processMetadataResults(t *testing.T, rt *mtrSchedulerRuntime, want int) {
+	t.Helper()
+	for i := 0; i < want; i++ {
+		select {
+		case mr := <-rt.metadataCh:
+			rt.processMetadataResult(mr)
+		case <-time.After(time.Second):
+			t.Fatalf("metadata result %d/%d did not finish", i+1, want)
+		}
+	}
+}
+
+func waitForMetadataGeo(t *testing.T, agg *MTRAggregator, asn string) {
+	t.Helper()
+	deadline := time.After(time.Second)
+	tick := time.NewTicker(5 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		for _, stat := range agg.Snapshot() {
+			if stat.Geo != nil && stat.Geo.Asnumber == asn {
+				return
+			}
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("metadata geo %q did not patch stats: %+v", asn, agg.Snapshot())
+		case <-tick.C:
+		}
+	}
+}
+
 func TestScheduler_AsyncMetadataIgnoresOldGenerationAfterReset(t *testing.T) {
 	rt, err := newMTRSchedulerRuntime(context.Background(), &mockTTLProber{}, NewMTRAggregator(), mtrSchedulerConfig{
 		BeginHop:         1,
@@ -1116,21 +1329,22 @@ func TestScheduler_AsyncMetadataIgnoresOldGenerationAfterReset(t *testing.T) {
 	}
 
 	rt.agg.Update(rt.singleProbeResult(1, bare), 1)
-	rt.metadataInFlight["9.9.9.9"] = 0
+	rt.metadataGeoInFlight["9.9.9.9"] = 0
 
 	rt.generation = 1
-	clear(rt.metadataInFlight)
+	clear(rt.metadataGeoInFlight)
 	clear(rt.metadataCache)
 	rt.agg.Reset()
 	rt.agg.Update(rt.singleProbeResult(1, bare), 1)
-	rt.metadataInFlight["9.9.9.9"] = 1
+	rt.metadataGeoInFlight["9.9.9.9"] = 1
 
 	rt.processMetadataResult(mtrMetadataResult{
 		patch: mtrMetadataPatch{
 			ip:  "9.9.9.9",
 			geo: &ipgeo.IPGeoData{Asnumber: "OLD"},
 		},
-		gen: 0,
+		kind: mtrMetadataKindGeo,
+		gen:  0,
 	})
 
 	stats := rt.agg.Snapshot()
@@ -1146,7 +1360,8 @@ func TestScheduler_AsyncMetadataIgnoresOldGenerationAfterReset(t *testing.T) {
 			ip:  "9.9.9.9",
 			geo: &ipgeo.IPGeoData{Asnumber: "NEW"},
 		},
-		gen: 1,
+		kind: mtrMetadataKindGeo,
+		gen:  1,
 	})
 
 	stats = rt.agg.Snapshot()
@@ -1198,8 +1413,9 @@ func TestScheduler_ResetCancelsMetadataGeneration(t *testing.T) {
 		t.Fatalf("stale metadata result should be dropped after reset: %+v", stale)
 	case <-time.After(120 * time.Millisecond):
 	}
-	if len(rt.metadataInFlight) != 0 {
-		t.Fatalf("metadataInFlight len = %d, want 0 after reset", len(rt.metadataInFlight))
+	if len(rt.metadataGeoInFlight) != 0 || len(rt.metadataHostInFlight) != 0 {
+		t.Fatalf("metadata in-flight after reset: geo=%d host=%d, want 0",
+			len(rt.metadataGeoInFlight), len(rt.metadataHostInFlight))
 	}
 }
 
@@ -1244,7 +1460,7 @@ func TestScheduler_AsyncMetadataBacksOffEmptyLookup(t *testing.T) {
 	}
 
 	rt.maybeLaunchMetadataLookup(result)
-	if len(rt.metadataInFlight) != 0 {
+	if len(rt.metadataGeoInFlight) != 0 {
 		t.Fatal("empty metadata result should suppress immediate retry")
 	}
 	if got := atomic.LoadInt32(&lookupCount); got != 1 {
@@ -1261,7 +1477,15 @@ func TestScheduler_AsyncMetadataUsesGeoTimeoutFloor(t *testing.T) {
 	}
 }
 
-func TestScheduler_AsyncMetadataHostOnlyFailureBacksOffGeo(t *testing.T) {
+func TestScheduler_AsyncMetadataGeoFailureDoesNotBlockHostPatch(t *testing.T) {
+	oldLookupPTR := lookupMTRPTR
+	lookupMTRPTR = func(_ context.Context, _ string) []string {
+		return []string{"dns.example."}
+	}
+	t.Cleanup(func() {
+		lookupMTRPTR = oldLookupPTR
+	})
+
 	rt, err := newMTRSchedulerRuntime(context.Background(), &mockTTLProber{}, NewMTRAggregator(), mtrSchedulerConfig{
 		BeginHop:         1,
 		MaxHops:          1,
@@ -1274,51 +1498,90 @@ func TestScheduler_AsyncMetadataHostOnlyFailureBacksOffGeo(t *testing.T) {
 			IPGeoSource: func(ip string, timeout time.Duration, lang string, maptrace bool) (*ipgeo.IPGeoData, error) {
 				return nil, errors.New("metadata unavailable")
 			},
+			RDNS:    true,
+			Timeout: time.Second,
 		},
 	}, nil, nil)
 	if err != nil {
 		t.Fatalf("newMTRSchedulerRuntime error: %v", err)
 	}
 
-	rt.cacheMetadataPatch(mtrMetadataPatch{ip: "9.9.9.9", host: "dns.example"})
-	if !rt.metadataBackoffActive("9.9.9.9", time.Now()) {
-		t.Fatal("host-only metadata failure should back off geo retries")
+	result := mtrProbeResult{
+		TTL:     1,
+		Success: true,
+		Addr:    &net.IPAddr{IP: net.ParseIP("9.9.9.9")},
+		RTT:     5 * time.Millisecond,
 	}
-	if cached := rt.metadataCache["9.9.9.9"]; cached.host != "dns.example" {
-		t.Fatalf("cached host = %q, want dns.example", cached.host)
-	}
+	rt.agg.Update(rt.singleProbeResult(1, result), 1)
+	rt.maybeLaunchMetadataLookup(result)
+	processMetadataResults(t, rt, 2)
 
-	rt.cacheMetadataPatch(mtrMetadataPatch{ip: "9.9.9.9", geo: &ipgeo.IPGeoData{Asnumber: "64514"}})
-	if rt.metadataBackoffActive("9.9.9.9", time.Now()) {
-		t.Fatal("successful geo metadata should clear backoff")
+	stats := rt.agg.Snapshot()
+	if len(stats) != 1 || stats[0].Host != "dns.example" {
+		t.Fatalf("host patch = %+v, want dns.example", stats)
+	}
+	if stats[0].Geo != nil {
+		t.Fatalf("geo = %+v, want nil after geo failure", stats[0].Geo)
+	}
+	if !rt.metadataGeoBackoffActive("9.9.9.9", time.Now()) {
+		t.Fatal("geo failure should back off geo retries")
+	}
+	if rt.metadataHostBackoffActive("9.9.9.9", time.Now()) {
+		t.Fatal("geo failure should not back off host retries")
 	}
 }
 
-func TestScheduler_AsyncMetadataGeoOnlyFailureBacksOffRDNS(t *testing.T) {
-	rt := &mtrSchedulerRuntime{
-		cfg: mtrSchedulerConfig{
-			BaseConfig: Config{
-				RDNS: true,
-				IPGeoSource: func(ip string, timeout time.Duration, lang string, maptrace bool) (*ipgeo.IPGeoData, error) {
-					return &ipgeo.IPGeoData{Asnumber: "64514"}, nil
-				},
+func TestScheduler_AsyncMetadataHostFailureDoesNotBlockGeoPatch(t *testing.T) {
+	oldLookupPTR := lookupMTRPTR
+	lookupMTRPTR = func(_ context.Context, _ string) []string {
+		return nil
+	}
+	t.Cleanup(func() {
+		lookupMTRPTR = oldLookupPTR
+	})
+
+	rt, err := newMTRSchedulerRuntime(context.Background(), &mockTTLProber{}, NewMTRAggregator(), mtrSchedulerConfig{
+		BeginHop:         1,
+		MaxHops:          1,
+		HopInterval:      time.Millisecond,
+		ParallelRequests: 1,
+		ProgressThrottle: time.Millisecond,
+		FillGeo:          true,
+		AsyncMetadata:    true,
+		BaseConfig: Config{
+			RDNS: true,
+			IPGeoSource: func(ip string, timeout time.Duration, lang string, maptrace bool) (*ipgeo.IPGeoData, error) {
+				return &ipgeo.IPGeoData{Asnumber: "64514"}, nil
 			},
+			Timeout: time.Second,
 		},
-		metadataBackoff: make(map[string]time.Time),
-		metadataCache:   make(map[string]mtrMetadataPatch),
+	}, nil, nil)
+	if err != nil {
+		t.Fatalf("newMTRSchedulerRuntime error: %v", err)
 	}
 
-	rt.cacheMetadataPatch(mtrMetadataPatch{ip: "9.9.9.9", geo: &ipgeo.IPGeoData{Asnumber: "64514"}})
-	if !rt.metadataBackoffActive("9.9.9.9", time.Now()) {
-		t.Fatal("geo-only metadata failure should back off RDNS retries")
+	result := mtrProbeResult{
+		TTL:     1,
+		Success: true,
+		Addr:    &net.IPAddr{IP: net.ParseIP("9.9.9.9")},
+		RTT:     5 * time.Millisecond,
 	}
-	if cached := rt.metadataCache["9.9.9.9"]; cached.geo == nil || cached.geo.Asnumber != "64514" {
-		t.Fatalf("cached geo = %+v, want ASN 64514", cached.geo)
-	}
+	rt.agg.Update(rt.singleProbeResult(1, result), 1)
+	rt.maybeLaunchMetadataLookup(result)
+	processMetadataResults(t, rt, 2)
 
-	rt.cacheMetadataPatch(mtrMetadataPatch{ip: "9.9.9.9", host: "dns.example", geo: &ipgeo.IPGeoData{Asnumber: "64514"}})
-	if rt.metadataBackoffActive("9.9.9.9", time.Now()) {
-		t.Fatal("complete metadata should clear backoff")
+	stats := rt.agg.Snapshot()
+	if len(stats) != 1 || stats[0].Geo == nil || stats[0].Geo.Asnumber != "64514" {
+		t.Fatalf("geo patch = %+v, want ASN 64514", stats)
+	}
+	if stats[0].Host != "" {
+		t.Fatalf("host = %q, want empty after host failure", stats[0].Host)
+	}
+	if !rt.metadataHostBackoffActive("9.9.9.9", time.Now()) {
+		t.Fatal("host failure should back off host retries")
+	}
+	if rt.metadataGeoBackoffActive("9.9.9.9", time.Now()) {
+		t.Fatal("host failure should not back off geo retries")
 	}
 }
 
