@@ -23,6 +23,15 @@
   接口），并在 `ReadFrom` 中调用 `stripIPv4Header` 剥离 macOS DGRAM ICMP socket
   返回的外层 IP 头。
 
+## Git 与提交信息规范（必须遵守）
+
+- Commit message 必须使用 Conventional Commits 风格：`type(scope): 具体行为`。
+- subject 必须描述该提交实际改变的行为或约束，不能只写“处理 review 问题”“修复剩余问题”“调整代码”等泛化内容。
+- review finding 修复提交也必须写明具体修复点，例如 timeout、fallback、权限校验、stdout/stderr 分离；若一个提交覆盖多个 finding，用 body bullet 简短列出。
+- 一个提交包含多个互不相关主题时，优先拆分提交；确实需要放在一起时，subject 写主影响，body 写清每个具体改动。
+- 提交或 push PR 前必须检查 `git log --oneline main..HEAD`，发现泛化、误导或与 diff 不匹配的 commit message，应先 reword/amend。
+- 改写已推送 PR 分支历史后，只使用 `git push --force-with-lease`，不要用无保护的强推覆盖远端新提交。
+
 ## 当前 CLI 语义（重点）
 
 ### 常规 traceroute 路径
