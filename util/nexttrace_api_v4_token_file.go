@@ -71,6 +71,12 @@ func sanitizeNextTraceAPIV4PathPart(value string) string {
 func ReadNextTraceAPIV4SessionToken() (string, error) {
 	var firstErr error
 	for _, path := range []string{NextTraceAPIV4SessionTokenPath(), NextTraceAPIV4LatestTokenPath()} {
+		if err := validateNextTraceAPIV4TokenReadPath(path); err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
 		body, err := os.ReadFile(path)
 		if os.IsNotExist(err) {
 			continue
@@ -86,6 +92,30 @@ func ReadNextTraceAPIV4SessionToken() (string, error) {
 		}
 	}
 	return "", firstErr
+}
+
+func validateNextTraceAPIV4TokenReadPath(path string) error {
+	dir := filepath.Dir(path)
+	info, err := os.Lstat(dir)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("NextTrace API v4 token directory is a symlink: %s", dir)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("NextTrace API v4 token path is not a directory: %s", dir)
+	}
+	if err := checkNextTraceAPIV4TokenDirOwner(info); err != nil {
+		return err
+	}
+	if strictNextTraceAPIV4TokenPerms() && info.Mode().Perm() != 0o700 {
+		return fmt.Errorf("NextTrace API v4 token directory permissions are %s, want 0700", info.Mode().Perm())
+	}
+	return rejectNextTraceAPIV4Symlink(path)
 }
 
 func WriteNextTraceAPIV4SessionToken(token string) (string, error) {

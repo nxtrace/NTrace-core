@@ -108,6 +108,89 @@ func TestGetNextTraceAPIV4TokenFallsBackToLatestFile(t *testing.T) {
 	assert.Equal(t, "latest-token", os.Getenv(EnvNextTraceAPIV4TokenKey))
 }
 
+func TestGetNextTraceAPIV4TokenRejectsSymlinkSessionFile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("creating symlinks on Windows can require extra privileges")
+	}
+	paths := overrideNextTraceAPIV4TokenPaths(t)
+	outside := filepath.Join(t.TempDir(), "outside-token")
+	require.NoError(t, os.WriteFile(outside, []byte("outside-token\n"), 0o600))
+	require.NoError(t, os.Symlink(outside, paths.session))
+	t.Setenv(EnvNextTraceAPIV4TokenKey, "")
+
+	assert.Equal(t, "", GetNextTraceAPIV4Token())
+	assert.Equal(t, "", os.Getenv(EnvNextTraceAPIV4TokenKey))
+}
+
+func TestGetNextTraceAPIV4TokenSkipsSymlinkSessionFileAndReadsLatest(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("creating symlinks on Windows can require extra privileges")
+	}
+	paths := overrideNextTraceAPIV4TokenPaths(t)
+	outside := filepath.Join(t.TempDir(), "outside-token")
+	require.NoError(t, os.WriteFile(outside, []byte("outside-token\n"), 0o600))
+	require.NoError(t, os.Symlink(outside, paths.session))
+	require.NoError(t, os.WriteFile(paths.latest, []byte(" latest-token \n"), 0o600))
+	t.Setenv(EnvNextTraceAPIV4TokenKey, "")
+
+	assert.Equal(t, "latest-token", GetNextTraceAPIV4Token())
+	assert.Equal(t, "latest-token", os.Getenv(EnvNextTraceAPIV4TokenKey))
+}
+
+func TestReadNextTraceAPIV4SessionTokenRejectsSymlinkDirectory(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("creating symlinks on Windows can require extra privileges")
+	}
+	parent := t.TempDir()
+	realDir := filepath.Join(parent, "real")
+	linkDir := filepath.Join(parent, "link")
+	require.NoError(t, os.Mkdir(realDir, 0o700))
+	require.NoError(t, os.Symlink(realDir, linkDir))
+	overrideNextTraceAPIV4TokenPathFuncs(t, filepath.Join(linkDir, "session"), filepath.Join(linkDir, "latest"))
+
+	token, err := ReadNextTraceAPIV4SessionToken()
+	require.Error(t, err)
+	assert.Equal(t, "", token)
+	assert.Contains(t, err.Error(), "symlink")
+}
+
+func TestReadNextTraceAPIV4SessionTokenMissingDirectoryIsEmpty(t *testing.T) {
+	missingDir := filepath.Join(t.TempDir(), "missing")
+	overrideNextTraceAPIV4TokenPathFuncs(t, filepath.Join(missingDir, "session"), filepath.Join(missingDir, "latest"))
+
+	token, err := ReadNextTraceAPIV4SessionToken()
+	require.NoError(t, err)
+	assert.Equal(t, "", token)
+	_, statErr := os.Stat(missingDir)
+	assert.True(t, os.IsNotExist(statErr))
+}
+
+func TestReadNextTraceAPIV4SessionTokenRejectsDirectoryTokenPath(t *testing.T) {
+	paths := overrideNextTraceAPIV4TokenPaths(t)
+	require.NoError(t, os.Mkdir(paths.session, 0o700))
+
+	token, err := ReadNextTraceAPIV4SessionToken()
+	require.Error(t, err)
+	assert.Equal(t, "", token)
+	assert.Contains(t, err.Error(), "directory")
+}
+
+func TestReadNextTraceAPIV4SessionTokenRejectsLooseDirectoryPerms(t *testing.T) {
+	if !strictNextTraceAPIV4TokenPerms() {
+		t.Skip("POSIX mode bits are not enforced on this platform")
+	}
+	paths := overrideNextTraceAPIV4TokenPaths(t)
+	dir := filepath.Dir(paths.session)
+	require.NoError(t, os.WriteFile(paths.session, []byte("file-token\n"), 0o600))
+	require.NoError(t, os.Chmod(dir, 0o755))
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+
+	token, err := ReadNextTraceAPIV4SessionToken()
+	require.Error(t, err)
+	assert.Equal(t, "", token)
+	assert.Contains(t, err.Error(), "permissions")
+}
+
 func TestWriteNextTraceAPIV4SessionTokenWritesTempFiles(t *testing.T) {
 	paths := overrideNextTraceAPIV4TokenPaths(t)
 
@@ -186,9 +269,18 @@ type nextTraceAPIV4TokenTestPaths struct {
 func overrideNextTraceAPIV4TokenPaths(t *testing.T) nextTraceAPIV4TokenTestPaths {
 	t.Helper()
 	dir := t.TempDir()
+	if strictNextTraceAPIV4TokenPerms() {
+		require.NoError(t, os.Chmod(dir, 0o700))
+	}
 	tokenPath := dir + string(os.PathSeparator) + "nexttrace-api-v4-token"
 	latestPath := dir + string(os.PathSeparator) + "nexttrace-api-v4-token-latest"
 
+	overrideNextTraceAPIV4TokenPathFuncs(t, tokenPath, latestPath)
+	return nextTraceAPIV4TokenTestPaths{session: tokenPath, latest: latestPath}
+}
+
+func overrideNextTraceAPIV4TokenPathFuncs(t *testing.T, tokenPath, latestPath string) {
+	t.Helper()
 	oldPathFunc := nextTraceAPIV4SessionTokenPath
 	oldLatestPathFunc := nextTraceAPIV4LatestTokenPath
 	nextTraceAPIV4SessionTokenPath = func() string { return tokenPath }
@@ -197,5 +289,4 @@ func overrideNextTraceAPIV4TokenPaths(t *testing.T) nextTraceAPIV4TokenTestPaths
 		nextTraceAPIV4SessionTokenPath = oldPathFunc
 		nextTraceAPIV4LatestTokenPath = oldLatestPathFunc
 	})
-	return nextTraceAPIV4TokenTestPaths{session: tokenPath, latest: latestPath}
 }
