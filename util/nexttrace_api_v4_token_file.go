@@ -120,7 +120,7 @@ func writeNextTraceAPIV4TokenFile(path string, body []byte) error {
 			_ = os.Remove(tmpPath)
 		}
 	}()
-	if err := tmp.Chmod(0o600); err != nil {
+	if err := tmp.Chmod(0o600); err != nil && strictNextTraceAPIV4TokenPerms() {
 		_ = tmp.Close()
 		return err
 	}
@@ -158,21 +158,23 @@ func ensureNextTraceAPIV4TokenDir(dir string) error {
 	if err := checkNextTraceAPIV4TokenDirOwner(info); err != nil {
 		return err
 	}
-	if err := os.Chmod(dir, 0o700); err != nil {
-		return err
-	}
-	info, err = os.Lstat(dir)
-	if err != nil {
-		return err
-	}
-	if info.Mode()&os.ModeSymlink != 0 {
-		return fmt.Errorf("NextTrace API v4 token directory is a symlink: %s", dir)
-	}
-	if !info.IsDir() {
-		return fmt.Errorf("NextTrace API v4 token path is not a directory: %s", dir)
-	}
-	if info.Mode().Perm() != 0o700 {
-		return fmt.Errorf("NextTrace API v4 token directory permissions are %s, want 0700", info.Mode().Perm())
+	if strictNextTraceAPIV4TokenPerms() {
+		if err := os.Chmod(dir, 0o700); err != nil {
+			return err
+		}
+		info, err = os.Lstat(dir)
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("NextTrace API v4 token directory is a symlink: %s", dir)
+		}
+		if !info.IsDir() {
+			return fmt.Errorf("NextTrace API v4 token path is not a directory: %s", dir)
+		}
+		if info.Mode().Perm() != 0o700 {
+			return fmt.Errorf("NextTrace API v4 token directory permissions are %s, want 0700", info.Mode().Perm())
+		}
 	}
 	return nil
 }

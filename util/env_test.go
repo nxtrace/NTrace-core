@@ -119,13 +119,17 @@ func TestWriteNextTraceAPIV4SessionTokenWritesTempFiles(t *testing.T) {
 		body, err := os.ReadFile(path)
 		require.NoError(t, err)
 		assert.Equal(t, "file-token\n", string(body))
-		info, err := os.Stat(path)
-		require.NoError(t, err)
-		assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+		if strictNextTraceAPIV4TokenPerms() {
+			info, err := os.Stat(path)
+			require.NoError(t, err)
+			assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+		}
 	}
-	info, err := os.Stat(filepath.Dir(paths.session))
-	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(0o700), info.Mode().Perm())
+	if strictNextTraceAPIV4TokenPerms() {
+		info, err := os.Stat(filepath.Dir(paths.session))
+		require.NoError(t, err)
+		assert.Equal(t, os.FileMode(0o700), info.Mode().Perm())
+	}
 }
 
 func TestWriteNextTraceAPIV4SessionTokenRejectsSymlinkFile(t *testing.T) {

@@ -8,6 +8,10 @@ import (
 	"syscall"
 )
 
+func strictNextTraceAPIV4TokenPerms() bool {
+	return true
+}
+
 func checkNextTraceAPIV4TokenDirOwner(info os.FileInfo) error {
 	stat, ok := info.Sys().(*syscall.Stat_t)
 	if !ok {
