@@ -1173,6 +1173,137 @@ func TestScheduler_AsyncMetadataGeoPatchesBeforeBlockedRDNS(t *testing.T) {
 	}
 }
 
+func TestScheduler_AsyncMetadataDN42GeoWaitsForHost(t *testing.T) {
+	ClearCaches()
+	t.Cleanup(ClearCaches)
+
+	oldLookupPTR := lookupMTRPTR
+	lookupMTRPTR = func(_ context.Context, _ string) []string {
+		return []string{"router.dn42."}
+	}
+	t.Cleanup(func() {
+		lookupMTRPTR = oldLookupPTR
+	})
+
+	queryCh := make(chan string, 1)
+	rt, err := newMTRSchedulerRuntime(context.Background(), &mockTTLProber{}, NewMTRAggregator(), mtrSchedulerConfig{
+		BeginHop:         1,
+		MaxHops:          1,
+		HopInterval:      time.Millisecond,
+		ParallelRequests: 1,
+		ProgressThrottle: time.Millisecond,
+		FillGeo:          true,
+		AsyncMetadata:    true,
+		BaseConfig: Config{
+			DN42: true,
+			RDNS: true,
+			IPGeoSource: func(ip string, timeout time.Duration, lang string, maptrace bool) (*ipgeo.IPGeoData, error) {
+				queryCh <- ip
+				return &ipgeo.IPGeoData{Asnumber: "4242420001"}, nil
+			},
+			Timeout: time.Second,
+		},
+	}, nil, nil)
+	if err != nil {
+		t.Fatalf("newMTRSchedulerRuntime error: %v", err)
+	}
+
+	result := mtrProbeResult{
+		TTL:     1,
+		Success: true,
+		Addr:    &net.IPAddr{IP: net.ParseIP("10.0.0.1")},
+		RTT:     5 * time.Millisecond,
+	}
+	rt.agg.Update(rt.singleProbeResult(1, result), 1)
+	rt.maybeLaunchMetadataLookup(result)
+	if len(rt.metadataGeoInFlight) != 0 {
+		t.Fatal("DN42 geo lookup should wait for host lookup")
+	}
+
+	processMetadataResults(t, rt, 2)
+
+	select {
+	case got := <-queryCh:
+		if got != "10.0.0.1,router.dn42" {
+			t.Fatalf("DN42 geo query = %q, want ip,host", got)
+		}
+	default:
+		t.Fatal("DN42 geo source was not called")
+	}
+	stats := rt.agg.Snapshot()
+	if len(stats) != 1 || stats[0].Host != "router.dn42" {
+		t.Fatalf("host patch = %+v, want router.dn42", stats)
+	}
+	if stats[0].Geo == nil || stats[0].Geo.Asnumber != "4242420001" {
+		t.Fatalf("geo patch = %+v, want ASN 4242420001", stats)
+	}
+}
+
+func TestScheduler_AsyncMetadataDN42EmptyHostFallsBackToIPGeo(t *testing.T) {
+	ClearCaches()
+	t.Cleanup(ClearCaches)
+
+	oldLookupPTR := lookupMTRPTR
+	lookupMTRPTR = func(_ context.Context, _ string) []string {
+		return nil
+	}
+	t.Cleanup(func() {
+		lookupMTRPTR = oldLookupPTR
+	})
+
+	queryCh := make(chan string, 1)
+	rt, err := newMTRSchedulerRuntime(context.Background(), &mockTTLProber{}, NewMTRAggregator(), mtrSchedulerConfig{
+		BeginHop:         1,
+		MaxHops:          1,
+		HopInterval:      time.Millisecond,
+		ParallelRequests: 1,
+		ProgressThrottle: time.Millisecond,
+		FillGeo:          true,
+		AsyncMetadata:    true,
+		BaseConfig: Config{
+			DN42: true,
+			RDNS: true,
+			IPGeoSource: func(ip string, timeout time.Duration, lang string, maptrace bool) (*ipgeo.IPGeoData, error) {
+				queryCh <- ip
+				return &ipgeo.IPGeoData{Asnumber: "4242420002"}, nil
+			},
+			Timeout: time.Second,
+		},
+	}, nil, nil)
+	if err != nil {
+		t.Fatalf("newMTRSchedulerRuntime error: %v", err)
+	}
+
+	result := mtrProbeResult{
+		TTL:     1,
+		Success: true,
+		Addr:    &net.IPAddr{IP: net.ParseIP("10.0.0.2")},
+		RTT:     5 * time.Millisecond,
+	}
+	rt.agg.Update(rt.singleProbeResult(1, result), 1)
+	rt.maybeLaunchMetadataLookup(result)
+	processMetadataResults(t, rt, 2)
+
+	select {
+	case got := <-queryCh:
+		if got != "10.0.0.2" {
+			t.Fatalf("DN42 geo query = %q, want IP-only fallback", got)
+		}
+	default:
+		t.Fatal("DN42 geo source was not called")
+	}
+	stats := rt.agg.Snapshot()
+	if len(stats) != 1 {
+		t.Fatalf("stats rows = %d, want 1", len(stats))
+	}
+	if stats[0].Host != "" {
+		t.Fatalf("host = %q, want empty PTR fallback", stats[0].Host)
+	}
+	if stats[0].Geo == nil || stats[0].Geo.Asnumber != "4242420002" {
+		t.Fatalf("geo patch = %+v, want ASN 4242420002", stats[0].Geo)
+	}
+}
+
 func TestScheduler_AsyncMetadataLimitsGeoConcurrency(t *testing.T) {
 	ClearCaches()
 	t.Cleanup(ClearCaches)

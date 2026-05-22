@@ -3,6 +3,7 @@ package trace
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"sync/atomic"
 	"time"
@@ -379,11 +380,18 @@ func (rt *mtrSchedulerRuntime) maybeLaunchMetadataLookup(result mtrProbeResult) 
 		generationCtx = rt.ctx
 	}
 
-	rt.maybeLaunchGeoMetadataLookup(ip, result, cfg, generationCtx, gen)
+	rt.maybeLaunchGeoMetadataLookup(ip, result, cfg, generationCtx, gen, false)
 	rt.maybeLaunchHostMetadataLookup(ip, result, cfg, generationCtx, gen)
 }
 
-func (rt *mtrSchedulerRuntime) maybeLaunchGeoMetadataLookup(ip string, result mtrProbeResult, cfg Config, generationCtx context.Context, gen uint64) {
+func (rt *mtrSchedulerRuntime) maybeLaunchGeoMetadataLookup(
+	ip string,
+	result mtrProbeResult,
+	cfg Config,
+	generationCtx context.Context,
+	gen uint64,
+	allowDN42IPOnly bool,
+) {
 	if cfg.IPGeoSource == nil || result.Geo != nil {
 		return
 	}
@@ -397,6 +405,11 @@ func (rt *mtrSchedulerRuntime) maybeLaunchGeoMetadataLookup(ip string, result mt
 	host := result.Hostname
 	if host == "" {
 		host = rt.metadataCache[ip].host
+	}
+	// DN42 的 Geo 查询会把 PTR 拼进 "ip,host"。RDNS 开启但 host 还没出来时，
+	// 先等 Host lookup 结束，避免异步拆分后把纯 IP 结果写入缓存。
+	if cfg.DN42 && cfg.RDNS && host == "" && !allowDN42IPOnly {
+		return
 	}
 	rt.metadataGeoInFlight[ip] = gen
 	go rt.runMetadataLookup(generationCtx, gen, mtrMetadataKindGeo, rt.metadataGeoSlots, func(cfg Config) mtrMetadataPatch {
@@ -485,10 +498,41 @@ func (rt *mtrSchedulerRuntime) processMetadataResult(result mtrMetadataResult) {
 	}
 	rt.clearMetadataInFlight(result.kind, ip)
 	rt.cacheMetadataPatch(result.kind, result.patch)
+	rt.maybeLaunchDN42GeoAfterHostResult(result)
 	if !rt.agg.PatchMetadataByIP(ip, result.patch.host, result.patch.geo) {
 		return
 	}
 	rt.maybeSnapshot(false)
+}
+
+func (rt *mtrSchedulerRuntime) maybeLaunchDN42GeoAfterHostResult(result mtrMetadataResult) {
+	if result.kind != mtrMetadataKindHost {
+		return
+	}
+	cfg := rt.cfg.BaseConfig
+	if !cfg.DN42 || !cfg.RDNS || cfg.IPGeoSource == nil {
+		return
+	}
+	ip := result.patch.ip
+	cached := rt.metadataCache[ip]
+	if ip == "" || cached.geo != nil {
+		return
+	}
+	addrIP := net.ParseIP(ip)
+	if addrIP == nil {
+		return
+	}
+	generationCtx := rt.metadataCtx
+	if generationCtx == nil {
+		generationCtx = rt.ctx
+	}
+	// Host lookup 结束后再允许 IP-only fallback：PTR 为空时仍补 Geo，
+	// PTR 成功时则用缓存的 host 发起 "ip,host" 查询。
+	rt.maybeLaunchGeoMetadataLookup(ip, mtrProbeResult{
+		Addr:     &net.IPAddr{IP: addrIP},
+		Hostname: cached.host,
+		Geo:      cached.geo,
+	}, cfg, generationCtx, result.gen, true)
 }
 
 func (rt *mtrSchedulerRuntime) clearMetadataInFlight(kind mtrMetadataKind, ip string) {
