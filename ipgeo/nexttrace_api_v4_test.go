@@ -4,11 +4,14 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -30,6 +33,12 @@ func withNextTraceAPIV4RetryDelays(t *testing.T, delays ...time.Duration) {
 	})
 }
 
+func resetNextTraceAPIV4ClientCache() {
+	nextTraceAPIV4ClientCacheMu.Lock()
+	defer nextTraceAPIV4ClientCacheMu.Unlock()
+	nextTraceAPIV4ClientCache = make(map[nextTraceAPIV4ClientCacheKey]*NextTraceAPIV4Client)
+}
+
 func TestLeoIPNextTraceAPIV4HTTPNormalizesTimeout(t *testing.T) {
 	t.Setenv(util.EnvNextTraceAPIV4TokenKey, "test-token")
 	oldEndpoint := nextTraceAPIV4GeoEndpoint
@@ -37,6 +46,7 @@ func TestLeoIPNextTraceAPIV4HTTPNormalizesTimeout(t *testing.T) {
 	t.Cleanup(func() {
 		nextTraceAPIV4GeoEndpoint = oldEndpoint
 		nextTraceAPIV4HTTPClientFactory = oldFactory
+		resetNextTraceAPIV4ClientCache()
 	})
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -58,6 +68,7 @@ func TestLeoIPNextTraceAPIV4HTTPNormalizesTimeout(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			resetNextTraceAPIV4ClientCache()
 			var got time.Duration
 			nextTraceAPIV4HTTPClientFactory = func(timeout time.Duration) *http.Client {
 				got = timeout
@@ -87,6 +98,7 @@ func TestLeoIPNextTraceAPIV4HTTPUsesTimeoutAsTotalBudget(t *testing.T) {
 	t.Cleanup(func() {
 		nextTraceAPIV4GeoEndpoint = oldEndpoint
 		nextTraceAPIV4HTTPClientFactory = oldFactory
+		resetNextTraceAPIV4ClientCache()
 	})
 
 	attempts := 0
@@ -102,6 +114,7 @@ func TestLeoIPNextTraceAPIV4HTTPUsesTimeoutAsTotalBudget(t *testing.T) {
 		client.Timeout = timeout
 		return client
 	}
+	resetNextTraceAPIV4ClientCache()
 
 	start := time.Now()
 	_, err := LeoIPNextTraceAPIV4HTTP("1.1.1.1", 2*time.Second, "cn", false)
@@ -114,6 +127,157 @@ func TestLeoIPNextTraceAPIV4HTTPUsesTimeoutAsTotalBudget(t *testing.T) {
 	}
 	if elapsed >= 2900*time.Millisecond {
 		t.Fatalf("elapsed = %s, want bounded by 2s timeout budget", elapsed)
+	}
+}
+
+func TestLeoIPNextTraceAPIV4HTTPReusesCachedClientAndConnection(t *testing.T) {
+	t.Setenv(util.EnvNextTraceAPIV4TokenKey, "test-token")
+	oldEndpoint := nextTraceAPIV4GeoEndpoint
+	oldFactory := nextTraceAPIV4HTTPClientFactory
+	t.Cleanup(func() {
+		nextTraceAPIV4GeoEndpoint = oldEndpoint
+		nextTraceAPIV4HTTPClientFactory = oldFactory
+		resetNextTraceAPIV4ClientCache()
+	})
+
+	var factoryCalls int32
+	var newConns int32
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = w.Write([]byte(`{"ip":"` + r.URL.Query().Get("ip") + `"}`))
+	}))
+	srv.Config.ConnState = func(_ net.Conn, state http.ConnState) {
+		if state == http.StateNew {
+			atomic.AddInt32(&newConns, 1)
+		}
+	}
+	srv.Start()
+	defer srv.Close()
+
+	nextTraceAPIV4GeoEndpoint = srv.URL
+	nextTraceAPIV4HTTPClientFactory = func(timeout time.Duration) *http.Client {
+		atomic.AddInt32(&factoryCalls, 1)
+		client := srv.Client()
+		client.Timeout = timeout
+		return client
+	}
+	resetNextTraceAPIV4ClientCache()
+
+	for _, ip := range []string{"1.1.1.1", "8.8.8.8", "9.9.9.9"} {
+		geo, err := LeoIPNextTraceAPIV4HTTP(ip, 2*time.Second, "cn", false)
+		if err != nil {
+			t.Fatalf("LeoIPNextTraceAPIV4HTTP(%s) error = %v", ip, err)
+		}
+		if geo.IP != ip {
+			t.Fatalf("IP = %q, want %s", geo.IP, ip)
+		}
+	}
+
+	if got := atomic.LoadInt32(&factoryCalls); got != 1 {
+		t.Fatalf("factory calls = %d, want 1 cached client", got)
+	}
+	if got := atomic.LoadInt32(&newConns); got != 1 {
+		t.Fatalf("new connections = %d, want 1 reused HTTP connection", got)
+	}
+}
+
+func TestLeoIPNextTraceAPIV4HTTPCacheKeyIncludesTokenAndTimeout(t *testing.T) {
+	oldEndpoint := nextTraceAPIV4GeoEndpoint
+	oldFactory := nextTraceAPIV4HTTPClientFactory
+	t.Cleanup(func() {
+		nextTraceAPIV4GeoEndpoint = oldEndpoint
+		nextTraceAPIV4HTTPClientFactory = oldFactory
+		resetNextTraceAPIV4ClientCache()
+	})
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = w.Write([]byte(`{"ip":"` + r.URL.Query().Get("ip") + `"}`))
+	}))
+	defer srv.Close()
+
+	var factoryCalls int32
+	nextTraceAPIV4GeoEndpoint = srv.URL
+	nextTraceAPIV4HTTPClientFactory = func(timeout time.Duration) *http.Client {
+		atomic.AddInt32(&factoryCalls, 1)
+		client := srv.Client()
+		client.Timeout = timeout
+		return client
+	}
+	resetNextTraceAPIV4ClientCache()
+
+	t.Setenv(util.EnvNextTraceAPIV4TokenKey, "token-a")
+	if _, err := LeoIPNextTraceAPIV4HTTP("1.1.1.1", 2*time.Second, "cn", false); err != nil {
+		t.Fatalf("first lookup error = %v", err)
+	}
+	if _, err := LeoIPNextTraceAPIV4HTTP("8.8.8.8", time.Second, "cn", false); err != nil {
+		t.Fatalf("same normalized timeout lookup error = %v", err)
+	}
+	if got := atomic.LoadInt32(&factoryCalls); got != 1 {
+		t.Fatalf("factory calls after same key = %d, want 1", got)
+	}
+
+	t.Setenv(util.EnvNextTraceAPIV4TokenKey, "token-b")
+	if _, err := LeoIPNextTraceAPIV4HTTP("9.9.9.9", 2*time.Second, "cn", false); err != nil {
+		t.Fatalf("token change lookup error = %v", err)
+	}
+	if got := atomic.LoadInt32(&factoryCalls); got != 2 {
+		t.Fatalf("factory calls after token change = %d, want 2", got)
+	}
+
+	if _, err := LeoIPNextTraceAPIV4HTTP("1.0.0.1", 3*time.Second, "cn", false); err != nil {
+		t.Fatalf("timeout change lookup error = %v", err)
+	}
+	if got := atomic.LoadInt32(&factoryCalls); got != 3 {
+		t.Fatalf("factory calls after timeout change = %d, want 3", got)
+	}
+}
+
+func TestLeoIPNextTraceAPIV4HTTPCachesClientConcurrently(t *testing.T) {
+	t.Setenv(util.EnvNextTraceAPIV4TokenKey, "test-token")
+	oldEndpoint := nextTraceAPIV4GeoEndpoint
+	oldFactory := nextTraceAPIV4HTTPClientFactory
+	t.Cleanup(func() {
+		nextTraceAPIV4GeoEndpoint = oldEndpoint
+		nextTraceAPIV4HTTPClientFactory = oldFactory
+		resetNextTraceAPIV4ClientCache()
+	})
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = w.Write([]byte(`{"ip":"` + r.URL.Query().Get("ip") + `"}`))
+	}))
+	defer srv.Close()
+
+	var factoryCalls int32
+	nextTraceAPIV4GeoEndpoint = srv.URL
+	nextTraceAPIV4HTTPClientFactory = func(timeout time.Duration) *http.Client {
+		atomic.AddInt32(&factoryCalls, 1)
+		client := srv.Client()
+		client.Timeout = timeout
+		return client
+	}
+	resetNextTraceAPIV4ClientCache()
+
+	var wg sync.WaitGroup
+	errCh := make(chan error, 20)
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := LeoIPNextTraceAPIV4HTTP("1.1.1.1", 2*time.Second, "cn", false)
+			errCh <- err
+		}()
+	}
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		if err != nil {
+			t.Fatalf("concurrent lookup error = %v", err)
+		}
+	}
+	if got := atomic.LoadInt32(&factoryCalls); got != 1 {
+		t.Fatalf("factory calls = %d, want 1 cached client under concurrency", got)
 	}
 }
 

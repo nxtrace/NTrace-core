@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/nxtrace/NTrace-core/util"
@@ -29,7 +30,15 @@ var (
 	nextTraceAPIV4GeoEndpoint       = "https://api.nxtrace.org/v4/ipGeo"
 	nextTraceAPIV4HTTPClientFactory = util.NewGeoHTTPClient
 	nextTraceAPIV4RetryDelays       = []time.Duration{200 * time.Millisecond, 500 * time.Millisecond}
+	nextTraceAPIV4ClientCache       = make(map[nextTraceAPIV4ClientCacheKey]*NextTraceAPIV4Client)
+	nextTraceAPIV4ClientCacheMu     sync.Mutex
 )
+
+type nextTraceAPIV4ClientCacheKey struct {
+	endpoint string
+	token    string
+	timeout  time.Duration
+}
 
 type NextTraceAPIV4Quota struct {
 	Remaining    uint64
@@ -76,11 +85,34 @@ func LeoIPNextTraceAPIV4HTTP(ip string, timeout time.Duration, lang string, mapt
 	_ = lang
 	_ = maptrace
 	timeout = normalizeNextTraceAPIV4Timeout(timeout)
-	client := NewNextTraceAPIV4Client(nextTraceAPIV4GeoEndpoint, util.GetNextTraceAPIV4Token(), nextTraceAPIV4HTTPClientFactory(timeout))
+	client := cachedNextTraceAPIV4Client(nextTraceAPIV4GeoEndpoint, util.GetNextTraceAPIV4Token(), timeout)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	geo, _, err := client.Lookup(ctx, ip)
 	return geo, err
+}
+
+func cachedNextTraceAPIV4Client(endpoint string, token string, timeout time.Duration) *NextTraceAPIV4Client {
+	if strings.TrimSpace(endpoint) == "" {
+		endpoint = nextTraceAPIV4GeoEndpoint
+	}
+	token = strings.TrimSpace(token)
+	timeout = normalizeNextTraceAPIV4Timeout(timeout)
+
+	key := nextTraceAPIV4ClientCacheKey{
+		endpoint: endpoint,
+		token:    token,
+		timeout:  timeout,
+	}
+	nextTraceAPIV4ClientCacheMu.Lock()
+	defer nextTraceAPIV4ClientCacheMu.Unlock()
+
+	if client := nextTraceAPIV4ClientCache[key]; client != nil {
+		return client
+	}
+	client := NewNextTraceAPIV4Client(endpoint, token, nextTraceAPIV4HTTPClientFactory(timeout))
+	nextTraceAPIV4ClientCache[key] = client
+	return client
 }
 
 func (c *NextTraceAPIV4Client) Lookup(ctx context.Context, ip string) (*IPGeoData, NextTraceAPIV4Quota, error) {
