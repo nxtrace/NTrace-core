@@ -417,6 +417,60 @@ func TestNextTraceAPIV4ClientCacheEvictsOldestEntry(t *testing.T) {
 	}
 }
 
+func TestNextTraceAPIV4ClientCacheEvictsMultipleOldestEntries(t *testing.T) {
+	t.Cleanup(resetNextTraceAPIV4ClientCache)
+	resetNextTraceAPIV4ClientCache()
+
+	var closeIdleCalls int32
+	endpoint := "https://api.example.test/v4/ipGeo"
+	timeout := 2 * time.Second
+	total := nextTraceAPIV4CacheMaxSize + 3
+	keys := make([]nextTraceAPIV4ClientCacheKey, 0, total)
+
+	nextTraceAPIV4ClientCacheMu.Lock()
+	for i := 0; i < total; i++ {
+		key := nextTraceAPIV4ClientCacheKey{
+			endpoint: endpoint,
+			token:    "token-" + strconv.Itoa(i),
+			timeout:  timeout,
+		}
+		keys = append(keys, key)
+		nextTraceAPIV4ClientCache[key] = &NextTraceAPIV4Client{
+			endpoint: endpoint,
+			token:    key.token,
+			httpClient: &http.Client{
+				Timeout:   timeout,
+				Transport: &closeIdleRoundTripper{closed: &closeIdleCalls},
+			},
+		}
+		nextTraceAPIV4ClientCacheOrder = append(nextTraceAPIV4ClientCacheOrder, key)
+	}
+	evictNextTraceAPIV4ClientCacheLocked()
+	gotLen := len(nextTraceAPIV4ClientCache)
+	gotOrder := append([]nextTraceAPIV4ClientCacheKey(nil), nextTraceAPIV4ClientCacheOrder...)
+	evictedStillCached := false
+	for _, key := range keys[:3] {
+		if nextTraceAPIV4ClientCache[key] != nil {
+			evictedStillCached = true
+			break
+		}
+	}
+	nextTraceAPIV4ClientCacheMu.Unlock()
+
+	if gotLen != nextTraceAPIV4CacheMaxSize {
+		t.Fatalf("cache size = %d, want %d", gotLen, nextTraceAPIV4CacheMaxSize)
+	}
+	if evictedStillCached {
+		t.Fatal("one of the oldest cache entries remained cached")
+	}
+	if !reflect.DeepEqual(gotOrder, keys[3:]) {
+		t.Fatalf("cache order = %#v, want %#v", gotOrder, keys[3:])
+	}
+	if got := atomic.LoadInt32(&closeIdleCalls); got != 3 {
+		t.Fatalf("CloseIdleConnections calls = %d, want 3", got)
+	}
+}
+
 func TestLeoIPNextTraceAPIV4HTTPCachesClientConcurrently(t *testing.T) {
 	t.Setenv(util.EnvNextTraceAPIV4TokenKey, "test-token")
 	oldEndpoint := nextTraceAPIV4GeoEndpoint

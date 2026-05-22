@@ -126,11 +126,22 @@ func cachedNextTraceAPIV4Client(endpoint string, token string, timeout time.Dura
 }
 
 func evictNextTraceAPIV4ClientCacheLocked() {
-	for len(nextTraceAPIV4ClientCache) > nextTraceAPIV4CacheMaxSize && len(nextTraceAPIV4ClientCacheOrder) > 0 {
-		key := nextTraceAPIV4ClientCacheOrder[0]
-		copy(nextTraceAPIV4ClientCacheOrder, nextTraceAPIV4ClientCacheOrder[1:])
-		nextTraceAPIV4ClientCacheOrder[len(nextTraceAPIV4ClientCacheOrder)-1] = nextTraceAPIV4ClientCacheKey{}
-		nextTraceAPIV4ClientCacheOrder = nextTraceAPIV4ClientCacheOrder[:len(nextTraceAPIV4ClientCacheOrder)-1]
+	evictCount := len(nextTraceAPIV4ClientCache) - nextTraceAPIV4CacheMaxSize
+	if evictCount <= 0 {
+		return
+	}
+	if evictCount > len(nextTraceAPIV4ClientCacheOrder) {
+		evictCount = len(nextTraceAPIV4ClientCacheOrder)
+	}
+
+	evictedKeys := append([]nextTraceAPIV4ClientCacheKey(nil), nextTraceAPIV4ClientCacheOrder[:evictCount]...)
+	copy(nextTraceAPIV4ClientCacheOrder, nextTraceAPIV4ClientCacheOrder[evictCount:])
+	for i := len(nextTraceAPIV4ClientCacheOrder) - evictCount; i < len(nextTraceAPIV4ClientCacheOrder); i++ {
+		nextTraceAPIV4ClientCacheOrder[i] = nextTraceAPIV4ClientCacheKey{}
+	}
+	nextTraceAPIV4ClientCacheOrder = nextTraceAPIV4ClientCacheOrder[:len(nextTraceAPIV4ClientCacheOrder)-evictCount]
+
+	for _, key := range evictedKeys {
 		client := nextTraceAPIV4ClientCache[key]
 		delete(nextTraceAPIV4ClientCache, key)
 		closeNextTraceAPIV4ClientIdleConnections(client)
