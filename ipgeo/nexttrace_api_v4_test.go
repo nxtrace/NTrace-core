@@ -322,6 +322,40 @@ func TestLeoIPNextTraceAPIV4HTTPCacheKeyIncludesGeoDNSResolver(t *testing.T) {
 	}
 }
 
+func TestNextTraceAPIV4ClientCacheNormalizesEndpoint(t *testing.T) {
+	oldFactory := nextTraceAPIV4HTTPClientFactory
+	t.Cleanup(func() {
+		nextTraceAPIV4HTTPClientFactory = oldFactory
+		resetNextTraceAPIV4ClientCache()
+	})
+
+	var factoryCalls int32
+	nextTraceAPIV4HTTPClientFactory = func(timeout time.Duration) *http.Client {
+		atomic.AddInt32(&factoryCalls, 1)
+		return &http.Client{
+			Timeout: timeout,
+			Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+				return nil, errors.New("unexpected request")
+			}),
+		}
+	}
+	resetNextTraceAPIV4ClientCache()
+
+	endpoint := "https://api.example.test/v4/ipGeo"
+	client := cachedNextTraceAPIV4Client(" "+endpoint+" ", "test-token", 2*time.Second)
+	cached := cachedNextTraceAPIV4Client(endpoint, "test-token", 2*time.Second)
+
+	if client != cached {
+		t.Fatal("cached client differs for endpoint with surrounding spaces")
+	}
+	if got := atomic.LoadInt32(&factoryCalls); got != 1 {
+		t.Fatalf("factory calls = %d, want 1", got)
+	}
+	if client.endpoint != endpoint {
+		t.Fatalf("client endpoint = %q, want %q", client.endpoint, endpoint)
+	}
+}
+
 func TestNextTraceAPIV4ClientCacheEvictsOldestEntry(t *testing.T) {
 	oldFactory := nextTraceAPIV4HTTPClientFactory
 	oldResolver := util.CurrentGeoDNSResolver()
@@ -518,6 +552,14 @@ func TestNewNextTraceAPIV4ClientDefaultsBoundedHTTPClient(t *testing.T) {
 	}
 	if client.token != "test-token" {
 		t.Fatalf("token = %q, want trimmed token", client.token)
+	}
+}
+
+func TestNewNextTraceAPIV4ClientTrimsEndpoint(t *testing.T) {
+	endpoint := "https://api.example.test/v4/ipGeo"
+	client := NewNextTraceAPIV4Client(" "+endpoint+" ", "test-token", http.DefaultClient)
+	if client.endpoint != endpoint {
+		t.Fatalf("endpoint = %q, want %q", client.endpoint, endpoint)
 	}
 }
 

@@ -60,9 +60,7 @@ type NextTraceAPIV4Client struct {
 }
 
 func NewNextTraceAPIV4Client(endpoint string, token string, httpClient *http.Client) *NextTraceAPIV4Client {
-	if strings.TrimSpace(endpoint) == "" {
-		endpoint = nextTraceAPIV4GeoEndpoint
-	}
+	endpoint = normalizeNextTraceAPIV4Endpoint(endpoint)
 	if httpClient == nil {
 		httpClient = util.NewGeoHTTPClient(nextTraceAPIV4MinTimeout)
 	}
@@ -96,9 +94,7 @@ func LeoIPNextTraceAPIV4HTTP(ip string, timeout time.Duration, lang string, mapt
 }
 
 func cachedNextTraceAPIV4Client(endpoint string, token string, timeout time.Duration) *NextTraceAPIV4Client {
-	if strings.TrimSpace(endpoint) == "" {
-		endpoint = nextTraceAPIV4GeoEndpoint
-	}
+	endpoint = normalizeNextTraceAPIV4Endpoint(endpoint)
 	token = strings.TrimSpace(token)
 	timeout = normalizeNextTraceAPIV4Timeout(timeout)
 
@@ -146,6 +142,14 @@ func closeNextTraceAPIV4ClientIdleConnections(client *NextTraceAPIV4Client) {
 		return
 	}
 	client.httpClient.CloseIdleConnections()
+}
+
+func normalizeNextTraceAPIV4Endpoint(endpoint string) string {
+	endpoint = strings.TrimSpace(endpoint)
+	if endpoint == "" {
+		return nextTraceAPIV4GeoEndpoint
+	}
+	return endpoint
 }
 
 func (c *NextTraceAPIV4Client) Lookup(ctx context.Context, ip string) (*IPGeoData, NextTraceAPIV4Quota, error) {
