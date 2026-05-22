@@ -556,9 +556,10 @@ func (s *Result) markAllPendingGeoTimeout() {
 }
 
 func (s *Result) addWithGeoAsync(hop Hop, attemptIdx, numMeasurements, maxAttempts int, cfg Config) {
-	if hop.Geo == nil {
+	needsMetadata := cfg.IPGeoSource != nil || cfg.RDNS
+	if cfg.IPGeoSource != nil && hop.Geo == nil {
 		hop.Geo = pendingGeo()
-	} else if hop.Geo.Source == "" {
+	} else if cfg.IPGeoSource != nil && hop.Geo.Source == "" {
 		hop.Geo.Source = PendingGeoSource
 	}
 	if hop.Lang == "" {
@@ -567,6 +568,9 @@ func (s *Result) addWithGeoAsync(hop Hop, attemptIdx, numMeasurements, maxAttemp
 
 	added, idx := s.add(hop, attemptIdx, numMeasurements, maxAttempts)
 	if !added {
+		return
+	}
+	if !needsMetadata {
 		return
 	}
 

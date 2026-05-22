@@ -105,3 +105,24 @@ func TestWaitForPendingGeoDataReturnsImmediatelyForCompletedWorkers(t *testing.T
 		t.Fatalf("waitForPendingGeoData returned too slowly for completed result: %v", elapsed)
 	}
 }
+
+func TestAddWithGeoAsyncNoMetadataLeavesGeoNil(t *testing.T) {
+	res := &Result{
+		Hops:     make([][]Hop, 1),
+		tailDone: make([]bool, 1),
+	}
+	res.addWithGeoAsync(Hop{
+		Success: true,
+		Address: &net.IPAddr{IP: net.ParseIP("1.1.1.1")},
+		TTL:     1,
+	}, 0, 1, 1, Config{})
+
+	waitForPendingGeoData(context.Background(), res)
+
+	if len(res.Hops[0]) != 1 {
+		t.Fatalf("hop count = %d, want 1", len(res.Hops[0]))
+	}
+	if geo := res.Hops[0][0].Geo; geo != nil {
+		t.Fatalf("hop geo = %+v, want nil when geo and RDNS are disabled", geo)
+	}
+}
