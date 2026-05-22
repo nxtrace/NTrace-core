@@ -3,6 +3,7 @@ package util
 import (
 	"context"
 	"net"
+	"strings"
 	"sync"
 	"time"
 )
@@ -50,7 +51,18 @@ func getGeoResolverOverride() *net.Resolver {
 func SetGeoDNSResolver(dotServer string) {
 	geoMu.Lock()
 	defer geoMu.Unlock()
-	geoDotServer = dotServer
+	geoDotServer = normalizeGeoDNSResolver(dotServer)
+}
+
+// CurrentGeoDNSResolver 返回当前生效的 Geo DNS resolver 名称（已规范化）。
+func CurrentGeoDNSResolver() string {
+	geoMu.RLock()
+	defer geoMu.RUnlock()
+	return geoDotServer
+}
+
+func normalizeGeoDNSResolver(dotServer string) string {
+	return strings.ToLower(strings.TrimSpace(dotServer))
 }
 
 // SetGeoDNSFallback 设置 DoT 失败后是否回退系统 DNS，默认 true。
@@ -67,6 +79,7 @@ func WithGeoDNSResolver[T any](dotServer string, callback func() (T, error)) (T,
 		var zero T
 		return zero, nil
 	}
+	dotServer = normalizeGeoDNSResolver(dotServer)
 	if dotServer == "" {
 		return callback()
 	}

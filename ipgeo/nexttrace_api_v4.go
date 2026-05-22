@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/nxtrace/NTrace-core/util"
@@ -23,13 +24,24 @@ const (
 	nextTraceAPIV4MaxGeoBody   = 1 << 20
 	nextTraceAPIV4MinTimeout   = 2 * time.Second
 	nextTraceAPIV4MaxAttempts  = 3
+	nextTraceAPIV4CacheMaxSize = 32
 )
 
 var (
 	nextTraceAPIV4GeoEndpoint       = "https://api.nxtrace.org/v4/ipGeo"
 	nextTraceAPIV4HTTPClientFactory = util.NewGeoHTTPClient
 	nextTraceAPIV4RetryDelays       = []time.Duration{200 * time.Millisecond, 500 * time.Millisecond}
+	nextTraceAPIV4ClientCache       = make(map[nextTraceAPIV4ClientCacheKey]*NextTraceAPIV4Client)
+	nextTraceAPIV4ClientCacheOrder  []nextTraceAPIV4ClientCacheKey
+	nextTraceAPIV4ClientCacheMu     sync.RWMutex
 )
+
+type nextTraceAPIV4ClientCacheKey struct {
+	endpoint       string
+	token          string
+	timeout        time.Duration
+	geoDNSResolver string
+}
 
 type NextTraceAPIV4Quota struct {
 	Remaining    uint64
@@ -48,9 +60,7 @@ type NextTraceAPIV4Client struct {
 }
 
 func NewNextTraceAPIV4Client(endpoint string, token string, httpClient *http.Client) *NextTraceAPIV4Client {
-	if strings.TrimSpace(endpoint) == "" {
-		endpoint = nextTraceAPIV4GeoEndpoint
-	}
+	endpoint = normalizeNextTraceAPIV4Endpoint(endpoint)
 	if httpClient == nil {
 		httpClient = util.NewGeoHTTPClient(nextTraceAPIV4MinTimeout)
 	}
@@ -76,11 +86,81 @@ func LeoIPNextTraceAPIV4HTTP(ip string, timeout time.Duration, lang string, mapt
 	_ = lang
 	_ = maptrace
 	timeout = normalizeNextTraceAPIV4Timeout(timeout)
-	client := NewNextTraceAPIV4Client(nextTraceAPIV4GeoEndpoint, util.GetNextTraceAPIV4Token(), nextTraceAPIV4HTTPClientFactory(timeout))
+	client := cachedNextTraceAPIV4Client(nextTraceAPIV4GeoEndpoint, util.GetNextTraceAPIV4Token(), timeout)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	geo, _, err := client.Lookup(ctx, ip)
 	return geo, err
+}
+
+func cachedNextTraceAPIV4Client(endpoint string, token string, timeout time.Duration) *NextTraceAPIV4Client {
+	endpoint = normalizeNextTraceAPIV4Endpoint(endpoint)
+	token = strings.TrimSpace(token)
+	timeout = normalizeNextTraceAPIV4Timeout(timeout)
+
+	key := nextTraceAPIV4ClientCacheKey{
+		endpoint:       endpoint,
+		token:          token,
+		timeout:        timeout,
+		geoDNSResolver: util.CurrentGeoDNSResolver(),
+	}
+
+	nextTraceAPIV4ClientCacheMu.RLock()
+	if client := nextTraceAPIV4ClientCache[key]; client != nil {
+		nextTraceAPIV4ClientCacheMu.RUnlock()
+		return client
+	}
+	nextTraceAPIV4ClientCacheMu.RUnlock()
+
+	nextTraceAPIV4ClientCacheMu.Lock()
+	defer nextTraceAPIV4ClientCacheMu.Unlock()
+	if client := nextTraceAPIV4ClientCache[key]; client != nil {
+		return client
+	}
+
+	client := NewNextTraceAPIV4Client(endpoint, token, nextTraceAPIV4HTTPClientFactory(timeout))
+	nextTraceAPIV4ClientCache[key] = client
+	nextTraceAPIV4ClientCacheOrder = append(nextTraceAPIV4ClientCacheOrder, key)
+	evictNextTraceAPIV4ClientCacheLocked()
+	return client
+}
+
+func evictNextTraceAPIV4ClientCacheLocked() {
+	evictCount := len(nextTraceAPIV4ClientCache) - nextTraceAPIV4CacheMaxSize
+	if evictCount <= 0 {
+		return
+	}
+	if evictCount > len(nextTraceAPIV4ClientCacheOrder) {
+		evictCount = len(nextTraceAPIV4ClientCacheOrder)
+	}
+
+	evictedKeys := append([]nextTraceAPIV4ClientCacheKey(nil), nextTraceAPIV4ClientCacheOrder[:evictCount]...)
+	copy(nextTraceAPIV4ClientCacheOrder, nextTraceAPIV4ClientCacheOrder[evictCount:])
+	for i := len(nextTraceAPIV4ClientCacheOrder) - evictCount; i < len(nextTraceAPIV4ClientCacheOrder); i++ {
+		nextTraceAPIV4ClientCacheOrder[i] = nextTraceAPIV4ClientCacheKey{}
+	}
+	nextTraceAPIV4ClientCacheOrder = nextTraceAPIV4ClientCacheOrder[:len(nextTraceAPIV4ClientCacheOrder)-evictCount]
+
+	for _, key := range evictedKeys {
+		client := nextTraceAPIV4ClientCache[key]
+		delete(nextTraceAPIV4ClientCache, key)
+		closeNextTraceAPIV4ClientIdleConnections(client)
+	}
+}
+
+func closeNextTraceAPIV4ClientIdleConnections(client *NextTraceAPIV4Client) {
+	if client == nil || client.httpClient == nil {
+		return
+	}
+	client.httpClient.CloseIdleConnections()
+}
+
+func normalizeNextTraceAPIV4Endpoint(endpoint string) string {
+	endpoint = strings.TrimSpace(endpoint)
+	if endpoint == "" {
+		return nextTraceAPIV4GeoEndpoint
+	}
+	return endpoint
 }
 
 func (c *NextTraceAPIV4Client) Lookup(ctx context.Context, ip string) (*IPGeoData, NextTraceAPIV4Quota, error) {
