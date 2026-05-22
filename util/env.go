@@ -95,7 +95,7 @@ func GetNextTraceAPIV4Token() string {
 	token, err := ReadNextTraceAPIV4SessionToken()
 	if err != nil {
 		if os.Getenv("NEXTTRACE_DEBUG") != "" {
-			fmt.Println("ENV", EnvNextTraceAPIV4TokenKey, "session token file read failed")
+			fmt.Println("ENV", EnvNextTraceAPIV4TokenKey, "session token file read failed:", err, "paths:", NextTraceAPIV4SessionTokenPath(), NextTraceAPIV4LatestTokenPath())
 		}
 		return ""
 	}

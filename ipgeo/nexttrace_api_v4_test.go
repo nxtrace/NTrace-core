@@ -188,6 +188,25 @@ func TestNextTraceAPIV4ClientLookupBuildsRequestAndParsesResponse(t *testing.T) 
 	}
 }
 
+func TestNewNextTraceAPIV4ClientDefaultsBoundedHTTPClient(t *testing.T) {
+	client := NewNextTraceAPIV4Client("", " test-token ", nil)
+	if client.httpClient == nil {
+		t.Fatal("httpClient = nil, want bounded default client")
+	}
+	if client.httpClient.Timeout < nextTraceAPIV4MinTimeout {
+		t.Fatalf("httpClient.Timeout = %s, want at least %s", client.httpClient.Timeout, nextTraceAPIV4MinTimeout)
+	}
+	if client.httpClient == http.DefaultClient {
+		t.Fatal("httpClient = http.DefaultClient, want bounded default client")
+	}
+	if client.endpoint != nextTraceAPIV4GeoEndpoint {
+		t.Fatalf("endpoint = %q, want default endpoint", client.endpoint)
+	}
+	if client.token != "test-token" {
+		t.Fatalf("token = %q, want trimmed token", client.token)
+	}
+}
+
 func TestNextTraceAPIV4ClientLookupRejectsOversizedSuccessBody(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")

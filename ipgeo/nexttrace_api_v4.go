@@ -52,7 +52,7 @@ func NewNextTraceAPIV4Client(endpoint string, token string, httpClient *http.Cli
 		endpoint = nextTraceAPIV4GeoEndpoint
 	}
 	if httpClient == nil {
-		httpClient = http.DefaultClient
+		httpClient = util.NewGeoHTTPClient(nextTraceAPIV4MinTimeout)
 	}
 	return &NextTraceAPIV4Client{
 		endpoint:   endpoint,

@@ -102,13 +102,27 @@ func readNextTraceAPIV4TTYToken(stdin *os.File) (string, error) {
 	}
 	token, readErr := readNextTraceAPIV4HiddenToken(stdin)
 	restoreErr := term.Restore(fd, oldState)
-	if readErr != nil {
-		return token, readErr
-	}
-	if restoreErr != nil {
-		return "", restoreErr
+	if err := nextTraceAPIV4TTYTokenError(readErr, restoreErr); err != nil {
+		if readErr != nil {
+			return token, err
+		}
+		return "", err
 	}
 	return token, nil
+}
+
+func nextTraceAPIV4TTYTokenError(readErr error, restoreErr error) error {
+	if restoreErr == nil {
+		return readErr
+	}
+	restoreErr = fmt.Errorf("restore terminal: %w", restoreErr)
+	if readErr == nil {
+		return restoreErr
+	}
+	if errors.Is(readErr, errNextTraceAPIV4TokenSetupInterrupted) {
+		return errors.Join(readErr, restoreErr)
+	}
+	return fmt.Errorf("%v; %w", readErr, restoreErr)
 }
 
 func readNextTraceAPIV4HiddenToken(reader io.Reader) (string, error) {

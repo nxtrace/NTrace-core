@@ -165,6 +165,31 @@ func TestHandleNextTraceAPIV4TokenSetupInterruptedError(t *testing.T) {
 	}
 }
 
+func TestNextTraceAPIV4TTYTokenErrorKeepsInterruptAndRestoreError(t *testing.T) {
+	restoreErr := errors.New("restore failed")
+	err := nextTraceAPIV4TTYTokenError(errNextTraceAPIV4TokenSetupInterrupted, restoreErr)
+	if !errors.Is(err, errNextTraceAPIV4TokenSetupInterrupted) {
+		t.Fatalf("error = %v, want interrupted sentinel", err)
+	}
+	if !errors.Is(err, restoreErr) {
+		t.Fatalf("error = %v, want restore error", err)
+	}
+	if !strings.Contains(err.Error(), "restore terminal") {
+		t.Fatalf("error = %q, want restore context", err.Error())
+	}
+}
+
+func TestNextTraceAPIV4TTYTokenErrorDoesNotHideRestoreBehindEOF(t *testing.T) {
+	restoreErr := errors.New("restore failed")
+	err := nextTraceAPIV4TTYTokenError(io.EOF, restoreErr)
+	if errors.Is(err, io.EOF) {
+		t.Fatalf("error = %v, should not be treated as plain EOF", err)
+	}
+	if !errors.Is(err, restoreErr) {
+		t.Fatalf("error = %v, want restore error", err)
+	}
+}
+
 func TestReadNextTraceAPIV4HiddenTokenReadsLine(t *testing.T) {
 	token, err := readNextTraceAPIV4HiddenToken(strings.NewReader("token\n"))
 	if err != nil {

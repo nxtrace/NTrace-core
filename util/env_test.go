@@ -108,6 +108,37 @@ func TestGetNextTraceAPIV4TokenFallsBackToLatestFile(t *testing.T) {
 	assert.Equal(t, "latest-token", os.Getenv(EnvNextTraceAPIV4TokenKey))
 }
 
+func TestGetNextTraceAPIV4TokenDebugLogsReadErrorAndPaths(t *testing.T) {
+	t.Setenv("NEXTTRACE_DEBUG", "1")
+	t.Setenv(EnvNextTraceAPIV4TokenKey, "")
+	parentPath := filepath.Join(t.TempDir(), "not-a-directory")
+	require.NoError(t, os.WriteFile(parentPath, []byte("not-a-secret-token\n"), 0o600))
+	sessionPath := filepath.Join(parentPath, "session")
+	latestPath := filepath.Join(parentPath, "latest")
+	overrideNextTraceAPIV4TokenPathFuncs(t, sessionPath, latestPath)
+
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = r.Close() })
+	t.Cleanup(func() { _ = w.Close() })
+	os.Stdout = w
+	defer func() { os.Stdout = oldStdout }()
+
+	assert.Equal(t, "", GetNextTraceAPIV4Token())
+	require.NoError(t, w.Close())
+	out, err := io.ReadAll(r)
+	require.NoError(t, err)
+
+	output := string(out)
+	assert.Contains(t, output, EnvNextTraceAPIV4TokenKey)
+	assert.Contains(t, output, "session token file read failed")
+	assert.Contains(t, output, "not a directory")
+	assert.Contains(t, output, sessionPath)
+	assert.Contains(t, output, latestPath)
+	assert.NotContains(t, output, "not-a-secret-token")
+}
+
 func TestGetNextTraceAPIV4TokenRejectsSymlinkSessionFile(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("creating symlinks on Windows can require extra privileges")
