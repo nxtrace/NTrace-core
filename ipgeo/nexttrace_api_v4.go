@@ -15,26 +15,35 @@ import (
 	"time"
 
 	"github.com/nxtrace/NTrace-core/util"
+	"golang.org/x/net/http/httpproxy"
 )
 
 const (
-	NextTraceAPIV4TokenPageURL = "https://api.nxtrace.org/v4/api-tokens"
-	nextTraceAPIV4TokenHeader  = "X-NextTrace-Token"
-	nextTraceAPIV4MaxErrorBody = 512
-	nextTraceAPIV4MaxGeoBody   = 1 << 20
-	nextTraceAPIV4MinTimeout   = 2 * time.Second
-	nextTraceAPIV4MaxAttempts  = 3
-	nextTraceAPIV4CacheMaxSize = 32
+	NextTraceAPIV4TokenPageURL  = "https://api.nxtrace.org/v4/api-tokens"
+	nextTraceAPIV4APIHost       = "api.nxtrace.org"
+	nextTraceAPIV4DefaultPort   = "443"
+	nextTraceAPIV4GeoPath       = "/v4/ipGeo"
+	nextTraceAPIV4TokenHeader   = "X-NextTrace-Token"
+	nextTraceAPIV4MaxErrorBody  = 512
+	nextTraceAPIV4MaxGeoBody    = 1 << 20
+	nextTraceAPIV4MinTimeout    = 2 * time.Second
+	nextTraceAPIV4FastIPTimeout = time.Second
+	nextTraceAPIV4MaxAttempts   = 3
+	nextTraceAPIV4CacheMaxSize  = 32
 )
 
 var (
-	nextTraceAPIV4GeoEndpoint       = "https://api.nxtrace.org/v4/ipGeo"
-	nextTraceAPIV4HTTPClientFactory = util.NewGeoHTTPClient
-	nextTraceAPIV4RetryDelays       = []time.Duration{200 * time.Millisecond, 500 * time.Millisecond}
-	nextTraceAPIV4ClientCache       = make(map[nextTraceAPIV4ClientCacheKey]*NextTraceAPIV4Client)
-	nextTraceAPIV4ClientCacheOrder  []nextTraceAPIV4ClientCacheKey
-	nextTraceAPIV4ClientCacheMu     sync.RWMutex
+	nextTraceAPIV4GeoEndpoint      = "https://api.nxtrace.org/v4/ipGeo"
+	nextTraceAPIV4RetryDelays      = []time.Duration{200 * time.Millisecond, 500 * time.Millisecond}
+	nextTraceAPIV4ClientCache      = make(map[nextTraceAPIV4ClientCacheKey]*NextTraceAPIV4Client)
+	nextTraceAPIV4ClientCacheOrder []nextTraceAPIV4ClientCacheKey
+	nextTraceAPIV4ClientCacheMu    sync.RWMutex
 )
+
+type nextTraceAPIV4HTTPClientFactoryFunc func(endpoint string, timeout time.Duration) *http.Client
+
+var nextTraceAPIV4HTTPClientFactory nextTraceAPIV4HTTPClientFactoryFunc = newNextTraceAPIV4HTTPClient
+var nextTraceAPIV4FastIPFn = util.GetFastIPWithContext
 
 type nextTraceAPIV4ClientCacheKey struct {
 	endpoint       string
@@ -62,7 +71,7 @@ type NextTraceAPIV4Client struct {
 func NewNextTraceAPIV4Client(endpoint string, token string, httpClient *http.Client) *NextTraceAPIV4Client {
 	endpoint = normalizeNextTraceAPIV4Endpoint(endpoint)
 	if httpClient == nil {
-		httpClient = util.NewGeoHTTPClient(nextTraceAPIV4MinTimeout)
+		httpClient = nextTraceAPIV4HTTPClientFactory(endpoint, nextTraceAPIV4MinTimeout)
 	}
 	return &NextTraceAPIV4Client{
 		endpoint:   endpoint,
@@ -86,9 +95,10 @@ func LeoIPNextTraceAPIV4HTTP(ip string, timeout time.Duration, lang string, mapt
 	_ = lang
 	_ = maptrace
 	timeout = normalizeNextTraceAPIV4Timeout(timeout)
-	client := cachedNextTraceAPIV4Client(nextTraceAPIV4GeoEndpoint, util.GetNextTraceAPIV4Token(), timeout)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
+	_ = prepareNextTraceAPIV4FastIP(ctx, nextTraceAPIV4GeoEndpoint, false)
+	client := cachedNextTraceAPIV4Client(nextTraceAPIV4GeoEndpoint, util.GetNextTraceAPIV4Token(), timeout)
 	geo, _, err := client.Lookup(ctx, ip)
 	return geo, err
 }
@@ -118,7 +128,7 @@ func cachedNextTraceAPIV4Client(endpoint string, token string, timeout time.Dura
 		return client
 	}
 
-	client := NewNextTraceAPIV4Client(endpoint, token, nextTraceAPIV4HTTPClientFactory(timeout))
+	client := NewNextTraceAPIV4Client(endpoint, token, nextTraceAPIV4HTTPClientFactory(endpoint, timeout))
 	nextTraceAPIV4ClientCache[key] = client
 	nextTraceAPIV4ClientCacheOrder = append(nextTraceAPIV4ClientCacheOrder, key)
 	evictNextTraceAPIV4ClientCacheLocked()
@@ -161,6 +171,119 @@ func normalizeNextTraceAPIV4Endpoint(endpoint string) string {
 		return nextTraceAPIV4GeoEndpoint
 	}
 	return endpoint
+}
+
+func PrepareNextTraceAPIV4FastIP(ctx context.Context, enableOutput bool) error {
+	return prepareNextTraceAPIV4FastIP(ctx, nextTraceAPIV4GeoEndpoint, enableOutput)
+}
+
+func prepareNextTraceAPIV4FastIP(ctx context.Context, endpoint string, enableOutput bool) error {
+	host, port, ok := nextTraceAPIV4APIEndpointHostPort(endpoint)
+	if !ok || nextTraceAPIV4ProxyConfigured(endpoint) {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	prewarmCtx, cancel := context.WithTimeout(ctx, nextTraceAPIV4FastIPTimeout)
+	defer cancel()
+	_, err := nextTraceAPIV4FastIPFn(prewarmCtx, host, port, enableOutput)
+	return err
+}
+
+func nextTraceAPIV4ProxyConfigured(endpoint string) bool {
+	if util.GetProxy() != nil {
+		return true
+	}
+	u, err := url.Parse(normalizeNextTraceAPIV4Endpoint(endpoint))
+	if err != nil {
+		return false
+	}
+	proxyURL, err := httpproxy.FromEnvironment().ProxyFunc()(u)
+	return err != nil || proxyURL != nil
+}
+
+func nextTraceAPIV4APIEndpointHostPort(endpoint string) (string, string, bool) {
+	u, err := url.Parse(normalizeNextTraceAPIV4Endpoint(endpoint))
+	if err != nil {
+		return "", "", false
+	}
+	scheme := strings.ToLower(u.Scheme)
+	if scheme != "https" && scheme != "http" {
+		return "", "", false
+	}
+	if !strings.EqualFold(u.Hostname(), nextTraceAPIV4APIHost) || u.EscapedPath() != nextTraceAPIV4GeoPath {
+		return "", "", false
+	}
+	port := u.Port()
+	if port == "" {
+		if scheme == "http" {
+			port = "80"
+		} else {
+			port = nextTraceAPIV4DefaultPort
+		}
+	}
+	return nextTraceAPIV4APIHost, port, true
+}
+
+func newNextTraceAPIV4HTTPClient(endpoint string, timeout time.Duration) *http.Client {
+	client := util.NewGeoHTTPClient(timeout)
+	host, port, ok := nextTraceAPIV4APIEndpointHostPort(endpoint)
+	if !ok {
+		return client
+	}
+	transport, ok := client.Transport.(*http.Transport)
+	if !ok || transport == nil {
+		return client
+	}
+
+	if proxyURL := util.GetProxy(); proxyURL != nil {
+		transport.Proxy = http.ProxyURL(proxyURL)
+		return client
+	}
+
+	dialer := &net.Dialer{
+		Timeout:   timeout,
+		KeepAlive: 30 * time.Second,
+	}
+	transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		return dialNextTraceAPIV4(ctx, dialer, network, addr, host, port)
+	}
+	return client
+}
+
+func dialNextTraceAPIV4(ctx context.Context, dialer *net.Dialer, network string, addr string, apiHost string, apiPort string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return dialer.DialContext(ctx, network, addr)
+	}
+	if strings.EqualFold(host, apiHost) && port == apiPort {
+		if fastIP := strings.Trim(util.GetFastIPCache(), "[]"); fastIP != "" {
+			if conn, dialErr := dialer.DialContext(ctx, network, net.JoinHostPort(fastIP, port)); dialErr == nil {
+				return conn, nil
+			}
+		}
+	}
+	return dialGeoResolved(ctx, dialer, network, host, port)
+}
+
+func dialGeoResolved(ctx context.Context, dialer *net.Dialer, network string, host string, port string) (net.Conn, error) {
+	ips, err := util.LookupHostForGeo(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+	var lastErr error
+	for _, ip := range ips {
+		conn, dialErr := dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
+		if dialErr == nil {
+			return conn, nil
+		}
+		lastErr = dialErr
+	}
+	if lastErr == nil {
+		return nil, fmt.Errorf("geo DNS returned no IPs for host %q", host)
+	}
+	return nil, lastErr
 }
 
 func (c *NextTraceAPIV4Client) Lookup(ctx context.Context, ip string) (*IPGeoData, NextTraceAPIV4Quota, error) {

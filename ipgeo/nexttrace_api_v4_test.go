@@ -67,6 +67,13 @@ func nextTraceAPIV4ClientCacheLen() int {
 	return len(nextTraceAPIV4ClientCache)
 }
 
+func isolateNextTraceAPIV4ProxyEnv(t *testing.T) {
+	t.Helper()
+	for _, key := range []string{"HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "no_proxy"} {
+		t.Setenv(key, "")
+	}
+}
+
 func TestLeoIPNextTraceAPIV4HTTPNormalizesTimeout(t *testing.T) {
 	t.Setenv(util.EnvNextTraceAPIV4TokenKey, "test-token")
 	oldEndpoint := nextTraceAPIV4GeoEndpoint
@@ -98,7 +105,7 @@ func TestLeoIPNextTraceAPIV4HTTPNormalizesTimeout(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			resetNextTraceAPIV4ClientCache()
 			var got time.Duration
-			nextTraceAPIV4HTTPClientFactory = func(timeout time.Duration) *http.Client {
+			nextTraceAPIV4HTTPClientFactory = func(_ string, timeout time.Duration) *http.Client {
 				got = timeout
 				client := srv.Client()
 				client.Timeout = timeout
@@ -137,7 +144,7 @@ func TestLeoIPNextTraceAPIV4HTTPUsesTimeoutAsTotalBudget(t *testing.T) {
 	}))
 	defer srv.Close()
 	nextTraceAPIV4GeoEndpoint = srv.URL
-	nextTraceAPIV4HTTPClientFactory = func(timeout time.Duration) *http.Client {
+	nextTraceAPIV4HTTPClientFactory = func(_ string, timeout time.Duration) *http.Client {
 		client := srv.Client()
 		client.Timeout = timeout
 		return client
@@ -155,6 +162,68 @@ func TestLeoIPNextTraceAPIV4HTTPUsesTimeoutAsTotalBudget(t *testing.T) {
 	}
 	if elapsed >= 2900*time.Millisecond {
 		t.Fatalf("elapsed = %s, want bounded by 2s timeout budget", elapsed)
+	}
+}
+
+func TestLeoIPNextTraceAPIV4HTTPSharesTimeoutWithFastIPPrewarm(t *testing.T) {
+	isolateNextTraceAPIV4ProxyEnv(t)
+	t.Setenv(util.EnvNextTraceAPIV4TokenKey, "test-token")
+	oldEndpoint := nextTraceAPIV4GeoEndpoint
+	oldFactory := nextTraceAPIV4HTTPClientFactory
+	oldFastIPFn := nextTraceAPIV4FastIPFn
+	oldProxy := util.EnvProxyURL
+	t.Cleanup(func() {
+		nextTraceAPIV4GeoEndpoint = oldEndpoint
+		nextTraceAPIV4HTTPClientFactory = oldFactory
+		nextTraceAPIV4FastIPFn = oldFastIPFn
+		util.EnvProxyURL = oldProxy
+		resetNextTraceAPIV4ClientCache()
+	})
+
+	util.EnvProxyURL = ""
+	nextTraceAPIV4GeoEndpoint = "https://" + nextTraceAPIV4APIHost + nextTraceAPIV4GeoPath
+	nextTraceAPIV4FastIPFn = func(ctx context.Context, _ string, _ string, enableOutput bool) (string, error) {
+		if enableOutput {
+			t.Fatal("FastIP enableOutput = true, want false for lookup fallback")
+		}
+		if _, ok := ctx.Deadline(); !ok {
+			t.Fatal("FastIP context has no deadline")
+		}
+		time.Sleep(200 * time.Millisecond)
+		return "127.0.0.1", nil
+	}
+
+	timeout := 2 * time.Second
+	var lookupRemaining time.Duration
+	nextTraceAPIV4HTTPClientFactory = func(_ string, gotTimeout time.Duration) *http.Client {
+		if gotTimeout != timeout {
+			t.Fatalf("client timeout = %s, want %s", gotTimeout, timeout)
+		}
+		return &http.Client{
+			Timeout: gotTimeout,
+			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				deadline, ok := req.Context().Deadline()
+				if !ok {
+					t.Fatal("lookup context has no deadline")
+				}
+				lookupRemaining = time.Until(deadline)
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Status:     "200 OK",
+					Header:     make(http.Header),
+					Body:       io.NopCloser(strings.NewReader(`{"ip":"1.1.1.1"}`)),
+					Request:    req,
+				}, nil
+			}),
+		}
+	}
+	resetNextTraceAPIV4ClientCache()
+
+	if _, err := LeoIPNextTraceAPIV4HTTP("1.1.1.1", timeout, "cn", false); err != nil {
+		t.Fatalf("LeoIPNextTraceAPIV4HTTP() error = %v", err)
+	}
+	if lookupRemaining >= timeout-100*time.Millisecond {
+		t.Fatalf("lookup remaining timeout = %s, want FastIP prewarm charged to same budget", lookupRemaining)
 	}
 }
 
@@ -183,7 +252,7 @@ func TestLeoIPNextTraceAPIV4HTTPReusesCachedClientAndConnection(t *testing.T) {
 	defer srv.Close()
 
 	nextTraceAPIV4GeoEndpoint = srv.URL
-	nextTraceAPIV4HTTPClientFactory = func(timeout time.Duration) *http.Client {
+	nextTraceAPIV4HTTPClientFactory = func(_ string, timeout time.Duration) *http.Client {
 		atomic.AddInt32(&factoryCalls, 1)
 		client := srv.Client()
 		client.Timeout = timeout
@@ -209,6 +278,287 @@ func TestLeoIPNextTraceAPIV4HTTPReusesCachedClientAndConnection(t *testing.T) {
 	}
 }
 
+func TestLeoIPNextTraceAPIV4HTTPUsesFastIPForAPIEndpoint(t *testing.T) {
+	isolateNextTraceAPIV4ProxyEnv(t)
+	t.Setenv(util.EnvNextTraceAPIV4TokenKey, "test-token")
+	oldEndpoint := nextTraceAPIV4GeoEndpoint
+	oldFastIPFn := nextTraceAPIV4FastIPFn
+	oldProxy := util.EnvProxyURL
+	oldCache := util.GetFastIPCache()
+	oldMeta := util.GetFastIPMetaCache()
+	t.Cleanup(func() {
+		nextTraceAPIV4GeoEndpoint = oldEndpoint
+		nextTraceAPIV4FastIPFn = oldFastIPFn
+		util.EnvProxyURL = oldProxy
+		util.SetFastIPCacheState(oldCache, oldMeta)
+		resetNextTraceAPIV4ClientCache()
+	})
+
+	util.EnvProxyURL = ""
+	util.SetFastIPCacheState("", util.FastIPMeta{})
+	var fastIPCalls int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Host; !strings.HasPrefix(got, nextTraceAPIV4APIHost+":") {
+			t.Fatalf("Host = %q, want api host with port", got)
+		}
+		if got := r.URL.Path; got != nextTraceAPIV4GeoPath {
+			t.Fatalf("path = %q, want %s", got, nextTraceAPIV4GeoPath)
+		}
+		if got := r.URL.Query().Get("ip"); got != "1.1.1.1" {
+			t.Fatalf("query ip = %q, want 1.1.1.1", got)
+		}
+		if got := r.Header.Get(nextTraceAPIV4TokenHeader); got != "test-token" {
+			t.Fatalf("%s = %q, want test-token", nextTraceAPIV4TokenHeader, got)
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = w.Write([]byte(`{"ip":"1.1.1.1"}`))
+	}))
+	defer srv.Close()
+	port := strconv.Itoa(srv.Listener.Addr().(*net.TCPAddr).Port)
+	nextTraceAPIV4GeoEndpoint = "http://" + nextTraceAPIV4APIHost + ":" + port + nextTraceAPIV4GeoPath
+	nextTraceAPIV4FastIPFn = func(ctx context.Context, domain string, gotPort string, enableOutput bool) (string, error) {
+		atomic.AddInt32(&fastIPCalls, 1)
+		if domain != nextTraceAPIV4APIHost {
+			t.Fatalf("FastIP domain = %q, want %s", domain, nextTraceAPIV4APIHost)
+		}
+		if gotPort != port {
+			t.Fatalf("FastIP port = %q, want %s", gotPort, port)
+		}
+		if enableOutput {
+			t.Fatal("FastIP enableOutput = true, want false for lookup fallback")
+		}
+		util.SetFastIPCacheState("127.0.0.1", util.FastIPMeta{IP: "127.0.0.1"})
+		return "127.0.0.1", nil
+	}
+	resetNextTraceAPIV4ClientCache()
+
+	geo, err := LeoIPNextTraceAPIV4HTTP("1.1.1.1", 2*time.Second, "cn", false)
+	if err != nil {
+		t.Fatalf("LeoIPNextTraceAPIV4HTTP() error = %v", err)
+	}
+	if geo.IP != "1.1.1.1" {
+		t.Fatalf("IP = %q, want 1.1.1.1", geo.IP)
+	}
+	if got := atomic.LoadInt32(&fastIPCalls); got != 1 {
+		t.Fatalf("FastIP calls = %d, want 1", got)
+	}
+}
+
+func TestPrepareNextTraceAPIV4FastIPUsesBoundedChildContext(t *testing.T) {
+	isolateNextTraceAPIV4ProxyEnv(t)
+	oldFastIPFn := nextTraceAPIV4FastIPFn
+	oldProxy := util.EnvProxyURL
+	t.Cleanup(func() {
+		nextTraceAPIV4FastIPFn = oldFastIPFn
+		util.EnvProxyURL = oldProxy
+	})
+
+	util.EnvProxyURL = ""
+	var calls int32
+	nextTraceAPIV4FastIPFn = func(ctx context.Context, domain string, port string, enableOutput bool) (string, error) {
+		atomic.AddInt32(&calls, 1)
+		if domain != nextTraceAPIV4APIHost {
+			t.Fatalf("FastIP domain = %q, want %s", domain, nextTraceAPIV4APIHost)
+		}
+		if port != nextTraceAPIV4DefaultPort {
+			t.Fatalf("FastIP port = %q, want %s", port, nextTraceAPIV4DefaultPort)
+		}
+		deadline, ok := ctx.Deadline()
+		if !ok {
+			t.Fatal("FastIP context has no deadline")
+		}
+		if remaining := time.Until(deadline); remaining <= 0 || remaining > nextTraceAPIV4FastIPTimeout+200*time.Millisecond {
+			t.Fatalf("FastIP context remaining = %s, want bounded by %s", remaining, nextTraceAPIV4FastIPTimeout)
+		}
+		return "127.0.0.1", nil
+	}
+
+	if err := prepareNextTraceAPIV4FastIP(context.Background(), nextTraceAPIV4GeoEndpoint, false); err != nil {
+		t.Fatalf("prepareNextTraceAPIV4FastIP() error = %v", err)
+	}
+	if got := atomic.LoadInt32(&calls); got != 1 {
+		t.Fatalf("FastIP calls = %d, want 1", got)
+	}
+}
+
+func TestNextTraceAPIV4APIEndpointHostPortDefaultsHTTPPort(t *testing.T) {
+	_, port, ok := nextTraceAPIV4APIEndpointHostPort("http://" + nextTraceAPIV4APIHost + nextTraceAPIV4GeoPath)
+	if !ok {
+		t.Fatal("http endpoint should be recognized")
+	}
+	if port != "80" {
+		t.Fatalf("http implicit port = %q, want 80", port)
+	}
+
+	_, port, ok = nextTraceAPIV4APIEndpointHostPort("https://" + nextTraceAPIV4APIHost + nextTraceAPIV4GeoPath)
+	if !ok {
+		t.Fatal("https endpoint should be recognized")
+	}
+	if port != nextTraceAPIV4DefaultPort {
+		t.Fatalf("https implicit port = %q, want %s", port, nextTraceAPIV4DefaultPort)
+	}
+}
+
+func TestDialNextTraceAPIV4FallsBackWhenCachedFastIPFails(t *testing.T) {
+	oldCache := util.GetFastIPCache()
+	oldMeta := util.GetFastIPMetaCache()
+	t.Cleanup(func() {
+		util.SetFastIPCacheState(oldCache, oldMeta)
+	})
+
+	listenConfig := net.ListenConfig{}
+	listener, err := listenConfig.Listen(context.Background(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Listen() error = %v", err)
+	}
+	defer func() {
+		if err := listener.Close(); err != nil {
+			t.Fatalf("listener.Close() error = %v", err)
+		}
+	}()
+	accepted := make(chan net.Conn, 1)
+	go func() {
+		conn, err := listener.Accept()
+		if err == nil {
+			accepted <- conn
+		}
+	}()
+
+	port := strconv.Itoa(listener.Addr().(*net.TCPAddr).Port)
+	util.SetFastIPCacheState("127.0.0.2", util.FastIPMeta{IP: "127.0.0.2"})
+	conn, err := dialNextTraceAPIV4(context.Background(), &net.Dialer{Timeout: time.Second}, "tcp", net.JoinHostPort("127.0.0.1", port), "127.0.0.1", port)
+	if err != nil {
+		t.Fatalf("dialNextTraceAPIV4() error = %v", err)
+	}
+	_ = conn.Close()
+
+	select {
+	case serverConn := <-accepted:
+		_ = serverConn.Close()
+	case <-time.After(time.Second):
+		t.Fatal("fallback dial did not reach original host listener")
+	}
+}
+
+func TestPrepareNextTraceAPIV4FastIPSkipsStandardProxyEnv(t *testing.T) {
+	isolateNextTraceAPIV4ProxyEnv(t)
+	oldFastIPFn := nextTraceAPIV4FastIPFn
+	oldProxy := util.EnvProxyURL
+	t.Cleanup(func() {
+		nextTraceAPIV4FastIPFn = oldFastIPFn
+		util.EnvProxyURL = oldProxy
+	})
+
+	util.EnvProxyURL = ""
+	t.Setenv("HTTPS_PROXY", "http://127.0.0.1:65535")
+	var calls int32
+	nextTraceAPIV4FastIPFn = func(context.Context, string, string, bool) (string, error) {
+		atomic.AddInt32(&calls, 1)
+		return "127.0.0.1", nil
+	}
+
+	if err := prepareNextTraceAPIV4FastIP(context.Background(), nextTraceAPIV4GeoEndpoint, false); err != nil {
+		t.Fatalf("prepareNextTraceAPIV4FastIP() error = %v", err)
+	}
+	if got := atomic.LoadInt32(&calls); got != 0 {
+		t.Fatalf("FastIP calls = %d, want 0 with HTTPS_PROXY", got)
+	}
+}
+
+func TestLeoIPNextTraceAPIV4HTTPSkipsFastIPForCustomEndpoint(t *testing.T) {
+	isolateNextTraceAPIV4ProxyEnv(t)
+	t.Setenv(util.EnvNextTraceAPIV4TokenKey, "test-token")
+	oldEndpoint := nextTraceAPIV4GeoEndpoint
+	oldFastIPFn := nextTraceAPIV4FastIPFn
+	oldCache := util.GetFastIPCache()
+	oldMeta := util.GetFastIPMetaCache()
+	t.Cleanup(func() {
+		nextTraceAPIV4GeoEndpoint = oldEndpoint
+		nextTraceAPIV4FastIPFn = oldFastIPFn
+		util.SetFastIPCacheState(oldCache, oldMeta)
+		resetNextTraceAPIV4ClientCache()
+	})
+
+	var fastIPCalls int32
+	nextTraceAPIV4FastIPFn = func(context.Context, string, string, bool) (string, error) {
+		atomic.AddInt32(&fastIPCalls, 1)
+		return "127.0.0.1", nil
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = w.Write([]byte(`{"ip":"` + r.URL.Query().Get("ip") + `"}`))
+	}))
+	defer srv.Close()
+	nextTraceAPIV4GeoEndpoint = srv.URL
+	resetNextTraceAPIV4ClientCache()
+
+	geo, err := LeoIPNextTraceAPIV4HTTP("8.8.8.8", 2*time.Second, "cn", false)
+	if err != nil {
+		t.Fatalf("LeoIPNextTraceAPIV4HTTP() error = %v", err)
+	}
+	if geo.IP != "8.8.8.8" {
+		t.Fatalf("IP = %q, want 8.8.8.8", geo.IP)
+	}
+	if got := atomic.LoadInt32(&fastIPCalls); got != 0 {
+		t.Fatalf("FastIP calls = %d, want 0 for custom endpoint", got)
+	}
+}
+
+func TestLeoIPNextTraceAPIV4HTTPUsesProxyInsteadOfFastIP(t *testing.T) {
+	isolateNextTraceAPIV4ProxyEnv(t)
+	t.Setenv(util.EnvNextTraceAPIV4TokenKey, "test-token")
+	oldEndpoint := nextTraceAPIV4GeoEndpoint
+	oldFastIPFn := nextTraceAPIV4FastIPFn
+	oldProxy := util.EnvProxyURL
+	t.Cleanup(func() {
+		nextTraceAPIV4GeoEndpoint = oldEndpoint
+		nextTraceAPIV4FastIPFn = oldFastIPFn
+		util.EnvProxyURL = oldProxy
+		resetNextTraceAPIV4ClientCache()
+	})
+
+	var proxyRequests int32
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&proxyRequests, 1)
+		if got := r.URL.Scheme; got != "http" {
+			t.Fatalf("proxy request scheme = %q, want http", got)
+		}
+		if got := r.URL.Host; got != nextTraceAPIV4APIHost+":65535" {
+			t.Fatalf("proxy request host = %q, want api.nxtrace.org:65535", got)
+		}
+		if got := r.Header.Get(nextTraceAPIV4TokenHeader); got != "test-token" {
+			t.Fatalf("%s = %q, want test-token", nextTraceAPIV4TokenHeader, got)
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = w.Write([]byte(`{"ip":"` + r.URL.Query().Get("ip") + `"}`))
+	}))
+	defer proxy.Close()
+
+	var fastIPCalls int32
+	nextTraceAPIV4FastIPFn = func(context.Context, string, string, bool) (string, error) {
+		atomic.AddInt32(&fastIPCalls, 1)
+		return "127.0.0.1", nil
+	}
+	util.EnvProxyURL = proxy.URL
+	nextTraceAPIV4GeoEndpoint = "http://" + nextTraceAPIV4APIHost + ":65535" + nextTraceAPIV4GeoPath
+	resetNextTraceAPIV4ClientCache()
+
+	geo, err := LeoIPNextTraceAPIV4HTTP("9.9.9.9", 2*time.Second, "cn", false)
+	if err != nil {
+		t.Fatalf("LeoIPNextTraceAPIV4HTTP() error = %v", err)
+	}
+	if geo.IP != "9.9.9.9" {
+		t.Fatalf("IP = %q, want 9.9.9.9", geo.IP)
+	}
+	if got := atomic.LoadInt32(&proxyRequests); got != 1 {
+		t.Fatalf("proxy requests = %d, want 1", got)
+	}
+	if got := atomic.LoadInt32(&fastIPCalls); got != 0 {
+		t.Fatalf("FastIP calls = %d, want 0 when proxy is configured", got)
+	}
+}
+
 func TestLeoIPNextTraceAPIV4HTTPCacheKeyIncludesTokenAndTimeout(t *testing.T) {
 	oldEndpoint := nextTraceAPIV4GeoEndpoint
 	oldFactory := nextTraceAPIV4HTTPClientFactory
@@ -226,7 +576,7 @@ func TestLeoIPNextTraceAPIV4HTTPCacheKeyIncludesTokenAndTimeout(t *testing.T) {
 
 	var factoryCalls int32
 	nextTraceAPIV4GeoEndpoint = srv.URL
-	nextTraceAPIV4HTTPClientFactory = func(timeout time.Duration) *http.Client {
+	nextTraceAPIV4HTTPClientFactory = func(_ string, timeout time.Duration) *http.Client {
 		atomic.AddInt32(&factoryCalls, 1)
 		client := srv.Client()
 		client.Timeout = timeout
@@ -281,7 +631,7 @@ func TestLeoIPNextTraceAPIV4HTTPCacheKeyIncludesGeoDNSResolver(t *testing.T) {
 
 	var factoryCalls int32
 	nextTraceAPIV4GeoEndpoint = srv.URL
-	nextTraceAPIV4HTTPClientFactory = func(timeout time.Duration) *http.Client {
+	nextTraceAPIV4HTTPClientFactory = func(_ string, timeout time.Duration) *http.Client {
 		atomic.AddInt32(&factoryCalls, 1)
 		client := srv.Client()
 		client.Timeout = timeout
@@ -330,7 +680,7 @@ func TestNextTraceAPIV4ClientCacheNormalizesEndpoint(t *testing.T) {
 	})
 
 	var factoryCalls int32
-	nextTraceAPIV4HTTPClientFactory = func(timeout time.Duration) *http.Client {
+	nextTraceAPIV4HTTPClientFactory = func(_ string, timeout time.Duration) *http.Client {
 		atomic.AddInt32(&factoryCalls, 1)
 		return &http.Client{
 			Timeout: timeout,
@@ -367,7 +717,7 @@ func TestNextTraceAPIV4ClientCacheEvictsOldestEntry(t *testing.T) {
 
 	var factoryCalls int32
 	var closeIdleCalls int32
-	nextTraceAPIV4HTTPClientFactory = func(timeout time.Duration) *http.Client {
+	nextTraceAPIV4HTTPClientFactory = func(_ string, timeout time.Duration) *http.Client {
 		atomic.AddInt32(&factoryCalls, 1)
 		return &http.Client{
 			Timeout:   timeout,
@@ -489,7 +839,7 @@ func TestLeoIPNextTraceAPIV4HTTPCachesClientConcurrently(t *testing.T) {
 
 	var factoryCalls int32
 	nextTraceAPIV4GeoEndpoint = srv.URL
-	nextTraceAPIV4HTTPClientFactory = func(timeout time.Duration) *http.Client {
+	nextTraceAPIV4HTTPClientFactory = func(_ string, timeout time.Duration) *http.Client {
 		atomic.AddInt32(&factoryCalls, 1)
 		client := srv.Client()
 		client.Timeout = timeout

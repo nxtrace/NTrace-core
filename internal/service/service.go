@@ -66,11 +66,12 @@ type runtimeOptions struct {
 }
 
 var (
-	ensureLeoMoeConnectionFn = ensureLeoMoeConnection
-	lookupIPGeoFn            = trace.LookupIPGeo
-	runMTRFn                 = trace.RunMTR
-	runMTRRawFn              = trace.RunMTRRaw
-	runMTUTraceFn            = mtutrace.Run
+	ensureLeoMoeConnectionFn      = ensureLeoMoeConnection
+	prepareNextTraceAPIV4FastIPFn = ipgeo.PrepareNextTraceAPIV4FastIP
+	lookupIPGeoFn                 = trace.LookupIPGeo
+	runMTRFn                      = trace.RunMTR
+	runMTRRawFn                   = trace.RunMTRRaw
+	runMTUTraceFn                 = mtutrace.Run
 )
 
 func New() *Service {
@@ -440,7 +441,11 @@ func withServiceRuntime[T any](ctx context.Context, opts runtimeOptions, fn func
 
 	return util.WithGeoDNSResolver(strings.ToLower(strings.TrimSpace(opts.DotServer)), func() (T, error) {
 		if opts.NeedsLeoWS {
-			ensureLeoMoeConnectionFn(ctx)
+			if ipgeo.NextTraceAPIV4TokenConfigured() {
+				_ = prepareNextTraceAPIV4FastIPFn(ctx, false)
+			} else {
+				ensureLeoMoeConnectionFn(ctx)
+			}
 		}
 		return fn()
 	})

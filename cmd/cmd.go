@@ -49,7 +49,8 @@ const (
 )
 
 var (
-	domainLookupFn = util.DomainLookUpWithContext
+	domainLookupFn                = util.DomainLookUpWithContext
+	prepareNextTraceAPIV4FastIPFn = ipgeo.PrepareNextTraceAPIV4FastIP
 )
 
 func normalizeListenAddr(addr string) string {
@@ -885,6 +886,7 @@ func initLeoWebsocket(ctx context.Context, dataOrigin, powProvider *string, asyn
 		return nil
 	}
 	if ipgeo.NextTraceAPIV4TokenConfigured() {
+		_ = prepareNextTraceAPIV4FastIPFn(ctx, true)
 		return nil
 	}
 

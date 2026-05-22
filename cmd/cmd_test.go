@@ -69,11 +69,29 @@ func TestLookupTargetIPOrExitReturnsFalseOnContextDeadline(t *testing.T) {
 
 func TestInitLeoWebsocketSkipsV3WhenNextTraceAPIV4TokenConfigured(t *testing.T) {
 	t.Setenv(util.EnvNextTraceAPIV4TokenKey, "v4-token")
+	oldPrepare := prepareNextTraceAPIV4FastIPFn
+	var prepareCalls int
+	prepareNextTraceAPIV4FastIPFn = func(ctx context.Context, enableOutput bool) error {
+		prepareCalls++
+		if ctx == nil {
+			t.Fatal("PrepareNextTraceAPIV4FastIP context = nil")
+		}
+		if !enableOutput {
+			t.Fatal("PrepareNextTraceAPIV4FastIP enableOutput = false, want true")
+		}
+		return nil
+	}
+	t.Cleanup(func() {
+		prepareNextTraceAPIV4FastIPFn = oldPrepare
+	})
 	dataProvider := "LeoMoeAPI"
 	powProvider := "api.nxtrace.org"
 
 	if got := initLeoWebsocket(context.Background(), &dataProvider, &powProvider, false); got != nil {
 		t.Fatalf("initLeoWebsocket() = %+v, want nil when NextTrace API v4 token is configured", got)
+	}
+	if prepareCalls != 1 {
+		t.Fatalf("PrepareNextTraceAPIV4FastIP calls = %d, want 1", prepareCalls)
 	}
 }
 
