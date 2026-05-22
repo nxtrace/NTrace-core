@@ -15,7 +15,7 @@ func strictNextTraceAPIV4TokenPerms() bool {
 func checkNextTraceAPIV4TokenDirOwner(info os.FileInfo) error {
 	stat, ok := info.Sys().(*syscall.Stat_t)
 	if !ok {
-		return nil
+		return fmt.Errorf("cannot verify owner of NextTrace API v4 token directory")
 	}
 	if int(stat.Uid) != os.Getuid() {
 		return fmt.Errorf("NextTrace API v4 token directory is not owned by current user")

@@ -48,8 +48,8 @@ func TestGetSecretEnvDefaultDoesNotPrintValueInDebugMode(t *testing.T) {
 	oldStdout := os.Stdout
 	r, w, err := os.Pipe()
 	require.NoError(t, err)
-	defer r.Close()
-	defer w.Close()
+	t.Cleanup(func() { _ = r.Close() })
+	t.Cleanup(func() { _ = w.Close() })
 	os.Stdout = w
 	defer func() { os.Stdout = oldStdout }()
 
