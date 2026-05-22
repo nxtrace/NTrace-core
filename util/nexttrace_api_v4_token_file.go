@@ -125,9 +125,7 @@ func WriteNextTraceAPIV4SessionToken(token string) (string, error) {
 		return path, err
 	}
 	latestPath := NextTraceAPIV4LatestTokenPath()
-	if err := writeNextTraceAPIV4TokenFile(latestPath, body); err != nil {
-		return latestPath, err
-	}
+	_ = writeNextTraceAPIV4TokenFile(latestPath, body)
 	return path, nil
 }
 

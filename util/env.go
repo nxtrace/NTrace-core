@@ -35,7 +35,7 @@ func GetEnvTrimmed(key string) (string, bool) {
 	}
 	val := strings.TrimSpace(v)
 	if os.Getenv("NEXTTRACE_DEBUG") != "" {
-		fmt.Println("ENV", key, "detected as", val)
+		fmt.Fprintln(os.Stderr, "ENV", key, "detected as", val)
 	}
 	return val, true
 }
@@ -68,7 +68,7 @@ func GetSecretEnvDefault(key string, def string) string {
 	}
 	val := strings.TrimSpace(v)
 	if os.Getenv("NEXTTRACE_DEBUG") != "" {
-		fmt.Println("ENV", key, "detected")
+		fmt.Fprintln(os.Stderr, "ENV", key, "detected")
 	}
 	return val
 }
@@ -95,14 +95,14 @@ func GetNextTraceAPIV4Token() string {
 	token, err := ReadNextTraceAPIV4SessionToken()
 	if err != nil {
 		if os.Getenv("NEXTTRACE_DEBUG") != "" {
-			fmt.Println("ENV", EnvNextTraceAPIV4TokenKey, "session token file read failed:", err, "paths:", NextTraceAPIV4SessionTokenPath(), NextTraceAPIV4LatestTokenPath())
+			fmt.Fprintln(os.Stderr, "ENV", EnvNextTraceAPIV4TokenKey, "session token file read failed:", err, "paths:", NextTraceAPIV4SessionTokenPath(), NextTraceAPIV4LatestTokenPath())
 		}
 		return ""
 	}
 	if token != "" {
 		_ = os.Setenv(EnvNextTraceAPIV4TokenKey, token)
 		if os.Getenv("NEXTTRACE_DEBUG") != "" {
-			fmt.Println("ENV", EnvNextTraceAPIV4TokenKey, "loaded from session token file")
+			fmt.Fprintln(os.Stderr, "ENV", EnvNextTraceAPIV4TokenKey, "loaded from session token file")
 		}
 	}
 	return token

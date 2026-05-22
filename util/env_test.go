@@ -45,23 +45,33 @@ func TestGetSecretEnvDefaultDoesNotPrintValueInDebugMode(t *testing.T) {
 	t.Setenv("NEXTTRACE_DEBUG", "1")
 	t.Setenv("TEST_SECRET_KEY", " secret-token ")
 
-	oldStdout := os.Stdout
-	r, w, err := os.Pipe()
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = r.Close() })
-	t.Cleanup(func() { _ = w.Close() })
-	os.Stdout = w
-	defer func() { os.Stdout = oldStdout }()
-
-	got := GetSecretEnvDefault("TEST_SECRET_KEY", "")
-	require.NoError(t, w.Close())
-	out, err := io.ReadAll(r)
-	require.NoError(t, err)
+	var got string
+	stdout, stderr := captureStdoutStderr(t, func() {
+		got = GetSecretEnvDefault("TEST_SECRET_KEY", "")
+	})
 
 	assert.Equal(t, "secret-token", got)
-	assert.Contains(t, string(out), "TEST_SECRET_KEY")
-	assert.NotContains(t, string(out), "secret-token")
-	assert.False(t, strings.Contains(string(out), " secret-token "))
+	assert.Equal(t, "", stdout)
+	assert.Contains(t, stderr, "TEST_SECRET_KEY")
+	assert.NotContains(t, stderr, "secret-token")
+	assert.False(t, strings.Contains(stderr, " secret-token "))
+}
+
+func TestGetEnvTrimmedDebugPrintsToStderr(t *testing.T) {
+	t.Setenv("NEXTTRACE_DEBUG", "1")
+	t.Setenv("TEST_DEBUG_KEY", " debug-value ")
+
+	var got string
+	stdout, stderr := captureStdoutStderr(t, func() {
+		var ok bool
+		got, ok = GetEnvTrimmed("TEST_DEBUG_KEY")
+		require.True(t, ok)
+	})
+
+	assert.Equal(t, "debug-value", got)
+	assert.Equal(t, "", stdout)
+	assert.Contains(t, stderr, "TEST_DEBUG_KEY")
+	assert.Contains(t, stderr, "debug-value")
 }
 
 func TestGetEnvInt(t *testing.T) {
@@ -117,20 +127,14 @@ func TestGetNextTraceAPIV4TokenDebugLogsReadErrorAndPaths(t *testing.T) {
 	latestPath := filepath.Join(parentPath, "latest")
 	overrideNextTraceAPIV4TokenPathFuncs(t, sessionPath, latestPath)
 
-	oldStdout := os.Stdout
-	r, w, err := os.Pipe()
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = r.Close() })
-	t.Cleanup(func() { _ = w.Close() })
-	os.Stdout = w
-	defer func() { os.Stdout = oldStdout }()
+	var token string
+	stdout, stderr := captureStdoutStderr(t, func() {
+		token = GetNextTraceAPIV4Token()
+	})
 
-	assert.Equal(t, "", GetNextTraceAPIV4Token())
-	require.NoError(t, w.Close())
-	out, err := io.ReadAll(r)
-	require.NoError(t, err)
-
-	output := string(out)
+	assert.Equal(t, "", token)
+	assert.Equal(t, "", stdout)
+	output := stderr
 	assert.Contains(t, output, EnvNextTraceAPIV4TokenKey)
 	assert.Contains(t, output, "session token file read failed")
 	assert.Contains(t, output, "not a directory")
@@ -246,6 +250,24 @@ func TestWriteNextTraceAPIV4SessionTokenWritesTempFiles(t *testing.T) {
 	}
 }
 
+func TestGetNextTraceAPIV4TokenDebugLoadedMessagePrintsToStderr(t *testing.T) {
+	t.Setenv("NEXTTRACE_DEBUG", "1")
+	paths := overrideNextTraceAPIV4TokenPaths(t)
+	require.NoError(t, os.WriteFile(paths.session, []byte(" file-token \n"), 0o600))
+	t.Setenv(EnvNextTraceAPIV4TokenKey, "")
+
+	var token string
+	stdout, stderr := captureStdoutStderr(t, func() {
+		token = GetNextTraceAPIV4Token()
+	})
+
+	assert.Equal(t, "file-token", token)
+	assert.Equal(t, "", stdout)
+	assert.Contains(t, stderr, EnvNextTraceAPIV4TokenKey)
+	assert.Contains(t, stderr, "loaded from session token file")
+	assert.NotContains(t, stderr, "file-token")
+}
+
 func TestWriteNextTraceAPIV4SessionTokenRejectsSymlinkFile(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("creating symlinks on Windows can require extra privileges")
@@ -261,6 +283,15 @@ func TestWriteNextTraceAPIV4SessionTokenRejectsSymlinkFile(t *testing.T) {
 	body, readErr := os.ReadFile(outside)
 	require.NoError(t, readErr)
 	assert.Equal(t, "outside\n", string(body))
+}
+
+func TestWriteNextTraceAPIV4SessionTokenRejectsDirectorySessionPath(t *testing.T) {
+	paths := overrideNextTraceAPIV4TokenPaths(t)
+	require.NoError(t, os.Mkdir(paths.session, 0o700))
+
+	_, err := WriteNextTraceAPIV4SessionToken(" file-token ")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "directory")
 }
 
 func TestWriteNextTraceAPIV4SessionTokenRejectsSymlinkDirectory(t *testing.T) {
@@ -285,6 +316,43 @@ func TestWriteNextTraceAPIV4SessionTokenRejectsSymlinkDirectory(t *testing.T) {
 	_, err := WriteNextTraceAPIV4SessionToken(" file-token ")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "symlink")
+}
+
+func TestWriteNextTraceAPIV4SessionTokenIgnoresLatestWriteFailure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("creating symlinks on Windows can require extra privileges")
+	}
+	paths := overrideNextTraceAPIV4TokenPaths(t)
+	outside := filepath.Join(t.TempDir(), "outside-token")
+	require.NoError(t, os.WriteFile(outside, []byte("outside\n"), 0o600))
+	require.NoError(t, os.Symlink(outside, paths.latest))
+
+	path, err := WriteNextTraceAPIV4SessionToken(" file-token ")
+	require.NoError(t, err)
+	assert.Equal(t, paths.session, path)
+
+	body, err := os.ReadFile(paths.session)
+	require.NoError(t, err)
+	assert.Equal(t, "file-token\n", string(body))
+	outsideBody, err := os.ReadFile(outside)
+	require.NoError(t, err)
+	assert.Equal(t, "outside\n", string(outsideBody))
+}
+
+func TestWriteNextTraceAPIV4SessionTokenIgnoresLatestDirectoryFailure(t *testing.T) {
+	paths := overrideNextTraceAPIV4TokenPaths(t)
+	require.NoError(t, os.Mkdir(paths.latest, 0o700))
+
+	path, err := WriteNextTraceAPIV4SessionToken(" file-token ")
+	require.NoError(t, err)
+	assert.Equal(t, paths.session, path)
+
+	body, err := os.ReadFile(paths.session)
+	require.NoError(t, err)
+	assert.Equal(t, "file-token\n", string(body))
+	info, err := os.Stat(paths.latest)
+	require.NoError(t, err)
+	assert.True(t, info.IsDir())
 }
 
 func overrideNextTraceAPIV4SessionTokenPath(t *testing.T) string {
@@ -320,4 +388,33 @@ func overrideNextTraceAPIV4TokenPathFuncs(t *testing.T, tokenPath, latestPath st
 		nextTraceAPIV4SessionTokenPath = oldPathFunc
 		nextTraceAPIV4LatestTokenPath = oldLatestPathFunc
 	})
+}
+
+func captureStdoutStderr(t *testing.T, fn func()) (string, string) {
+	t.Helper()
+	oldStdout := os.Stdout
+	oldStderr := os.Stderr
+	stdoutR, stdoutW, err := os.Pipe()
+	require.NoError(t, err)
+	stderrR, stderrW, err := os.Pipe()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = stdoutR.Close() })
+	t.Cleanup(func() { _ = stdoutW.Close() })
+	t.Cleanup(func() { _ = stderrR.Close() })
+	t.Cleanup(func() { _ = stderrW.Close() })
+	os.Stdout = stdoutW
+	os.Stderr = stderrW
+	defer func() {
+		os.Stdout = oldStdout
+		os.Stderr = oldStderr
+	}()
+
+	fn()
+	require.NoError(t, stdoutW.Close())
+	require.NoError(t, stderrW.Close())
+	stdout, err := io.ReadAll(stdoutR)
+	require.NoError(t, err)
+	stderr, err := io.ReadAll(stderrR)
+	require.NoError(t, err)
+	return string(stdout), string(stderr)
 }
