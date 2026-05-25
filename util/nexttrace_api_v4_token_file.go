@@ -113,7 +113,7 @@ func validateNextTraceAPIV4TokenReadPath(path string) error {
 		return err
 	}
 	if strictNextTraceAPIV4TokenPerms() && info.Mode().Perm() != 0o700 {
-		return fmt.Errorf("NextTrace API v4 token directory permissions are %s, want 0700", info.Mode().Perm())
+		return fmt.Errorf("NextTrace API v4 token directory permissions are %04o, want 0700", info.Mode().Perm())
 	}
 	return rejectNextTraceAPIV4Symlink(path)
 }
@@ -201,7 +201,7 @@ func ensureNextTraceAPIV4TokenDir(dir string) error {
 			return fmt.Errorf("NextTrace API v4 token path is not a directory: %s", dir)
 		}
 		if info.Mode().Perm() != 0o700 {
-			return fmt.Errorf("NextTrace API v4 token directory permissions are %s, want 0700", info.Mode().Perm())
+			return fmt.Errorf("NextTrace API v4 token directory permissions are %04o, want 0700", info.Mode().Perm())
 		}
 	}
 	return nil

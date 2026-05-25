@@ -223,6 +223,8 @@ func TestReadNextTraceAPIV4SessionTokenRejectsLooseDirectoryPerms(t *testing.T) 
 	require.Error(t, err)
 	assert.Equal(t, "", token)
 	assert.Contains(t, err.Error(), "permissions")
+	assert.Contains(t, err.Error(), "0755")
+	assert.Contains(t, err.Error(), "want 0700")
 }
 
 func TestWriteNextTraceAPIV4SessionTokenWritesTempFiles(t *testing.T) {
