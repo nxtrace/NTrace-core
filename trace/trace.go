@@ -47,6 +47,7 @@ type Config struct {
 	DstPort          int
 	Quic             bool
 	IPGeoSource      ipgeo.Source
+	GeoLookupOffset  int
 	RDNS             bool
 	AlwaysWaitRDNS   bool
 	PacketInterval   int
@@ -639,7 +640,11 @@ func lookupGeoWithRetry(c Config, cacheKey, query string, dn42 bool) (*ipgeo.IPG
 	}
 
 	var lastErr error
-	for attempt := 0; attempt <= geoLookupMaxRetries(c.NumMeasurements); attempt++ {
+	startAttempt := c.GeoLookupOffset
+	if startAttempt < 0 {
+		startAttempt = 0
+	}
+	for attempt := startAttempt; attempt <= startAttempt+geoLookupMaxRetries(c.NumMeasurements); attempt++ {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}

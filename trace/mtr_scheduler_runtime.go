@@ -413,6 +413,7 @@ func (rt *mtrSchedulerRuntime) maybeLaunchGeoMetadataLookup(
 	}
 	rt.metadataGeoInFlight[ip] = gen
 	rt.metadataGeoAttempts[ip]++
+	cfg.GeoLookupOffset = rt.metadataGeoAttempts[ip] - 1
 	go rt.runMetadataLookup(generationCtx, gen, mtrMetadataKindGeo, rt.metadataGeoSlots, func(cfg Config) mtrMetadataPatch {
 		return lookupMTRGeoMetadata(result.Addr, cfg, host)
 	}, cfg)
@@ -449,7 +450,7 @@ func (rt *mtrSchedulerRuntime) runMetadataLookup(
 	}
 	defer rt.releaseMetadataSlot(slots)
 
-	lookupCtx, cancel := context.WithTimeout(generationCtx, mtrMetadataLookupTimeout(cfg.Timeout))
+	lookupCtx, cancel := context.WithTimeout(generationCtx, mtrMetadataLookupTimeout(kind, cfg.Timeout, cfg.NumMeasurements, cfg.GeoLookupOffset))
 	defer cancel()
 	cfg.Context = lookupCtx
 	patch := lookup(cfg)
@@ -481,10 +482,24 @@ func (rt *mtrSchedulerRuntime) releaseMetadataSlot(slots chan struct{}) {
 	}
 }
 
-func mtrMetadataLookupTimeout(probeTimeout time.Duration) time.Duration {
+func mtrMetadataLookupTimeout(kind mtrMetadataKind, probeTimeout time.Duration, numMeasurements int, geoOffset int) time.Duration {
 	floor := geoTimeoutForAttempt(0)
+	if kind == mtrMetadataKindGeo {
+		floor = mtrGeoMetadataLookupTimeoutFloor(numMeasurements, geoOffset)
+	}
 	if probeTimeout > floor {
 		return probeTimeout
+	}
+	return floor
+}
+
+func mtrGeoMetadataLookupTimeoutFloor(numMeasurements int, offset int) time.Duration {
+	if offset < 0 {
+		offset = 0
+	}
+	var floor time.Duration
+	for attempt := offset; attempt <= offset+geoLookupMaxRetries(numMeasurements); attempt++ {
+		floor += geoTimeoutForAttempt(attempt)
 	}
 	return floor
 }
