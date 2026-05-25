@@ -1677,6 +1677,9 @@ func TestScheduler_AsyncMetadataUsesGeoTimeoutFloor(t *testing.T) {
 	if got, want := mtrMetadataLookupTimeout(mtrMetadataKindGeo, 6*time.Second, 1, 1), 6*time.Second; got != want {
 		t.Fatalf("mtrMetadataLookupTimeout(geo, 6s, 1, 1) = %s, want %s", got, want)
 	}
+	if got, want := mtrMetadataLookupTimeout(mtrMetadataKindGeo, 80*time.Millisecond, 2, int(^uint(0)>>1)), 12*time.Second; got != want {
+		t.Fatalf("mtrMetadataLookupTimeout(geo, 80ms, 2, max int) = %s, want %s", got, want)
+	}
 }
 
 func TestScheduler_AsyncMetadataGeoFailureDoesNotBlockHostPatch(t *testing.T) {

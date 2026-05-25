@@ -116,3 +116,29 @@ func TestLookupGeoWithRetryExpiredDeadlineReturnsDeadlineExceeded(t *testing.T) 
 		t.Fatalf("lookupGeoWithRetry() error = %v, want DeadlineExceeded", err)
 	}
 }
+
+func TestLookupGeoWithRetryClampsLargeOffset(t *testing.T) {
+	ClearCaches()
+	t.Cleanup(ClearCaches)
+
+	var gotTimeout time.Duration
+	source := func(ip string, timeout time.Duration, lang string, maptrace bool) (*ipgeo.IPGeoData, error) {
+		gotTimeout = timeout
+		return &ipgeo.IPGeoData{IP: ip, Asnumber: "64515"}, nil
+	}
+
+	geo, err := lookupGeoWithRetry(Config{
+		IPGeoSource:     source,
+		GeoLookupOffset: int(^uint(0) >> 1),
+		NumMeasurements: 1,
+	}, "203.0.113.10", "203.0.113.10", false)
+	if err != nil {
+		t.Fatalf("lookupGeoWithRetry() error = %v", err)
+	}
+	if geo == nil || geo.Asnumber != "64515" {
+		t.Fatalf("lookupGeoWithRetry() geo = %+v, want ASN 64515", geo)
+	}
+	if gotTimeout != 6*time.Second {
+		t.Fatalf("geo timeout = %s, want 6s", gotTimeout)
+	}
+}

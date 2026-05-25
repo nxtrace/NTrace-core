@@ -494,11 +494,10 @@ func mtrMetadataLookupTimeout(kind mtrMetadataKind, probeTimeout time.Duration, 
 }
 
 func mtrGeoMetadataLookupTimeoutFloor(numMeasurements int, offset int) time.Duration {
-	if offset < 0 {
-		offset = 0
-	}
+	offset = normalizeGeoLookupAttempt(offset)
+	endAttempt := offset + geoLookupMaxRetries(numMeasurements)
 	var floor time.Duration
-	for attempt := offset; attempt <= offset+geoLookupMaxRetries(numMeasurements); attempt++ {
+	for attempt := offset; attempt <= endAttempt; attempt++ {
 		floor += geoTimeoutForAttempt(attempt)
 	}
 	return floor
