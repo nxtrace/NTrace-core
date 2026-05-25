@@ -11,8 +11,9 @@ import (
 
 const (
 	// mtrAsyncMetadataMaxRetries 限制单个 IP、单类 metadata 的失败重试次数；
-	// 失败后立即重试，避免长时间运行的 TUI 长期缺 Geo/PTR。
-	mtrAsyncMetadataMaxRetries = 3
+	// 失败后立即重试；达到上限后进入冷却，避免长时间运行的 TUI 永久缺 Geo/PTR。
+	mtrAsyncMetadataMaxRetries    = 3
+	mtrAsyncMetadataRetryCooldown = 30 * time.Second
 	// mtrAsyncMetadataGeoConcurrency 只限制 MTR TUI 的异步 GeoIP 查询；
 	// 探测并发和非 TUI 的 MTR metadata 路径由其他逻辑控制。
 	mtrAsyncMetadataGeoConcurrency = 10
@@ -27,6 +28,8 @@ const (
 	mtrMetadataKindGeo mtrMetadataKind = iota + 1
 	mtrMetadataKindHost
 )
+
+var mtrMetadataNow = time.Now
 
 type mtrSchedulerRuntime struct {
 	ctx                  context.Context
@@ -58,6 +61,8 @@ type mtrSchedulerRuntime struct {
 	metadataCache        map[string]mtrMetadataPatch
 	metadataGeoAttempts  map[string]int
 	metadataHostAttempts map[string]int
+	metadataGeoRetryAt   map[string]time.Time
+	metadataHostRetryAt  map[string]time.Time
 	lastSnapshot         time.Time
 }
 
@@ -153,6 +158,8 @@ func newMTRSchedulerRuntime(
 		metadataCache:        make(map[string]mtrMetadataPatch),
 		metadataGeoAttempts:  make(map[string]int),
 		metadataHostAttempts: make(map[string]int),
+		metadataGeoRetryAt:   make(map[string]time.Time),
+		metadataHostRetryAt:  make(map[string]time.Time),
 	}, nil
 }
 
@@ -617,6 +624,7 @@ func (rt *mtrSchedulerRuntime) cacheMetadataPatch(kind mtrMetadataKind, patch mt
 	case mtrMetadataKindGeo:
 		if patch.geo != nil {
 			delete(rt.metadataGeoAttempts, patch.ip)
+			delete(rt.metadataGeoRetryAt, patch.ip)
 			if cached.geo == nil {
 				cached.geo = patch.geo
 			}
@@ -624,6 +632,7 @@ func (rt *mtrSchedulerRuntime) cacheMetadataPatch(kind mtrMetadataKind, patch mt
 	case mtrMetadataKindHost:
 		if patch.host != "" {
 			delete(rt.metadataHostAttempts, patch.ip)
+			delete(rt.metadataHostRetryAt, patch.ip)
 			if cached.host == "" {
 				cached.host = patch.host
 			}
@@ -633,15 +642,29 @@ func (rt *mtrSchedulerRuntime) cacheMetadataPatch(kind mtrMetadataKind, patch mt
 }
 
 func (rt *mtrSchedulerRuntime) metadataGeoRetriesExhausted(ip string) bool {
-	return rt.metadataRetriesExhausted(rt.metadataGeoAttempts, ip)
+	return rt.metadataRetriesExhausted(rt.metadataGeoAttempts, rt.metadataGeoRetryAt, ip)
 }
 
 func (rt *mtrSchedulerRuntime) metadataHostRetriesExhausted(ip string) bool {
-	return rt.metadataRetriesExhausted(rt.metadataHostAttempts, ip)
+	return rt.metadataRetriesExhausted(rt.metadataHostAttempts, rt.metadataHostRetryAt, ip)
 }
 
-func (rt *mtrSchedulerRuntime) metadataRetriesExhausted(attempts map[string]int, ip string) bool {
-	return attempts[ip] >= mtrAsyncMetadataMaxRetries+1
+func (rt *mtrSchedulerRuntime) metadataRetriesExhausted(attempts map[string]int, retryAt map[string]time.Time, ip string) bool {
+	if attempts[ip] < mtrAsyncMetadataMaxRetries+1 {
+		delete(retryAt, ip)
+		return false
+	}
+	now := mtrMetadataNow()
+	if nextAt, ok := retryAt[ip]; ok {
+		if now.Before(nextAt) {
+			return true
+		}
+		delete(attempts, ip)
+		delete(retryAt, ip)
+		return false
+	}
+	retryAt[ip] = now.Add(mtrAsyncMetadataRetryCooldown)
+	return true
 }
 
 func (rt *mtrSchedulerRuntime) detectDestination(ttl int, result mtrProbeResult) {
@@ -774,6 +797,8 @@ func (rt *mtrSchedulerRuntime) handleReset() {
 	clear(rt.metadataCache)
 	clear(rt.metadataGeoAttempts)
 	clear(rt.metadataHostAttempts)
+	clear(rt.metadataGeoRetryAt)
+	clear(rt.metadataHostRetryAt)
 	atomic.StoreInt32(&rt.knownFinalTTL, -1)
 	rt.agg.Reset()
 	_ = rt.prober.Reset()

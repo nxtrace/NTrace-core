@@ -1419,6 +1419,17 @@ func processMetadataResults(t *testing.T, rt *mtrSchedulerRuntime, want int) {
 	}
 }
 
+func setMTRMetadataNowForTest(t *testing.T, now *time.Time) {
+	t.Helper()
+	oldNow := mtrMetadataNow
+	mtrMetadataNow = func() time.Time {
+		return *now
+	}
+	t.Cleanup(func() {
+		mtrMetadataNow = oldNow
+	})
+}
+
 func waitForMetadataGeo(t *testing.T, agg *MTRAggregator, asn string) {
 	t.Helper()
 	deadline := time.After(time.Second)
@@ -1593,6 +1604,133 @@ func TestScheduler_AsyncMetadataRetriesEmptyGeoLookupImmediatelyThenStops(t *tes
 	}
 	if got, want := atomic.LoadInt32(&lookupCount), int32(mtrAsyncMetadataMaxRetries+1); got != want {
 		t.Fatalf("lookup count after exhaustion = %d, want %d", got, want)
+	}
+}
+
+func TestScheduler_AsyncMetadataGeoRetriesAfterCooldown(t *testing.T) {
+	now := time.Unix(1, 0)
+	setMTRMetadataNowForTest(t, &now)
+
+	var lookupCount int32
+	failures := int32(mtrAsyncMetadataMaxRetries + 1)
+	rt, err := newMTRSchedulerRuntime(context.Background(), &mockTTLProber{}, NewMTRAggregator(), mtrSchedulerConfig{
+		BeginHop:         1,
+		MaxHops:          1,
+		HopInterval:      time.Millisecond,
+		ParallelRequests: 1,
+		ProgressThrottle: time.Millisecond,
+		FillGeo:          true,
+		AsyncMetadata:    true,
+		BaseConfig: Config{
+			IPGeoSource: func(ip string, timeout time.Duration, lang string, maptrace bool) (*ipgeo.IPGeoData, error) {
+				if atomic.AddInt32(&lookupCount, 1) <= failures {
+					return nil, errors.New("metadata unavailable")
+				}
+				return &ipgeo.IPGeoData{Asnumber: "64500"}, nil
+			},
+			Timeout: time.Second,
+		},
+	}, nil, nil)
+	if err != nil {
+		t.Fatalf("newMTRSchedulerRuntime error: %v", err)
+	}
+
+	result := mtrProbeResult{
+		TTL:     1,
+		Success: true,
+		Addr:    &net.IPAddr{IP: net.ParseIP("1.0.0.2")},
+	}
+	rt.agg.Update(rt.singleProbeResult(1, result), 1)
+	rt.maybeLaunchMetadataLookup(result)
+	processMetadataResults(t, rt, int(failures))
+
+	rt.maybeLaunchMetadataLookup(result)
+	if len(rt.metadataGeoInFlight) != 0 {
+		t.Fatal("geo retries should stay suppressed during cooldown")
+	}
+	if got := atomic.LoadInt32(&lookupCount); got != failures {
+		t.Fatalf("lookup count during cooldown = %d, want %d", got, failures)
+	}
+
+	now = now.Add(mtrAsyncMetadataRetryCooldown + time.Nanosecond)
+	rt.maybeLaunchMetadataLookup(result)
+	processMetadataResults(t, rt, 1)
+
+	if got, want := atomic.LoadInt32(&lookupCount), failures+1; got != want {
+		t.Fatalf("lookup count after cooldown = %d, want %d", got, want)
+	}
+	stats := rt.agg.Snapshot()
+	if len(stats) != 1 || stats[0].Geo == nil || stats[0].Geo.Asnumber != "64500" {
+		t.Fatalf("geo patch after cooldown = %+v, want ASN 64500", stats)
+	}
+	if rt.metadataGeoRetriesExhausted("1.0.0.2") {
+		t.Fatal("successful geo retry should clear retry exhaustion")
+	}
+}
+
+func TestScheduler_AsyncMetadataHostRetriesAfterCooldown(t *testing.T) {
+	now := time.Unix(1, 0)
+	setMTRMetadataNowForTest(t, &now)
+	oldLookupPTR := lookupMTRPTR
+	var lookupCount int32
+	failures := int32(mtrAsyncMetadataMaxRetries + 1)
+	lookupMTRPTR = func(_ context.Context, _ string) []string {
+		if atomic.AddInt32(&lookupCount, 1) <= failures {
+			return nil
+		}
+		return []string{"dns.example"}
+	}
+	t.Cleanup(func() {
+		lookupMTRPTR = oldLookupPTR
+	})
+
+	rt, err := newMTRSchedulerRuntime(context.Background(), &mockTTLProber{}, NewMTRAggregator(), mtrSchedulerConfig{
+		BeginHop:         1,
+		MaxHops:          1,
+		HopInterval:      time.Millisecond,
+		ParallelRequests: 1,
+		ProgressThrottle: time.Millisecond,
+		FillGeo:          true,
+		AsyncMetadata:    true,
+		BaseConfig: Config{
+			RDNS:    true,
+			Timeout: time.Second,
+		},
+	}, nil, nil)
+	if err != nil {
+		t.Fatalf("newMTRSchedulerRuntime error: %v", err)
+	}
+
+	result := mtrProbeResult{
+		TTL:     1,
+		Success: true,
+		Addr:    &net.IPAddr{IP: net.ParseIP("9.9.9.9")},
+	}
+	rt.agg.Update(rt.singleProbeResult(1, result), 1)
+	rt.maybeLaunchMetadataLookup(result)
+	processMetadataResults(t, rt, int(failures))
+
+	rt.maybeLaunchMetadataLookup(result)
+	if len(rt.metadataHostInFlight) != 0 {
+		t.Fatal("host retries should stay suppressed during cooldown")
+	}
+	if got := atomic.LoadInt32(&lookupCount); got != failures {
+		t.Fatalf("PTR lookup count during cooldown = %d, want %d", got, failures)
+	}
+
+	now = now.Add(mtrAsyncMetadataRetryCooldown + time.Nanosecond)
+	rt.maybeLaunchMetadataLookup(result)
+	processMetadataResults(t, rt, 1)
+
+	if got, want := atomic.LoadInt32(&lookupCount), failures+1; got != want {
+		t.Fatalf("PTR lookup count after cooldown = %d, want %d", got, want)
+	}
+	stats := rt.agg.Snapshot()
+	if len(stats) != 1 || stats[0].Host != "dns.example" {
+		t.Fatalf("host patch after cooldown = %+v, want dns.example", stats)
+	}
+	if rt.metadataHostRetriesExhausted("9.9.9.9") {
+		t.Fatal("successful host retry should clear retry exhaustion")
 	}
 }
 
