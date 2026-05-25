@@ -206,6 +206,15 @@ func TestWithGeoDNSResolver_RestoresPreviousConfig(t *testing.T) {
 	}
 }
 
+func TestSetGeoDNSResolver_NormalizesName(t *testing.T) {
+	SetGeoDNSResolver(" Google ")
+	defer SetGeoDNSResolver("")
+
+	if got := CurrentGeoDNSResolver(); got != "google" {
+		t.Fatalf("CurrentGeoDNSResolver() = %q, want google", got)
+	}
+}
+
 func TestWithGeoDNSResolver_AllowsNestedSameResolver(t *testing.T) {
 	SetGeoDNSResolver("google")
 	SetGeoDNSFallback(false)
@@ -226,7 +235,7 @@ func TestWithGeoDNSResolver_AllowsNestedSameResolver(t *testing.T) {
 
 	go func() {
 		defer close(done)
-		got, err = WithGeoDNSResolver("cloudflare", func() (string, error) {
+		got, err = WithGeoDNSResolver(" CloudFlare ", func() (string, error) {
 			outerDot, outerFallback = getGeoDNSConfig()
 			return WithGeoDNSResolver("cloudflare", func() (string, error) {
 				nestedDot, nestedFallback = getGeoDNSConfig()

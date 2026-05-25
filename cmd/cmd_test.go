@@ -12,6 +12,7 @@ import (
 	"github.com/nxtrace/NTrace-core/trace"
 	"github.com/nxtrace/NTrace-core/tracelog"
 	"github.com/nxtrace/NTrace-core/util"
+	"github.com/nxtrace/NTrace-core/wshandle"
 )
 
 func TestLookupTargetIPHonorsContextCancellation(t *testing.T) {
@@ -64,6 +65,74 @@ func TestLookupTargetIPOrExitReturnsFalseOnContextDeadline(t *testing.T) {
 	}
 	if ip != nil {
 		t.Fatalf("lookupTargetIPOrExit ip = %v, want nil", ip)
+	}
+}
+
+func TestInitLeoWebsocketSkipsV3WhenNextTraceAPIV4TokenConfigured(t *testing.T) {
+	t.Setenv(util.EnvNextTraceAPIV4TokenKey, "v4-token")
+	oldPrepare := prepareNextTraceAPIV4FastIPFn
+	oldNewLeo := newLeoWebsocketFn
+	var prepareCalls int
+	var wsCalls int
+	prepareNextTraceAPIV4FastIPFn = func(ctx context.Context, enableOutput bool) error {
+		prepareCalls++
+		if ctx == nil {
+			t.Fatal("PrepareNextTraceAPIV4FastIP context = nil")
+		}
+		if !enableOutput {
+			t.Fatal("PrepareNextTraceAPIV4FastIP enableOutput = false, want true")
+		}
+		return nil
+	}
+	newLeoWebsocketFn = func(context.Context) *wshandle.WsConn {
+		wsCalls++
+		return nil
+	}
+	t.Cleanup(func() {
+		prepareNextTraceAPIV4FastIPFn = oldPrepare
+		newLeoWebsocketFn = oldNewLeo
+	})
+	dataProvider := "LeoMoeAPI"
+	powProvider := "api.nxtrace.org"
+
+	if got := initLeoWebsocket(context.Background(), &dataProvider, &powProvider, false); got != nil {
+		t.Fatalf("initLeoWebsocket() = %+v, want nil when NextTrace API v4 token is configured", got)
+	}
+	if prepareCalls != 1 {
+		t.Fatalf("PrepareNextTraceAPIV4FastIP calls = %d, want 1", prepareCalls)
+	}
+	if wsCalls != 0 {
+		t.Fatalf("Leo WS calls = %d, want 0 when API v4 preheat succeeds", wsCalls)
+	}
+}
+
+func TestInitLeoWebsocketFallsBackToV3WhenAPIV4FastIPFails(t *testing.T) {
+	t.Setenv(util.EnvNextTraceAPIV4TokenKey, "v4-token")
+	oldPrepare := prepareNextTraceAPIV4FastIPFn
+	oldNewLeo := newLeoWebsocketFn
+	var prepareCalls int
+	var wsCalls int
+	prepareNextTraceAPIV4FastIPFn = func(context.Context, bool) error {
+		prepareCalls++
+		return errors.New("fastip unavailable")
+	}
+	newLeoWebsocketFn = func(context.Context) *wshandle.WsConn {
+		wsCalls++
+		return nil
+	}
+	t.Cleanup(func() {
+		prepareNextTraceAPIV4FastIPFn = oldPrepare
+		newLeoWebsocketFn = oldNewLeo
+	})
+	dataProvider := "LeoMoeAPI"
+	powProvider := "api.nxtrace.org"
+
+	_ = initLeoWebsocket(context.Background(), &dataProvider, &powProvider, false)
+	if prepareCalls != 1 {
+		t.Fatalf("PrepareNextTraceAPIV4FastIP calls = %d, want 1", prepareCalls)
+	}
+	if wsCalls != 1 {
+		t.Fatalf("Leo WS calls = %d, want 1 after API v4 preheat failure", wsCalls)
 	}
 }
 

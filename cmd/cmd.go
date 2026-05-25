@@ -49,7 +49,10 @@ const (
 )
 
 var (
-	domainLookupFn = util.DomainLookUpWithContext
+	domainLookupFn                = util.DomainLookUpWithContext
+	prepareNextTraceAPIV4FastIPFn = ipgeo.PrepareNextTraceAPIV4FastIP
+	newLeoWebsocketFn             = wshandle.NewWithContext
+	newLeoWebsocketAsyncFn        = wshandle.NewWithContextAsync
 )
 
 func normalizeListenAddr(addr string) string {
@@ -884,12 +887,17 @@ func initLeoWebsocket(ctx context.Context, dataOrigin, powProvider *string, asyn
 	if !strings.EqualFold(*dataOrigin, "LEOMOEAPI") {
 		return nil
 	}
+	if ipgeo.NextTraceAPIV4TokenConfigured() {
+		if err := prepareNextTraceAPIV4FastIPFn(ctx, true); err == nil {
+			return nil
+		}
+	}
 
 	var leoWs *wshandle.WsConn
 	if async {
-		leoWs = wshandle.NewWithContextAsync(ctx)
+		leoWs = newLeoWebsocketAsyncFn(ctx)
 	} else {
-		leoWs = wshandle.NewWithContext(ctx)
+		leoWs = newLeoWebsocketFn(ctx)
 	}
 	return leoWs
 }
@@ -1208,6 +1216,7 @@ func Execute() {
 	disableMaptrace := registerDisableMaptraceFlag(parser)
 	disableMPLS := parser.Flag("e", "disable-mpls", &argparse.Options{Help: "Disable MPLS"})
 	ver := parser.Flag("V", "version", &argparse.Options{Help: "Print version info and exit"})
+	setupNextTraceAPIV4Token := parser.Flag("x", "setup-api-v4-token", &argparse.Options{Help: "Store a session-only NextTrace API v4 token in a temporary file"})
 	speedMode := registerSpeedFlag(parser)
 	naliMode := registerNaliFlag(parser)
 	srcAddr := parser.String("s", "source", &argparse.Options{Help: "Use source address src_addr for outgoing packets"})
@@ -1253,6 +1262,16 @@ func Execute() {
 		// In case of error print error and print usage
 		// This can also be done by passing -h or --help flags
 		fmt.Print(sanitizeUsagePositionalArgs(parser.Usage(err)))
+		return
+	}
+	if *setupNextTraceAPIV4Token {
+		if err := runNextTraceAPIV4TokenSetup(nextTraceAPIV4TokenSetupOptions{
+			stdin:  os.Stdin,
+			stdout: os.Stdout,
+			stderr: os.Stderr,
+		}); err != nil {
+			os.Exit(handleNextTraceAPIV4TokenSetupError(os.Stderr, err))
+		}
 		return
 	}
 	rootCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

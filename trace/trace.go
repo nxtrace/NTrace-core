@@ -47,6 +47,7 @@ type Config struct {
 	DstPort          int
 	Quic             bool
 	IPGeoSource      ipgeo.Source
+	GeoLookupOffset  int
 	RDNS             bool
 	AlwaysWaitRDNS   bool
 	PacketInterval   int
@@ -556,9 +557,10 @@ func (s *Result) markAllPendingGeoTimeout() {
 }
 
 func (s *Result) addWithGeoAsync(hop Hop, attemptIdx, numMeasurements, maxAttempts int, cfg Config) {
-	if hop.Geo == nil {
+	needsMetadata := cfg.IPGeoSource != nil || cfg.RDNS
+	if cfg.IPGeoSource != nil && hop.Geo == nil {
 		hop.Geo = pendingGeo()
-	} else if hop.Geo.Source == "" {
+	} else if cfg.IPGeoSource != nil && hop.Geo.Source == "" {
 		hop.Geo.Source = PendingGeoSource
 	}
 	if hop.Lang == "" {
@@ -567,6 +569,9 @@ func (s *Result) addWithGeoAsync(hop Hop, attemptIdx, numMeasurements, maxAttemp
 
 	added, idx := s.add(hop, attemptIdx, numMeasurements, maxAttempts)
 	if !added {
+		return
+	}
+	if !needsMetadata {
 		return
 	}
 
@@ -591,7 +596,18 @@ func geoLookupMaxRetries(numMeasurements int) int {
 	return maxRetries
 }
 
+func normalizeGeoLookupAttempt(attempt int) int {
+	if attempt < 0 {
+		return 0
+	}
+	if attempt > 4 {
+		return 4
+	}
+	return attempt
+}
+
 func geoTimeoutForAttempt(attempt int) time.Duration {
+	attempt = normalizeGeoLookupAttempt(attempt)
 	timeout := 2 + attempt
 	if timeout > 6 {
 		timeout = 6
@@ -635,7 +651,9 @@ func lookupGeoWithRetry(c Config, cacheKey, query string, dn42 bool) (*ipgeo.IPG
 	}
 
 	var lastErr error
-	for attempt := 0; attempt <= geoLookupMaxRetries(c.NumMeasurements); attempt++ {
+	startAttempt := normalizeGeoLookupAttempt(c.GeoLookupOffset)
+	endAttempt := startAttempt + geoLookupMaxRetries(c.NumMeasurements)
+	for attempt := startAttempt; attempt <= endAttempt; attempt++ {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}

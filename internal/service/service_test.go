@@ -214,6 +214,70 @@ func TestAnnotateIPsAndGeoLookupInitializeDefaultLeoMoeRuntime(t *testing.T) {
 	}
 }
 
+func TestGeoLookupUsesAPIV4FastIPInsteadOfLeoWSWhenTokenConfigured(t *testing.T) {
+	restore := stubServiceRuntimeForTests(t)
+	defer restore()
+	t.Setenv(util.EnvNextTraceAPIV4TokenKey, "v4-token")
+
+	var ensureCalls int
+	var prepareCalls int
+	ensureLeoMoeConnectionFn = func(context.Context) {
+		ensureCalls++
+	}
+	prepareNextTraceAPIV4FastIPFn = func(ctx context.Context, enableOutput bool) error {
+		prepareCalls++
+		if ctx == nil {
+			t.Fatal("PrepareNextTraceAPIV4FastIP context = nil")
+		}
+		if enableOutput {
+			t.Fatal("PrepareNextTraceAPIV4FastIP enableOutput = true, want false for service runtime")
+		}
+		return nil
+	}
+	lookupIPGeoFn = func(_ context.Context, _ ipgeo.Source, _ string, _ bool, _ int, query string) (*ipgeo.IPGeoData, error) {
+		return &ipgeo.IPGeoData{IP: query, Asnumber: "AS13335"}, nil
+	}
+
+	if _, err := New().GeoLookup(context.Background(), GeoLookupRequest{Query: "8.8.8.8"}); err != nil {
+		t.Fatalf("GeoLookup returned error: %v", err)
+	}
+	if ensureCalls != 0 {
+		t.Fatalf("ensureLeoMoeConnection calls = %d, want 0 with API v4 token", ensureCalls)
+	}
+	if prepareCalls != 1 {
+		t.Fatalf("PrepareNextTraceAPIV4FastIP calls = %d, want 1", prepareCalls)
+	}
+}
+
+func TestGeoLookupFallsBackToLeoWSWhenAPIV4FastIPFails(t *testing.T) {
+	restore := stubServiceRuntimeForTests(t)
+	defer restore()
+	t.Setenv(util.EnvNextTraceAPIV4TokenKey, "v4-token")
+
+	var ensureCalls int
+	var prepareCalls int
+	ensureLeoMoeConnectionFn = func(context.Context) {
+		ensureCalls++
+	}
+	prepareNextTraceAPIV4FastIPFn = func(context.Context, bool) error {
+		prepareCalls++
+		return errors.New("fastip unavailable")
+	}
+	lookupIPGeoFn = func(_ context.Context, _ ipgeo.Source, _ string, _ bool, _ int, query string) (*ipgeo.IPGeoData, error) {
+		return &ipgeo.IPGeoData{IP: query, Asnumber: "AS13335"}, nil
+	}
+
+	if _, err := New().GeoLookup(context.Background(), GeoLookupRequest{Query: "8.8.8.8"}); err != nil {
+		t.Fatalf("GeoLookup returned error: %v", err)
+	}
+	if prepareCalls != 1 {
+		t.Fatalf("PrepareNextTraceAPIV4FastIP calls = %d, want 1", prepareCalls)
+	}
+	if ensureCalls != 1 {
+		t.Fatalf("ensureLeoMoeConnection calls = %d, want 1 after API v4 preheat failure", ensureCalls)
+	}
+}
+
 func TestAnnotateIPsAndGeoLookupSkipLeoRuntimeForDisabledGeoIP(t *testing.T) {
 	restore := stubServiceRuntimeForTests(t)
 	defer restore()
@@ -267,15 +331,23 @@ func stubServiceRuntimeForTests(t *testing.T) func() {
 	t.Helper()
 
 	oldEnsureLeo := ensureLeoMoeConnectionFn
+	oldPrepareFastIP := prepareNextTraceAPIV4FastIPFn
 	oldLookupIPGeo := lookupIPGeoFn
 	oldRunMTR := runMTRFn
 	oldRunMTRRaw := runMTRRawFn
 	oldRunMTU := runMTUTraceFn
 	oldEnvDataProvider := util.EnvDataProvider
+	tokenDir := t.TempDir()
+	t.Setenv(util.EnvNextTraceAPIV4TokenKey, "")
+	t.Setenv("TMPDIR", tokenDir)
+	t.Setenv("TMP", tokenDir)
+	t.Setenv("TEMP", tokenDir)
 	util.EnvDataProvider = ""
 	ensureLeoMoeConnectionFn = func(context.Context) {}
+	prepareNextTraceAPIV4FastIPFn = func(context.Context, bool) error { return nil }
 	return func() {
 		ensureLeoMoeConnectionFn = oldEnsureLeo
+		prepareNextTraceAPIV4FastIPFn = oldPrepareFastIP
 		lookupIPGeoFn = oldLookupIPGeo
 		runMTRFn = oldRunMTR
 		runMTRRawFn = oldRunMTRRaw
