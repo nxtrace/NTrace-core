@@ -162,7 +162,7 @@ func writeNextTraceAPIV4TokenFile(path string, body []byte) error {
 	if err := rejectNextTraceAPIV4Symlink(path); err != nil {
 		return err
 	}
-	if err := os.Rename(tmpPath, path); err != nil {
+	if err := replaceNextTraceAPIV4TokenFile(tmpPath, path); err != nil {
 		return err
 	}
 	keepTmp = true

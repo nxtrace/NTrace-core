@@ -249,6 +249,22 @@ func TestWriteNextTraceAPIV4SessionTokenWritesTempFiles(t *testing.T) {
 	}
 }
 
+func TestWriteNextTraceAPIV4SessionTokenOverwritesExistingFiles(t *testing.T) {
+	paths := overrideNextTraceAPIV4TokenPaths(t)
+
+	_, err := WriteNextTraceAPIV4SessionToken(" first-token ")
+	require.NoError(t, err)
+	path, err := WriteNextTraceAPIV4SessionToken(" second-token ")
+	require.NoError(t, err)
+	assert.Equal(t, paths.session, path)
+
+	for _, path := range []string{paths.session, paths.latest} {
+		body, err := os.ReadFile(path)
+		require.NoError(t, err)
+		assert.Equal(t, "second-token\n", string(body))
+	}
+}
+
 func TestGetNextTraceAPIV4TokenDebugLoadedMessagePrintsToStderr(t *testing.T) {
 	t.Setenv("NEXTTRACE_DEBUG", "1")
 	paths := overrideNextTraceAPIV4TokenPaths(t)
