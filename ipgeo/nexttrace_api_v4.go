@@ -241,6 +241,9 @@ func newNextTraceAPIV4HTTPClient(endpoint string, timeout time.Duration) *http.C
 		transport.Proxy = http.ProxyURL(proxyURL)
 		return client
 	}
+	if nextTraceAPIV4ProxyConfigured(endpoint) {
+		return client
+	}
 
 	dialer := &net.Dialer{
 		Timeout:   timeout,

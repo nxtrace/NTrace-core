@@ -51,6 +51,8 @@ const (
 var (
 	domainLookupFn                = util.DomainLookUpWithContext
 	prepareNextTraceAPIV4FastIPFn = ipgeo.PrepareNextTraceAPIV4FastIP
+	newLeoWebsocketFn             = wshandle.NewWithContext
+	newLeoWebsocketAsyncFn        = wshandle.NewWithContextAsync
 )
 
 func normalizeListenAddr(addr string) string {
@@ -886,15 +888,16 @@ func initLeoWebsocket(ctx context.Context, dataOrigin, powProvider *string, asyn
 		return nil
 	}
 	if ipgeo.NextTraceAPIV4TokenConfigured() {
-		_ = prepareNextTraceAPIV4FastIPFn(ctx, true)
-		return nil
+		if err := prepareNextTraceAPIV4FastIPFn(ctx, true); err == nil {
+			return nil
+		}
 	}
 
 	var leoWs *wshandle.WsConn
 	if async {
-		leoWs = wshandle.NewWithContextAsync(ctx)
+		leoWs = newLeoWebsocketAsyncFn(ctx)
 	} else {
-		leoWs = wshandle.NewWithContext(ctx)
+		leoWs = newLeoWebsocketFn(ctx)
 	}
 	return leoWs
 }
@@ -1261,9 +1264,6 @@ func Execute() {
 		fmt.Print(sanitizeUsagePositionalArgs(parser.Usage(err)))
 		return
 	}
-	rootCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	util.SrcDev = ""
 	if *setupNextTraceAPIV4Token {
 		if err := runNextTraceAPIV4TokenSetup(nextTraceAPIV4TokenSetupOptions{
 			stdin:  os.Stdin,
@@ -1274,6 +1274,9 @@ func Execute() {
 		}
 		return
 	}
+	rootCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	util.SrcDev = ""
 
 	mtrModes := deriveEffectiveMTRModes(*mtrMode, *reportMode, *wideMode, *rawPrint)
 	if *naliMode {

@@ -442,7 +442,9 @@ func withServiceRuntime[T any](ctx context.Context, opts runtimeOptions, fn func
 	return util.WithGeoDNSResolver(strings.ToLower(strings.TrimSpace(opts.DotServer)), func() (T, error) {
 		if opts.NeedsLeoWS {
 			if ipgeo.NextTraceAPIV4TokenConfigured() {
-				_ = prepareNextTraceAPIV4FastIPFn(ctx, false)
+				if err := prepareNextTraceAPIV4FastIPFn(ctx, false); err != nil {
+					ensureLeoMoeConnectionFn(ctx)
+				}
 			} else {
 				ensureLeoMoeConnectionFn(ctx)
 			}

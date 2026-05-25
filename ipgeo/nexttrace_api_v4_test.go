@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -463,6 +464,26 @@ func TestPrepareNextTraceAPIV4FastIPSkipsStandardProxyEnv(t *testing.T) {
 	}
 	if got := atomic.LoadInt32(&calls); got != 0 {
 		t.Fatalf("FastIP calls = %d, want 0 with HTTPS_PROXY", got)
+	}
+}
+
+func TestNewNextTraceAPIV4HTTPClientSkipsFastIPDialForStandardProxyEnv(t *testing.T) {
+	isolateNextTraceAPIV4ProxyEnv(t)
+	oldProxy := util.EnvProxyURL
+	t.Cleanup(func() {
+		util.EnvProxyURL = oldProxy
+	})
+
+	util.EnvProxyURL = ""
+	t.Setenv("HTTPS_PROXY", "http://127.0.0.1:65535")
+	client := newNextTraceAPIV4HTTPClient(nextTraceAPIV4GeoEndpoint, time.Second)
+	transport, ok := client.Transport.(*http.Transport)
+	if !ok || transport == nil || transport.DialContext == nil {
+		t.Fatalf("client transport = %#v, want http.Transport with DialContext", client.Transport)
+	}
+	dialName := runtime.FuncForPC(reflect.ValueOf(transport.DialContext).Pointer()).Name()
+	if strings.Contains(dialName, "newNextTraceAPIV4HTTPClient") {
+		t.Fatalf("DialContext = %s, want util.NewGeoHTTPClient dialer when HTTPS_PROXY is set", dialName)
 	}
 }
 

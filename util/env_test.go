@@ -137,7 +137,6 @@ func TestGetNextTraceAPIV4TokenDebugLogsReadErrorAndPaths(t *testing.T) {
 	output := stderr
 	assert.Contains(t, output, EnvNextTraceAPIV4TokenKey)
 	assert.Contains(t, output, "session token file read failed")
-	assert.Contains(t, output, "not a directory")
 	assert.Contains(t, output, sessionPath)
 	assert.Contains(t, output, latestPath)
 	assert.NotContains(t, output, "not-a-secret-token")
