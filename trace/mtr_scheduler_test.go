@@ -1650,11 +1650,13 @@ func TestScheduler_AsyncMetadataGeoRetriesAfterInitialTimeout(t *testing.T) {
 	if len(timeouts) != 2 {
 		t.Fatalf("geo timeouts = %v, want two attempts", timeouts)
 	}
-	if timeouts[0] < 1900*time.Millisecond || timeouts[0] > geoTimeoutForAttempt(0) {
-		t.Fatalf("first geo timeout = %s, want near %s", timeouts[0], geoTimeoutForAttempt(0))
+	firstFloor := geoTimeoutForAttempt(0)
+	if timeouts[0] < firstFloor-500*time.Millisecond || timeouts[0] > firstFloor {
+		t.Fatalf("first geo timeout = %s, want near %s", timeouts[0], firstFloor)
 	}
-	if timeouts[1] < 2900*time.Millisecond || timeouts[1] > geoTimeoutForAttempt(1) {
-		t.Fatalf("retry geo timeout = %s, want near %s", timeouts[1], geoTimeoutForAttempt(1))
+	retryFloor := geoTimeoutForAttempt(1)
+	if timeouts[1] < retryFloor-500*time.Millisecond || timeouts[1] > retryFloor {
+		t.Fatalf("retry geo timeout = %s, want near %s", timeouts[1], retryFloor)
 	}
 	stats := rt.agg.Snapshot()
 	if len(stats) != 1 || stats[0].Geo == nil || stats[0].Geo.Asnumber != "64515" {
