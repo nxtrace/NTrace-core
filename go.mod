@@ -10,7 +10,7 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/jsdelivr/globalping-cli v1.5.1
 	github.com/mattn/go-runewidth v0.0.23
-	github.com/modelcontextprotocol/go-sdk v1.6.0
+	github.com/modelcontextprotocol/go-sdk v1.6.1
 	github.com/oschwald/maxminddb-golang v1.13.1
 	github.com/rodaine/table v1.3.1
 	github.com/spf13/viper v1.21.0
@@ -19,9 +19,9 @@ require (
 	github.com/tidwall/gjson v1.19.0
 	github.com/tsosunchia/powclient v0.3.0
 	github.com/xjasonlyu/windivert-go v0.0.0-20201010013527-4239d0afa76f
-	golang.org/x/net v0.54.0
+	golang.org/x/net v0.55.0
 	golang.org/x/sync v0.20.0
-	golang.org/x/sys v0.44.0
+	golang.org/x/sys v0.45.0
 	golang.org/x/term v0.43.0
 )
 
