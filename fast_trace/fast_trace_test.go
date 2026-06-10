@@ -3,6 +3,7 @@ package fastTrace
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -145,7 +146,7 @@ func TestTestFileInitializesFastTraceWSByDefault(t *testing.T) {
 
 func emptyFastTraceFile(t *testing.T) string {
 	t.Helper()
-	path := t.TempDir() + "/targets.txt"
+	path := filepath.Join(t.TempDir(), "targets.txt")
 	if err := os.WriteFile(path, nil, 0o600); err != nil {
 		t.Fatalf("WriteFile targets: %v", err)
 	}

@@ -813,9 +813,9 @@ func runFastTraceModeWithRuntime(ctx context.Context, dn42 bool, dataOrigin *str
 	if from != "" || (!fastTraceFlag && file == "") {
 		return false
 	}
-	leoWs := prepareRuntimeEnvironment(ctx, dn42, dataOrigin, disableMaptrace, powProvider, false)
+	leoWs, runtimePrepared := prepareFastTraceRuntimeEnvironment(ctx, dn42, dataOrigin, disableMaptrace, powProvider)
 	defer closeLeoWebsocket(leoWs)
-	params.RuntimePrepared = true
+	params.RuntimePrepared = runtimePrepared
 	return maybeRunFastTraceMode(from, fastTraceFlag, file, params, method)
 }
 
@@ -884,9 +884,20 @@ func prepareRuntimeEnvironment(ctx context.Context, dn42 bool, dataOrigin *strin
 	return initLeoWebsocket(ctx, dataOrigin, powProvider, asyncLeo)
 }
 
+func prepareFastTraceRuntimeEnvironment(ctx context.Context, dn42 bool, dataOrigin *string, disableMaptrace *bool, powProvider *string) (*wshandle.WsConn, bool) {
+	capabilitiesCheck()
+	applyDN42Mode(dn42, dataOrigin, disableMaptrace)
+	return initLeoRuntime(ctx, dataOrigin, powProvider, false)
+}
+
 func initLeoWebsocket(ctx context.Context, dataOrigin, powProvider *string, async bool) *wshandle.WsConn {
+	leoWs, _ := initLeoRuntime(ctx, dataOrigin, powProvider, async)
+	return leoWs
+}
+
+func initLeoRuntime(ctx context.Context, dataOrigin, powProvider *string, async bool) (*wshandle.WsConn, bool) {
 	if !strings.EqualFold(*dataOrigin, "LEOMOEAPI") {
-		return nil
+		return nil, false
 	}
 	if !strings.EqualFold(*powProvider, "api.nxtrace.org") {
 		util.PowProviderParam = *powProvider
@@ -895,11 +906,11 @@ func initLeoWebsocket(ctx context.Context, dataOrigin, powProvider *string, asyn
 		*dataOrigin = util.EnvDataProvider
 	}
 	if !strings.EqualFold(*dataOrigin, "LEOMOEAPI") {
-		return nil
+		return nil, false
 	}
 	if ipgeo.NextTraceAPIV4TokenConfigured() {
 		if err := prepareNextTraceAPIV4FastIPFn(ctx, true); err == nil {
-			return nil
+			return nil, true
 		}
 	}
 
@@ -909,7 +920,7 @@ func initLeoWebsocket(ctx context.Context, dataOrigin, powProvider *string, asyn
 	} else {
 		leoWs = newLeoWebsocketFn(ctx)
 	}
-	return leoWs
+	return leoWs, leoWs != nil
 }
 
 func closeLeoWebsocket(leoWs *wshandle.WsConn) {

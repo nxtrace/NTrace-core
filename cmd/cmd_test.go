@@ -280,6 +280,111 @@ func TestRunFastTraceModePreparesRuntimeAndMarksParams(t *testing.T) {
 	}
 }
 
+func TestRunFastTraceModeMarksRuntimePreparedAfterAPIV4FallbackToV3(t *testing.T) {
+	t.Setenv(util.EnvNextTraceAPIV4TokenKey, "v4-token")
+	oldPrepare := prepareNextTraceAPIV4FastIPFn
+	oldNewLeo := newLeoWebsocketFn
+	oldRunFastTrace := runFastTraceFn
+	var prepareCalls int
+	var wsCalls int
+	var gotRuntimePrepared bool
+	prepareNextTraceAPIV4FastIPFn = func(context.Context, bool) error {
+		prepareCalls++
+		return errors.New("fastip unavailable")
+	}
+	newLeoWebsocketFn = func(context.Context) *wshandle.WsConn {
+		wsCalls++
+		return &wshandle.WsConn{}
+	}
+	runFastTraceFn = func(_ trace.Method, params fastTrace.ParamsFastTrace) {
+		gotRuntimePrepared = params.RuntimePrepared
+	}
+	t.Cleanup(func() {
+		prepareNextTraceAPIV4FastIPFn = oldPrepare
+		newLeoWebsocketFn = oldNewLeo
+		runFastTraceFn = oldRunFastTrace
+	})
+	dataProvider := "LeoMoeAPI"
+	disableMaptrace := false
+	powProvider := "api.nxtrace.org"
+
+	if !runFastTraceModeWithRuntime(context.Background(), false, &dataProvider, &disableMaptrace, &powProvider, "", true, "", fastTrace.ParamsFastTrace{}, trace.ICMPTrace) {
+		t.Fatal("runFastTraceModeWithRuntime returned false, want true")
+	}
+	if prepareCalls != 1 {
+		t.Fatalf("PrepareNextTraceAPIV4FastIP calls = %d, want 1", prepareCalls)
+	}
+	if wsCalls != 1 {
+		t.Fatalf("Leo WS calls = %d, want 1 after API v4 preheat failure", wsCalls)
+	}
+	if !gotRuntimePrepared {
+		t.Fatal("FastTest RuntimePrepared = false, want true after v3 fallback")
+	}
+}
+
+func TestRunFastTraceModeLeavesRuntimeUnpreparedForNonLeoProvider(t *testing.T) {
+	tests := []struct {
+		name         string
+		dataProvider string
+		envProvider  string
+	}{
+		{name: "cli provider", dataProvider: "IPInfo"},
+		{name: "env override", dataProvider: "LeoMoeAPI", envProvider: "IPInfo"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			isolateCmdNextTraceAPIV4TokenFiles(t)
+			oldEnvDataProvider := util.EnvDataProvider
+			util.EnvDataProvider = tt.envProvider
+			oldPrepare := prepareNextTraceAPIV4FastIPFn
+			oldNewLeo := newLeoWebsocketFn
+			oldRunFastTrace := runFastTraceFn
+			var prepareCalls int
+			var wsCalls int
+			var runCalls int
+			var gotRuntimePrepared bool
+			prepareNextTraceAPIV4FastIPFn = func(context.Context, bool) error {
+				prepareCalls++
+				return nil
+			}
+			newLeoWebsocketFn = func(context.Context) *wshandle.WsConn {
+				wsCalls++
+				return &wshandle.WsConn{}
+			}
+			runFastTraceFn = func(_ trace.Method, params fastTrace.ParamsFastTrace) {
+				runCalls++
+				gotRuntimePrepared = params.RuntimePrepared
+			}
+			t.Cleanup(func() {
+				util.EnvDataProvider = oldEnvDataProvider
+				prepareNextTraceAPIV4FastIPFn = oldPrepare
+				newLeoWebsocketFn = oldNewLeo
+				runFastTraceFn = oldRunFastTrace
+			})
+			dataProvider := tt.dataProvider
+			disableMaptrace := false
+			powProvider := "api.nxtrace.org"
+
+			if !runFastTraceModeWithRuntime(context.Background(), false, &dataProvider, &disableMaptrace, &powProvider, "", true, "", fastTrace.ParamsFastTrace{}, trace.ICMPTrace) {
+				t.Fatal("runFastTraceModeWithRuntime returned false, want true")
+			}
+			if prepareCalls != 0 {
+				t.Fatalf("PrepareNextTraceAPIV4FastIP calls = %d, want 0 for non-Leo provider", prepareCalls)
+			}
+			if wsCalls != 0 {
+				t.Fatalf("Leo WS calls = %d, want 0 for non-Leo provider", wsCalls)
+			}
+			if runCalls != 1 {
+				t.Fatalf("FastTest calls = %d, want 1", runCalls)
+			}
+			if gotRuntimePrepared {
+				t.Fatal("FastTest RuntimePrepared = true, want false for non-Leo provider")
+			}
+		})
+	}
+}
+
 func TestRunFastTraceModeSkipsRuntimeForGlobalpingFrom(t *testing.T) {
 	oldPrepare := prepareNextTraceAPIV4FastIPFn
 	oldNewLeo := newLeoWebsocketFn
