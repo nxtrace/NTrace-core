@@ -21,7 +21,7 @@ require (
 	github.com/xjasonlyu/windivert-go v0.0.0-20201010013527-4239d0afa76f
 	golang.org/x/net v0.55.0
 	golang.org/x/sync v0.20.0
-	golang.org/x/sys v0.45.0
+	golang.org/x/sys v0.46.0
 	golang.org/x/term v0.43.0
 )
 
