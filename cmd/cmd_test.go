@@ -4,11 +4,14 @@ import (
 	"context"
 	"errors"
 	"net"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/akamensky/argparse"
+	fastTrace "github.com/nxtrace/NTrace-core/fast_trace"
 	"github.com/nxtrace/NTrace-core/trace"
 	"github.com/nxtrace/NTrace-core/tracelog"
 	"github.com/nxtrace/NTrace-core/util"
@@ -106,6 +109,70 @@ func TestInitLeoWebsocketSkipsV3WhenNextTraceAPIV4TokenConfigured(t *testing.T) 
 	}
 }
 
+func TestInitLeoWebsocketSkipsV3WhenNextTraceAPIV4TokenFileConfigured(t *testing.T) {
+	tests := []struct {
+		name      string
+		writePath func(paths nextTraceAPIV4TokenPaths) string
+	}{
+		{
+			name: "session",
+			writePath: func(paths nextTraceAPIV4TokenPaths) string {
+				return paths.session
+			},
+		},
+		{
+			name: "latest",
+			writePath: func(paths nextTraceAPIV4TokenPaths) string {
+				return paths.latest
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			paths := isolateCmdNextTraceAPIV4TokenFiles(t)
+			writeNextTraceAPIV4TokenFileForTest(t, tt.writePath(paths), "file-token\n")
+			oldPrepare := prepareNextTraceAPIV4FastIPFn
+			oldNewLeo := newLeoWebsocketFn
+			var prepareCalls int
+			var wsCalls int
+			prepareNextTraceAPIV4FastIPFn = func(ctx context.Context, enableOutput bool) error {
+				prepareCalls++
+				if ctx == nil {
+					t.Fatal("PrepareNextTraceAPIV4FastIP context = nil")
+				}
+				if !enableOutput {
+					t.Fatal("PrepareNextTraceAPIV4FastIP enableOutput = false, want true")
+				}
+				return nil
+			}
+			newLeoWebsocketFn = func(context.Context) *wshandle.WsConn {
+				wsCalls++
+				return nil
+			}
+			t.Cleanup(func() {
+				prepareNextTraceAPIV4FastIPFn = oldPrepare
+				newLeoWebsocketFn = oldNewLeo
+			})
+			dataProvider := "LeoMoeAPI"
+			powProvider := "api.nxtrace.org"
+
+			if got := initLeoWebsocket(context.Background(), &dataProvider, &powProvider, false); got != nil {
+				t.Fatalf("initLeoWebsocket() = %+v, want nil when NextTrace API v4 token file is configured", got)
+			}
+			if prepareCalls != 1 {
+				t.Fatalf("PrepareNextTraceAPIV4FastIP calls = %d, want 1", prepareCalls)
+			}
+			if wsCalls != 0 {
+				t.Fatalf("Leo WS calls = %d, want 0 when API v4 preheat succeeds", wsCalls)
+			}
+			if got := os.Getenv(util.EnvNextTraceAPIV4TokenKey); got != "file-token" {
+				t.Fatalf("%s = %q, want token loaded from file", util.EnvNextTraceAPIV4TokenKey, got)
+			}
+		})
+	}
+}
+
 func TestInitLeoWebsocketFallsBackToV3WhenAPIV4FastIPFails(t *testing.T) {
 	t.Setenv(util.EnvNextTraceAPIV4TokenKey, "v4-token")
 	oldPrepare := prepareNextTraceAPIV4FastIPFn
@@ -133,6 +200,152 @@ func TestInitLeoWebsocketFallsBackToV3WhenAPIV4FastIPFails(t *testing.T) {
 	}
 	if wsCalls != 1 {
 		t.Fatalf("Leo WS calls = %d, want 1 after API v4 preheat failure", wsCalls)
+	}
+}
+
+func TestInitLeoWebsocketFallsBackToV3WhenAPIV4TokenMissing(t *testing.T) {
+	isolateCmdNextTraceAPIV4TokenFiles(t)
+	oldPrepare := prepareNextTraceAPIV4FastIPFn
+	oldNewLeo := newLeoWebsocketFn
+	var prepareCalls int
+	var wsCalls int
+	prepareNextTraceAPIV4FastIPFn = func(context.Context, bool) error {
+		prepareCalls++
+		return nil
+	}
+	newLeoWebsocketFn = func(context.Context) *wshandle.WsConn {
+		wsCalls++
+		return nil
+	}
+	t.Cleanup(func() {
+		prepareNextTraceAPIV4FastIPFn = oldPrepare
+		newLeoWebsocketFn = oldNewLeo
+	})
+	dataProvider := "LeoMoeAPI"
+	powProvider := "api.nxtrace.org"
+
+	_ = initLeoWebsocket(context.Background(), &dataProvider, &powProvider, false)
+	if prepareCalls != 0 {
+		t.Fatalf("PrepareNextTraceAPIV4FastIP calls = %d, want 0 without API v4 token", prepareCalls)
+	}
+	if wsCalls != 1 {
+		t.Fatalf("Leo WS calls = %d, want 1 without API v4 token", wsCalls)
+	}
+}
+
+func TestRunFastTraceModePreparesRuntimeAndMarksParams(t *testing.T) {
+	t.Setenv(util.EnvNextTraceAPIV4TokenKey, "v4-token")
+	oldPrepare := prepareNextTraceAPIV4FastIPFn
+	oldNewLeo := newLeoWebsocketFn
+	oldRunFastTrace := runFastTraceFn
+	var prepareCalls int
+	var wsCalls int
+	var runCalls int
+	var gotRuntimePrepared bool
+	prepareNextTraceAPIV4FastIPFn = func(context.Context, bool) error {
+		prepareCalls++
+		return nil
+	}
+	newLeoWebsocketFn = func(context.Context) *wshandle.WsConn {
+		wsCalls++
+		return nil
+	}
+	runFastTraceFn = func(_ trace.Method, params fastTrace.ParamsFastTrace) {
+		runCalls++
+		gotRuntimePrepared = params.RuntimePrepared
+	}
+	t.Cleanup(func() {
+		prepareNextTraceAPIV4FastIPFn = oldPrepare
+		newLeoWebsocketFn = oldNewLeo
+		runFastTraceFn = oldRunFastTrace
+	})
+	dataProvider := "LeoMoeAPI"
+	disableMaptrace := false
+	powProvider := "api.nxtrace.org"
+
+	if !runFastTraceModeWithRuntime(context.Background(), false, &dataProvider, &disableMaptrace, &powProvider, "", true, "", fastTrace.ParamsFastTrace{}, trace.ICMPTrace) {
+		t.Fatal("runFastTraceModeWithRuntime returned false, want true")
+	}
+	if prepareCalls != 1 {
+		t.Fatalf("PrepareNextTraceAPIV4FastIP calls = %d, want 1", prepareCalls)
+	}
+	if wsCalls != 0 {
+		t.Fatalf("Leo WS calls = %d, want 0 when API v4 preheat succeeds", wsCalls)
+	}
+	if runCalls != 1 {
+		t.Fatalf("FastTest calls = %d, want 1", runCalls)
+	}
+	if !gotRuntimePrepared {
+		t.Fatal("FastTest RuntimePrepared = false, want true")
+	}
+}
+
+func TestRunFastTraceModeSkipsRuntimeForGlobalpingFrom(t *testing.T) {
+	oldPrepare := prepareNextTraceAPIV4FastIPFn
+	oldNewLeo := newLeoWebsocketFn
+	oldRunFastTrace := runFastTraceFn
+	var prepareCalls int
+	var wsCalls int
+	var runCalls int
+	prepareNextTraceAPIV4FastIPFn = func(context.Context, bool) error {
+		prepareCalls++
+		return nil
+	}
+	newLeoWebsocketFn = func(context.Context) *wshandle.WsConn {
+		wsCalls++
+		return nil
+	}
+	runFastTraceFn = func(trace.Method, fastTrace.ParamsFastTrace) {
+		runCalls++
+	}
+	t.Cleanup(func() {
+		prepareNextTraceAPIV4FastIPFn = oldPrepare
+		newLeoWebsocketFn = oldNewLeo
+		runFastTraceFn = oldRunFastTrace
+	})
+	dataProvider := "LeoMoeAPI"
+	disableMaptrace := false
+	powProvider := "api.nxtrace.org"
+
+	if runFastTraceModeWithRuntime(context.Background(), false, &dataProvider, &disableMaptrace, &powProvider, "tokyo", true, "", fastTrace.ParamsFastTrace{}, trace.ICMPTrace) {
+		t.Fatal("runFastTraceModeWithRuntime returned true for --from, want false")
+	}
+	if prepareCalls != 0 {
+		t.Fatalf("PrepareNextTraceAPIV4FastIP calls = %d, want 0 for --from", prepareCalls)
+	}
+	if wsCalls != 0 {
+		t.Fatalf("Leo WS calls = %d, want 0 for --from", wsCalls)
+	}
+	if runCalls != 0 {
+		t.Fatalf("FastTest calls = %d, want 0 for --from", runCalls)
+	}
+}
+
+type nextTraceAPIV4TokenPaths struct {
+	session string
+	latest  string
+}
+
+func isolateCmdNextTraceAPIV4TokenFiles(t *testing.T) nextTraceAPIV4TokenPaths {
+	t.Helper()
+	dir := t.TempDir()
+	t.Setenv("TMPDIR", dir)
+	t.Setenv("TMP", dir)
+	t.Setenv("TEMP", dir)
+	t.Setenv(util.EnvNextTraceAPIV4TokenKey, "")
+	return nextTraceAPIV4TokenPaths{
+		session: util.NextTraceAPIV4SessionTokenPath(),
+		latest:  util.NextTraceAPIV4LatestTokenPath(),
+	}
+}
+
+func writeNextTraceAPIV4TokenFileForTest(t *testing.T, path, token string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatalf("MkdirAll token dir: %v", err)
+	}
+	if err := os.WriteFile(path, []byte(token), 0o600); err != nil {
+		t.Fatalf("WriteFile token: %v", err)
 	}
 }
 

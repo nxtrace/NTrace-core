@@ -53,6 +53,7 @@ var (
 	prepareNextTraceAPIV4FastIPFn = ipgeo.PrepareNextTraceAPIV4FastIP
 	newLeoWebsocketFn             = wshandle.NewWithContext
 	newLeoWebsocketAsyncFn        = wshandle.NewWithContextAsync
+	runFastTraceFn                = fastTrace.FastTest
 )
 
 func normalizeListenAddr(addr string) string {
@@ -801,12 +802,21 @@ func maybeRunFastTraceMode(from string, fastTraceFlag bool, file string, params 
 	if from != "" || (!fastTraceFlag && file == "") {
 		return false
 	}
-	fastTrace.FastTest(method, params)
+	runFastTraceFn(method, params)
 	if params.OutputPath != "" {
 		fmt.Printf("您的追踪日志已经存放在 %s 中\n", params.OutputPath)
 	}
-	os.Exit(0)
 	return true
+}
+
+func runFastTraceModeWithRuntime(ctx context.Context, dn42 bool, dataOrigin *string, disableMaptrace *bool, powProvider *string, from string, fastTraceFlag bool, file string, params fastTrace.ParamsFastTrace, method trace.Method) bool {
+	if from != "" || (!fastTraceFlag && file == "") {
+		return false
+	}
+	leoWs := prepareRuntimeEnvironment(ctx, dn42, dataOrigin, disableMaptrace, powProvider, false)
+	defer closeLeoWebsocket(leoWs)
+	params.RuntimePrepared = true
+	return maybeRunFastTraceMode(from, fastTraceFlag, file, params, method)
 }
 
 func configureGeoDNS(dot string) {
@@ -1515,7 +1525,7 @@ func Execute() {
 		Dot:            *dot,
 		OutputPath:     resolvedOutputPath,
 	}
-	if maybeRunFastTraceMode(*from, *fastTraceFlag, *file, paramsFastTrace, method) {
+	if runFastTraceModeWithRuntime(rootCtx, *dn42, dataOrigin, disableMaptrace, powProvider, *from, *fastTraceFlag, *file, paramsFastTrace, method) {
 		return
 	}
 

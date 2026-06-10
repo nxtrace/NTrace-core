@@ -2,8 +2,12 @@ package fastTrace
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
+
+	"github.com/nxtrace/NTrace-core/trace"
+	"github.com/nxtrace/NTrace-core/wshandle"
 )
 
 func TestTrace(t *testing.T) {
@@ -74,4 +78,76 @@ func TestReadFastTestv6ChoiceCanceledContext(t *testing.T) {
 	if choice != "" {
 		t.Fatalf("readFastTestv6Choice choice = %q, want empty", choice)
 	}
+}
+
+func TestTestFileSkipsFastTraceWSWhenRuntimePrepared(t *testing.T) {
+	file := emptyFastTraceFile(t)
+	oldInit := initFastTraceWSFn
+	oldClose := closeFastTraceWSFn
+	var initCalls int
+	var closeCalls int
+	initFastTraceWSFn = func(context.Context) *wshandle.WsConn {
+		initCalls++
+		return nil
+	}
+	closeFastTraceWSFn = func(*wshandle.WsConn) {
+		closeCalls++
+	}
+	t.Cleanup(func() {
+		initFastTraceWSFn = oldInit
+		closeFastTraceWSFn = oldClose
+	})
+
+	testFile(ParamsFastTrace{
+		Context:         context.Background(),
+		File:            file,
+		RuntimePrepared: true,
+	}, trace.ICMPTrace)
+
+	if initCalls != 0 {
+		t.Fatalf("initFastTraceWS calls = %d, want 0 when runtime is prepared", initCalls)
+	}
+	if closeCalls != 0 {
+		t.Fatalf("closeFastTraceWS calls = %d, want 0 when runtime is prepared", closeCalls)
+	}
+}
+
+func TestTestFileInitializesFastTraceWSByDefault(t *testing.T) {
+	file := emptyFastTraceFile(t)
+	oldInit := initFastTraceWSFn
+	oldClose := closeFastTraceWSFn
+	var initCalls int
+	var closeCalls int
+	initFastTraceWSFn = func(context.Context) *wshandle.WsConn {
+		initCalls++
+		return nil
+	}
+	closeFastTraceWSFn = func(*wshandle.WsConn) {
+		closeCalls++
+	}
+	t.Cleanup(func() {
+		initFastTraceWSFn = oldInit
+		closeFastTraceWSFn = oldClose
+	})
+
+	testFile(ParamsFastTrace{
+		Context: context.Background(),
+		File:    file,
+	}, trace.ICMPTrace)
+
+	if initCalls != 1 {
+		t.Fatalf("initFastTraceWS calls = %d, want 1 by default", initCalls)
+	}
+	if closeCalls != 1 {
+		t.Fatalf("closeFastTraceWS calls = %d, want 1 by default", closeCalls)
+	}
+}
+
+func emptyFastTraceFile(t *testing.T) string {
+	t.Helper()
+	path := t.TempDir() + "/targets.txt"
+	if err := os.WriteFile(path, nil, 0o600); err != nil {
+		t.Fatalf("WriteFile targets: %v", err)
+	}
+	return path
 }

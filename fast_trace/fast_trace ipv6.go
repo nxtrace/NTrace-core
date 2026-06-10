@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"os"
-	"os/signal"
 	"strings"
 
 	"github.com/fatih/color"
@@ -14,7 +12,6 @@ import (
 	"github.com/nxtrace/NTrace-core/ipgeo"
 	"github.com/nxtrace/NTrace-core/trace"
 	"github.com/nxtrace/NTrace-core/util"
-	"github.com/nxtrace/NTrace-core/wshandle"
 )
 
 //var pFastTracer ParamsFastTrace
@@ -163,13 +160,8 @@ func FastTestv6(traceMode trace.Method, paramsFastTrace ParamsFastTrace) {
 		TracerouteMethod: fastTestMethod(traceMode),
 	}
 
-	// 建立 WebSocket 连接
-	w := wshandle.NewWithContext(paramsFastTrace.Context)
-	w.Interrupt = make(chan os.Signal, 1)
-	signal.Notify(w.Interrupt, os.Interrupt)
-	defer func() {
-		w.Close()
-	}()
+	cleanupWS := openFastTraceWSIfNeeded(paramsFastTrace)
+	defer cleanupWS()
 
 	runFastTestv6Selection(&ft, choice)
 }
