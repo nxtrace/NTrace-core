@@ -108,10 +108,6 @@ func promptFastTraceChoice(ctx context.Context, prompt, defaultChoice string) (s
 	return choice, true
 }
 
-func initFastTraceWS(ctx context.Context) *wshandle.WsConn {
-	return wshandle.NewWithContext(ctx)
-}
-
 func closeFastTraceWS(w *wshandle.WsConn) {
 	if w != nil {
 		w.Close()
@@ -119,7 +115,7 @@ func closeFastTraceWS(w *wshandle.WsConn) {
 }
 
 var (
-	initFastTraceWSFn  = initFastTraceWS
+	initFastTraceWSFn  = wshandle.NewWithContext
 	closeFastTraceWSFn = closeFastTraceWS
 )
 
