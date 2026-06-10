@@ -120,7 +120,7 @@ var (
 )
 
 func openFastTraceWSIfNeeded(params ParamsFastTrace) func() {
-	if params.RuntimePrepared {
+	if params.RuntimePrepared || ipgeo.NextTraceAPIV4TokenConfigured() {
 		return func() {}
 	}
 	w := initFastTraceWSFn(params.Context)
