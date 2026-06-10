@@ -31,6 +31,8 @@
 - 一个提交包含多个互不相关主题时，优先拆分提交；确实需要放在一起时，subject 写主影响，body 写清每个具体改动。
 - 提交或 push PR 前必须检查 `git log --oneline main..HEAD`，发现泛化、误导或与 diff 不匹配的 commit message，应先 reword/amend。
 - 改写已推送 PR 分支历史后，只使用 `git push --force-with-lease`，不要用无保护的强推覆盖远端新提交。
+- 在本工作区发布 PR 时，目标仓库必须是 `nxtrace/NTrace-dev`；禁止直接向 `nxtrace/NTrace-core` 创建 PR。
+- 如果 GitHub 工具或远端推断结果指向 `nxtrace/NTrace-core`，必须改为 `nxtrace/NTrace-dev` 或停止确认，不能直接创建 PR。
 
 ## 当前 CLI 语义（重点）
 
