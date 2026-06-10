@@ -9,7 +9,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"os/signal"
 	"strings"
 	"time"
 
@@ -110,10 +109,7 @@ func promptFastTraceChoice(ctx context.Context, prompt, defaultChoice string) (s
 }
 
 func initFastTraceWS(ctx context.Context) *wshandle.WsConn {
-	w := wshandle.NewWithContext(ctx)
-	w.Interrupt = make(chan os.Signal, 1)
-	signal.Notify(w.Interrupt, os.Interrupt)
-	return w
+	return wshandle.NewWithContext(ctx)
 }
 
 func closeFastTraceWS(w *wshandle.WsConn) {
