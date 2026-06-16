@@ -53,6 +53,7 @@ var (
 	prepareNextTraceAPIV4FastIPFn = ipgeo.PrepareNextTraceAPIV4FastIP
 	newLeoWebsocketFn             = wshandle.NewWithContext
 	newLeoWebsocketAsyncFn        = wshandle.NewWithContextAsync
+	runFastTraceFn                = fastTrace.FastTest
 )
 
 func normalizeListenAddr(addr string) string {
@@ -801,12 +802,21 @@ func maybeRunFastTraceMode(from string, fastTraceFlag bool, file string, params 
 	if from != "" || (!fastTraceFlag && file == "") {
 		return false
 	}
-	fastTrace.FastTest(method, params)
+	runFastTraceFn(method, params)
 	if params.OutputPath != "" {
 		fmt.Printf("您的追踪日志已经存放在 %s 中\n", params.OutputPath)
 	}
-	os.Exit(0)
 	return true
+}
+
+func runFastTraceModeWithRuntime(ctx context.Context, dn42 bool, dataOrigin *string, disableMaptrace *bool, powProvider *string, from string, fastTraceFlag bool, file string, params fastTrace.ParamsFastTrace, method trace.Method) bool {
+	if from != "" || (!fastTraceFlag && file == "") {
+		return false
+	}
+	leoWs, runtimePrepared := prepareFastTraceRuntimeEnvironment(ctx, dn42, dataOrigin, disableMaptrace, powProvider)
+	defer closeLeoWebsocket(leoWs)
+	params.RuntimePrepared = runtimePrepared
+	return maybeRunFastTraceMode(from, fastTraceFlag, file, params, method)
 }
 
 func configureGeoDNS(dot string) {
@@ -874,9 +884,20 @@ func prepareRuntimeEnvironment(ctx context.Context, dn42 bool, dataOrigin *strin
 	return initLeoWebsocket(ctx, dataOrigin, powProvider, asyncLeo)
 }
 
+func prepareFastTraceRuntimeEnvironment(ctx context.Context, dn42 bool, dataOrigin *string, disableMaptrace *bool, powProvider *string) (*wshandle.WsConn, bool) {
+	capabilitiesCheck()
+	applyDN42Mode(dn42, dataOrigin, disableMaptrace)
+	return initLeoRuntime(ctx, dataOrigin, powProvider, false)
+}
+
 func initLeoWebsocket(ctx context.Context, dataOrigin, powProvider *string, async bool) *wshandle.WsConn {
+	leoWs, _ := initLeoRuntime(ctx, dataOrigin, powProvider, async)
+	return leoWs
+}
+
+func initLeoRuntime(ctx context.Context, dataOrigin, powProvider *string, async bool) (*wshandle.WsConn, bool) {
 	if !strings.EqualFold(*dataOrigin, "LEOMOEAPI") {
-		return nil
+		return nil, false
 	}
 	if !strings.EqualFold(*powProvider, "api.nxtrace.org") {
 		util.PowProviderParam = *powProvider
@@ -885,11 +906,11 @@ func initLeoWebsocket(ctx context.Context, dataOrigin, powProvider *string, asyn
 		*dataOrigin = util.EnvDataProvider
 	}
 	if !strings.EqualFold(*dataOrigin, "LEOMOEAPI") {
-		return nil
+		return nil, false
 	}
 	if ipgeo.NextTraceAPIV4TokenConfigured() {
 		if err := prepareNextTraceAPIV4FastIPFn(ctx, true); err == nil {
-			return nil
+			return nil, true
 		}
 	}
 
@@ -899,7 +920,7 @@ func initLeoWebsocket(ctx context.Context, dataOrigin, powProvider *string, asyn
 	} else {
 		leoWs = newLeoWebsocketFn(ctx)
 	}
-	return leoWs
+	return leoWs, leoWs != nil
 }
 
 func closeLeoWebsocket(leoWs *wshandle.WsConn) {
@@ -1515,7 +1536,7 @@ func Execute() {
 		Dot:            *dot,
 		OutputPath:     resolvedOutputPath,
 	}
-	if maybeRunFastTraceMode(*from, *fastTraceFlag, *file, paramsFastTrace, method) {
+	if runFastTraceModeWithRuntime(rootCtx, *dn42, dataOrigin, disableMaptrace, powProvider, *from, *fastTraceFlag, *file, paramsFastTrace, method) {
 		return
 	}
 

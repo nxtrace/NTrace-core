@@ -9,7 +9,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"os/signal"
 	"strings"
 	"time"
 
@@ -29,25 +28,26 @@ type FastTracer struct {
 }
 
 type ParamsFastTrace struct {
-	Context        context.Context
-	OSType         int
-	ICMPMode       int
-	SrcDev         string
-	SrcAddr        string
-	DstPort        int
-	BeginHop       int
-	MaxHops        int
-	MaxAttempts    int
-	RDNS           bool
-	AlwaysWaitRDNS bool
-	Lang           string
-	PktSize        int
-	PacketSizeSet  bool
-	TOS            int
-	Timeout        time.Duration
-	File           string
-	Dot            string
-	OutputPath     string
+	Context         context.Context
+	OSType          int
+	ICMPMode        int
+	SrcDev          string
+	SrcAddr         string
+	DstPort         int
+	BeginHop        int
+	MaxHops         int
+	MaxAttempts     int
+	RDNS            bool
+	AlwaysWaitRDNS  bool
+	Lang            string
+	PktSize         int
+	PacketSizeSet   bool
+	TOS             int
+	Timeout         time.Duration
+	File            string
+	Dot             string
+	OutputPath      string
+	RuntimePrepared bool
 }
 
 type IpListElement struct {
@@ -108,16 +108,24 @@ func promptFastTraceChoice(ctx context.Context, prompt, defaultChoice string) (s
 	return choice, true
 }
 
-func initFastTraceWS(ctx context.Context) *wshandle.WsConn {
-	w := wshandle.NewWithContext(ctx)
-	w.Interrupt = make(chan os.Signal, 1)
-	signal.Notify(w.Interrupt, os.Interrupt)
-	return w
-}
-
 func closeFastTraceWS(w *wshandle.WsConn) {
 	if w != nil {
 		w.Close()
+	}
+}
+
+var (
+	initFastTraceWSFn  = wshandle.NewWithContext
+	closeFastTraceWSFn = closeFastTraceWS
+)
+
+func openFastTraceWSIfNeeded(params ParamsFastTrace) func() {
+	if params.RuntimePrepared || ipgeo.NextTraceAPIV4TokenConfigured() {
+		return func() {}
+	}
+	w := initFastTraceWSFn(params.Context)
+	return func() {
+		closeFastTraceWSFn(w)
 	}
 }
 
@@ -413,15 +421,15 @@ func FastTest(traceMode trace.Method, paramsFastTrace ParamsFastTrace) {
 		return
 	}
 
-	w := initFastTraceWS(paramsFastTrace.Context)
-	defer closeFastTraceWS(w)
+	cleanupWS := openFastTraceWSIfNeeded(paramsFastTrace)
+	defer cleanupWS()
 
 	runFastTraceByChoice(newFastTracer(traceMode, paramsFastTrace), choice)
 }
 
 func testFile(paramsFastTrace ParamsFastTrace, traceMode trace.Method) {
-	w := initFastTraceWS(paramsFastTrace.Context)
-	defer closeFastTraceWS(w)
+	cleanupWS := openFastTraceWSIfNeeded(paramsFastTrace)
+	defer cleanupWS()
 
 	tracerouteMethod := resolveTraceMethod(traceMode)
 	for _, ip := range loadIPList(paramsFastTrace.Context, paramsFastTrace.File) {

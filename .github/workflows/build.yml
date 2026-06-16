@@ -80,7 +80,7 @@ jobs:
       - name: Set up Go (built-in cache)
         uses: actions/setup-go@v6
         with:
-          go-version: '1.26.x'
+          go-version: '1.26.4'
           check-latest: true
           cache: true
 
@@ -203,7 +203,7 @@ jobs:
       - name: Set up Go (built-in cache)
         uses: actions/setup-go@v6
         with:
-          go-version: '1.26.x'
+          go-version: '1.26.4'
           check-latest: true
           cache: true
 
