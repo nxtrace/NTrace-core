@@ -7,7 +7,7 @@
 - 名称：NextTrace (NTrace-core)
 - 仓库：github.com/nxtrace/NTrace-core
 - 模块：`github.com/nxtrace/NTrace-core`
-- 语言：Go（`go 1.26.0`）
+- 语言：Go（`go 1.26.4`）
 - 入口：`main.go -> cmd.Execute()`
 - 核心能力：ICMP/TCP/UDP traceroute、GeoIP/RDNS、MTR 连续探测、Web/API、多平台构建
 
@@ -352,11 +352,12 @@
 
 ## CI 与工具链（当前）
 
-- `go.mod`: `go 1.26.0`
+- `go.mod`: `go 1.26.4`
 - GitHub Actions：
-  - `.github/workflows/build.yml` 使用 `setup-go@v6` + `go-version: 1.26.x`
-  - `.github/workflows/test.yml` 使用 `setup-go@v6` + `go-version: 1.26.x`
-  - test workflow 中 `GOTOOLCHAIN=go1.26.0+auto`
+  - `.github/workflows/build.yml` 使用 `setup-go@v6` + `go-version: 1.26.4`
+  - `.github/workflows/test.yml` 使用 `setup-go@v6` + `go-version: 1.26.4`
+  - `.github/workflows/regression.yml` 使用 `setup-go@v6` + `go-version: 1.26.4`
+  - test workflow 中 `GOTOOLCHAIN=go1.26.4+auto`
   - build matrix 已移除 `windows/arm`
 - `.cross_compile.sh` 与 workflow 里的 `go build` 现在都用数组构造 `-tags` 参数，避免 shell word-splitting；脚本也会把当前 `GOARM` 传给 `compress_with_upx`，使 linux/armv7 目标能命中对应压缩分支。
 - `ipgeo/ipdbone.go` 不再原地修改全局 `defaultClient.httpClient.Timeout`；超时覆盖会通过克隆 client（复用 token cache / token init，同步替换整个 HTTP client）实现，避免 dial timeout 与 client timeout 脱节。

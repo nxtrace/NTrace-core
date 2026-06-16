@@ -46,7 +46,7 @@ jobs:
       - name: Set up Go (built-in cache)
         uses: actions/setup-go@v6
         with:
-          go-version: '1.26.x'
+          go-version: '1.26.4'
           check-latest: true
           cache: true
 
@@ -54,7 +54,7 @@ jobs:
         if: ${{ matrix.os != 'windows-latest' }}
         shell: bash
         run: |
-          sudo go env -w GOTOOLCHAIN=go1.26.0+auto
+          sudo go env -w GOTOOLCHAIN=go1.26.4+auto
           sudo go test -v -covermode=count -coverprofile='coverage.out' ./...
 
       - name: Smoke test nt_install.sh
@@ -68,5 +68,5 @@ jobs:
       - name: Test with windows
         if: ${{ matrix.os == 'windows-latest' }}
         run: |
-          go env -w GOTOOLCHAIN=go1.26.0+auto
+          go env -w GOTOOLCHAIN=go1.26.4+auto
           go test -v -covermode=count -coverprofile="coverage.out" ./...
