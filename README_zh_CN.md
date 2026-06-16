@@ -918,13 +918,19 @@ nexttrace --pow-provider sakura
 
 [https://github.com/Archeb/opentrace](https://github.com/Archeb/opentrace)
 
-## NEXTTRACE WEB API
+## GlobalTrace
 
-`NextTraceWebApi`是一个`MTR`风格的`NextTrace`网页版服务端实现，提供了包括`Docker`在内多种部署方式。
+`GlobalTrace` 是一个 `Globalping x NextTrace` 开源 Web 路由追踪项目。它借助 Globalping 遍布全球的 Probe 从不同地区发起 `MTR` measurement，并结合 NextTrace / NTrace 骨干网 IP 数据库补充 hop 的 GeoIP、ASN 与网络归属信息。
 
-在 WebSocket 持续探测模式中，MTR 现改为逐事件推送 `type: "mtr_raw"`（不再使用周期性 `mtr` 快照消息）。
+网站：[https://lg.nxtrace.org](https://lg.nxtrace.org)
 
-[https://github.com/nxtrace/nexttracewebapi](https://github.com/nxtrace/nexttracewebapi)
+项目地址：[nxtrace/GlobalTrace](https://github.com/nxtrace/GlobalTrace)
+
+## NextTrace Web
+
+`NextTrace Web`是一个`MTR`风格的`NextTrace`网页版服务端实现，提供了包括`Docker`在内多种部署方式。
+
+[https://github.com/nxtrace/nexttraceweb](https://github.com/nxtrace/nexttraceweb)
 
 ## Deploy WebUI 与 MCP
 

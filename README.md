@@ -918,11 +918,17 @@ This software is still in the early stages of development and may have many flaw
 
 [https://github.com/Archeb/opentrace](https://github.com/Archeb/opentrace)
 
-## NEXTTRACE WEB API
+## GlobalTrace
 
-`NextTraceWebApi` is a web-based server implementation of `NextTrace` in the `MTR` style, offering various deployment options including `Docker`.
+`GlobalTrace` is an open-source `Globalping x NextTrace` web traceroute project. It uses Globalping's worldwide probe network to run `MTR` measurements from multiple regions, then enriches hop IPs with the NextTrace / NTrace backbone IP database for GeoIP, ASN, and network ownership details.
 
-For WebSocket continuous tracing, MTR now streams per-event payloads with `type: "mtr_raw"` (instead of periodic `mtr` snapshots).
+Website: [https://lg.nxtrace.org](https://lg.nxtrace.org)
+
+Project: [nxtrace/GlobalTrace](https://github.com/nxtrace/GlobalTrace)
+
+## NextTrace Web
+
+`NextTrace Web` is a web-based server implementation of `NextTrace` in the `MTR` style, offering various deployment options including `Docker`.
 
 [https://github.com/nxtrace/nexttracewebapi](https://github.com/nxtrace/nexttracewebapi)
 
