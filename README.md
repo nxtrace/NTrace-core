@@ -930,7 +930,7 @@ Project: [nxtrace/GlobalTrace](https://github.com/nxtrace/GlobalTrace)
 
 `NextTrace Web` is a web-based server implementation of `NextTrace` in the `MTR` style, offering various deployment options including `Docker`.
 
-[https://github.com/nxtrace/nexttracewebapi](https://github.com/nxtrace/nexttracewebapi)
+[https://github.com/nxtrace/nexttraceweb](https://github.com/nxtrace/nexttraceweb)
 
 ## Deploy WebUI and MCP
 
