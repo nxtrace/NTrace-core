@@ -10,6 +10,8 @@ import (
 )
 
 const (
+	maxMTRHopCount = 255
+
 	// mtrAsyncMetadataMaxRetries 限制单个 IP、单类 metadata 的失败重试次数；
 	// 失败后立即重试；达到上限后进入冷却，避免长时间运行的 TUI 永久缺 Geo/PTR。
 	mtrAsyncMetadataMaxRetries    = 3
@@ -89,8 +91,8 @@ func newMTRSchedulerRuntime(
 	if maxHops <= 0 {
 		maxHops = 30
 	}
-	if maxHops > 255 {
-		maxHops = 255
+	if maxHops > maxMTRHopCount {
+		maxHops = maxMTRHopCount
 	}
 	if beginHop > maxHops {
 		return nil, fmt.Errorf("mtr: beginHop (%d) > maxHops (%d)", beginHop, maxHops)
@@ -312,8 +314,20 @@ func (rt *mtrSchedulerRuntime) resultHopCount() int {
 	return 0
 }
 
+func (rt *mtrSchedulerRuntime) newProbeResult() *Result {
+	hopCount := rt.resultHopCount()
+	if hopCount < 0 {
+		return &Result{}
+	}
+	maxHopCount := maxMTRHopCount
+	if hopCount > maxHopCount {
+		hopCount = maxHopCount
+	}
+	return &Result{Hops: make([][]Hop, hopCount)}
+}
+
 func (rt *mtrSchedulerRuntime) timeoutProbeResult(ttl int) *Result {
-	singleRes := &Result{Hops: make([][]Hop, rt.resultHopCount())}
+	singleRes := rt.newProbeResult()
 	idx := ttl - 1
 	if idx >= 0 && idx < len(singleRes.Hops) {
 		singleRes.Hops[idx] = []Hop{{TTL: ttl, Error: errHopLimitTimeout}}
@@ -708,7 +722,7 @@ func (rt *mtrSchedulerRuntime) markProbeCompleted(ttl int) {
 }
 
 func (rt *mtrSchedulerRuntime) singleProbeResult(ttl int, result mtrProbeResult) *Result {
-	singleRes := &Result{Hops: make([][]Hop, rt.resultHopCount())}
+	singleRes := rt.newProbeResult()
 	hop := Hop{
 		Success:  result.Success,
 		Address:  result.Addr,
