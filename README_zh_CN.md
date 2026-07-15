@@ -19,7 +19,7 @@
     <img src="https://img.shields.io/github/actions/workflow/status/nxtrace/NTrace-dev/build.yml?branch=main&style=flat-square" alt="Github Actions">
   </a>
   <a href="https://github.com/nxtrace/NTrace-dev/actions/workflows/golangci-lint.yml">
-    <img src="https://github.com/nxtrace/NTrace-dev/actions/workflows/golangci-lint.yml/badge.svg?branch=main" alt="golangci-lint">
+    <img src="https://img.shields.io/github/actions/workflow/status/nxtrace/NTrace-dev/golangci-lint.yml?branch=main&style=flat-square&label=golangci-lint" alt="golangci-lint">
   </a>
   <a href="https://github.com/nxtrace/NTrace-dev/releases">
     <img src="https://img.shields.io/github/release/nxtrace/NTrace-dev/all.svg?style=flat-square">
