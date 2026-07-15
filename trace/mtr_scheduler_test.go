@@ -56,31 +56,56 @@ func (m *mockTTLProber) getProbeCount() int {
 // ---------------------------------------------------------------------------
 
 func TestScheduler_ResultBuildersUseBoundedHopCount(t *testing.T) {
-	rt, err := newMTRSchedulerRuntime(
-		context.Background(),
-		&mockTTLProber{},
-		NewMTRAggregator(),
-		mtrSchedulerConfig{
-			BeginHop:         1,
-			MaxHops:          1 << 20,
-			HopInterval:      time.Millisecond,
-			ParallelRequests: 1,
-		},
-		nil,
-		nil,
-	)
-	if err != nil {
-		t.Fatalf("newMTRSchedulerRuntime returned error: %v", err)
-	}
-	if rt.maxHops != 255 {
-		t.Fatalf("rt.maxHops = %d, want 255", rt.maxHops)
+	tests := []struct {
+		name    string
+		maxHops int
+		want    int
+	}{
+		{name: "normal", maxHops: 7, want: 7},
+		{name: "default", maxHops: -1, want: 30},
+		{name: "excessive", maxHops: 1 << 20, want: maxMTRHopCount},
 	}
 
-	if got := len(rt.timeoutProbeResult(1).Hops); got != 255 {
-		t.Fatalf("timeoutProbeResult hop len = %d, want 255", got)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			rt, err := newMTRSchedulerRuntime(
+				context.Background(),
+				&mockTTLProber{},
+				NewMTRAggregator(),
+				mtrSchedulerConfig{
+					BeginHop:         1,
+					MaxHops:          test.maxHops,
+					HopInterval:      time.Millisecond,
+					ParallelRequests: 1,
+				},
+				nil,
+				nil,
+			)
+			if err != nil {
+				t.Fatalf("newMTRSchedulerRuntime returned error: %v", err)
+			}
+			if rt.maxHops != test.want {
+				t.Fatalf("rt.maxHops = %d, want %d", rt.maxHops, test.want)
+			}
+
+			if got := len(rt.timeoutProbeResult(test.want).Hops); got != test.want {
+				t.Fatalf("timeoutProbeResult hop len = %d, want %d", got, test.want)
+			}
+			if got := len(rt.singleProbeResult(test.want, mtrProbeResult{TTL: test.want}).Hops); got != test.want {
+				t.Fatalf("singleProbeResult hop len = %d, want %d", got, test.want)
+			}
+		})
 	}
-	if got := len(rt.singleProbeResult(1, mtrProbeResult{TTL: 1}).Hops); got != 255 {
-		t.Fatalf("singleProbeResult hop len = %d, want 255", got)
+}
+
+func TestScheduler_ResultBuildersBoundMalformedRuntime(t *testing.T) {
+	rt := &mtrSchedulerRuntime{maxHops: 1 << 20}
+
+	if got := len(rt.timeoutProbeResult(1).Hops); got != maxMTRHopCount {
+		t.Fatalf("timeoutProbeResult hop len = %d, want %d", got, maxMTRHopCount)
+	}
+	if got := len(rt.singleProbeResult(1, mtrProbeResult{TTL: 1}).Hops); got != maxMTRHopCount {
+		t.Fatalf("singleProbeResult hop len = %d, want %d", got, maxMTRHopCount)
 	}
 }
 
