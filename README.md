@@ -1132,4 +1132,4 @@ This Project uses [JetBrain Open-Source Project License](https://jb.gg/OpenSourc
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=nxtrace/NTrace-core&type=Date)](https://star-history.com/#nxtrace/NTrace-core&Date)
+[![Star History Chart](https://star-history.dera.page/svg?repos=nxtrace/NTrace-core&type=Date)](https://star-history.dera.page/#nxtrace/NTrace-core&Date)
