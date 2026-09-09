@@ -52,6 +52,7 @@ type ParamsFastTrace struct {
 	File            string
 	Dot             string
 	OutputPath      string
+	NoStopReason    bool
 	RuntimePrepared bool
 	DataProvider    string
 	IPGeoSource     ipgeo.Source
@@ -316,10 +317,14 @@ func normalizeFastTraceConfig(method trace.Method, conf trace.Config) (trace.Con
 }
 
 type fastTraceOutputPlan struct {
-	file io.WriteCloser
+	noStopReason bool
+	file         io.WriteCloser
 }
 
 func (plan *fastTraceOutputPlan) printStopReason(reason *trace.StopReason) error {
+	if plan != nil && plan.noStopReason {
+		return nil
+	}
 	terminalErr := printer.PrintTraceStopReason(reason)
 	var fileErr error
 	if plan != nil && plan.file != nil {
@@ -335,8 +340,8 @@ func (plan *fastTraceOutputPlan) close() error {
 	return plan.file.Close()
 }
 
-func configureFastTraceRealtimePrinter(conf *trace.Config, outputPath, header string) (*fastTraceOutputPlan, error) {
-	plan := &fastTraceOutputPlan{}
+func configureFastTraceRealtimePrinter(conf *trace.Config, outputPath, header string, noStopReason bool) (*fastTraceOutputPlan, error) {
+	plan := &fastTraceOutputPlan{noStopReason: noStopReason}
 	if strings.TrimSpace(outputPath) == "" {
 		conf.RealtimePrinter = printer.RealtimePrinter
 		return plan, nil
@@ -399,7 +404,7 @@ func runFileTraceTarget(params ParamsFastTrace, tracerouteMethod trace.Method, i
 		displayPacketSize = trace.DefaultPacketSize(tracerouteMethod, net.ParseIP(ip.Ip))
 	}
 	header := fmt.Sprintf("『%s』\ntraceroute to %s, %d hops max, %s, %s mode\n", ip.Desc, ip.Ip, params.MaxHops, trace.FormatPacketSizeLabel(displayPacketSize), strings.ToUpper(string(tracerouteMethod)))
-	outputPlan, err := configureFastTraceRealtimePrinter(&conf, params.OutputPath, header)
+	outputPlan, err := configureFastTraceRealtimePrinter(&conf, params.OutputPath, header, params.NoStopReason)
 	if err != nil {
 		log.Println(err)
 		return
@@ -472,7 +477,7 @@ func (f *FastTracer) tracert(location string, ispCollection ISPCollection) {
 
 	header := fmt.Sprintf("『%s %s 』\ntraceroute to %s, %d hops max, %s, %s mode\n",
 		location, ispCollection.ISPName, ispCollection.IP, f.ParamsFastTrace.MaxHops, trace.FormatPacketSizeLabel(displayPacketSize), strings.ToUpper(string(f.TracerouteMethod)))
-	outputPlan, err := configureFastTraceRealtimePrinter(&conf, f.ParamsFastTrace.OutputPath, header)
+	outputPlan, err := configureFastTraceRealtimePrinter(&conf, f.ParamsFastTrace.OutputPath, header, f.ParamsFastTrace.NoStopReason)
 	if err != nil {
 		log.Println(err)
 		return

@@ -19,6 +19,8 @@ JSON includes optional `StopReason` with lowercase nested fields `hop`, `reason`
 
 Normal traceroute output precedence is `--json` > `--table` > `--classic` > `--raw` > `--output` > realtime. A higher-priority mode that overrides an explicit output file emits a warning on stderr.
 
+Full and tiny support `--no-stop-reason` to suppress all `Trace Stopped: ...` summaries in terminal and `--output` / `--output-default` files, including Fast Trace and file-based batch tracing. Summaries remain visible by default. The flag does not change mode selection or structured `StopReason` data and has no effect in other modes that accept it. It is not available in ntr.
+
 ## MTR
 
 ```bash

@@ -328,6 +328,7 @@ type effectiveMTRModes struct {
 }
 
 type tracerouteOutputFlags struct {
+	noStopReason  *bool
 	routePath     *bool
 	outputPath    *string
 	outputDefault *bool
@@ -448,6 +449,7 @@ func registerTracerouteOutputFlagsWithAvailability(parser *argparse.Parser, enab
 	jsonPrint := parser.Flag("j", "json", &argparse.Options{Help: "Output JSON; with MTR, stream NDJSON unless --report/--wide is selected"})
 	if enabled {
 		return tracerouteOutputFlags{
+			noStopReason:  parser.Flag("", "no-stop-reason", &argparse.Options{Help: "Hide the traceroute stop summary in terminal and output files"}),
 			routePath:     parser.Flag("P", "route-path", &argparse.Options{Help: "Print traceroute hop path by ASN and location"}),
 			outputPath:    parser.String("o", "output", &argparse.Options{Help: "Write realtime trace output and final stop reason to FILE"}),
 			outputDefault: parser.Flag("O", "output-default", &argparse.Options{Help: "Write realtime trace output and final stop reason to the default log file (/tmp/trace.log)"}),
@@ -457,6 +459,7 @@ func registerTracerouteOutputFlagsWithAvailability(parser *argparse.Parser, enab
 		}
 	}
 	return tracerouteOutputFlags{
+		noStopReason:  ptrBool(false),
 		routePath:     ptrBool(false),
 		outputPath:    ptrStr(""),
 		outputDefault: ptrBool(false),
@@ -1232,12 +1235,13 @@ func writeIgnoredTraceOutputWarning(w io.Writer, mode traceOutputMode, outputPat
 }
 
 type traceOutputPlan struct {
-	mode traceOutputMode
-	file io.WriteCloser
+	noStopReason bool
+	mode         traceOutputMode
+	file         io.WriteCloser
 }
 
 func (plan *traceOutputPlan) printStopReason(reason *trace.StopReason) error {
-	if plan == nil || !plan.mode.printsStopReason() {
+	if plan == nil || plan.noStopReason || !plan.mode.printsStopReason() {
 		return nil
 	}
 	terminalErr := printer.PrintTraceStopReason(reason)
@@ -1255,8 +1259,8 @@ func (plan *traceOutputPlan) close() error {
 	return plan.file.Close()
 }
 
-func configureTracePrinters(conf *trace.Config, mode traceOutputMode, outputPath string) (*traceOutputPlan, error) {
-	plan := &traceOutputPlan{mode: mode}
+func configureTracePrinters(conf *trace.Config, mode traceOutputMode, outputPath string, noStopReason bool) (*traceOutputPlan, error) {
+	plan := &traceOutputPlan{mode: mode, noStopReason: noStopReason}
 	switch mode {
 	case traceOutputJSON:
 		conf.RealtimePrinter = nil
@@ -1859,6 +1863,7 @@ func Execute() {
 		File:           *file,
 		Dot:            *dot,
 		OutputPath:     resolvedOutputPath,
+		NoStopReason:   *outputFlags.noStopReason,
 	}
 	if runFastTraceModeWithRuntime(rootCtx, *dn42, dataOrigin, disableMaptrace, powProvider, *from, *fastTraceFlag, *file, paramsFastTrace, method) {
 		return
@@ -1989,7 +1994,7 @@ func Execute() {
 		log.Printf("write trace output warning: %v", err)
 	}
 
-	outputPlan, err := configureTracePrinters(&conf, outputMode, resolvedOutputPath)
+	outputPlan, err := configureTracePrinters(&conf, outputMode, resolvedOutputPath, *outputFlags.noStopReason)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)

@@ -69,7 +69,7 @@ func (f *FastTracer) tracert_v6(location string, ispCollection ISPCollection) {
 
 	header := fmt.Sprintf("『%s %s 』\ntraceroute to %s, %d hops max, %s, %s mode\n",
 		location, ispCollection.ISPName, ispCollection.IPv6, f.ParamsFastTrace.MaxHops, trace.FormatPacketSizeLabel(displayPacketSize), strings.ToUpper(string(f.TracerouteMethod)))
-	outputPlan, err := configureFastTraceRealtimePrinter(&conf, f.ParamsFastTrace.OutputPath, header)
+	outputPlan, err := configureFastTraceRealtimePrinter(&conf, f.ParamsFastTrace.OutputPath, header, f.ParamsFastTrace.NoStopReason)
 	if err != nil {
 		return
 	}

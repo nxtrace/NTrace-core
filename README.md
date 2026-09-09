@@ -296,6 +296,9 @@ nexttrace --output ./trace.log 1.0.0.1
 # Realtime trace output to the default log file
 nexttrace --output-default 1.0.0.1
 
+# Hide stop summaries in both terminal and file output
+nexttrace --no-stop-reason --output trace.log 1.1.1.1
+
 # IPv4/IPv6 Resolve Only, and automatically select the first IP when there are multiple IPs
 nexttrace --ipv4 g.co
 nexttrace --ipv6 g.co
@@ -319,6 +322,8 @@ export NEXTTRACE_DISABLEMPLS=1
 ```
 
 Normal traceroute reports why it stopped: destination reached, a terminal unreachable response (including its marker), or the configured maximum hop count. `--json` keeps the existing top-level result shape and adds optional `StopReason` with lowercase nested fields `hop`, `reason`, `responses`, and `markers`; `responses` contains human-readable descriptions while `markers` contains machine-readable codes. Classic/raw/JSON modes do not receive an extra human-readable footer. `--output` writes the same plain stop line to the log without ANSI escapes.
+
+`--no-stop-reason` hides all `Trace Stopped: ...` summaries in both the terminal and `--output` / `--output-default` files; they remain visible by default. Available in full and tiny builds, not ntr. It applies to normal traceroute, Fast Trace, and file-based batch tracing. It does not change mode selection, probe termination, or JSON/API stop reasons, and has no effect in other modes that accept it.
 
 When multiple normal-trace output modes are selected, precedence is `--json` > `--table` > `--classic` > `--raw` > `--output` > realtime output. If a higher-priority mode overrides an explicit `--output` or `--output-default`, NextTrace reports that choice on stderr and does not create the ignored log file.
 
@@ -954,7 +959,7 @@ usage: nexttrace [-h|--help] [-4|--ipv4] [-6|--ipv6] [-T|--tcp] [-U|--udp]
                  (IP.SB|ip.sb|IPInfo|ipinfo|IPInsight|ipinsight|IPAPI.com|ip-api.com|IPInfoLocal|ipinfolocal|chunzhen|NextTrace-API|ipdb.one|disable-geoip|DN42|dn42)]
                  [--pow-provider (api.nxtrace.org|sakura)] [-n|--no-rdns]
                  [-a|--always-rdns] [-k|--traceroute] [-P|--route-path]
-                 [-o|--output "<value>"] [-O|--output-default] [--table]
+                 [-o|--output "<value>"] [-O|--output-default] [--no-stop-reason] [--table]
                  [-j|--json] [-c|--classic] [--dn42] [--raw] [-f|--first
                  <integer>] [-M|--map] [-e|--disable-mpls] [-V|--version]
                  [-x|--setup-api-v4-token] [-l|--dns] [--speed] [--nali]
@@ -1022,6 +1027,8 @@ Arguments:
   -O  --output-default               Write realtime trace output and final stop
                                      reason to the default log file
                                      (/tmp/trace.log)
+      --no-stop-reason               Hide the traceroute stop summary in
+                                     terminal and output files
       --table                        Output trace results as a final summary
                                      table (traceroute report mode)
   -j  --json                         Output JSON; MTR streams NDJSON unless

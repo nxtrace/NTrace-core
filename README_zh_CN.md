@@ -317,6 +317,9 @@ nexttrace --output ./trace.log 1.0.0.1
 # 将实时 traceroute 输出写入默认日志文件
 nexttrace --output-default 1.0.0.1
 
+# 隐藏终端及文件中的停止原因摘要
+nexttrace --no-stop-reason --output trace.log 1.1.1.1
+
 # 只进行IPv4/IPv6解析，且当多个IP时自动选择第一个IP
 nexttrace --ipv4 g.co
 nexttrace --ipv6 g.co
@@ -337,6 +340,8 @@ export NEXTTRACE_DISABLEMPLS=1
 ```
 
 普通 traceroute 会报告停止原因：到达目标、收到终止性的 unreachable 响应（含 marker），或达到配置的最大跳数。`--json` 保持既有顶层结果结构，并新增可选 `StopReason`；其嵌套字段固定为小写 `hop`、`reason`、`responses`、`markers`，其中 `responses` 是人类可读描述，`markers` 是机器可读代码。classic/raw/JSON 不追加人类可读 footer；`--output` 会把同一停止原因以无 ANSI 的纯文本写入日志。
+
+`--no-stop-reason` 隐藏所有 `Trace Stopped: ...` 摘要，同时作用于终端及 `--output` / `--output-default` 文件；默认仍显示。完整版和 tiny 支持，ntr 不提供。适用于普通 traceroute、Fast Trace 和文件批量探测；不改变模式选择、探测停止逻辑或 JSON/API 中的终止原因，在其他接受该参数的模式中无效果。
 
 普通 traceroute 同时指定多个输出模式时，优先级为 `--json` > `--table` > `--classic` > `--raw` > `--output` > 实时输出。高优先级模式覆盖显式 `--output` 或 `--output-default` 时，NextTrace 会在 stderr 说明该选择，且不会创建被忽略的日志文件。
 
@@ -929,7 +934,7 @@ usage: nexttrace [-h|--help] [-4|--ipv4] [-6|--ipv6] [-T|--tcp] [-U|--udp]
                  (IP.SB|ip.sb|IPInfo|ipinfo|IPInsight|ipinsight|IPAPI.com|ip-api.com|IPInfoLocal|ipinfolocal|chunzhen|NextTrace-API|ipdb.one|disable-geoip|DN42|dn42)]
                  [--pow-provider (api.nxtrace.org|sakura)] [-n|--no-rdns]
                  [-a|--always-rdns] [-k|--traceroute] [-P|--route-path]
-                 [-o|--output "<value>"] [-O|--output-default] [--table]
+                 [-o|--output "<value>"] [-O|--output-default] [--no-stop-reason] [--table]
                  [-j|--json] [-c|--classic] [--dn42] [--raw] [-f|--first
                  <integer>] [-M|--map] [-e|--disable-mpls] [-V|--version]
                  [-x|--setup-api-v4-token] [-l|--dns] [--speed] [--nali]
@@ -997,6 +1002,8 @@ Arguments:
   -O  --output-default               Write realtime trace output and final stop
                                      reason to the default log file
                                      (/tmp/trace.log)
+      --no-stop-reason               Hide the traceroute stop summary in
+                                     terminal and output files
       --table                        Output trace results as a final summary
                                      table (traceroute report mode)
   -j  --json                         Output JSON; MTR streams NDJSON unless
