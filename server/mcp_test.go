@@ -72,7 +72,7 @@ func (s *recordingMCPService) MTRReport(_ context.Context, input service.MTRRepo
 		Target:     "example.com",
 		ResolvedIP: "93.184.216.34",
 		Protocol:   "icmp",
-		Stats:      []trace.MTRHopStat{{TTL: 1, Geo: &ipgeo.IPGeoData{Router: map[string][]string{}}}},
+		Stats:      []trace.MTRHopStat{{TTL: 1, Snt: 3, Received: 2, Dropped: 1, Loss: 100.0 / 3.0, GMean: 1.5, Jitter: 0.5, JitterAvg: 0.25, JitterMax: 0.5, JitterInterarrival: 0.5, Geo: &ipgeo.IPGeoData{Router: map[string][]string{}}}},
 		PathEnd:    &service.TraceStopReason{Hop: 4, Reason: trace.StopReasonDestination},
 	}, nil
 }
@@ -190,6 +190,13 @@ func TestMCPHandlerRegistersAllToolsWithSchemas(t *testing.T) {
 	assertSchemaProperties(t, byName["nexttrace_traceroute"].OutputSchema, []string{"stop_reason"})
 	assertSchemaProperties(t, byName["nexttrace_mtr_report"].OutputSchema, []string{"path_end"})
 	assertSchemaProperties(t, byName["nexttrace_mtr_raw"].OutputSchema, []string{"path_end"})
+	reportSchema := schemaMap(t, byName["nexttrace_mtr_report"].OutputSchema)
+	statsSchema := reportSchema["properties"].(map[string]any)["stats"].(map[string]any)
+	itemSchema := statsSchema["items"].(map[string]any)
+	if ref, ok := itemSchema["$ref"].(string); ok {
+		itemSchema = reportSchema["$defs"].(map[string]any)[strings.TrimPrefix(ref, "#/$defs/")].(map[string]any)
+	}
+	assertSchemaProperties(t, itemSchema, []string{"dropped", "gmean_ms", "jitter_ms", "jitter_avg_ms", "jitter_max_ms", "jitter_interarrival_ms"})
 }
 
 func TestMCPHandlerCallsEveryToolWithStructuredContent(t *testing.T) {

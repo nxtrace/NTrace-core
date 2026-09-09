@@ -90,3 +90,16 @@ Globalping CLI mode is single-location oriented. For Agent multi-location work, 
 nexttrace --deploy --mcp
 nexttrace --deploy --mcp --listen 0.0.0.0:1080 --deploy-token "$TOKEN"
 ```
+
+### MTR column metrics
+
+Use `--mtr-columns loss,snt,space,dropped,gmean,jitter,javg,jmax,jint` in MTR text
+mode or offline replay. `space` inserts one extra display space; it may repeat.
+`o/O` opens the `Fields:` editor, where literal spaces have the same meaning.
+Codes `D/G/J/M/X/I` select Drop/Gmean/Jttr/Javg/Jmax/Jint. The default columns stay
+unchanged. `--mtr-columns` remains unavailable with RAW or JSON.
+
+Jitter compares successive successful RTTs per responder row, across timeouts.
+The first jitter is zero and participates in Javg. Jint is the mtr-scale
+accumulator (`I = 15/16 I + jitter`), not the divided RFC estimate. Gmean includes
+successful zero RTTs, which make it zero. Drop is `snt - received`.

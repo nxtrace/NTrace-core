@@ -71,6 +71,12 @@ Final answer shape: use [output-templates.md](output-templates.md#nexttrace_trac
 ### `nexttrace_mtr_report`
 
 Runs bounded MTR and returns aggregated `stats[]` plus optional `path_end`.
+Each row includes `dropped`, `gmean_ms`, `jitter_ms`, `jitter_avg_ms`,
+`jitter_max_ms`, and `jitter_interarrival_ms`, including zero values. Jitter
+compares successful RTTs within each responder row. The first zero jitter counts
+in its mean. Interarrival jitter is the mtr-scale accumulator
+`I = 15/16 I + jitter`, not the divided RFC estimate. No input parameter is needed
+to obtain these fields.
 
 Adds:
 

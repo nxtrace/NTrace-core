@@ -124,7 +124,8 @@
 - `--mtr-record FILE` 独占创建新文件，保留完整 UTF-8 JSON 行；写入失败停止探测。首个会话错误及阶段不被后续录制 start/finish 错误覆盖。
 - `--mtr-replay FILE` 为纯离线独立入口，拒绝 target/探测参数/stdin；TTY 默认停在末尾，非 TTY/report 输出最终表，JSON 使用独立 `mtr_replay` 文档。
 - 回放 `j/J` 定位、Space 播放、`p` 暂停、`r` 回到开头；残缺文件恢复有效前缀但非零退出。显示副本过滤 Unicode Cc/Cf，文件与 JSON 原值保留。
-- `--mtr-columns` 只控制 MTR/回放文本列，不改变 RAW/JSON；`o/O` 会话内编辑，`d/D` 历史视图、`g/G` 切换三种图表。默认统计列不变，新增可选 Received/Rcv。
+- `--mtr-columns` 只控制 MTR/回放文本列，不改变 RAW/JSON 的列选择；`o/O` 会话内编辑，`d/D` 历史视图、`g/G` 切换三种图表。默认统计列不变，可选 Received/Rcv、Dropped/Drop、Gmean/Jttr/Javg/Jmax/Jint；`space` 和编辑态空格增加实际间距。
+- 扩展统计在共享 `MTRHopStat` 计算，JSON report/回放和 MCP 输出对应字段；旧录制按事件顺序重算。Jint 使用 mtr 累积尺度，公式与零值规则见 `docs/mtr-columns.md`。
 - 契约与验收入口：[MTR JSON](docs/mtr-json.md)、[录制/回放](docs/mtr-session.md)、[CLI 说明](skills/nexttrace/references/cli-fallback.md)。
 
 ### Doctor、fwmark 与 TOS

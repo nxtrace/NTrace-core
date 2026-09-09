@@ -568,7 +568,7 @@ func registerMTRFlags(parser *argparse.Parser) mtrCLIFlags {
 		}
 		return mtrCLIFlags{
 			mtrMode:    mtrMode,
-			columns:    parser.String("", "mtr-columns", &argparse.Options{Help: "MTR text columns in order: loss,snt,received,last,avg,best,wrst,stdev (does not enable MTR)"}),
+			columns:    parser.String("", "mtr-columns", &argparse.Options{Help: "MTR text columns in order: loss, snt, received, last, avg, best, wrst, stdev, dropped, gmean, jitter, javg, jmax, jint, space (does not enable MTR)"}),
 			reportMode: parser.Flag("r", "report", &argparse.Options{Help: "MTR report mode (non-interactive, implies --mtr); can trigger MTR without --mtr"}),
 			wideMode:   parser.Flag("w", "wide", &argparse.Options{Help: "MTR wide report mode (implies --mtr --report); alone equals --mtr --report --wide"}),
 			showIPs:    parser.Flag("", "show-ips", &argparse.Options{Help: "MTR only: display both PTR hostnames and numeric IPs (PTR first, IP in parentheses)"}),

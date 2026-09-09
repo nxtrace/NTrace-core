@@ -20,35 +20,55 @@ const (
 	MTRColumnBest
 	MTRColumnWrst
 	MTRColumnStDev
+	MTRColumnDropped
+	MTRColumnGMean
+	MTRColumnJitter
+	MTRColumnJitterAvg
+	MTRColumnJitterMax
+	MTRColumnJitterInterarrival
+	MTRColumnSpace
 )
 
 var mtrColumnDefinitions = [...]struct {
 	name, title string
 	code        byte
+	description string
 }{
-	{"loss", "Loss%", 'L'}, {"snt", "Snt", 'S'}, {"received", "Rcv", 'R'},
-	{"last", "Last", 'N'}, {"avg", "Avg", 'A'}, {"best", "Best", 'B'},
-	{"wrst", "Wrst", 'W'}, {"stdev", "StDev", 'V'},
+	{"loss", "Loss%", 'L', "Loss Ratio"},
+	{"snt", "Snt", 'S', "Sent Packets"},
+	{"received", "Rcv", 'R', "Received Packets"},
+	{"last", "Last", 'N', "Newest RTT(ms)"},
+	{"avg", "Avg", 'A', "Average RTT(ms)"},
+	{"best", "Best", 'B', "Min/Best RTT(ms)"},
+	{"wrst", "Wrst", 'W', "Max/Worst RTT(ms)"},
+	{"stdev", "StDev", 'V', "Standard Deviation"},
+	{"dropped", "Drop", 'D', "Dropped Packets"},
+	{"gmean", "Gmean", 'G', "Geometric Mean"},
+	{"jitter", "Jttr", 'J', "Current Jitter"},
+	{"javg", "Javg", 'M', "Jitter Mean/Avg."},
+	{"jmax", "Jmax", 'X', "Worst Jitter"},
+	{"jint", "Jint", 'I', "Interarrival Jitter"},
+	{"space", "", ' ', "Space between fields"},
 }
 
 func DefaultMTRColumns() []MTRColumn {
 	return []MTRColumn{MTRColumnLoss, MTRColumnSnt, MTRColumnLast, MTRColumnAvg, MTRColumnBest, MTRColumnWrst, MTRColumnStDev}
 }
 
-// ParseMTRColumns accepts comma-separated CLI names, or space-separated TUI codes.
+// ParseMTRColumns accepts comma-separated CLI names or TUI codes; spaces add display spacing.
 func ParseMTRColumns(input string, codes bool) ([]MTRColumn, error) {
 	tokens := strings.Split(strings.ToLower(input), ",")
 	if codes {
 		tokens = nil
 		for _, c := range strings.ToUpper(input) {
-			if c != ' ' {
-				tokens = append(tokens, string(c))
-			}
+			tokens = append(tokens, string(c))
 		}
 	}
 	var columns []MTRColumn
 	for _, token := range tokens {
-		token = strings.TrimSpace(token)
+		if !codes {
+			token = strings.TrimSpace(token)
+		}
 		if token == "" {
 			return nil, fmt.Errorf("empty MTR column entry")
 		}
@@ -79,10 +99,16 @@ func ValidateMTRColumns(columns []MTRColumn) error {
 		if int(c) >= len(mtrColumnDefinitions) {
 			return fmt.Errorf("unknown MTR column %d", c)
 		}
+		if c == MTRColumnSpace {
+			continue
+		}
 		if seen[c] {
 			return fmt.Errorf("duplicate MTR column %s", mtrColumnDefinitions[c].name)
 		}
 		seen[c] = true
+	}
+	if len(seen) == 0 {
+		return fmt.Errorf("select at least one MTR column")
 	}
 	return nil
 }
@@ -120,6 +146,18 @@ func mtrColumnValue(c MTRColumn, s trace.MTRHopStat) string {
 		return formatMs(s.Wrst)
 	case MTRColumnStDev:
 		return formatMs(s.StDev)
+	case MTRColumnDropped:
+		return fmt.Sprint(s.Dropped)
+	case MTRColumnGMean:
+		return formatMs(s.GMean)
+	case MTRColumnJitter:
+		return formatMs(s.Jitter)
+	case MTRColumnJitterAvg:
+		return formatMs(s.JitterAvg)
+	case MTRColumnJitterMax:
+		return formatMs(s.JitterMax)
+	case MTRColumnJitterInterarrival:
+		return formatMs(s.JitterInterarrival)
 	default:
 		return ""
 	}
@@ -144,7 +182,7 @@ func mtrSelectedMetrics(columns []MTRColumn, widths []int, stat *trace.MTRHopSta
 			value = mtrColumnValue(c, *stat)
 		}
 		cells[i] = padLeft(value, widths[i])
-		if colorize && stat != nil && (c == MTRColumnLoss || c == MTRColumnSnt || c == MTRColumnReceived) {
+		if colorize && stat != nil && (c == MTRColumnLoss || c == MTRColumnSnt || c == MTRColumnReceived || c == MTRColumnDropped) {
 			cells[i], _ = mtrColorPacketsByLoss(cells[i], "", stat.Loss, isWaitingHopStat(*stat))
 		}
 	}
