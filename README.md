@@ -26,10 +26,6 @@
   </a>
 </p>
 
-## Default-mode migration: no earlier than 2027
-
-> **Downstream developers:** NextTrace will switch the default operating and display mode of `nexttrace` and `nexttrace-tiny` to MTR **no earlier than 2027**. Using `--raw` alone will switch to MTR RAW at the same time. Traditional traceroute and its RAW output will remain available through `-k/--traceroute`. Programs relying on today's behavior should adopt `--traceroute` or `--traceroute --raw` now. **This release does not change the default; the switching release will be announced separately.** `ntr` remains MTR-only.
-
 ## IAAS Sponsor
 
 <div style="text-align: center;">
@@ -47,6 +43,10 @@
 </div>
 
 We are extremely grateful to [DMIT](https://dmit.io), [Misaka](https://misaka.io) and [SnapStack](https://portal.saltyfish.io) for providing the network infrastructure that powers this project.
+
+## Default-mode migration: no earlier than 2027
+
+> **Downstream developers:** NextTrace will switch the default operating and display mode of `nexttrace` and `nexttrace-tiny` to MTR **no earlier than 2027**. Using `--raw` alone will switch to MTR RAW at the same time. Traditional traceroute and its RAW output will remain available through `-k/--traceroute`. Programs relying on today's behavior should adopt `--traceroute` or `--traceroute --raw` now. **This release does not change the default; the switching release will be announced separately.** `ntr` remains MTR-only.
 
 ## How To Use
 

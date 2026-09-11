@@ -26,10 +26,6 @@
   </a>
 </p>
 
-## 默认模式迁移公告：最早于 2027 年
-
-> **下游开发者请注意：** NextTrace 将最早于 2027 年将 `nexttrace` 和 `nexttrace-tiny` 的默认运行与显示模式切换为 MTR，单独使用 `--raw` 时也将切换为 MTR RAW。传统 traceroute 及其 RAW 输出将继续通过 `-k/--traceroute` 提供。依赖当前行为的程序应提前使用 `--traceroute` 或 `--traceroute --raw`。**本次版本尚未切换默认模式，具体切换版本将另行公告。** `ntr` 继续作为 MTR 专用版。
-
 ## IAAS Sponsor
 
 <div style="text-align: center;">
@@ -47,6 +43,10 @@
 </div>
 
 我们非常感谢 [DMIT](https://dmit.io)、 [Misaka](https://misaka.io) 和 [SnapStack](https://portal.saltyfish.io) 提供了支持本项目所需的网络基础设施。
+
+## 默认模式迁移公告：最早于 2027 年
+
+> **下游开发者请注意：** NextTrace 将最早于 2027 年将 `nexttrace` 和 `nexttrace-tiny` 的默认运行与显示模式切换为 MTR，单独使用 `--raw` 时也将切换为 MTR RAW。传统 traceroute 及其 RAW 输出将继续通过 `-k/--traceroute` 提供。依赖当前行为的程序应提前使用 `--traceroute` 或 `--traceroute --raw`。**本次版本尚未切换默认模式，具体切换版本将另行公告。** `ntr` 继续作为 MTR 专用版。
 
 ## How To Use
 
