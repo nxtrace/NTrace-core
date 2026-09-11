@@ -16,32 +16,65 @@ type MTRColumnEditor struct {
 	Draft, Error string
 }
 
-func renderMTRColumnEditor(b *strings.Builder, editor MTRColumnEditor, width int) {
-	var line string
-	for _, word := range strings.Fields("L=Loss S=Snt R=Received N=Last A=Avg B=Best W=Wrst V=StDev") {
-		if line != "" && len(line)+1+len(word) > width {
-			tuiLine(b, "%s", line)
-			line = ""
-		}
-		if line != "" {
-			line += " "
-		}
-		line += word
+func renderMTRColumnEditor(b *strings.Builder, header MTRTUIHeader, width, height int) {
+	editor := header.ColumnEditor
+	prefix := "Fields: "
+	if width < len(prefix)+2 {
+		prefix = ""
 	}
-	tuiLine(b, "%s", truncateByDisplayWidth(line, width))
-	for _, help := range []string{"Enter: apply Esc: cancel", "Backspace: delete", "Ctrl-U: clear"} {
-		tuiLine(b, "%s", truncateByDisplayWidth(help, width))
-	}
-
-	prefix := "Columns: "
 	available := max(1, width-len(prefix)-1)
 	draft := editor.Draft
 	if len(draft) > available {
 		draft = draft[len(draft)-available:]
 	}
-	tuiLine(b, "%s", truncateByDisplayWidth(prefix+draft+"_", width))
+	fields := prefix + draft + "_"
+	// Leave the last terminal row unused: CRLF there would scroll the page.
+	remaining := max(0, height-1)
+	line := func(text string) {
+		if remaining > 0 {
+			tuiLine(b, "%s", text)
+			remaining--
+		}
+	}
+	// Header builders already fit visible width before adding ANSI colors.
+	if height >= 9 {
+		line(buildMTRTUITitleLine(header, width))
+		if width < 40 {
+			line(truncateByDisplayWidth(buildMTRTUIRouteText(header), width))
+		} else {
+			line(buildMTRTUIRouteLine(header, width, mtrTUIClock(header)))
+		}
+	}
+	line(fields)
 	if editor.Error != "" {
-		tuiLine(b, "%s", truncateByDisplayWidth(editor.Error, width))
+		line(truncateByDisplayWidth(editor.Error, width))
+	}
+	// Keep editing controls visible even when the field list does not fit.
+	controls := []string{"Enter: apply Esc: cancel", "Backspace: delete", "Ctrl-U: clear  Ctrl-C: quit"}
+	if width >= 72 {
+		controls = []string{"Enter: apply  Esc: cancel  Backspace: delete  Ctrl-U: clear  Ctrl-C: quit"}
+	}
+	order := []MTRColumn{MTRColumnSpace, MTRColumnLoss, MTRColumnDropped, MTRColumnReceived,
+		MTRColumnSnt, MTRColumnLast, MTRColumnBest, MTRColumnAvg, MTRColumnWrst,
+		MTRColumnStDev, MTRColumnGMean, MTRColumnJitter, MTRColumnJitterAvg,
+		MTRColumnJitterMax, MTRColumnJitterInterarrival}
+	if remaining >= len(order)+len(controls)+2 {
+		line("")
+	}
+	count := min(len(order), max(0, remaining-len(controls)-1))
+	for _, column := range order[:count] {
+		def := mtrColumnDefinitions[column]
+		code := string(def.code)
+		if column == MTRColumnSpace {
+			code = "<sp>"
+		}
+		line(truncateByDisplayWidth("  "+code+": "+def.description, width))
+	}
+	if count < len(order) && remaining > len(controls) {
+		line(truncateByDisplayWidth("Enlarge terminal for help", width))
+	}
+	for _, help := range controls {
+		line(truncateByDisplayWidth(help, width))
 	}
 }
 
@@ -89,9 +122,7 @@ func MTRTablePrinterWithColumns(stats []trace.MTRHopStat, iteration, mode, nameM
 	}
 	fmt.Print("\033[H\033[2J")
 	headers := []any{"Hop"}
-	for _, c := range columns {
-		headers = append(headers, mtrColumnDefinitions[c].title)
-	}
+	headers = append(headers, mtrTableColumnCells(columns, nil)...)
 	headers = append(headers, "Host")
 	tbl := table.New(headers...).WithWriter(os.Stdout)
 	tbl.WithHeaderFormatter(color.New(color.FgGreen, color.Underline).SprintfFunc()).WithFirstColumnFormatter(color.New(color.FgYellow).SprintfFunc())
@@ -103,9 +134,7 @@ func MTRTablePrinterWithColumns(stats []trace.MTRHopStat, iteration, mode, nameM
 		}
 		prevTTL = s.TTL
 		row := []any{hop}
-		for _, c := range columns {
-			row = append(row, mtrColumnValue(c, s))
-		}
+		row = append(row, mtrTableColumnCells(columns, &s)...)
 		row = append(row, appendMTRResponseMarker(formatMTRHostWithMPLS(s, mode, nameMode, lang, showIPs), s))
 		tbl.AddRow(row...)
 	}
@@ -144,4 +173,28 @@ func renderMTRSelectedHeader(b *strings.Builder, header MTRTUIHeader, width int)
 	} else {
 		tuiLine(b, "%s", truncateByDisplayWidth("O:cols Q:quit "+mtrTUIStatusText(header.Status), width))
 	}
+}
+
+// table applies two spaces of padding per cell. Attach explicit spacers to real
+// cells so each requested space adds exactly one character, not another column.
+func mtrTableColumnCells(columns []MTRColumn, stat *trace.MTRHopStat) []any {
+	var cells []any
+	spaces := ""
+	for _, c := range columns {
+		if c == MTRColumnSpace {
+			spaces += " "
+			continue
+		}
+		value := mtrColumnDefinitions[c].title
+		if stat != nil {
+			value = mtrColumnValue(c, *stat)
+		}
+		cells = append(cells, spaces+value)
+		spaces = ""
+	}
+	if spaces != "" && len(cells) > 0 {
+		last := len(cells) - 1
+		cells[last] = cells[last].(string) + spaces
+	}
+	return cells
 }

@@ -103,6 +103,11 @@ English template:
 
 ## `nexttrace_mtr_report`
 
+When jitter or additional columns are requested, include the relevant
+`dropped`, `gmean_ms`, `jitter_ms`, `jitter_avg_ms`, `jitter_max_ms`, and
+`jitter_interarrival_ms` values from `stats[]`. Label the last as mtr-scale Jint;
+do not present it as the divided RFC estimate. Keep the default table concise.
+
 中文模板:
 
 ```markdown

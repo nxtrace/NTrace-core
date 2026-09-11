@@ -26,10 +26,6 @@
   </a>
 </p>
 
-## 默认模式迁移公告：最早于 2027 年
-
-> **下游开发者请注意：** NextTrace 将最早于 2027 年将 `nexttrace` 和 `nexttrace-tiny` 的默认运行与显示模式切换为 MTR，单独使用 `--raw` 时也将切换为 MTR RAW。传统 traceroute 及其 RAW 输出将继续通过 `-k/--traceroute` 提供。依赖当前行为的程序应提前使用 `--traceroute` 或 `--traceroute --raw`。**本次版本尚未切换默认模式，具体切换版本将另行公告。** `ntr` 继续作为 MTR 专用版。
-
 ## IAAS Sponsor
 
 <div style="text-align: center;">
@@ -47,6 +43,10 @@
 </div>
 
 我们非常感谢 [DMIT](https://dmit.io)、 [Misaka](https://misaka.io) 和 [SnapStack](https://portal.saltyfish.io) 提供了支持本项目所需的网络基础设施。
+
+## 默认模式迁移公告：最早于 2027 年
+
+> **下游开发者请注意：** NextTrace 将最早于 2027 年将 `nexttrace` 和 `nexttrace-tiny` 的默认运行与显示模式切换为 MTR，单独使用 `--raw` 时也将切换为 MTR RAW。传统 traceroute 及其 RAW 输出将继续通过 `-k/--traceroute` 提供。依赖当前行为的程序应提前使用 `--traceroute` 或 `--traceroute --raw`。**本次版本尚未切换默认模式，具体切换版本将另行公告。** `ntr` 继续作为 MTR 专用版。
 
 ## How To Use
 
@@ -317,6 +317,9 @@ nexttrace --output ./trace.log 1.0.0.1
 # 将实时 traceroute 输出写入默认日志文件
 nexttrace --output-default 1.0.0.1
 
+# 隐藏终端及文件中的停止原因摘要
+nexttrace --no-stop-reason --output trace.log 1.1.1.1
+
 # 只进行IPv4/IPv6解析，且当多个IP时自动选择第一个IP
 nexttrace --ipv4 g.co
 nexttrace --ipv6 g.co
@@ -337,6 +340,8 @@ export NEXTTRACE_DISABLEMPLS=1
 ```
 
 普通 traceroute 会报告停止原因：到达目标、收到终止性的 unreachable 响应（含 marker），或达到配置的最大跳数。`--json` 保持既有顶层结果结构，并新增可选 `StopReason`；其嵌套字段固定为小写 `hop`、`reason`、`responses`、`markers`，其中 `responses` 是人类可读描述，`markers` 是机器可读代码。classic/raw/JSON 不追加人类可读 footer；`--output` 会把同一停止原因以无 ANSI 的纯文本写入日志。
+
+`--no-stop-reason` 隐藏所有 `Trace Stopped: ...` 摘要，同时作用于终端及 `--output` / `--output-default` 文件；默认仍显示。完整版和 tiny 支持，ntr 不提供。适用于普通 traceroute、Fast Trace 和文件批量探测；不改变模式选择、探测停止逻辑或 JSON/API 中的终止原因，在其他接受该参数的模式中无效果。
 
 普通 traceroute 同时指定多个输出模式时，优先级为 `--json` > `--table` > `--classic` > `--raw` > `--output` > 实时输出。高优先级模式覆盖显式 `--output` 或 `--output-default` 时，NextTrace 会在 stderr 说明该选择，且不会创建被忽略的日志文件。
 
@@ -702,11 +707,13 @@ nexttrace -w --mtr-columns received,snt,last 1.1.1.1
 ntr --mtr-columns received 1.1.1.1
 ```
 
-`--mtr-columns` 支持 `loss,snt,received,last,avg,best,wrst,stdev` 的任意非空子集及顺序，忽略大小写与列名两端空格；未知列、重复列、空项报错。`received` 显示为 `Rcv`。默认仍为 `Loss%、Snt、Last、Avg、Best、Wrst、StDev`。
+`--mtr-columns` 支持 `loss,snt,received,last,avg,best,wrst,stdev,dropped,gmean,jitter,javg,jmax,jint,space` 的任意非空子集及顺序，忽略大小写与列名两端空格；未知列、重复指标列、空项报错。`space` 增加一格显示间距，可重复，但至少需要一个指标列。`received` 显示为 `Rcv`。默认仍为 `Loss%、Snt、Last、Avg、Best、Wrst、StDev`。
 
 参数适用于 TUI、非 TTY 表格和 report/wide，也支持离线回放的文字输出；不自动开启 MTR：full/tiny 需配合 `-t/-r/-w`，ntr 使用默认 MTR 模式。RAW、JSON、传统 traceroute 和其他独立模式会在初始化前拒绝该参数。自定义 TUI 保留完整数字及至少 8 格 Host；空间不足时显示提示，加宽终端或减少列后恢复。
 
-按 `o/O` 编辑当前字段码：`L=Loss S=Snt R=Received N=Last A=Avg B=Best W=Wrst V=StDev`。输入不区分大小写，空格用于分隔。Enter 校验并应用，Esc 取消，Backspace 删除末尾字符，Ctrl-U 清空。空串、未知码和重复码保留编辑状态并显示错误。括号粘贴中的换行转为空格，不自动提交；草稿最多 256 个 ASCII 字符。
+按 `o/O` 编辑当前字段码：`L=Loss D=Drop R=Received S=Snt N=Last B=Best A=Avg W=Wrst V=StDev G=Gmean J=Jttr M=Javg X=Jmax I=Jint`。输入不区分大小写；每个空格增加一格实际显示间距，保留首尾及连续空格。Enter 校验并应用，Esc 取消，Backspace 删除末尾字符，Ctrl-U 清空。空串、纯空格、未知码和重复指标码保留编辑状态并显示错误。括号粘贴中的换行转为空格，不自动提交；草稿最多 256 个 ASCII 字符。
+
+`Fields:` 页面逐行列出字段说明。计算口径、空格示例及 JSON 字段见 [MTR 列指标](docs/mtr-columns.md)。
 
 编辑期间其他快捷键不生效，Ctrl-C 仍退出；探测、计数及暂停状态保持不变。从历史视图应用列后返回统计表，取消则保留历史视图。历史图表的固定列不变，列选择仅在当前会话有效；暂停期间仍可编辑和调整窗口大小。
 
@@ -927,7 +934,7 @@ usage: nexttrace [-h|--help] [-4|--ipv4] [-6|--ipv6] [-T|--tcp] [-U|--udp]
                  (IP.SB|ip.sb|IPInfo|ipinfo|IPInsight|ipinsight|IPAPI.com|ip-api.com|IPInfoLocal|ipinfolocal|chunzhen|NextTrace-API|ipdb.one|disable-geoip|DN42|dn42)]
                  [--pow-provider (api.nxtrace.org|sakura)] [-n|--no-rdns]
                  [-a|--always-rdns] [-k|--traceroute] [-P|--route-path]
-                 [-o|--output "<value>"] [-O|--output-default] [--table]
+                 [-o|--output "<value>"] [-O|--output-default] [--no-stop-reason] [--table]
                  [-j|--json] [-c|--classic] [--dn42] [--raw] [-f|--first
                  <integer>] [-M|--map] [-e|--disable-mpls] [-V|--version]
                  [-x|--setup-api-v4-token] [-l|--dns] [--speed] [--nali]
@@ -995,6 +1002,8 @@ Arguments:
   -O  --output-default               Write realtime trace output and final stop
                                      reason to the default log file
                                      (/tmp/trace.log)
+      --no-stop-reason               Hide the traceroute stop summary in
+                                     terminal and output files
       --table                        Output trace results as a final summary
                                      table (traceroute report mode)
   -j  --json                         Output JSON; MTR streams NDJSON unless
@@ -1074,9 +1083,10 @@ Arguments:
   -w  --wide                         MTR wide report mode (implies --mtr
                                      --report); alone equals --mtr --report
                                      --wide
-      --mtr-columns                  MTR text columns in order: loss,snt,
-                                     received,last,avg,best,wrst,stdev;
-                                     does not enable MTR
+      --mtr-columns                  MTR text columns in order: loss, snt,
+                                     received, last, avg, best, wrst, stdev,
+                                     dropped, gmean, jitter, javg, jmax, jint,
+                                     space (does not enable MTR)
       --show-ips                     MTR only: display both PTR hostnames and
                                      numeric IPs (PTR first, IP in parentheses)
   -y  --ipinfo                       Set initial MTR TUI host info mode (0-4).

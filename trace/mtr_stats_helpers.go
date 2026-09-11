@@ -113,6 +113,7 @@ func (agg *MTRAggregator) includeAttemptLocked(bucket *mtrTTLBucket, attempt Hop
 	}
 
 	rttMs := float64(attempt.RTT) / float64(time.Millisecond)
+	updateMTRVariability(acc, rttMs)
 	acc.sum += rttMs
 	acc.sumSq += rttMs * rttMs
 	acc.received++
@@ -153,6 +154,7 @@ func parseMTRAddr(value string) (netip.Addr, bool) {
 }
 
 func mergeMTRHopAccum(dst, src *mtrHopAccum) {
+	mergeMTRVariability(dst, src)
 	dst.sent += src.sent
 	dst.received += src.received
 	if src.received > 0 {
@@ -243,6 +245,8 @@ func capMTRHopAccum(acc *mtrHopAccum, maxPerHop int) {
 		sumSqNew = (sumNew * sumNew) / nNew
 	}
 
+	acc.logSum *= ratio
+	acc.jitterSum *= ratio
 	acc.sum = sumNew
 	acc.sumSq = sumSqNew
 	acc.received = acc.sent
@@ -284,19 +288,25 @@ func buildMTRHopStat(acc *mtrHopAccum, ttl int) MTRHopStat {
 	}
 
 	return MTRHopStat{
-		TTL:      ttl,
-		Host:     acc.host,
-		IP:       acc.ip,
-		Loss:     lossPct,
-		Snt:      acc.sent,
-		Last:     acc.last,
-		Avg:      avg,
-		Best:     best,
-		Wrst:     acc.worst,
-		StDev:    stdev,
-		Geo:      acc.geo,
-		MPLS:     mpls,
-		Received: acc.received,
+		Dropped:            lossCount,
+		GMean:              mtrGeometricMean(acc),
+		Jitter:             acc.jitter,
+		JitterAvg:          mtrJitterMean(acc),
+		JitterMax:          acc.jitterMax,
+		JitterInterarrival: acc.jitterInterarrival,
+		TTL:                ttl,
+		Host:               acc.host,
+		IP:                 acc.ip,
+		Loss:               lossPct,
+		Snt:                acc.sent,
+		Last:               acc.last,
+		Avg:                avg,
+		Best:               best,
+		Wrst:               acc.worst,
+		StDev:              stdev,
+		Geo:                acc.geo,
+		MPLS:               mpls,
+		Received:           acc.received,
 	}
 }
 

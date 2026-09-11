@@ -220,7 +220,7 @@ def main(binary):
                 offline.send("d")
                 offline.expect("History")
                 offline.send("o")
-                offline.expect("Columns:")
+                offline.expect("Fields:")
                 offline.send("\x15la\r")
                 offline.expect("Loss%", "Avg", "Paused")
                 offline.send(" ")

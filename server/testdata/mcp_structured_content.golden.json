@@ -35,6 +35,7 @@
         {
           "avg_ms": 0,
           "best_ms": 0,
+          "dropped": 1,
           "geo": {
             "asnumber": "",
             "city": "",
@@ -55,10 +56,15 @@
             "source": "",
             "whois": ""
           },
+          "gmean_ms": 1.5,
+          "jitter_avg_ms": 0.25,
+          "jitter_interarrival_ms": 0.5,
+          "jitter_max_ms": 0.5,
+          "jitter_ms": 0.5,
           "last_ms": 0,
-          "loss_percent": 0,
-          "received": 0,
-          "snt": 0,
+          "loss_percent": 33.333333333333336,
+          "received": 2,
+          "snt": 3,
           "stdev_ms": 0,
           "ttl": 1,
           "wrst_ms": 0

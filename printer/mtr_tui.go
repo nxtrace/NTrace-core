@@ -369,11 +369,19 @@ var getTermWidth = func() int {
 // MTRTUIRender 将 MTR TUI 帧渲染到 w。
 // 每帧重新获取终端宽度并计算自适应布局。
 func MTRTUIRender(w io.Writer, header MTRTUIHeader, stats []trace.MTRHopStat) {
-	mtrTUIRenderWithWidth(w, header, stats, getTermWidth())
+	_, height, err := term.GetSize(int(os.Stdout.Fd()))
+	if err != nil || height <= 0 {
+		height = 24
+	}
+	mtrTUIRenderWithSize(w, header, stats, getTermWidth(), height)
 }
 
 // mtrTUIRenderWithWidth 是带可控宽度的内部渲染入口（测试用）。
 func mtrTUIRenderWithWidth(w io.Writer, header MTRTUIHeader, stats []trace.MTRHopStat, termWidth int) {
+	mtrTUIRenderWithSize(w, header, stats, termWidth, 24)
+}
+
+func mtrTUIRenderWithSize(w io.Writer, header MTRTUIHeader, stats []trace.MTRHopStat, termWidth, termHeight int) {
 	lo := buildMTRTUILayout(stats, termWidth)
 	var b strings.Builder
 
@@ -385,9 +393,7 @@ func mtrTUIRenderWithWidth(w io.Writer, header MTRTUIHeader, stats []trace.MTRHo
 		return
 	}
 	if header.ColumnEditor.Active {
-		tuiLine(&b, "%s", buildMTRTUITitleLine(header, lo.termWidth))
-		tuiLine(&b, "%s", mtrTUIStatusText(header.Status))
-		renderMTRColumnEditor(&b, header.ColumnEditor, lo.termWidth)
+		renderMTRColumnEditor(&b, header, lo.termWidth, termHeight)
 		_, _ = fmt.Fprint(w, b.String())
 		return
 	}

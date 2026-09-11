@@ -61,7 +61,8 @@ func TestMTRSessionReplayMatchesScheduler(t *testing.T) {
 			result.MPLS = []string{"label 20", "label 10"}
 			result.Response = &MTRProbeResponse{Kind: kind, Description: kind}
 		}
-		rt.processProbeSuccess(ttl, result, time.Now().Add(-time.Second))
+		// Completion timestamps may move backwards; application order is authoritative.
+		rt.processProbeSuccess(ttl, result, time.Now().Add(-time.Duration(len(events)+1)*time.Second))
 		if err := context.Cause(rt.ctx); err != nil {
 			t.Fatal(err)
 		}

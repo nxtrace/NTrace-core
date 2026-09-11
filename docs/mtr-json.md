@@ -87,7 +87,11 @@ Example validation failure:
 Statistics are shared with text wide reports, without reaggregation or row
 collapsing. Each [MTRHopStat](../trace/mtr_stats.go) has `ttl`, optional `host`
 and `ip`, `loss_percent`, `snt`, `last_ms`, `avg_ms`, `best_ms`, `wrst_ms`,
-`stdev_ms`, `received`, and optional `geo`, `mpls`, `response`. Multiple responders
+`stdev_ms`, `received`, `dropped`, `gmean_ms`, `jitter_ms`, `jitter_avg_ms`,
+`jitter_max_ms`, `jitter_interarrival_ms`, and optional `geo`, `mpls`, `response`.
+The additional statistics are always present, including zero values, within
+schema version 1. See [column metrics](mtr-columns.md) for definitions and the
+mtr-scale interarrival accumulator (not the divided RFC estimate). Multiple responders
 and unknown rows retain the aggregator's existing identity and ordering rules.
 `snt` counts completed events already entered into the aggregator. Interruptions
 do not synthesize timeout events for in-flight probes. RTT units are milliseconds.

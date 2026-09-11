@@ -26,10 +26,6 @@
   </a>
 </p>
 
-## Default-mode migration: no earlier than 2027
-
-> **Downstream developers:** NextTrace will switch the default operating and display mode of `nexttrace` and `nexttrace-tiny` to MTR **no earlier than 2027**. Using `--raw` alone will switch to MTR RAW at the same time. Traditional traceroute and its RAW output will remain available through `-k/--traceroute`. Programs relying on today's behavior should adopt `--traceroute` or `--traceroute --raw` now. **This release does not change the default; the switching release will be announced separately.** `ntr` remains MTR-only.
-
 ## IAAS Sponsor
 
 <div style="text-align: center;">
@@ -47,6 +43,10 @@
 </div>
 
 We are extremely grateful to [DMIT](https://dmit.io), [Misaka](https://misaka.io) and [SnapStack](https://portal.saltyfish.io) for providing the network infrastructure that powers this project.
+
+## Default-mode migration: no earlier than 2027
+
+> **Downstream developers:** NextTrace will switch the default operating and display mode of `nexttrace` and `nexttrace-tiny` to MTR **no earlier than 2027**. Using `--raw` alone will switch to MTR RAW at the same time. Traditional traceroute and its RAW output will remain available through `-k/--traceroute`. Programs relying on today's behavior should adopt `--traceroute` or `--traceroute --raw` now. **This release does not change the default; the switching release will be announced separately.** `ntr` remains MTR-only.
 
 ## How To Use
 
@@ -296,6 +296,9 @@ nexttrace --output ./trace.log 1.0.0.1
 # Realtime trace output to the default log file
 nexttrace --output-default 1.0.0.1
 
+# Hide stop summaries in both terminal and file output
+nexttrace --no-stop-reason --output trace.log 1.1.1.1
+
 # IPv4/IPv6 Resolve Only, and automatically select the first IP when there are multiple IPs
 nexttrace --ipv4 g.co
 nexttrace --ipv6 g.co
@@ -319,6 +322,8 @@ export NEXTTRACE_DISABLEMPLS=1
 ```
 
 Normal traceroute reports why it stopped: destination reached, a terminal unreachable response (including its marker), or the configured maximum hop count. `--json` keeps the existing top-level result shape and adds optional `StopReason` with lowercase nested fields `hop`, `reason`, `responses`, and `markers`; `responses` contains human-readable descriptions while `markers` contains machine-readable codes. Classic/raw/JSON modes do not receive an extra human-readable footer. `--output` writes the same plain stop line to the log without ANSI escapes.
+
+`--no-stop-reason` hides all `Trace Stopped: ...` summaries in both the terminal and `--output` / `--output-default` files; they remain visible by default. Available in full and tiny builds, not ntr. It applies to normal traceroute, Fast Trace, and file-based batch tracing. It does not change mode selection, probe termination, or JSON/API stop reasons, and has no effect in other modes that accept it.
 
 When multiple normal-trace output modes are selected, precedence is `--json` > `--table` > `--classic` > `--raw` > `--output` > realtime output. If a higher-priority mode overrides an explicit `--output` or `--output-default`, NextTrace reports that choice on stderr and does not create the ignored log file.
 
@@ -711,11 +716,13 @@ nexttrace -w --mtr-columns received,snt,last 1.1.1.1
 ntr --mtr-columns received 1.1.1.1
 ```
 
-`--mtr-columns` accepts any nonempty selection of `loss,snt,received,last,avg,best,wrst,stdev`, in the supplied order. Names ignore case and surrounding spaces; unknown names, duplicates and empty entries are errors. `received` is displayed as `Rcv`. The default remains `Loss%, Snt, Last, Avg, Best, Wrst, StDev`.
+`--mtr-columns` accepts any nonempty selection of `loss,snt,received,last,avg,best,wrst,stdev,dropped,gmean,jitter,javg,jmax,jint,space`, in the supplied order. Names ignore case and surrounding spaces; unknown names, duplicate metrics and empty entries are errors. `space` adds one display space and may repeat; at least one metric is required. `received` is displayed as `Rcv`. The default remains `Loss%, Snt, Last, Avg, Best, Wrst, StDev`.
 
 The option applies to TUI, non-TTY tables and report/wide output, including offline replay text output. It does not enable MTR: full/tiny require `-t`, `-r` or `-w`; ntr uses its default MTR mode. RAW, JSON, traditional traceroute and other standalone modes reject it before initialization. Custom TUI columns keep complete numbers and at least 8 Host cells; a narrow terminal shows a notice until widened or fewer columns are selected.
 
-Press `o/O` to edit the current column codes: `L=Loss S=Snt R=Received N=Last A=Avg B=Best W=Wrst V=StDev`. Codes ignore case; spaces separate codes. Enter validates and applies, Esc cancels, Backspace deletes and Ctrl-U clears. Invalid or duplicate codes and an empty draft keep the editor open. Bracketed paste converts newlines to spaces without submitting. The draft is limited to 256 ASCII characters.
+Press `o/O` to edit the current column codes: `L=Loss D=Drop R=Received S=Snt N=Last B=Best A=Avg W=Wrst V=StDev G=Gmean J=Jttr M=Javg X=Jmax I=Jint`. Codes ignore case; each space adds one display space. Leading, trailing and repeated spaces are preserved. Enter validates and applies, Esc cancels, Backspace deletes and Ctrl-U clears. Invalid or duplicate metric codes, an empty draft and a spaces-only draft keep the editor open. Bracketed paste converts newlines to spaces without submitting. The draft is limited to 256 ASCII characters.
+
+The `Fields:` page lists every code on a separate line. See [MTR column metrics](docs/mtr-columns.md) for formulas, spacing examples and JSON fields.
 
 While editing, other shortcuts are inactive and Ctrl-C still exits. Editing does not pause probes, reset counters or change the paused state. Applying a selection from history view returns to the statistics table; cancellation preserves the view. History columns stay fixed. Changes last only for this session; editing and resizing work while paused.
 
@@ -952,7 +959,7 @@ usage: nexttrace [-h|--help] [-4|--ipv4] [-6|--ipv6] [-T|--tcp] [-U|--udp]
                  (IP.SB|ip.sb|IPInfo|ipinfo|IPInsight|ipinsight|IPAPI.com|ip-api.com|IPInfoLocal|ipinfolocal|chunzhen|NextTrace-API|ipdb.one|disable-geoip|DN42|dn42)]
                  [--pow-provider (api.nxtrace.org|sakura)] [-n|--no-rdns]
                  [-a|--always-rdns] [-k|--traceroute] [-P|--route-path]
-                 [-o|--output "<value>"] [-O|--output-default] [--table]
+                 [-o|--output "<value>"] [-O|--output-default] [--no-stop-reason] [--table]
                  [-j|--json] [-c|--classic] [--dn42] [--raw] [-f|--first
                  <integer>] [-M|--map] [-e|--disable-mpls] [-V|--version]
                  [-x|--setup-api-v4-token] [-l|--dns] [--speed] [--nali]
@@ -1020,6 +1027,8 @@ Arguments:
   -O  --output-default               Write realtime trace output and final stop
                                      reason to the default log file
                                      (/tmp/trace.log)
+      --no-stop-reason               Hide the traceroute stop summary in
+                                     terminal and output files
       --table                        Output trace results as a final summary
                                      table (traceroute report mode)
   -j  --json                         Output JSON; MTR streams NDJSON unless
@@ -1099,9 +1108,10 @@ Arguments:
   -w  --wide                         MTR wide report mode (implies --mtr
                                      --report); alone equals --mtr --report
                                      --wide
-      --mtr-columns                  MTR text columns in order: loss,snt,
-                                     received,last,avg,best,wrst,stdev;
-                                     does not enable MTR
+      --mtr-columns                  MTR text columns in order: loss, snt,
+                                     received, last, avg, best, wrst, stdev,
+                                     dropped, gmean, jitter, javg, jmax, jint,
+                                     space (does not enable MTR)
       --show-ips                     MTR only: display both PTR hostnames and
                                      numeric IPs (PTR first, IP in parentheses)
   -y  --ipinfo                       Set initial MTR TUI host info mode (0-4).

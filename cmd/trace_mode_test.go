@@ -100,7 +100,7 @@ func TestModeFlagsMatchFlavorCapabilities(t *testing.T) {
 	registerPacketIntervalFlag(parser)
 	registerFileFlag(parser)
 	usage := parser.Usage(nil)
-	for _, flag := range []string{"--traceroute", "--classic", "--output", "--send-time", "--file"} {
+	for _, flag := range []string{"--traceroute", "--classic", "--output", "--send-time", "--file", "--no-stop-reason"} {
 		if strings.Contains(usage, flag) != enableTraceroute {
 			t.Errorf("%s availability incorrect in %s", flag, appBinName)
 		}
@@ -179,5 +179,20 @@ func TestEarlyModesRejectTracerouteBeforeTerminator(t *testing.T) {
 		if !handled || code != 1 || out.Len() != 0 || !strings.Contains(errOut.String(), "cannot be combined") {
 			t.Fatalf("speed: %v/%d stdout %q stderr %q", handled, code, out.String(), errOut.String())
 		}
+	}
+}
+
+func TestNoStopReasonFlagAvailability(t *testing.T) {
+	parser := argparse.NewParser(appBinName, "")
+	flags := registerTracerouteOutputFlags(parser)
+	if *flags.noStopReason {
+		t.Fatal("stop reason hidden by default")
+	}
+	err := parser.Parse([]string{appBinName, "--no-stop-reason"})
+	if (err == nil) != enableTraceroute {
+		t.Fatalf("--no-stop-reason parse in %s: %v", appBinName, err)
+	}
+	if *flags.noStopReason != enableTraceroute {
+		t.Fatalf("--no-stop-reason value in %s = %v", appBinName, *flags.noStopReason)
 	}
 }

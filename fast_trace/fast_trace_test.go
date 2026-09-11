@@ -111,71 +111,83 @@ func TestFastTraceStopReasonReachesTerminalAndOutputFile(t *testing.T) {
 
 	tests := []struct {
 		name string
-		run  func(outputPath string)
+		run  func(params ParamsFastTrace)
 	}{
 		{
 			name: "file target",
-			run: func(outputPath string) {
-				runFileTraceTarget(fastTraceTestParams(outputPath), trace.ICMPTrace, IpListElement{Ip: "192.0.2.1", Desc: "file target", Version4: true})
+			run: func(params ParamsFastTrace) {
+				runFileTraceTarget(params, trace.ICMPTrace, IpListElement{Ip: "192.0.2.1", Desc: "file target", Version4: true})
 			},
 		},
 		{
 			name: "IPv4 interactive target",
-			run: func(outputPath string) {
-				f := FastTracer{TracerouteMethod: trace.ICMPTrace, ParamsFastTrace: fastTraceTestParams(outputPath)}
+			run: func(params ParamsFastTrace) {
+				f := FastTracer{TracerouteMethod: trace.ICMPTrace, ParamsFastTrace: params}
 				f.tracert("test", ISPCollection{ISPName: "ISP", IP: "192.0.2.1"})
 			},
 		},
 		{
 			name: "IPv6 interactive target",
-			run: func(outputPath string) {
-				f := FastTracer{TracerouteMethod: trace.ICMPTrace, ParamsFastTrace: fastTraceTestParams(outputPath)}
+			run: func(params ParamsFastTrace) {
+				f := FastTracer{TracerouteMethod: trace.ICMPTrace, ParamsFastTrace: params}
 				f.tracert_v6("test", ISPCollection{ISPName: "ISP", IPv6: "2001:db8::1"})
 			},
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var terminal bytes.Buffer
-			var styledHop bool
-			var calls int
-			fastTraceTracerouteFn = func(_ trace.Method, conf trace.Config) (*trace.Result, error) {
-				calls++
-				if conf.RealtimePrinter == nil {
-					t.Fatal("RealtimePrinter = nil, want configured output printer")
+	for _, hidden := range []bool{false, true} {
+		for _, tt := range tests {
+			name := tt.name
+			if hidden {
+				name += "/hidden"
+			}
+			t.Run(name, func(t *testing.T) {
+				var terminal bytes.Buffer
+				var styledHop bool
+				var calls int
+				fastTraceTracerouteFn = func(_ trace.Method, conf trace.Config) (*trace.Result, error) {
+					calls++
+					if conf.RealtimePrinter == nil {
+						t.Fatal("RealtimePrinter = nil, want configured output printer")
+					}
+					before := terminal.Len()
+					conf.RealtimePrinter(&trace.Result{Hops: [][]trace.Hop{{}}}, 0)
+					styledHop = strings.Contains(terminal.String()[before:], "\x1b[")
+					return &trace.Result{StopReason: reason}, nil
 				}
-				before := terminal.Len()
-				conf.RealtimePrinter(&trace.Result{Hops: [][]trace.Hop{{}}}, 0)
-				styledHop = strings.Contains(terminal.String()[before:], "\x1b[")
-				return &trace.Result{StopReason: reason}, nil
-			}
-			color.Output = &terminal
-			color.NoColor = false
-			outputPath := filepath.Join(t.TempDir(), "trace.log")
+				color.Output = &terminal
+				color.NoColor = false
+				outputPath := filepath.Join(t.TempDir(), "trace.log")
 
-			tt.run(outputPath)
+				params := fastTraceTestParams(outputPath)
+				params.NoStopReason = hidden
+				tt.run(params)
+				wantCount := 1
+				if hidden {
+					wantCount = 0
+				}
 
-			if calls != 1 {
-				t.Fatalf("Traceroute calls = %d, want 1", calls)
-			}
-			if !styledHop {
-				t.Fatalf("terminal hop output is not styled: %q", terminal.String())
-			}
-			if got := strings.Count(terminal.String(), "Trace Stopped:"); got != 1 {
-				t.Fatalf("terminal stop reason count = %d, want 1; output=%q", got, terminal.String())
-			}
-			fileOutput, err := os.ReadFile(outputPath)
-			if err != nil {
-				t.Fatalf("ReadFile output: %v", err)
-			}
-			if got := strings.Count(string(fileOutput), "Trace Stopped:"); got != 1 {
-				t.Fatalf("file stop reason count = %d, want 1; output=%q", got, fileOutput)
-			}
-			if bytes.Contains(fileOutput, []byte("\x1b[")) {
-				t.Fatalf("file contains ANSI escapes: %q", fileOutput)
-			}
-		})
+				if calls != 1 {
+					t.Fatalf("Traceroute calls = %d, want 1", calls)
+				}
+				if !styledHop {
+					t.Fatalf("terminal hop output is not styled: %q", terminal.String())
+				}
+				if got := strings.Count(terminal.String(), "Trace Stopped:"); got != wantCount {
+					t.Fatalf("terminal stop reason count = %d, want %d; output=%q", got, wantCount, terminal.String())
+				}
+				fileOutput, err := os.ReadFile(outputPath)
+				if err != nil {
+					t.Fatalf("ReadFile output: %v", err)
+				}
+				if got := strings.Count(string(fileOutput), "Trace Stopped:"); got != wantCount {
+					t.Fatalf("file stop reason count = %d, want %d; output=%q", got, wantCount, fileOutput)
+				}
+				if bytes.Contains(fileOutput, []byte("\x1b[")) {
+					t.Fatalf("file contains ANSI escapes: %q", fileOutput)
+				}
+			})
+		}
 	}
 }
 
@@ -246,56 +258,73 @@ func TestFileTraceWritesStopReasonForEveryTarget(t *testing.T) {
 		color.NoColor = previousNoColor
 	})
 
-	reasons := []*trace.StopReason{
-		{Hop: 2, Reason: trace.StopReasonDestination, Responses: []string{"ICMP Echo Reply"}},
-		{Hop: 4, Reason: trace.StopReasonUnreachable, Responses: []string{"ICMP Host Unreachable"}, Markers: []string{"!H"}},
-	}
-	var calls int
-	fastTraceTracerouteFn = func(trace.Method, trace.Config) (*trace.Result, error) {
-		if calls >= len(reasons) {
-			t.Fatalf("unexpected traceroute call %d", calls+1)
+	for _, hidden := range []bool{false, true} {
+		name := "visible"
+		if hidden {
+			name = "hidden"
 		}
-		reason := reasons[calls]
-		calls++
-		return &trace.Result{StopReason: reason}, nil
-	}
+		t.Run(name, func(t *testing.T) {
+			reasons := []*trace.StopReason{
+				{Hop: 2, Reason: trace.StopReasonDestination, Responses: []string{"ICMP Echo Reply"}},
+				{Hop: 4, Reason: trace.StopReasonUnreachable, Responses: []string{"ICMP Host Unreachable"}, Markers: []string{"!H"}},
+				{Hop: 30, Reason: trace.StopReasonMaxHops},
+			}
+			var calls int
+			fastTraceTracerouteFn = func(trace.Method, trace.Config) (*trace.Result, error) {
+				if calls >= len(reasons) {
+					t.Fatalf("unexpected traceroute call %d", calls+1)
+				}
+				reason := reasons[calls]
+				calls++
+				return &trace.Result{StopReason: reason}, nil
+			}
 
-	dir := t.TempDir()
-	targetsPath := filepath.Join(dir, "targets.txt")
-	if err := os.WriteFile(targetsPath, []byte("192.0.2.1 first\n2001:db8::1 second\n"), 0o600); err != nil {
-		t.Fatalf("WriteFile targets: %v", err)
-	}
-	outputPath := filepath.Join(dir, "trace.log")
-	var terminal bytes.Buffer
-	color.Output = &terminal
-	color.NoColor = true
+			dir := t.TempDir()
+			targetsPath := filepath.Join(dir, "targets.txt")
+			if err := os.WriteFile(targetsPath, []byte("192.0.2.1 first\n2001:db8::1 second\n192.0.2.2 third\n"), 0o600); err != nil {
+				t.Fatalf("WriteFile targets: %v", err)
+			}
+			outputPath := filepath.Join(dir, "trace.log")
+			var terminal bytes.Buffer
+			color.Output = &terminal
+			color.NoColor = true
 
-	testFile(ParamsFastTrace{
-		Context:         context.Background(),
-		File:            targetsPath,
-		MaxHops:         30,
-		Timeout:         time.Second,
-		OutputPath:      outputPath,
-		RuntimePrepared: true,
-	}, trace.ICMPTrace)
+			testFile(ParamsFastTrace{
+				Context:         context.Background(),
+				File:            targetsPath,
+				MaxHops:         30,
+				Timeout:         time.Second,
+				OutputPath:      outputPath,
+				NoStopReason:    hidden,
+				RuntimePrepared: true,
+			}, trace.ICMPTrace)
 
-	if calls != len(reasons) {
-		t.Fatalf("Traceroute calls = %d, want %d", calls, len(reasons))
-	}
-	if got := strings.Count(terminal.String(), "Trace Stopped:"); got != len(reasons) {
-		t.Fatalf("terminal stop reason count = %d, want %d; output=%q", got, len(reasons), terminal.String())
-	}
-	fileOutput, err := os.ReadFile(outputPath)
-	if err != nil {
-		t.Fatalf("ReadFile output: %v", err)
-	}
-	if got := strings.Count(string(fileOutput), "Trace Stopped:"); got != len(reasons) {
-		t.Fatalf("file stop reason count = %d, want %d; output=%q", got, len(reasons), fileOutput)
-	}
-	first := strings.Index(string(fileOutput), "Destination Reached at Hop 2")
-	second := strings.Index(string(fileOutput), "No Continuing Route Observed at Hop 4")
-	if first < 0 || second < 0 || first >= second {
-		t.Fatalf("file stop reasons out of order: %q", fileOutput)
+			if calls != len(reasons) {
+				t.Fatalf("Traceroute calls = %d, want %d", calls, len(reasons))
+			}
+			wantCount := len(reasons)
+			if hidden {
+				wantCount = 0
+			}
+			if got := strings.Count(terminal.String(), "Trace Stopped:"); got != wantCount {
+				t.Fatalf("terminal stop reason count = %d, want %d; output=%q", got, wantCount, terminal.String())
+			}
+			fileOutput, err := os.ReadFile(outputPath)
+			if err != nil {
+				t.Fatalf("ReadFile output: %v", err)
+			}
+			if got := strings.Count(string(fileOutput), "Trace Stopped:"); got != wantCount {
+				t.Fatalf("file stop reason count = %d, want %d; output=%q", got, wantCount, fileOutput)
+			}
+			if hidden {
+				return
+			}
+			first := strings.Index(string(fileOutput), "Destination Reached at Hop 2")
+			second := strings.Index(string(fileOutput), "No Continuing Route Observed at Hop 4")
+			if first < 0 || second < 0 || first >= second {
+				t.Fatalf("file stop reasons out of order: %q", fileOutput)
+			}
+		})
 	}
 }
 

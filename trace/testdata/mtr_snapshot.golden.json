@@ -2,6 +2,12 @@
   "iteration": 3,
   "stats": [
     {
+      "dropped": 1,
+      "gmean_ms": 10.000000000000002,
+      "jitter_ms": 0,
+      "jitter_avg_ms": 0,
+      "jitter_max_ms": 0,
+      "jitter_interarrival_ms": 0,
       "ttl": 1,
       "host": "edge.example",
       "ip": "192.0.2.1",
@@ -19,6 +25,12 @@
       "received": 1
     },
     {
+      "dropped": 0,
+      "gmean_ms": 19.999999999999996,
+      "jitter_ms": 0,
+      "jitter_avg_ms": 0,
+      "jitter_max_ms": 0,
+      "jitter_interarrival_ms": 0,
       "ttl": 2,
       "host": "core-a.example",
       "ip": "198.51.100.1",
@@ -32,6 +44,12 @@
       "received": 1
     },
     {
+      "dropped": 0,
+      "gmean_ms": 30.000000000000004,
+      "jitter_ms": 0,
+      "jitter_avg_ms": 0,
+      "jitter_max_ms": 0,
+      "jitter_interarrival_ms": 0,
       "ttl": 2,
       "host": "core-b.example",
       "ip": "198.51.100.2",
@@ -45,6 +63,12 @@
       "received": 1
     },
     {
+      "dropped": 1,
+      "gmean_ms": 0,
+      "jitter_ms": 0,
+      "jitter_avg_ms": 0,
+      "jitter_max_ms": 0,
+      "jitter_interarrival_ms": 0,
       "ttl": 2,
       "loss_percent": 100,
       "snt": 1,
@@ -56,6 +80,12 @@
       "received": 0
     },
     {
+      "dropped": 0,
+      "gmean_ms": 40,
+      "jitter_ms": 0,
+      "jitter_avg_ms": 0,
+      "jitter_max_ms": 0,
+      "jitter_interarrival_ms": 0,
       "ttl": 3,
       "ip": "2001:db8::3",
       "loss_percent": 0,

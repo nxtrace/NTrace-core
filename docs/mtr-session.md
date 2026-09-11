@@ -195,3 +195,15 @@ go to stderr. A completed probe session is not itself a reachability verdict.
 Recordings contain target, source and responder addresses and available
 metadata. Redact those fields before attaching files to a public issue when
 they identify private infrastructure.
+
+## Extended column statistics
+
+Replay recomputes dropped packets, geometric mean and jitter from the recorded
+successful RTTs in event sequence order, not completion-timestamp order. Existing
+recordings need no conversion. See [column metrics](mtr-columns.md).
+
+The recording schema stays unchanged. A new recording may name additional
+columns (including `space`) in `display.columns`. Older binaries need an explicit
+supported `--mtr-columns` selection for text replay of such a recording; JSON
+replay does not parse display columns. Interactive column edits remain local to
+the display and do not rewrite the recording's initial column selection.

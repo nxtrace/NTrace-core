@@ -652,15 +652,9 @@ func TestSelectTraceOutputModePriority(t *testing.T) {
 }
 
 func TestTraceOutputPlanStopReasonVisibility(t *testing.T) {
-	previousOutput := color.Output
-	previousNoColor := color.NoColor
-	defer func() {
-		color.Output = previousOutput
-		color.NoColor = previousNoColor
-	}()
+	previousOutput, previousNoColor := color.Output, color.NoColor
+	t.Cleanup(func() { color.Output, color.NoColor = previousOutput, previousNoColor })
 	color.NoColor = true
-
-	reason := &trace.StopReason{Hop: 5, Reason: trace.StopReasonDestination}
 	tests := []struct {
 		name string
 		mode traceOutputMode
@@ -673,19 +667,59 @@ func TestTraceOutputPlanStopReasonVisibility(t *testing.T) {
 		{name: "raw", mode: traceOutputRaw},
 		{name: "JSON", mode: traceOutputJSON},
 	}
-
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var terminal bytes.Buffer
-			color.Output = &terminal
-			plan := &traceOutputPlan{mode: tt.mode}
-			if err := plan.printStopReason(reason); err != nil {
-				t.Fatalf("printStopReason() error = %v", err)
+		for _, reasonCode := range []string{trace.StopReasonDestination, trace.StopReasonUnreachable, trace.StopReasonMaxHops} {
+			for _, hidden := range []bool{false, true} {
+				name := tt.name + "/" + reasonCode
+				if hidden {
+					name += "/hidden"
+				}
+				t.Run(name, func(t *testing.T) {
+					var terminal bytes.Buffer
+					color.Output = &terminal
+					path := ""
+					if tt.mode == traceOutputFile {
+						path = filepath.Join(t.TempDir(), "trace.log")
+					}
+					plan, err := configureTracePrinters(&trace.Config{}, tt.mode, path, hidden)
+					if err != nil {
+						t.Fatal(err)
+					}
+					reason := &trace.StopReason{Hop: 5, Reason: reasonCode, Responses: []string{"response"}, Markers: []string{"!H"}}
+					res := &trace.Result{StopReason: reason}
+					before, err := json.Marshal(res)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if err := plan.printStopReason(reason); err != nil {
+						t.Fatal(err)
+					}
+					if err := plan.close(); err != nil {
+						t.Fatal(err)
+					}
+					want := tt.want && !hidden
+					if got := strings.Contains(terminal.String(), "Trace Stopped:"); got != want {
+						t.Fatalf("terminal stop reason present = %v, want %v; output=%q", got, want, terminal.String())
+					}
+					if path != "" {
+						data, err := os.ReadFile(path)
+						if err != nil {
+							t.Fatal(err)
+						}
+						if got := strings.Contains(string(data), "Trace Stopped:"); got != want {
+							t.Fatalf("file stop reason present = %v, want %v; output=%q", got, want, data)
+						}
+					}
+					after, err := json.Marshal(res)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if !bytes.Equal(before, after) {
+						t.Fatalf("structured result changed: %s -> %s", before, after)
+					}
+				})
 			}
-			if got := strings.Contains(terminal.String(), "Trace Stopped:"); got != tt.want {
-				t.Fatalf("terminal stop reason present = %v, want %v; output=%q", got, tt.want, terminal.String())
-			}
-		})
+		}
 	}
 }
 
@@ -744,7 +778,7 @@ func TestJSONOutputOverridesFileWithoutSideEffects(t *testing.T) {
 		RealtimePrinter: func(*trace.Result, int) {},
 		AsyncPrinter:    func(*trace.Result) {},
 	}
-	plan, err := configureTracePrinters(&conf, mode, path)
+	plan, err := configureTracePrinters(&conf, mode, path, false)
 	if err != nil {
 		t.Fatalf("configureTracePrinters() error = %v", err)
 	}
@@ -780,7 +814,7 @@ func TestTraceOutputFileWritesPlainStopReason(t *testing.T) {
 	color.NoColor = false
 	path := filepath.Join(t.TempDir(), "trace.log")
 	conf := trace.Config{}
-	plan, err := configureTracePrinters(&conf, traceOutputFile, path)
+	plan, err := configureTracePrinters(&conf, traceOutputFile, path, false)
 	if err != nil {
 		t.Fatalf("configureTracePrinters() error = %v", err)
 	}
@@ -832,7 +866,7 @@ func TestTraceOutputFileStillWritesWhenTerminalFails(t *testing.T) {
 	color.Output = failingCmdOutputWriter{}
 	color.NoColor = true
 	path := filepath.Join(t.TempDir(), "trace.log")
-	plan, err := configureTracePrinters(&trace.Config{}, traceOutputFile, path)
+	plan, err := configureTracePrinters(&trace.Config{}, traceOutputFile, path, false)
 	if err != nil {
 		t.Fatalf("configureTracePrinters() error = %v", err)
 	}

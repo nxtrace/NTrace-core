@@ -11,20 +11,26 @@ import (
 
 // MTRHopStat 表示 MTR 输出中一行统计数据。
 type MTRHopStat struct {
-	TTL      int               `json:"ttl"`
-	Host     string            `json:"host,omitempty"`
-	IP       string            `json:"ip,omitempty"`
-	Loss     float64           `json:"loss_percent"`
-	Snt      int               `json:"snt"`
-	Last     float64           `json:"last_ms"`
-	Avg      float64           `json:"avg_ms"`
-	Best     float64           `json:"best_ms"`
-	Wrst     float64           `json:"wrst_ms"`
-	StDev    float64           `json:"stdev_ms"`
-	Geo      *ipgeo.IPGeoData  `json:"geo,omitempty"`
-	MPLS     []string          `json:"mpls,omitempty"`
-	Received int               `json:"received"`
-	Response *MTRProbeResponse `json:"response,omitempty"`
+	Dropped            int               `json:"dropped" jsonschema:"Completed probes without a reply on this responder row"`
+	GMean              float64           `json:"gmean_ms" jsonschema:"Geometric mean of successful RTTs in milliseconds"`
+	Jitter             float64           `json:"jitter_ms" jsonschema:"Absolute difference between successive successful RTTs in milliseconds"`
+	JitterAvg          float64           `json:"jitter_avg_ms" jsonschema:"Mean jitter including the first zero sample in milliseconds"`
+	JitterMax          float64           `json:"jitter_max_ms" jsonschema:"Maximum jitter in milliseconds"`
+	JitterInterarrival float64           `json:"jitter_interarrival_ms" jsonschema:"mtr-scale interarrival accumulator in milliseconds: I = 15/16 I + jitter, not the divided RFC estimate"`
+	TTL                int               `json:"ttl"`
+	Host               string            `json:"host,omitempty"`
+	IP                 string            `json:"ip,omitempty"`
+	Loss               float64           `json:"loss_percent"`
+	Snt                int               `json:"snt"`
+	Last               float64           `json:"last_ms"`
+	Avg                float64           `json:"avg_ms"`
+	Best               float64           `json:"best_ms"`
+	Wrst               float64           `json:"wrst_ms"`
+	StDev              float64           `json:"stdev_ms"`
+	Geo                *ipgeo.IPGeoData  `json:"geo,omitempty"`
+	MPLS               []string          `json:"mpls,omitempty"`
+	Received           int               `json:"received"`
+	Response           *MTRProbeResponse `json:"response,omitempty"`
 }
 
 // MTRSnapshot 是某一时刻的完整快照。
@@ -52,21 +58,28 @@ type mtrHopIdentity struct {
 }
 
 type mtrHopAccum struct {
-	identity   mtrHopIdentity
-	host       string
-	ip         string
-	sent       int
-	received   int
-	sum        float64
-	sumSq      float64 // Σ(rtt²)，用于在线方差
-	last       float64
-	best       float64
-	worst      float64
-	geo        *ipgeo.IPGeoData
-	order      uint64
-	mplsSet    map[string]struct{}
-	seenUpdate uint64
-	geoUpdate  uint64
+	identity           mtrHopIdentity
+	host               string
+	ip                 string
+	sent               int
+	received           int
+	sum                float64
+	sumSq              float64 // Σ(rtt²)，用于在线方差
+	logSum             float64
+	hasZeroRTT         bool
+	first              float64
+	jitter             float64
+	jitterSum          float64
+	jitterMax          float64
+	jitterInterarrival float64
+	last               float64
+	best               float64
+	worst              float64
+	geo                *ipgeo.IPGeoData
+	order              uint64
+	mplsSet            map[string]struct{}
+	seenUpdate         uint64
+	geoUpdate          uint64
 }
 
 // mtrTTLBucket keeps rows in first-observation order. index points into rows,

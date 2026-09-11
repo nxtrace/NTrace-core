@@ -29,11 +29,11 @@ def main(binary):
         master, slave = pty.openpty()
         original = termios.tcgetattr(slave)
 
-    def resize(width):
+    def resize(width, height=32):
         if windows:
-            process.setwinsize(32, width)
+            process.setwinsize(height, width)
         else:
-            fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 32, width, 0, 0))
+            fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", height, width, 0, 0))
 
     def read(seconds=0.3):
         end = time.monotonic() + seconds
@@ -71,8 +71,12 @@ def main(binary):
         assert rows, text
         return rows[-1].split()
 
-    command = [
-        os.path.abspath(binary), "-t", "--mtr-columns", "loss,snt,received,avg",
+    help_result = subprocess.run([binary, "--help"], capture_output=True, text=True,
+                                 check=True, timeout=10)
+    # ntr defaults to MTR and does not register --mtr.
+    mode = ["--mtr"] if re.search(r"^\s+-t\s+--mtr\s", help_result.stdout, re.M) else []
+    command = [os.path.abspath(binary)] + mode + [
+        "--mtr-columns", "loss,snt,received,avg",
         "-d", "disable-geoip", "-n", "-s", "127.0.0.1", "-m", "1",
         "-i", "100", "--timeout", "100", "--no-color", "127.0.0.1",
     ]
@@ -88,9 +92,9 @@ def main(binary):
         send("p")
         paused = expect("Paused") + read(0.6)  # Drain any in-flight probes.
         send("o")
-        expect("Columns: LSRA_", "\x1b[?2004h")
+        expect("Fields: LSRA_", "\x1b[?2004h")
         send("\x15\x1b[200~r\nl s n a b w v\x1b[201~")
-        expect("Columns: r l s n a b w v_")
+        expect("Fields: r l s n a b w v_")
         send("\r")
         applied = expect("Rcv", "Last", "Paused", "\x1b[?2004l")
         old, new = counters(paused), counters(applied)
@@ -99,7 +103,7 @@ def main(binary):
         resize(24)
         expect("Select fewer columns")
         send("o")
-        expect("Columns: RLSNABWV_", "R=Received", "N=Last")
+        expect("Fields: R L S N A B W V_", "R: Received", "N: Newest")
         send("\x15l\x1b")
         expect("Select fewer columns")  # Bare Esc needs no subsequent read.
         resize(120)
@@ -109,6 +113,19 @@ def main(binary):
         send("o\x15ar\r")
         applied = expect("Avg", "Rcv", "Paused")
         assert "History" not in applied.split("\x1b[H\x1b[2J")[-1], applied
+        resize(160, 24)
+        send("o")
+        expect("Fields:", "G: Geometric Mean", "I: Interarrival Jitter")
+        send("\x15 DRSGJMXI \r")
+        expect("Drop", "Gmean", "Jttr", "Javg", "Jmax", "Jint", "Paused")
+        send("o")
+        expect("Fields:  DRSGJMXI _")
+        resize(80, 10)
+        expect("Fields:  DRSGJMXI _", "Enlarge terminal", "Enter: apply")
+        send("\x15GG\r")
+        expect("duplicate MTR column gmean")
+        send("\x1b")
+        expect("Drop", "Jint", "Paused")
         send("q")
         expect("\x1b[?1049l", "\x1b[?25h")
         if windows:
@@ -126,7 +143,8 @@ def main(binary):
             "checks": ["loopback probes", "pause", "prefill", "paste newline",
                        "apply", "unchanged paused counters", "narrow notice",
                        "narrow editor", "bare Esc", "resize while paused",
-                       "history apply", "terminal restore"],
+                       "history apply", "expanded metrics", "space roundtrip",
+                       "short editor", "duplicate metric", "terminal restore"],
         }, indent=2))
     finally:
         if windows:

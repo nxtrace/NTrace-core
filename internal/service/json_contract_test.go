@@ -51,7 +51,9 @@ func TestServiceJSONContractsGolden(t *testing.T) {
 				Wrst:     1.75,
 				StDev:    0.25,
 				Received: 2,
-				MPLS:     []string{"[MPLS: Lbl 16000, TC 0, S 1, TTL 63]"},
+				Dropped:  1, GMean: 1.479019945774904,
+				Jitter: 0.5, JitterAvg: 0.25, JitterMax: 0.5, JitterInterarrival: 0.5,
+				MPLS: []string{"[MPLS: Lbl 16000, TC 0, S 1, TTL 63]"},
 				Response: &trace.MTRProbeResponse{
 					Kind:        trace.MTRResponseTransit,
 					Description: "ICMP Time Exceeded",

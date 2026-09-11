@@ -40,7 +40,7 @@ func TestMTRColumnEditorApplyCancelAndIsolation(t *testing.T) {
 	}
 	feedMTRKeys(u, &k, "\x15rL\x7f n\r")
 	c, e := u.columnSnapshot()
-	if e.Active || printer.MTRColumnCodes(c) != "RN" || u.IsHistoryMode() || !u.IsPaused() {
+	if e.Active || printer.MTRColumnCodes(c) != "R N" || u.IsHistoryMode() || !u.IsPaused() {
 		t.Fatalf("%v %+v", c, e)
 	}
 	// Invalid/duplicate/empty drafts stay open, cancellation preserves applied columns and view.
@@ -54,14 +54,14 @@ func TestMTRColumnEditorApplyCancelAndIsolation(t *testing.T) {
 		feedMTRKeys(u, &k, "\x1b")
 		k.expireEscape(u, time.Now().Add(mtrEscapeDelay))
 		c, e = u.columnSnapshot()
-		if e.Active || printer.MTRColumnCodes(c) != "RN" || !u.IsHistoryMode() {
+		if e.Active || printer.MTRColumnCodes(c) != "R N" || !u.IsHistoryMode() {
 			t.Fatal("cancel changed state")
 		}
 	}
 	// Returned selection is isolated from callers.
 	c[0] = printer.MTRColumnLoss
 	c, _ = u.columnSnapshot()
-	if printer.MTRColumnCodes(c) != "RN" {
+	if printer.MTRColumnCodes(c) != "R N" {
 		t.Fatal("snapshot aliases state")
 	}
 }
@@ -89,7 +89,7 @@ func TestMTRColumnEditorEscapePasteAndLimit(t *testing.T) {
 	}
 	feedMTRKeys(u, &k, "\r")
 	c, e := u.columnSnapshot()
-	if e.Active || printer.MTRColumnCodes(c) != "RNL" {
+	if e.Active || printer.MTRColumnCodes(c) != "R  N  L" {
 		t.Fatal(c, e)
 	}
 	feedMTRKeys(u, &k, "o\x15"+strings.Repeat("a", 300))
@@ -203,5 +203,22 @@ func TestMTRRedrawInitialPausedResizeAndCleanup(t *testing.T) {
 	time.Sleep(120 * time.Millisecond)
 	if renders.Load() != count {
 		t.Fatal("wrote after cleanup")
+	}
+}
+
+func TestMTRColumnEditorNewCodesKeepReplayShortcutsIsolated(t *testing.T) {
+	u := newMTRUI(nil, 0)
+	u.replay = &mtrReplayControls{commands: make(chan mtrReplayCommand, 1), duration: time.Hour}
+	u.paused.Store(true)
+	var k mtrKeyInput
+	feedMTRKeys(u, &k, "o\x15 DGJMXI \r")
+	columns, editor := u.columnSnapshot()
+	if editor.Active || printer.MTRColumnCodes(columns) != " DGJMXI " || u.replayEditor.Active || !u.IsPaused() {
+		t.Fatalf("%v %+v", columns, editor)
+	}
+	feedMTRKeys(u, &k, "o")
+	_, editor = u.columnSnapshot()
+	if editor.Draft != " DGJMXI " {
+		t.Fatal(editor)
 	}
 }

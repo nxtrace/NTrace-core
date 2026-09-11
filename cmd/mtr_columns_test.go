@@ -56,7 +56,7 @@ func TestMTRColumnsModeContract(t *testing.T) {
 func TestMTRColumnsCLIRejectsBeforeInitialization(t *testing.T) {
 	cases := [][]string{
 		{"-r", "--mtr-columns", "loss,LOSS"}, {"-r", "--mtr-columns", ""},
-		{"-r", "--mtr-columns", "received,"}, {"-r", "--mtr-columns", "jitter"},
+		{"-r", "--mtr-columns", "received,"}, {"-r", "--mtr-columns", "unknown"},
 		{"-r", "--raw", "--mtr-columns", "loss"}, {"-r", "--json", "--mtr-columns", "loss"},
 	}
 	if runtime.GOOS == "windows" {
