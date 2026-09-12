@@ -168,7 +168,8 @@ func runMTRRecorded(ctx context.Context, opts mtrJSONOptions, modes effectiveMTR
 		case mtrRunReport:
 			err = runMTRReport(opts.Method, opts.Config, opts.HopIntervalMs, opts.MaxPerHop, opts.Target, opts.DataProvider, modes.wide, showIPs, recording.event, columns...)
 		default:
-			err = runMTRTUI(opts.Method, opts.Config, opts.HopIntervalMs, opts.MaxPerHop, opts.Target, opts.DataProvider, showIPs, hostMode, recording.event, columns...)
+			err = runMTRTUI(opts.Method, opts.Config, opts.HopIntervalMs, opts.MaxPerHop, opts.Target, opts.DataProvider, showIPs, hostMode, recording.event,
+				mtrTUIOptions{NoSummary: opts.NoSummary, Parameters: out.report.EffectiveParameters}, columns...)
 		}
 	}
 	if cause := context.Cause(ctx); cause != nil && (err == nil || errors.Is(err, context.Canceled)) {

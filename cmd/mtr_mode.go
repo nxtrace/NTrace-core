@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/nxtrace/NTrace-core/config"
+	"github.com/nxtrace/NTrace-core/internal/mtrsession"
 	"github.com/nxtrace/NTrace-core/ipgeo"
 	"github.com/nxtrace/NTrace-core/printer"
 	"github.com/nxtrace/NTrace-core/trace"
@@ -49,7 +50,7 @@ func checkMTRConflicts(flags map[string]bool) (conflict string, ok bool) {
 // runMTRTUI 执行 MTR 交互式 TUI 模式。
 // 当 stdin 为 TTY 时启用全屏 TUI（备用屏幕、按键控制）；
 // 非 TTY 时降级为简单表格刷新。
-func runMTRTUI(method trace.Method, conf trace.Config, hopIntervalMs int, maxPerHop int, domain string, dataOrigin string, showIPs bool, initialDisplayMode int, onEvent func(trace.MTRSessionEvent) error, columns ...printer.MTRColumn) error {
+func runMTRTUI(method trace.Method, conf trace.Config, hopIntervalMs int, maxPerHop int, domain string, dataOrigin string, showIPs bool, initialDisplayMode int, onEvent func(trace.MTRSessionEvent) error, options mtrTUIOptions, columns ...printer.MTRColumn) (runErr error) {
 	if hopIntervalMs <= 0 {
 		hopIntervalMs = 1000
 	}
@@ -60,16 +61,7 @@ func runMTRTUI(method trace.Method, conf trace.Config, hopIntervalMs int, maxPer
 	defer cancel()
 
 	// 初始化 TUI 控制器
-	ui := newMTRUI(cancel, initialDisplayMode)
-	ui.columns = append([]printer.MTRColumn(nil), columns...)
-	ui.Enter()
-	defer ui.Leave()
-
-	// 按键读取协程（非 TTY 时内部 no-op）
-	keysCtx, stopKeys := context.WithCancel(ctx)
-	keysDone := make(chan struct{})
-	go func() { defer close(keysDone); ui.ReadKeysLoop(keysCtx) }()
-	defer func() { stopKeys(); <-keysDone }()
+	ui := newMTRTraceUI(cancel, initialDisplayMode, conf.DisableMPLS, columns)
 
 	startTime := time.Now()
 	target := conf.DstIP.String()
@@ -88,9 +80,49 @@ func runMTRTUI(method trace.Method, conf trace.Config, hopIntervalMs int, maxPer
 	}
 
 	roundConf := normalizeMTRTraceConfig(conf)
+	snapshots := &mtrLiveSnapshots{start: startTime, session: mtrsession.Session{
+		Version: config.Version, Target: domain, ResolvedIP: target, Protocol: string(method), StartedAt: startTime.UTC(),
+		SourceHost: srcHost, SourceIP: srcIP,
+		EffectiveParameters: buildMTRSnapshotParameters(method, roundConf, hopIntervalMs, maxPerHop, dataOrigin, options),
+	}}
+	if snapshots.session.Target == "" {
+		snapshots.session.Target = target
+	}
+	ui.captureSnapshot = func() *printer.MTRSnapshot { return captureMTRDisplay(&snapshots.store, ui, showIPs) }
+	var probeErr error
+	ui.Enter()
+	defer func() {
+		ui.Leave()
+		if err := ui.closeSnapshotSaver(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+		}
+		if ui.IsTTY() && !options.NoSummary {
+			summaryErr := probeErr
+			if summaryErr == nil {
+				summaryErr = context.Cause(ctx)
+			}
+			if err := writeMTRExitSummary(os.Stdout, ui.captureSnapshot(), summaryErr); err != nil {
+				fmt.Fprintf(os.Stderr, "write MTR summary: %v\n", err)
+			}
+		}
+	}()
+	keysCtx, stopKeys := context.WithCancel(ctx)
+	keysDone := make(chan struct{})
+	go func() { defer close(keysDone); ui.ReadKeysLoop(keysCtx) }()
+	defer func() { stopKeys(); <-keysDone }()
 
 	opts := buildMTRInteractiveOptions(ui, hopIntervalMs, maxPerHop)
 	opts.OnEvent = onEvent
+	if ui.IsTTY() {
+		opts.OnEvent = func(event trace.MTRSessionEvent) error {
+			snapshots.event(event)
+			if onEvent != nil {
+				return onEvent(event)
+			}
+			return nil
+		}
+		opts.OnPathEnd = func(reason *trace.StopReason) { snapshots.pathEnd = copyMTRPathEnd(reason) }
+	}
 	history := attachMTRHistoryIfTTY(ui, &opts)
 
 	// TTY 模式下使用 TUI 渲染器 + 暂停支持，非 TTY 使用简单表格
@@ -99,16 +131,21 @@ func runMTRTUI(method trace.Method, conf trace.Config, hopIntervalMs int, maxPer
 		opts.IsPaused = ui.IsPaused
 		var frameColumns []printer.MTRColumn
 		var frameEditor printer.MTRColumnEditor
-		render := printer.MTRTUIPrinter(target, domain, target, config.Version, startTime,
+		var frameSave printer.MTRSaveDialog
+		var frameHelp printer.MTRHelpDialog
+		render := printer.MTRTUIPrinterWithDialogs(target, domain, target, config.Version, startTime,
 			srcHost, srcIP, lang, func() string { return buildAPIInfo(dataOrigin) }, showIPs, ui.IsPaused,
 			ui.CurrentDisplayMode, ui.CurrentNameMode, ui.IsMPLSDisabled,
-			ui.IsHistoryMode, ui.CurrentHistoryChartMode, history.Snapshot, func() ([]printer.MTRColumn, printer.MTRColumnEditor) { return frameColumns, frameEditor })
+			ui.IsHistoryMode, ui.CurrentHistoryChartMode, history.Snapshot, func() ([]printer.MTRColumn, printer.MTRColumnEditor) { return frameColumns, frameEditor },
+			func() (printer.MTRSaveDialog, printer.MTRHelpDialog) { return frameSave, frameHelp })
 		pasteEnabled := false
 		var stopRedraw func()
 		onSnapshot, stopRedraw = startMTRRedraw(ui.redraw, func() (int, int) { w, h, _ := term.GetSize(int(os.Stdout.Fd())); return w, h }, func(n int, stats []trace.MTRHopStat) {
 			frameColumns, frameEditor = ui.columnSnapshot()
-			if frameEditor.Active != pasteEnabled {
-				pasteEnabled = frameEditor.Active
+			frameSave, frameHelp = ui.dialogSnapshot()
+			editing := frameEditor.Active || frameSave.Active || frameHelp.Active
+			if editing != pasteEnabled {
+				pasteEnabled = editing
 				if pasteEnabled {
 					_, _ = fmt.Fprint(os.Stdout, "\033[?2004h")
 				} else {
@@ -117,6 +154,11 @@ func runMTRTUI(method trace.Method, conf trace.Config, hopIntervalMs int, maxPer
 			}
 			render(n, stats)
 		})
+		displaySnapshot := onSnapshot
+		onSnapshot = func(n int, stats []trace.MTRHopStat) {
+			snapshots.snapshot(stats)
+			displaySnapshot(n, stats)
+		}
 		defer stopRedraw()
 	} else {
 		onSnapshot = func(iteration int, stats []trace.MTRHopStat) {
@@ -124,7 +166,15 @@ func runMTRTUI(method trace.Method, conf trace.Config, hopIntervalMs int, maxPer
 		}
 	}
 
-	return mtrRunError(ctx, trace.RunMTR(ctx, method, roundConf, opts, onSnapshot))
+	probeErr = trace.RunMTR(ctx, method, roundConf, opts, onSnapshot)
+	return mtrRunError(ctx, probeErr)
+}
+
+func newMTRTraceUI(cancel context.CancelFunc, initialDisplayMode int, disableMPLS bool, columns []printer.MTRColumn) *mtrUI {
+	ui := newMTRUI(cancel, initialDisplayMode)
+	ui.columns = append([]printer.MTRColumn(nil), columns...)
+	ui.disableMPLS.Store(disableMPLS)
+	return ui
 }
 
 func buildMTRInteractiveOptions(ui *mtrUI, hopIntervalMs int, maxPerHop int) trace.MTROptions {

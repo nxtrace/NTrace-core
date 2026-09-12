@@ -717,9 +717,13 @@ ntr --mtr-columns received 1.1.1.1
 
 编辑期间其他快捷键不生效，Ctrl-C 仍退出；探测、计数及暂停状态保持不变。从历史视图应用列后返回统计表，取消则保留历史视图。历史图表的固定列不变，列选择仅在当前会话有效；暂停期间仍可编辑和调整窗口大小。
 
+实时与回放 TUI 均可按 `s` 将当前累计统计保存为 `txt`、`json` 或独立 `html` 报告。保存窗口中，Tab 切换字段，左右方向键或空格切换格式，Enter 保存，Esc 取消。保存不覆盖已有文件，不暂停或重置探测。报告包含当前统计及显示设置；完整探测历史与离线回放使用 `--mtr-record`。JSON 契约见 [MTR 快照报告](docs/mtr-snapshot.md)。
+
+实时与回放 TUI 恢复终端后，默认输出纯文本摘要。`--no-mtr-summary` 关闭该摘要，不自动开启 MTR，不改变传统 traceroute 及其他 MTR 输出格式；独立模式仍遵守各自的参数规则。按 `?` 查看完整帮助；上下方向键滚动，`?` 或 Esc 关闭帮助，`q` 或 Ctrl-C 退出。
+
 在终端（TTY）中运行时，MTR 模式使用**交互式全屏 TUI**：
 
-- **`q` / `Q`** — 退出（恢复终端，不留下输出）
+- **`q` / `Q`** — 退出并恢复终端
 - **`p`** — 暂停探测
 - **空格** — 恢复探测
 - **`r`** — 重置统计（计数器清零，显示模式保持不变）
@@ -729,6 +733,8 @@ ntr --mtr-columns received 1.1.1.1
   - 启用 `--show-ips`：PTR (IP) ↔ 仅 IP
 - **`e`** — 切换 MPLS 标签显示开/关
 - **`o` / `O`** — 编辑统计列
+- **`s` / `S`** — 保存当前报告
+- **`?`** — 查看完整帮助
 - **`d` / `D`** — 切换可选历史显示；默认 TUI 仍是经典指标表
 - **`g` / `G`** — 仅在历史显示中循环切换 History 图表：heatmap → bars → sparkline
 - TUI 标题栏显示**源 → 目标**路由信息，指定 `--source`/`--dev` 时会展示对应信息。
@@ -944,7 +950,7 @@ usage: nexttrace [-h|--help] [-4|--ipv4] [-6|--ipv6] [-T|--tcp] [-U|--udp]
                  <integer>] [--timeout <integer>] [--psize <integer>] [-Q|--tos
                  <integer>] [--dot-server
                  (dnssb|aliyun|dnspod|google|cloudflare)] [-g|--language
-                 (en|cn)] [-C|--no-color] [--from "<value>"] [-t|--mtr]
+                 (en|cn)] [-C|--no-color] [--from "<value>"] [-t|--mtr] [--no-mtr-summary]
                  [-r|--report] [-w|--wide] [--show-ips] [--mtr-columns <string>] [-y|--ipinfo <integer>]
                  [--mtr-record "<value>"] [--file "<value>"] [TARGET "<value>"]
 
@@ -1078,6 +1084,8 @@ Arguments:
                                      cities, ASNs, ISPs, or cloud regions.
   -t  --mtr                          Enable MTR (My Traceroute) continuous
                                      probing mode
+      --no-mtr-summary               Suppress the summary printed after leaving
+                                     the MTR TUI
   -r  --report                       MTR report mode (non-interactive, implies
                                      --mtr); can trigger MTR without --mtr
   -w  --wide                         MTR wide report mode (implies --mtr

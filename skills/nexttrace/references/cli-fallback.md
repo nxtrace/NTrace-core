@@ -50,6 +50,23 @@ incomplete. Text columns do not change RAW/JSON schemas and cannot accompany
 those output modes. See [JSON](../../../docs/mtr-json.md) and
 [recording/replay](../../../docs/mtr-session.md) for schemas and lifecycle rules.
 
+### TUI reports and help
+
+Live and replay TUI sessions support `s/S` to save the current cumulative
+statistics as `txt`, `json`, or standalone `html`. Tab switches fields;
+Left/Right or Space selects a format, Enter saves, and Esc cancels. Saving
+does not pause/reset probes or playback and never overwrites an existing file.
+The JSON document uses `type: "mtr_snapshot"` and `schema_version: 1`, with the
+current display settings and, for replay, its playback position/completeness.
+It contains no historical events and is not a `--mtr-replay` input.
+See [snapshot reports](../../../docs/mtr-snapshot.md).
+
+The TUI restores the terminal and prints a plain-text summary on exit by
+default. `--no-mtr-summary` suppresses this summary in live and replay TUI,
+does not select MTR, and does not change traditional traceroute or other MTR
+output formats. Standalone modes retain their own accepted options. `?` opens
+complete help; Up/Down scroll, `?` or Esc closes it, and `q` or Ctrl-C exits.
+
 ### Environment check and Linux marks
 
 ```sh

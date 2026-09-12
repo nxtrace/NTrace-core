@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"time"
 	"unicode"
@@ -36,7 +37,7 @@ func (w *mtrReplayOutput) Write(data []byte) (int, error) {
 	return n, err
 }
 
-func runMTRReplayTUI(parent context.Context, reader *mtrsession.Reader, current *mtrReplayCursor, header printer.MTRTUIHeader, duration time.Duration, complete bool, stdout io.Writer) error {
+func runMTRReplayTUI(parent context.Context, reader *mtrsession.Reader, current *mtrReplayCursor, header printer.MTRTUIHeader, duration time.Duration, complete, noSummary bool, stdout io.Writer) (runErr error) {
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 	ui := newMTRUI(cancel, header.DisplayMode)
@@ -46,15 +47,40 @@ func runMTRReplayTUI(parent context.Context, reader *mtrsession.Reader, current 
 	ui.paused.Store(true)
 	ui.replay = &mtrReplayControls{commands: make(chan mtrReplayCommand, 1), duration: duration}
 	ui.replay.cursor.Store(int64(current.cursor))
+	var snapshots mtrSnapshotStore
+	playing := false
+	publishMTRReplaySnapshot(&snapshots, current, duration, complete, false)
+	ui.captureSnapshot = func() *printer.MTRSnapshot {
+		snapshot := captureMTRDisplay(&snapshots, ui, header.ShowIPs)
+		if snapshot != nil && snapshot.Session != nil && snapshot.Session.EffectiveParameters != nil {
+			snapshot.Session.EffectiveParameters.Language = header.Lang
+		}
+		return snapshot
+	}
 	ui.Enter()
-	defer ui.Leave()
+	defer func() {
+		ui.Leave()
+		if err := ui.closeSnapshotSaver(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+		}
+		if !noSummary {
+			if runErr == nil {
+				// Cancellation can stop advance after an accepted record but
+				// before rendering. Failed records may have moved the cursor
+				// without applying their state, so retain the published view on errors.
+				publishMTRReplaySnapshot(&snapshots, current, duration, complete, playing && !ui.IsPaused())
+			}
+			if err := writeMTRExitSummary(stdout, ui.captureSnapshot(), runErr); err != nil {
+				fmt.Fprintf(os.Stderr, "write MTR summary: %v\n", err)
+			}
+		}
+	}()
 	keysDone := make(chan struct{})
 	go func() { defer close(keysDone); ui.ReadKeysLoop(ctx) }()
 	defer func() { cancel(); <-keysDone }()
 	var seekDone chan mtrReplaySeekResult
 	var stopSeek context.CancelFunc
 	var queuedSeek *time.Duration
-	playing := false
 	output := &mtrReplayOutput{w: stdout}
 	baseCursor, baseTime := current.cursor, time.Now()
 	beginSeek := func(at time.Duration) {
@@ -91,8 +117,9 @@ func runMTRReplayTUI(parent context.Context, reader *mtrsession.Reader, current 
 		h.Columns = append([]printer.MTRColumn(nil), ui.columns...)
 		h.ColumnEditor = ui.columnEditor
 		h.ReplayEditor = ui.replayEditor
-		editing := h.ColumnEditor.Active || h.ReplayEditor.Active
 		ui.columnsMu.Unlock()
+		h.SaveDialog, h.HelpDialog = ui.dialogSnapshot()
+		editing := h.ColumnEditor.Active || h.ReplayEditor.Active || h.SaveDialog.Active || h.HelpDialog.Active
 		// The sink retains the first error; render returns it after the frame.
 		if editing {
 			_, _ = fmt.Fprint(output, "\033[?2004h")
@@ -101,6 +128,7 @@ func runMTRReplayTUI(parent context.Context, reader *mtrsession.Reader, current 
 		}
 		snapshot := current.state.Snapshot()
 		h.Iteration = snapshot.Iteration
+		publishMTRReplaySnapshot(&snapshots, current, duration, complete, playing && !ui.IsPaused())
 		printer.MTRTUIRender(output, h, sanitizeMTRReplayStats(snapshot.Stats))
 		return output.err
 	}

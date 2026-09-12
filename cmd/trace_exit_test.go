@@ -45,7 +45,7 @@ func TestTraceRunErrorProcess(t *testing.T) {
 		}
 		maybeRunMTRMode(effectiveMTRModes{mtr: true, report: true}, trace.ICMPTrace,
 			trace.Config{SrcAddr: "127.0.0.1", DstIP: net.IPv4(127, 0, 0, 1)}, true, 1, false, 0,
-			"127.0.0.1", "disable-geoip", false, 0)
+			"127.0.0.1", "disable-geoip", false, 0, mtrTUIOptions{})
 	case "canceled":
 		exitOnTraceRunError(context.Canceled)
 	case "success":
