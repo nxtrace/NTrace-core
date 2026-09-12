@@ -21,6 +21,7 @@ on:
       - ".cross_compile.sh"
       - "scripts/test_nt_install.sh"
       - "scripts/test_mtr_session_pty.py"
+      - "scripts/test_mtr_snapshot_pty.py"
       - "scripts/perf/**"
       - ".github/workflows/*.yml"
   pull_request:
@@ -35,6 +36,7 @@ on:
       - ".cross_compile.sh"
       - "scripts/test_nt_install.sh"
       - "scripts/test_mtr_session_pty.py"
+      - "scripts/test_mtr_snapshot_pty.py"
       - "scripts/perf/**"
       - ".github/workflows/*.yml"
   workflow_dispatch:
@@ -164,6 +166,7 @@ jobs:
             fi
             go build -buildvcs=false "${tags[@]}" -o "${binary}" .
             sudo python3 scripts/test_mtr_session_pty.py "${binary}"
+            sudo python3 scripts/test_mtr_snapshot_pty.py "${binary}"
           done
 
       - name: MTR session recording and replay ConPTY smoke
@@ -179,6 +182,8 @@ jobs:
             go @buildArgs .
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             python scripts/test_mtr_session_pty.py $binary
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            python scripts/test_mtr_snapshot_pty.py $binary
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
 

@@ -726,9 +726,13 @@ The `Fields:` page lists every code on a separate line. See [MTR column metrics]
 
 While editing, other shortcuts are inactive and Ctrl-C still exits. Editing does not pause probes, reset counters or change the paused state. Applying a selection from history view returns to the statistics table; cancellation preserves the view. History columns stay fixed. Changes last only for this session; editing and resizing work while paused.
 
+Live and replay TUI sessions can save the current cumulative statistics as `txt`, `json`, or a standalone `html` report with `s`. In the save dialog, Tab switches fields, Left/Right or Space changes the format, Enter saves, and Esc cancels. Saving never overwrites a file and does not pause or reset probing. Reports contain the current statistics and display settings; use `--mtr-record` for probe history and offline replay. See [MTR snapshot reports](docs/mtr-snapshot.md) for the JSON contract.
+
+After restoring the terminal, live and replay TUI sessions print a plain-text summary by default. Use `--no-mtr-summary` to suppress it. This flag does not enable MTR or change traditional traceroute and other MTR output formats. Standalone modes retain their own accepted options. Press `?` for complete help; Up/Down scroll, `?` or Esc closes help, and `q` or Ctrl-C exits.
+
 When running in a terminal (TTY), MTR mode uses an **interactive full-screen TUI**:
 
-- **`q` / `Q`** — quit (restores terminal, no output left behind)
+- **`q` / `Q`** — quit and restore the terminal
 - **`p`** — pause probing
 - **`SPACE`** — resume probing
 - **`r`** — reset statistics (counters are cleared, display mode is preserved)
@@ -738,6 +742,8 @@ When running in a terminal (TTY), MTR mode uses an **interactive full-screen TUI
   - with `--show-ips`: PTR (IP) ↔ IP only
 - **`e`** — toggle MPLS label display on/off
 - **`o` / `O`** — edit statistic columns
+- **`s` / `S`** — save the current report
+- **`?`** — open complete help
 - **`d` / `D`** — toggle the optional history display; the default TUI remains the classic metric table
 - **`g` / `G`** — in history display only, cycle History chart mode: heatmap → bars → sparkline
 - The TUI header displays **source → destination**, with `--source`/`--dev` information when specified.
@@ -969,7 +975,7 @@ usage: nexttrace [-h|--help] [-4|--ipv4] [-6|--ipv6] [-T|--tcp] [-U|--udp]
                  <integer>] [--timeout <integer>] [--psize <integer>] [-Q|--tos
                  <integer>] [--dot-server
                  (dnssb|aliyun|dnspod|google|cloudflare)] [-g|--language
-                 (en|cn)] [-C|--no-color] [--from "<value>"] [-t|--mtr]
+                 (en|cn)] [-C|--no-color] [--from "<value>"] [-t|--mtr] [--no-mtr-summary]
                  [-r|--report] [-w|--wide] [--show-ips] [--mtr-columns <string>] [-y|--ipinfo <integer>]
                  [--mtr-record "<value>"] [--file "<value>"] [TARGET "<value>"]
 
@@ -1103,6 +1109,8 @@ Arguments:
                                      cities, ASNs, ISPs, or cloud regions.
   -t  --mtr                          Enable MTR (My Traceroute) continuous
                                      probing mode
+      --no-mtr-summary               Suppress the summary printed after leaving
+                                     the MTR TUI
   -r  --report                       MTR report mode (non-interactive, implies
                                      --mtr); can trigger MTR without --mtr
   -w  --wide                         MTR wide report mode (implies --mtr

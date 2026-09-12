@@ -122,6 +122,7 @@ Replay accepts presentation options, not a target or probe configuration.
 | `--show-ips` | Display PTR and IP together |
 | `-g`, `--language` | Display `cn` or `en` using recorded metadata |
 | `-C`, `--no-color` | Disable TUI colors; text reports already have no ANSI |
+| `--no-mtr-summary` | Suppress the text summary after leaving the replay TUI; no effect on non-TTY/report/JSON output |
 
 Omitted host mode, PTR/IP display, columns and language inherit the recording's
 initial settings; MPLS display also starts from the recorded setting. Live column
@@ -138,6 +139,18 @@ TTY opens paused at the last valid position. Space plays at original speed;
 at EOF it starts from the beginning. `p` pauses playback, `r` rewinds and pauses,
 `q` quits. Recorded probe pause and current playback pause are separate states.
 Host, MPLS, columns and the existing three history charts remain available.
+
+`s/S` saves the current cumulative statistics as a `txt`, `json`, or standalone
+`html` [snapshot report](mtr-snapshot.md). The report includes the current
+playback position and display settings, without historical probe events. Saving
+does not change playback or recorded pause state and never overwrites a file.
+Tab switches save fields, Left/Right or Space selects a format, Enter saves,
+and Esc cancels.
+
+`?` opens complete help. Up/Down scroll, `?` or Esc closes help, and `q` or Ctrl-C
+exits. Help does not change playback state. Leaving the TUI restores the terminal
+and prints a plain-text summary at the current position by default; use
+`--no-mtr-summary` to suppress it.
 
 `j/J` opens elapsed-time input, prefilled with the current position, and pauses.
 Use `HH:MM:SS[.mmm]`, with hours allowed beyond 23. Enter seeks and stays paused;

@@ -37,6 +37,7 @@ type mtrJSONOptions struct {
 	PrepareAsync       bool
 	CompactReport      bool
 	HumanOutput        bool
+	NoSummary          bool
 	OnEvent            func(trace.MTRSessionEvent) error
 }
 

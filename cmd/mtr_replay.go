@@ -23,6 +23,7 @@ type mtrReplayOptions struct {
 	report, wide, json, noColor, showIPs bool
 	columns, language                    string
 	hostMode                             int
+	noSummary                            bool
 	explicit                             map[string]bool
 }
 
@@ -106,6 +107,7 @@ func maybeRunMTRReplayMode(args []string, stdout, stderr io.Writer) (bool, int) 
 	}
 	fs.BoolVar(&o.showIPs, "show-ips", false, "Show PTR and IP together")
 	fs.StringVar(&o.columns, "mtr-columns", "", "Select text statistic columns")
+	fs.BoolVar(&o.noSummary, "no-mtr-summary", false, "Suppress the summary printed after leaving the MTR TUI")
 	ordered, err := doctorArgs(fs, normalizeMTRReplayArgs(fs, args))
 	if err == nil {
 		err = fs.Parse(ordered)
@@ -226,7 +228,7 @@ func runMTRReplay(ctx context.Context, opts mtrReplayOptions, stdout, stderr io.
 		return printer.WriteMTRReplayReport(stdout, sanitizeMTRReplayStats(loaded.state.Snapshot().Stats), printer.MTRReportOptions{Columns: header.Columns, StartTime: header.StartTime, SrcHost: header.SrcHost, Wide: wide, ShowIPs: header.ShowIPs, Lang: header.Lang})
 	}
 	applyColorMode(opts.noColor)
-	return runMTRReplayTUI(ctx, r, loaded, header, duration, complete, stdout)
+	return runMTRReplayTUI(ctx, r, loaded, header, duration, complete, opts.noSummary, stdout)
 }
 
 func mtrReplayHeader(session *mtrsession.Session, opts mtrReplayOptions) (printer.MTRTUIHeader, error) {

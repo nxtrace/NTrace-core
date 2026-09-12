@@ -44,12 +44,18 @@ func (r *mtrReplayControls) send(command mtrReplayCommand) {
 }
 
 func (u *mtrUI) isMTREditing() bool {
+	if u.isMTRDialogActive() {
+		return true
+	}
 	u.columnsMu.Lock()
 	defer u.columnsMu.Unlock()
 	return u.columnEditor.Active || u.replayEditor.Active
 }
 
 func (u *mtrUI) editMTRInput(b byte, paste bool) {
+	if u.editMTRDialog(b, paste) {
+		return
+	}
 	u.columnsMu.Lock()
 	replay := u.replayEditor.Active
 	u.columnsMu.Unlock()

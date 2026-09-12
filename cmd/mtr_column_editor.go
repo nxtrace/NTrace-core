@@ -112,8 +112,12 @@ func (k *mtrKeyInput) feed(u *mtrUI, b byte, now time.Time) bool {
 		return false
 	}
 	k.expireEscape(u, now)
+	if k.parser.state == mtrStateGround && u.isMTRHelpActive() && (b == 'q' || b == 'Q') {
+		return u.applyInputAction(mtrActionQuit)
+	}
 	editing := u.isMTREditing()
 	k.parser.trackPaste = editing
+	k.parser.trackArrows = u.isMTRDialogActive()
 	if k.parser.state == mtrStateGround && b != 27 && editing {
 		u.editMTRInput(b, false)
 	} else {
@@ -137,7 +141,7 @@ func (k *mtrKeyInput) feed(u *mtrUI, b byte, now time.Time) bool {
 
 func (k *mtrKeyInput) feedPaste(u *mtrUI, b byte) {
 	const end = "\x1b[201~"
-	k.pasteEnd += string(b)
+	k.pasteEnd += string([]byte{b})
 	for k.pasteEnd != "" && !strings.HasPrefix(end, k.pasteEnd) {
 		u.editMTRInput(k.pasteEnd[0], true)
 		k.pasteEnd = k.pasteEnd[1:]
@@ -149,6 +153,9 @@ func (k *mtrKeyInput) feedPaste(u *mtrUI, b byte) {
 }
 
 func (u *mtrUI) applyInputAction(action mtrInputAction) bool {
+	if action != mtrActionQuit && u.applyMTRDialogAction(action) {
+		return false
+	}
 	if u.replay != nil && u.applyReplayAction(action) {
 		return false
 	}
@@ -176,6 +183,10 @@ func (u *mtrUI) applyInputAction(action mtrInputAction) bool {
 		u.CycleHistoryChartMode()
 	case mtrActionColumns:
 		u.openColumnEditor()
+	case mtrActionSave:
+		u.openSnapshotDialog()
+	case mtrActionHelp:
+		u.openHelpDialog()
 	}
 	return false
 }
