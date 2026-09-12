@@ -30,6 +30,7 @@ type mtrUI struct {
 	snapshotClosed  bool
 	snapshotError   error
 	writeSnapshot   func(string, *printer.MTRSnapshot, string) error
+	terminalSize    func() (int, int)
 	columnsMu       sync.Mutex
 	columns         []printer.MTRColumn
 	columnEditor    printer.MTRColumnEditor

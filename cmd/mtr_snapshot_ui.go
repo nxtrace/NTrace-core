@@ -82,9 +82,11 @@ func (u *mtrUI) applyMTRDialogAction(action mtrInputAction) bool {
 	u.dialogsMu.Lock()
 	defer u.dialogsMu.Unlock()
 	if u.helpDialog.Active {
-		width, height, err := term.GetSize(int(os.Stdout.Fd()))
-		if err != nil {
-			width, height = 80, 24
+		width, height := 80, 24
+		if u.terminalSize != nil {
+			width, height = u.terminalSize()
+		} else if w, h, err := term.GetSize(int(os.Stdout.Fd())); err == nil {
+			width, height = w, h
 		}
 		limit := printer.MTRHelpMaxOffset(u.replay != nil, width, height)
 		u.helpDialog.Offset = min(u.helpDialog.Offset, limit)

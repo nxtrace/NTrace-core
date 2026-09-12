@@ -105,6 +105,7 @@ func TestMTRSnapshotPasteCannotSubmitOrTriggerHelp(t *testing.T) {
 func TestMTRHelpIsolationScrollingAndQuit(t *testing.T) {
 	for _, replay := range []bool{false, true} {
 		u := newMTRUI(nil, 0)
+		u.terminalSize = func() (int, int) { return 80, 24 }
 		if replay {
 			u.replay = &mtrReplayControls{commands: make(chan mtrReplayCommand, 1)}
 		}
