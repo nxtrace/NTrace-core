@@ -48,6 +48,7 @@ func runMTRReplayTUI(parent context.Context, reader *mtrsession.Reader, current 
 	ui.replay = &mtrReplayControls{commands: make(chan mtrReplayCommand, 1), duration: duration}
 	ui.replay.cursor.Store(int64(current.cursor))
 	var snapshots mtrSnapshotStore
+	playing := false
 	publishMTRReplaySnapshot(&snapshots, current, duration, complete, false)
 	ui.captureSnapshot = func() *printer.MTRSnapshot {
 		snapshot := captureMTRDisplay(&snapshots, ui, header.ShowIPs)
@@ -63,6 +64,12 @@ func runMTRReplayTUI(parent context.Context, reader *mtrsession.Reader, current 
 			fmt.Fprintln(os.Stderr, err)
 		}
 		if !noSummary {
+			if runErr == nil {
+				// Cancellation can stop advance after an accepted record but
+				// before rendering. Failed records may have moved the cursor
+				// without applying their state, so retain the published view on errors.
+				publishMTRReplaySnapshot(&snapshots, current, duration, complete, playing && !ui.IsPaused())
+			}
 			if err := writeMTRExitSummary(stdout, ui.captureSnapshot(), runErr); err != nil {
 				fmt.Fprintf(os.Stderr, "write MTR summary: %v\n", err)
 			}
@@ -74,7 +81,6 @@ func runMTRReplayTUI(parent context.Context, reader *mtrsession.Reader, current 
 	var seekDone chan mtrReplaySeekResult
 	var stopSeek context.CancelFunc
 	var queuedSeek *time.Duration
-	playing := false
 	output := &mtrReplayOutput{w: stdout}
 	baseCursor, baseTime := current.cursor, time.Now()
 	beginSeek := func(at time.Duration) {
