@@ -61,8 +61,7 @@ func runMTRTUI(method trace.Method, conf trace.Config, hopIntervalMs int, maxPer
 	defer cancel()
 
 	// 初始化 TUI 控制器
-	ui := newMTRUI(cancel, initialDisplayMode)
-	ui.columns = append([]printer.MTRColumn(nil), columns...)
+	ui := newMTRTraceUI(cancel, initialDisplayMode, conf.DisableMPLS, columns)
 
 	startTime := time.Now()
 	target := conf.DstIP.String()
@@ -169,6 +168,13 @@ func runMTRTUI(method trace.Method, conf trace.Config, hopIntervalMs int, maxPer
 
 	probeErr = trace.RunMTR(ctx, method, roundConf, opts, onSnapshot)
 	return mtrRunError(ctx, probeErr)
+}
+
+func newMTRTraceUI(cancel context.CancelFunc, initialDisplayMode int, disableMPLS bool, columns []printer.MTRColumn) *mtrUI {
+	ui := newMTRUI(cancel, initialDisplayMode)
+	ui.columns = append([]printer.MTRColumn(nil), columns...)
+	ui.disableMPLS.Store(disableMPLS)
+	return ui
 }
 
 func buildMTRInteractiveOptions(ui *mtrUI, hopIntervalMs int, maxPerHop int) trace.MTROptions {

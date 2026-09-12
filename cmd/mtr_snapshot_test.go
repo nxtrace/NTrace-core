@@ -89,6 +89,36 @@ func TestMTRSnapshotUsesCurrentDisplayWithoutChangingSession(t *testing.T) {
 	}
 }
 
+func TestMTRSnapshotHonorsInitialMPLSSettingAndRuntimeToggle(t *testing.T) {
+	for _, disabled := range []bool{false, true} {
+		conf := trace.Config{DisableMPLS: disabled}
+		ui := newMTRTraceUI(nil, 4, conf.DisableMPLS, []printer.MTRColumn{printer.MTRColumnLoss})
+		var store mtrSnapshotStore
+		store.publish(printer.MTRSnapshot{Session: &mtrsession.Session{
+			EffectiveParameters: &mtrsession.Parameters{DisableMPLS: conf.DisableMPLS},
+		}})
+		initial := captureMTRDisplay(&store, ui, false)
+		if ui.IsMPLSDisabled() != disabled || initial.Session.Display.ShowMPLS == disabled {
+			t.Fatalf("disable_mpls=%v: initial display=%+v", disabled, initial.Session.Display)
+		}
+		var keys mtrKeyInput
+		for _, key := range []string{"e", "E"} {
+			feedMTRKeys(ui, &keys, key)
+			snapshot := captureMTRDisplay(&store, ui, false)
+			wantShow := disabled
+			if key == "E" {
+				wantShow = !disabled
+			}
+			if snapshot.Session.Display.ShowMPLS != wantShow {
+				t.Fatalf("disable_mpls=%v after %s: display=%+v", disabled, key, snapshot.Session.Display)
+			}
+			if snapshot.Session.EffectiveParameters.DisableMPLS != disabled || initial.Session.Display.ShowMPLS == disabled {
+				t.Fatal("display toggle changed probe settings or an earlier snapshot")
+			}
+		}
+	}
+}
+
 func TestMTRSnapshotPauseWithoutAnotherProbe(t *testing.T) {
 	var store mtrSnapshotStore
 	store.publish(printer.MTRSnapshot{Source: "live", State: "running", Session: &mtrsession.Session{}})
