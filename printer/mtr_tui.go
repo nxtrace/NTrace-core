@@ -55,6 +55,8 @@ type MTRTUIHeader struct {
 	Now              time.Time // zero uses the live clock
 	Replay           *MTRReplayStatus
 	ReplayEditor     MTRReplayEditor
+	SaveDialog       MTRSaveDialog
+	HelpDialog       MTRHelpDialog
 }
 
 // ---------------------------------------------------------------------------
@@ -386,6 +388,16 @@ func mtrTUIRenderWithSize(w io.Writer, header MTRTUIHeader, stats []trace.MTRHop
 	var b strings.Builder
 
 	writeMTRTUIFramePrefix(&b)
+	if header.SaveDialog.Active {
+		renderMTRSaveDialog(&b, header.SaveDialog, lo.termWidth, termHeight)
+		_, _ = fmt.Fprint(w, b.String())
+		return
+	}
+	if header.HelpDialog.Active {
+		renderMTRHelpDialog(&b, header.HelpDialog, header.Replay != nil, lo.termWidth, termHeight)
+		_, _ = fmt.Fprint(w, b.String())
+		return
+	}
 	if header.ReplayEditor.Active {
 		tuiLine(&b, "%s", buildMTRTUITitleLine(header, lo.termWidth))
 		renderMTRReplayEditor(&b, header.ReplayEditor, lo.termWidth)
@@ -401,6 +413,11 @@ func mtrTUIRenderWithSize(w io.Writer, header MTRTUIHeader, stats []trace.MTRHop
 		renderMTRSelectedHeader(&b, header, lo.termWidth)
 	} else {
 		renderMTRTUIHeader(&b, header, lo.termWidth)
+	}
+	if header.SaveDialog.Error != "" {
+		tuiLine(&b, "%s", truncateByDisplayWidth(mtrDialogText(header.SaveDialog.Error), lo.termWidth))
+	} else if header.SaveDialog.Notice != "" {
+		tuiLine(&b, "%s", truncateByDisplayWidth(mtrDialogText(header.SaveDialog.Notice), lo.termWidth))
 	}
 	if header.HistoryMode {
 		renderMTRTUIHistory(&b, header, stats, lo.termWidth)
@@ -533,10 +550,13 @@ func resolveMTRTUIDestinationLabel(header MTRTUIHeader) string {
 }
 
 func buildMTRTUIControlsLine(header MTRTUIHeader, termWidth int) string {
+	if termWidth > 0 && termWidth < len("?:help") {
+		return "?"
+	}
 	if header.Replay != nil {
 		return buildMTRReplayControls(header, termWidth)
 	}
-	const keysPrefix = "Keys:  "
+	const keysPrefix = ""
 	items := buildMTRTUIKeyItems(header, mtrTUIKeyHiColor)
 	plainItems := buildMTRTUIKeyItems(header, fmt.Sprint)
 	keyLine := strings.Join(items, "  ")
@@ -548,7 +568,15 @@ func buildMTRTUIControlsLine(header MTRTUIHeader, termWidth int) string {
 		pad = termWidth - displayWidth(keysPrefix) - displayWidth(strings.Join(plainItems, " ")) - len("["+statusText+"]")
 	}
 	if pad < 2 {
-		compact := "O:cols Q:quit"
+		// Preserve the existing mode indicators on medium-width terminals;
+		// the help entry also exposes saving when its separate hint cannot fit.
+		items = append(items[:1], items[2:]...)
+		plainItems = append(plainItems[:1], plainItems[2:]...)
+		keyLine = strings.Join(items, " ")
+		pad = termWidth - displayWidth(strings.Join(plainItems, " ")) - len("["+statusText+"]")
+	}
+	if pad < 2 {
+		compact := "?:help S:save O:cols Q:quit"
 		if header.HistoryMode {
 			compact += " G-chart(" + mtrTUIHistoryChartLabel(header.HistoryChartMode) + ")"
 		}
@@ -559,6 +587,8 @@ func buildMTRTUIControlsLine(header MTRTUIHeader, termWidth int) string {
 
 func buildMTRTUIKeyItems(header MTRTUIHeader, highlight func(...any) string) []string {
 	items := []string{
+		highlight("?") + "-help",
+		highlight("S") + "-save",
 		highlight("Q") + "uit",
 		highlight("O") + "-columns",
 		highlight("P") + "ause",
@@ -1109,6 +1139,21 @@ func MTRTUIPrinter(target, domain, targetIP, version string, startTime time.Time
 	srcHost, srcIP, lang string, apiInfo func() string, showIPs bool,
 	isPaused func() bool, displayMode func() int, nameMode func() int, isMPLSDisabled func() bool,
 	isHistoryMode func() bool, historyChartMode func() int, historySnapshot func(time.Time) []MTRHistoryTTL, columnState ...func() ([]MTRColumn, MTRColumnEditor)) func(iteration int, stats []trace.MTRHopStat) {
+	var columns func() ([]MTRColumn, MTRColumnEditor)
+	if len(columnState) > 0 {
+		columns = columnState[0]
+	}
+	return MTRTUIPrinterWithDialogs(target, domain, targetIP, version, startTime, srcHost, srcIP, lang, apiInfo, showIPs,
+		isPaused, displayMode, nameMode, isMPLSDisabled, isHistoryMode, historyChartMode, historySnapshot, columns, nil)
+}
+
+// MTRTUIPrinterWithDialogs extends the existing printer without changing its
+// optional column-state API for callers that do not expose interactive dialogs.
+func MTRTUIPrinterWithDialogs(target, domain, targetIP, version string, startTime time.Time,
+	srcHost, srcIP, lang string, apiInfo func() string, showIPs bool,
+	isPaused func() bool, displayMode func() int, nameMode func() int, isMPLSDisabled func() bool,
+	isHistoryMode func() bool, historyChartMode func() int, historySnapshot func(time.Time) []MTRHistoryTTL,
+	columnState func() ([]MTRColumn, MTRColumnEditor), dialogState func() (MTRSaveDialog, MTRHelpDialog)) func(iteration int, stats []trace.MTRHopStat) {
 	var apiInfoMu sync.Mutex
 	var cachedAPIInfo string
 	var cachedAPIInfoAt time.Time
@@ -1161,12 +1206,19 @@ func MTRTUIPrinter(target, domain, targetIP, version string, startTime time.Time
 		headerAPIInfo := getAPIInfo()
 		var columns []MTRColumn
 		var editor MTRColumnEditor
-		if len(columnState) > 0 && columnState[0] != nil {
-			columns, editor = columnState[0]()
+		if columnState != nil {
+			columns, editor = columnState()
+		}
+		var saveDialog MTRSaveDialog
+		var helpDialog MTRHelpDialog
+		if dialogState != nil {
+			saveDialog, helpDialog = dialogState()
 		}
 		MTRTUIRender(os.Stdout, MTRTUIHeader{
 			Columns:          columns,
 			ColumnEditor:     editor,
+			SaveDialog:       saveDialog,
+			HelpDialog:       helpDialog,
 			Target:           target,
 			StartTime:        startTime,
 			Status:           status,

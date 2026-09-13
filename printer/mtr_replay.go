@@ -48,7 +48,7 @@ func buildMTRReplayControls(header MTRTUIHeader, width int) string {
 	if r.RecordedPaused {
 		status += " Probe-paused"
 	}
-	return truncateByDisplayWidth(status+"  Q:quit J:time Space:play P:pause R:rewind D:history G:chart O:cols Y:display N:host E:mpls", width)
+	return truncateByDisplayWidth("?:help S:save "+status+"  Q:quit J:time Space:play P:pause R:rewind D:history G:chart O:cols Y:display N:host E:mpls", width)
 }
 
 func renderMTRReplayEditor(b *strings.Builder, editor MTRReplayEditor, width int) {

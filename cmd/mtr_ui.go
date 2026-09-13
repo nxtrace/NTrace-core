@@ -19,22 +19,34 @@ import (
 
 // mtrUI 管理终端交互状态：备份屏幕、raw mode、按键处理。
 type mtrUI struct {
-	columnsMu    sync.Mutex
-	columns      []printer.MTRColumn
-	columnEditor printer.MTRColumnEditor
-	replayEditor printer.MTRReplayEditor
-	replay       *mtrReplayControls
-	redraw       chan struct{}
-	isTTY        bool
-	oldState     *term.State // raw mode 之前的终端状态
-	paused       atomic.Bool
-	restartReq   atomic.Bool
-	displayMode  atomic.Int32 // 显示模式 0-4
-	nameMode     atomic.Int32 // Host 基础显示 0=PTR/IP, 1=IP only
-	disableMPLS  atomic.Bool
-	historyMode  atomic.Bool
-	chartMode    atomic.Int32 // history chart mode 0-2
-	cancel       context.CancelFunc
+	dialogsMu       sync.Mutex
+	saveDialog      printer.MTRSaveDialog
+	helpDialog      printer.MTRHelpDialog
+	captureSnapshot func() *printer.MTRSnapshot
+	saveSnapshot    *printer.MTRSnapshot
+	saveUTF8        []byte
+	snapshotJobs    chan mtrSnapshotJob
+	snapshotDone    chan struct{}
+	snapshotClosed  bool
+	snapshotError   error
+	writeSnapshot   func(string, *printer.MTRSnapshot, string) error
+	terminalSize    func() (int, int)
+	columnsMu       sync.Mutex
+	columns         []printer.MTRColumn
+	columnEditor    printer.MTRColumnEditor
+	replayEditor    printer.MTRReplayEditor
+	replay          *mtrReplayControls
+	redraw          chan struct{}
+	isTTY           bool
+	oldState        *term.State // raw mode 之前的终端状态
+	paused          atomic.Bool
+	restartReq      atomic.Bool
+	displayMode     atomic.Int32 // 显示模式 0-4
+	nameMode        atomic.Int32 // Host 基础显示 0=PTR/IP, 1=IP only
+	disableMPLS     atomic.Bool
+	historyMode     atomic.Bool
+	chartMode       atomic.Int32 // history chart mode 0-2
+	cancel          context.CancelFunc
 }
 
 // newMTRUI 创建 TUI 控制器。cancel 是用于退出 MTR 的 context cancel 函数。
@@ -234,15 +246,22 @@ const (
 	mtrActionColumns
 	mtrActionReplayJump
 	mtrActionPasteStart
+	mtrActionSave
+	mtrActionHelp
+	mtrActionUp
+	mtrActionDown
+	mtrActionLeft
+	mtrActionRight
 )
 
 // mtrInputParser 是一个字节级状态机，能区分普通按键与
 // CSI/SS3/OSC/鼠标/焦点等转义序列，对后者整体吞掉。
 type mtrInputParser struct {
-	state      mtrParserState
-	trackPaste bool
-	csi        string
-	csiN       int // CSI 体内已读字节数（用于限制吞掉长度）
+	state       mtrParserState
+	trackPaste  bool
+	trackArrows bool
+	csi         string
+	csiN        int // CSI 体内已读字节数（用于限制吞掉长度）
 }
 
 type mtrParserState int
@@ -271,7 +290,7 @@ func (p *mtrInputParser) Feed(b byte) mtrInputAction {
 	case mtrStateCSI:
 		return p.feedCSI(b)
 	case mtrStateSS3:
-		return p.feedSS3()
+		return p.feedSS3(b)
 	case mtrStateOSC:
 		return p.feedOSC(b)
 	case mtrStateX10Mouse:
@@ -310,12 +329,16 @@ func (p *mtrInputParser) feedEsc(b byte) mtrInputAction {
 
 func (p *mtrInputParser) feedCSI(b byte) mtrInputAction {
 	p.csiN++
-	if p.trackPaste && len(p.csi) < mtrParserMaxCSI {
+	if (p.trackPaste || p.trackArrows) && len(p.csi) < mtrParserMaxCSI {
 		p.csi += string(b)
 	}
 	if p.trackPaste && p.csi == "200~" {
 		p.state = mtrStateGround
 		return mtrActionPasteStart
+	}
+	if p.trackArrows && len(p.csi) == 1 && b >= 'A' && b <= 'D' {
+		p.state = mtrStateGround
+		return mapMTRArrow(b)
 	}
 	switch {
 	case b == 'M':
@@ -333,8 +356,25 @@ func (p *mtrInputParser) feedCSI(b byte) mtrInputAction {
 	return mtrActionNone
 }
 
-func (p *mtrInputParser) feedSS3() mtrInputAction {
+func (p *mtrInputParser) feedSS3(b byte) mtrInputAction {
 	p.state = mtrStateGround
+	if p.trackArrows {
+		return mapMTRArrow(b)
+	}
+	return mtrActionNone
+}
+
+func mapMTRArrow(b byte) mtrInputAction {
+	switch b {
+	case 'A':
+		return mtrActionUp
+	case 'B':
+		return mtrActionDown
+	case 'C':
+		return mtrActionRight
+	case 'D':
+		return mtrActionLeft
+	}
 	return mtrActionNone
 }
 
@@ -388,6 +428,10 @@ func mapKeyToAction(b byte) mtrInputAction {
 		return mtrActionColumns
 	case 'j', 'J':
 		return mtrActionReplayJump
+	case 's', 'S':
+		return mtrActionSave
+	case '?':
+		return mtrActionHelp
 	default:
 		return mtrActionNone
 	}
@@ -490,6 +534,10 @@ func ParseMTRKey(b byte) string {
 		return "history_chart"
 	case 'o', 'O':
 		return "columns"
+	case 's', 'S':
+		return "save"
+	case '?':
+		return "help"
 	default:
 		return ""
 	}

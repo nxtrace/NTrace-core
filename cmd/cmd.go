@@ -353,6 +353,7 @@ type deployRunOptions struct {
 
 type mtrCLIFlags struct {
 	columns    *string
+	noSummary  *bool
 	mtrMode    *bool
 	reportMode *bool
 	wideMode   *bool
@@ -571,6 +572,7 @@ func registerMTRFlags(parser *argparse.Parser) mtrCLIFlags {
 		}
 		return mtrCLIFlags{
 			mtrMode:    mtrMode,
+			noSummary:  parser.Flag("", "no-mtr-summary", &argparse.Options{Help: "Suppress the summary printed after leaving the MTR TUI"}),
 			columns:    parser.String("", "mtr-columns", &argparse.Options{Help: "MTR text columns in order: loss, snt, received, last, avg, best, wrst, stdev, dropped, gmean, jitter, javg, jmax, jint, space (does not enable MTR)"}),
 			reportMode: parser.Flag("r", "report", &argparse.Options{Help: "MTR report mode (non-interactive, implies --mtr); can trigger MTR without --mtr"}),
 			wideMode:   parser.Flag("w", "wide", &argparse.Options{Help: "MTR wide report mode (implies --mtr --report); alone equals --mtr --report --wide"}),
@@ -580,6 +582,7 @@ func registerMTRFlags(parser *argparse.Parser) mtrCLIFlags {
 	}
 	return mtrCLIFlags{
 		mtrMode:    ptrBool(false),
+		noSummary:  ptrBool(false),
 		columns:    new(string),
 		reportMode: ptrBool(false),
 		wideMode:   ptrBool(false),
@@ -1122,6 +1125,7 @@ func maybeRunMTRMode(
 	dataOrigin string,
 	showIPs bool,
 	ipInfoMode int,
+	presentation mtrTUIOptions,
 	columns ...printer.MTRColumn,
 ) bool {
 	if !modes.mtr {
@@ -1146,7 +1150,7 @@ func maybeRunMTRMode(
 			fmt.Fprintf(os.Stderr, "--ipinfo/-y 必须在 0-4 范围内，当前值: %d\n", ipInfoMode)
 			os.Exit(1)
 		}
-		err = runMTRTUI(method, conf, mtrHopIntervalMs, mtrMaxPerHop, domain, dataOrigin, showIPs, ipInfoMode, nil, columns...)
+		err = runMTRTUI(method, conf, mtrHopIntervalMs, mtrMaxPerHop, domain, dataOrigin, showIPs, ipInfoMode, nil, presentation, columns...)
 	}
 	// Mode-local defers restore the terminal and close listeners before exit.
 	exitOnTraceRunError(err)
@@ -1606,6 +1610,7 @@ func Execute() {
 		count, interval := deriveMTRProbeParams(mtrModes.report, queriesSet, *numMeasurements, intervalSet, *ttlInterval)
 		opts := mtrJSONOptions{
 			Target: *str, Method: resolveTraceMethod(*tcp, *udp), Report: mtrModes.report,
+			NoSummary:     *mtrFlags.noSummary,
 			RecordPath:    *mtrRecord,
 			RecordDisplay: mtrRecordingDisplay{hostMode: *ipInfoMode, showIPs: *showIPs, wide: mtrModes.wide, columns: *mtrFlags.columns},
 			MaxPerHop:     count, HopIntervalMs: interval, PacketSize: *packetSize, PacketSizeExplicit: packetSet,
@@ -1987,7 +1992,8 @@ func Execute() {
 	conf.FWMark, conf.FWMarkSet = mark, fwmarkSet
 	conf.SrcPort = sourceCfg.SrcPort
 
-	if maybeRunMTRMode(mtrModes, method, conf, queriesExplicit, *numMeasurements, ttlTimeExplicit, *ttlInterval, domain, *dataOrigin, *showIPs, *ipInfoMode, mtrColumns...) {
+	presentation := mtrTUIOptions{NoSummary: *mtrFlags.noSummary, PacketSize: effectivePacketSize, DotServer: *dot}
+	if maybeRunMTRMode(mtrModes, method, conf, queriesExplicit, *numMeasurements, ttlTimeExplicit, *ttlInterval, domain, *dataOrigin, *showIPs, *ipInfoMode, presentation, mtrColumns...) {
 		return
 	}
 	if err := writeIgnoredTraceOutputWarning(os.Stderr, outputMode, resolvedOutputPath); err != nil {
