@@ -42,6 +42,44 @@ func waitSnapshotResult(t *testing.T, u *mtrUI) printer.MTRSaveDialog {
 	}
 }
 
+func TestMTRReplaySnapshotUsesImmediateControlState(t *testing.T) {
+	for _, tc := range []struct {
+		name, keys, published, want string
+		paused                      bool
+	}{
+		{"pause and save", "ps", "running", "paused", false},
+		{"resume and save", " S", "paused", "running", true},
+		{"restart and save", "rs", "running", "paused", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			snapshot := snapshotForDialog()
+			snapshot.Source, snapshot.State = "replay", tc.published
+			snapshot.ElapsedNS = int64(time.Second)
+			snapshot.Replay = &printer.MTRSnapshotReplay{CursorNS: int64(time.Second), DurationNS: int64(5 * time.Second), RecordingComplete: true, RecordedPaused: true}
+			var store mtrSnapshotStore
+			store.publish(*snapshot)
+			u := newMTRUI(nil, 0)
+			u.paused.Store(tc.paused)
+			u.replay = &mtrReplayControls{commands: make(chan mtrReplayCommand, 1)}
+			u.captureSnapshot = func() *printer.MTRSnapshot { return captureMTRDisplay(&store, u, false) }
+			var keys mtrKeyInput
+			// No replay-loop render runs between these bytes of one input read.
+			feedMTRKeys(u, &keys, tc.keys)
+			frozen := u.saveSnapshot
+			if frozen == nil || frozen.State != tc.want {
+				t.Fatalf("saved state = %+v, want %s", frozen, tc.want)
+			}
+			if frozen.CapturedAt != snapshot.CapturedAt || frozen.ElapsedNS != snapshot.ElapsedNS || *frozen.Replay != *snapshot.Replay || frozen.Stats[0].Snt != snapshot.Stats[0].Snt {
+				t.Fatal("control capture changed the committed replay data")
+			}
+			u.paused.Store(!u.IsPaused())
+			if frozen.State != tc.want || store.capture().State != tc.published {
+				t.Fatal("control capture changed the published or frozen state")
+			}
+		})
+	}
+}
+
 func TestMTRSnapshotDialogCapturesOnceAndEditsUnicode(t *testing.T) {
 	u := newMTRUI(nil, 0)
 	var captures int

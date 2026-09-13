@@ -130,8 +130,8 @@ func captureMTRDisplay(store *mtrSnapshotStore, ui *mtrUI, showIPs bool) *printe
 	if snapshot == nil || snapshot.Session == nil {
 		return snapshot
 	}
-	if snapshot.Source == "live" {
-		// Pause can change after the last reply, without another probe snapshot.
+	if snapshot.Source == "live" || snapshot.Source == "replay" {
+		// Controls can change before the next probe snapshot or replay render.
 		// Match the current TUI control state while retaining the data timestamp.
 		snapshot.State = "running"
 		if ui.IsPaused() {
