@@ -35,11 +35,32 @@ def resize(terminal, width, height):
 
 
 def recording_probes(path):
-    with open(path, encoding="utf-8") as source:
+    with open(path, "rb") as source:
         lines = source.readlines()
     # The writer publishes complete lines; a concurrent read may see its tail.
-    records = [json.loads(line) for line in lines if line.endswith("\n")]
+    records = [json.loads(line.decode("utf-8"))
+               for line in lines if line.endswith(b"\n")]
     return sum(record["type"] == "probe" for record in records)
+
+
+def check_recording_tail(directory):
+    path = os.path.join(directory, "reader-tail.jsonl")
+    prefix = b'{"type":"probe"}\n'
+    tail = (json.dumps({"type": "probe", "host": "中文😀"},
+                       ensure_ascii=False) + "\n").encode("utf-8")
+    # Exercise every byte boundary, including cuts inside multibyte characters.
+    for end in range(len(tail) + 1):
+        with open(path, "wb") as output:
+            output.write(prefix + tail[:end])
+        assert recording_probes(path) == 1 + int(end == len(tail)), end
+    with open(path, "wb") as output:
+        output.write(prefix + b'{"type":"probe","host":"\xff"}\n')
+    try:
+        recording_probes(path)
+    except UnicodeDecodeError:
+        pass
+    else:
+        raise AssertionError("Invalid UTF-8 in a complete record was ignored")
 
 
 def check_help(terminal, recording=None):
@@ -282,6 +303,7 @@ def main(binary):
                    "--timeout", "100", "--no-color", "--language", "en", "127.0.0.1"]
     try:
         with tempfile.TemporaryDirectory(prefix="mtr-snapshot-pty-") as directory:
+            check_recording_tail(directory)
             recording = os.path.join(directory, "session.jsonl")
             online = Terminal([binary] + mode + ["--mtr-record", recording] + probe_flags, log)
             try:
