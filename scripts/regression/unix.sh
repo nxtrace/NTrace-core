@@ -258,15 +258,16 @@ check_json_pure() {
   local expected_pattern="${4:-}"
   local allowed_csv="${5:-0}"
   local out="${ART_DIR}/${name}.txt"
+  local err="${ART_DIR}/${name}.stderr.txt"
   local service_err='request failed - please try again later'
   local pow_log_re='^\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} pow token fetch failed: .*$'
   local rc=0
-  if run_timeout_cmd 180 "${command_string}" >"${out}" 2>&1; then
+  if run_timeout_cmd 180 "${command_string}" >"${out}" 2>"${err}"; then
     rc=0
   else
     rc=$?
   fi
-  if grep -Fq "${service_err}" "${out}"; then
+  if grep -Fq "${service_err}" "${out}" "${err}"; then
     record "${name}" SKIP "${note}; external service unavailable"
     return
   fi
