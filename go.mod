@@ -15,7 +15,7 @@ require (
 	github.com/jedisct1/go-dnsstamps v0.0.0-20251112173516-191fc465df31
 	github.com/jessevdk/go-flags v1.6.1
 	github.com/jsdelivr/globalping-cli v1.5.1
-	github.com/mattn/go-runewidth v0.0.30
+	github.com/mattn/go-runewidth v0.0.31
 	github.com/miekg/dns v1.1.73
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/natesales/q v0.19.12
