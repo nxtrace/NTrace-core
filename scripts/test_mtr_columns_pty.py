@@ -16,6 +16,8 @@ import sys
 import tempfile
 import time
 
+from mtr_pty_screen import Screen
+
 if os.name != "nt":
     import fcntl
     import pty
@@ -24,12 +26,14 @@ if os.name != "nt":
 
 def main(binary):
     log = bytearray()
+    screen = Screen(120, 32)
     windows = os.name == "nt"
     if not windows:
         master, slave = pty.openpty()
         original = termios.tcgetattr(slave)
 
     def resize(width, height=32):
+        screen.resize(width, height)
         if windows:
             process.setwinsize(height, width)
         else:
@@ -49,15 +53,18 @@ def main(binary):
                 except (OSError, EOFError):
                     break
         log.extend(data)
-        return data.decode(errors="replace")
+        text = data.decode(errors="replace")
+        screen.feed(text)
+        return text
 
     def expect(*needles):
         text = ""
         deadline = time.monotonic() + 5
         while time.monotonic() < deadline:
             text += read()
-            if all(needle in text for needle in needles):
-                return text
+            visible = screen.text()
+            if all(needle in (text if "\x1b" in needle else visible) for needle in needles):
+                return visible
         raise AssertionError(f"Missing {needles!r}: {text!r}")
 
     def send(keys):
@@ -90,7 +97,9 @@ def main(binary):
     try:
         expect("Rcv", " 1. 127.0.0.1")
         send("p")
-        paused = expect("Paused") + read(0.6)  # Drain any in-flight probes.
+        expect("Paused")
+        read(0.6)  # Drain any in-flight probes.
+        paused = screen.text()
         send("o")
         expect("Fields: LSRA_", "\x1b[?2004h")
         send("\x15\x1b[200~r\nl s n a b w v\x1b[201~")
@@ -112,7 +121,7 @@ def main(binary):
         expect("History")
         send("o\x15ar\r")
         applied = expect("Avg", "Rcv", "Paused")
-        assert "History" not in applied.split("\x1b[H\x1b[2J")[-1], applied
+        assert "History" not in applied, applied
         resize(160, 24)
         send("o")
         expect("Fields:", "G: Geometric Mean", "I: Interarrival Jitter")
@@ -138,6 +147,10 @@ def main(binary):
             process.wait(timeout=3)
             assert process.returncode == 0, process.returncode
             assert termios.tcgetattr(slave) == original, "Terminal attributes not restored"
+            output = log.decode(errors="replace")
+            assert not re.search(r"\x1b\[[0-9;]*J", output), "TUI erased display/history"
+            body = output.split("\x1b[?1049h", 1)[1].split("\x1b[?1049l", 1)[0]
+            assert "\n" not in body, "TUI emitted scrolling line feeds"
         print(json.dumps({
             "platform": platform.system(), "pty": "PASS",
             "checks": ["loopback probes", "pause", "prefill", "paste newline",

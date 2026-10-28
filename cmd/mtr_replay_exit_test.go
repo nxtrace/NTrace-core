@@ -34,7 +34,7 @@ type replayExitFrameWriter struct {
 
 func (w *replayExitFrameWriter) Write(data []byte) (int, error) {
 	n, err := w.Buffer.Write(data)
-	if w.afterFrame != nil && bytes.Contains(data, []byte("\x1b[H\x1b[2J")) {
+	if w.afterFrame != nil && bytes.Contains(data, []byte("\x1b[1;1H")) {
 		callback := w.afterFrame
 		w.afterFrame = nil
 		return n, callback()
@@ -82,6 +82,9 @@ func TestMTRReplayExitSummaryCommitsCancelledAdvance(t *testing.T) {
 				return nil
 			}
 			runErr := runMTRReplayTUI(ctx, r, current, header, 7*time.Second, true, false, output)
+			if strings.Contains(output.String(), "\x1b[2J") || strings.Contains(output.String(), "\x1b[J") {
+				t.Fatal("replay frame erased the display")
+			}
 			if invalidRecord {
 				if advanceErr == nil || errors.Is(advanceErr, context.Canceled) || !errors.Is(runErr, advanceErr) {
 					t.Fatalf("advance=%v run=%v, want the original invalid-record error", advanceErr, runErr)

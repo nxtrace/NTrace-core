@@ -220,3 +220,11 @@ columns (including `space`) in `display.columns`. Older binaries need an explici
 supported `--mtr-columns` selection for text replay of such a recording; JSON
 replay does not parse display columns. Interactive column edits remain local to
 the display and do not rewrite the recording's initial column selection.
+
+## Terminal display
+
+Live and replay TUI sessions update changed rows in place, preserving native
+terminal text selection without adding each refresh to scrollback. The visible
+table is limited to the window width and height, with the last row reserved to
+avoid scrolling. Enlarge the window to see more rows; saved reports and session
+recordings retain the complete statistics.
