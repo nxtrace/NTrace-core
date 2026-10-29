@@ -14,28 +14,34 @@ concurrency:
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
-    tags: [ "v*" ]
+    branches: [main]
+    tags: ["v*"]
     paths:
       - "**/*.go"
       - "**/testdata/**"
+      - ".cross_compile.sh"
+      - ".github/ci-paths.json"
+      - ".github/workflows/build.yml"
+      - "assets/windivert/**"
+      - "default.pgo"
       - "go.mod"
       - "go.sum"
-      - "default.pgo"
-      - ".cross_compile.sh"
-      - "scripts/perf/**"
-      - ".github/workflows/*.yml"
+      - "scripts/ci/**"
+      - "server/web/**"
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
       - "**/*.go"
       - "**/testdata/**"
+      - ".cross_compile.sh"
+      - ".github/ci-paths.json"
+      - ".github/workflows/build.yml"
+      - "assets/windivert/**"
+      - "default.pgo"
       - "go.mod"
       - "go.sum"
-      - "default.pgo"
-      - ".cross_compile.sh"
-      - "scripts/perf/**"
-      - ".github/workflows/*.yml"
+      - "scripts/ci/**"
+      - "server/web/**"
 
 jobs:
   build:

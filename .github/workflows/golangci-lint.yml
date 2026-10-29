@@ -9,29 +9,33 @@ concurrency:
   cancel-in-progress: true
 
 on:
+  workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
       - "**/*.go"
       - "**/testdata/**"
+      - ".cross_compile.sh"
+      - ".github/ci-paths.json"
+      - ".github/workflows/golangci-lint.yml"
+      - ".golangci.yml"
+      - "default.pgo"
       - "go.mod"
       - "go.sum"
-      - "default.pgo"
-      - "scripts/perf/**"
-      - ".golangci.yml"
-      - ".github/workflows/golangci-lint.yml"
+      - "scripts/ci/**"
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
       - "**/*.go"
       - "**/testdata/**"
+      - ".cross_compile.sh"
+      - ".github/ci-paths.json"
+      - ".github/workflows/golangci-lint.yml"
+      - ".golangci.yml"
+      - "default.pgo"
       - "go.mod"
       - "go.sum"
-      - "default.pgo"
-      - "scripts/perf/**"
-      - ".golangci.yml"
-      - ".github/workflows/golangci-lint.yml"
+      - "scripts/ci/**"
 
 jobs:
   lint:

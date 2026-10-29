@@ -8,41 +8,152 @@ concurrency:
   cancel-in-progress: true
 
 on:
+  workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
       - "**/*.go"
       - "**/testdata/**"
+      - ".cross_compile.sh"
+      - ".github/ci-paths.json"
+      - ".github/workflows/test.yml"
+      - "assets/windivert/**"
+      - "cmd/cmd*.go"
+      - "cmd/dns*.go"
+      - "cmd/doctor*.go"
+      - "cmd/flavor*.go"
+      - "cmd/fwmark*.go"
+      - "cmd/mtr*.go"
+      - "cmd/mtr_json_run*.go"
+      - "cmd/mtr_mode*.go"
+      - "cmd/tos*.go"
+      - "cmd/trace_mode*.go"
+      - "config/**/*.go"
+      - "config/**/testdata/**"
+      - "default.pgo"
+      - "dn42/**/*.go"
+      - "dn42/**/testdata/**"
       - "go.mod"
       - "go.sum"
-      - "default.pgo"
+      - "internal/dnsclient/**/*.go"
+      - "internal/dnsclient/**/testdata/**"
+      - "internal/doctor/**/*.go"
+      - "internal/doctor/**/testdata/**"
+      - "internal/hoprender/**/*.go"
+      - "internal/hoprender/**/testdata/**"
+      - "internal/mtrsession/**/*.go"
+      - "internal/mtrsession/**/testdata/**"
+      - "internal/routeprobe/**/*.go"
+      - "internal/routeprobe/**/testdata/**"
+      - "ipgeo/**/*.go"
+      - "ipgeo/**/testdata/**"
+      - "main.go"
       - "nt_install.sh"
-      - ".cross_compile.sh"
+      - "pow/**/*.go"
+      - "pow/**/testdata/**"
+      - "printer/**/*.go"
+      - "printer/**/testdata/**"
+      - "scripts/ci/**"
+      - "scripts/mtr_pty_screen.py"
+      - "scripts/perf/*.sh"
+      - "scripts/test_mtr*_pty.py"
       - "scripts/test_nt_install.sh"
-      - "scripts/test_mtr_session_pty.py"
-      - "scripts/test_mtr_snapshot_pty.py"
-      - "scripts/perf/**"
-      - ".github/workflows/*.yml"
+      - "server/web/**"
+      - "trace/**/*.go"
+      - "trace/**/testdata/**"
+      - "util/**/*.go"
+      - "util/**/testdata/**"
+      - "wshandle/**/*.go"
+      - "wshandle/**/testdata/**"
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
       - "**/*.go"
       - "**/testdata/**"
+      - ".cross_compile.sh"
+      - ".github/ci-paths.json"
+      - ".github/workflows/test.yml"
+      - "assets/windivert/**"
+      - "cmd/cmd*.go"
+      - "cmd/dns*.go"
+      - "cmd/doctor*.go"
+      - "cmd/flavor*.go"
+      - "cmd/fwmark*.go"
+      - "cmd/mtr*.go"
+      - "cmd/mtr_json_run*.go"
+      - "cmd/mtr_mode*.go"
+      - "cmd/tos*.go"
+      - "cmd/trace_mode*.go"
+      - "config/**/*.go"
+      - "config/**/testdata/**"
+      - "default.pgo"
+      - "dn42/**/*.go"
+      - "dn42/**/testdata/**"
       - "go.mod"
       - "go.sum"
-      - "default.pgo"
+      - "internal/dnsclient/**/*.go"
+      - "internal/dnsclient/**/testdata/**"
+      - "internal/doctor/**/*.go"
+      - "internal/doctor/**/testdata/**"
+      - "internal/hoprender/**/*.go"
+      - "internal/hoprender/**/testdata/**"
+      - "internal/mtrsession/**/*.go"
+      - "internal/mtrsession/**/testdata/**"
+      - "internal/routeprobe/**/*.go"
+      - "internal/routeprobe/**/testdata/**"
+      - "ipgeo/**/*.go"
+      - "ipgeo/**/testdata/**"
+      - "main.go"
       - "nt_install.sh"
-      - ".cross_compile.sh"
+      - "pow/**/*.go"
+      - "pow/**/testdata/**"
+      - "printer/**/*.go"
+      - "printer/**/testdata/**"
+      - "scripts/ci/**"
+      - "scripts/mtr_pty_screen.py"
+      - "scripts/perf/*.sh"
+      - "scripts/test_mtr*_pty.py"
       - "scripts/test_nt_install.sh"
-      - "scripts/test_mtr_session_pty.py"
-      - "scripts/test_mtr_snapshot_pty.py"
-      - "scripts/perf/**"
-      - ".github/workflows/*.yml"
-  workflow_dispatch:
+      - "server/web/**"
+      - "trace/**/*.go"
+      - "trace/**/testdata/**"
+      - "util/**/*.go"
+      - "util/**/testdata/**"
+      - "wshandle/**/*.go"
+      - "wshandle/**/testdata/**"
 
 jobs:
+  changes:
+    name: Select relevant checks
+    runs-on: ubuntu-latest
+    outputs:
+      go: ${{ steps.select.outputs.go }}
+      pty: ${{ steps.select.outputs.pty }}
+      doctor: ${{ steps.select.outputs.doctor }}
+      dns: ${{ steps.select.outputs.dns }}
+      install: ${{ steps.select.outputs.install }}
+      web: ${{ steps.select.outputs.web }}
+      shell: ${{ steps.select.outputs.shell }}
+      platforms: ${{ steps.select.outputs.platforms }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify CI selection rules
+        run: |
+          python3 -m unittest discover -s scripts/ci -p 'test_*.py' -v
+          python3 scripts/ci/select_checks.py --check-workflows
+      - name: Select checks from complete event diff
+        id: select
+        run: python3 scripts/ci/select_checks.py
+
   test:
+    needs: changes
+    if: >-
+      needs.changes.outputs.go == 'true' || needs.changes.outputs.pty == 'true' ||
+      needs.changes.outputs.doctor == 'true' || needs.changes.outputs.dns == 'true' ||
+      needs.changes.outputs.install == 'true'
     name: Default JSON (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     env:
@@ -50,7 +161,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
+        os: ${{ fromJSON(needs.changes.outputs.platforms) }}
     steps:
       - name: Checkout codebase
         uses: actions/checkout@v7
@@ -59,6 +170,7 @@ jobs:
           fetch-tags: true
 
       - name: Set up Go (built-in cache)
+        if: ${{ (needs.changes.outputs.go == 'true' || needs.changes.outputs.pty == 'true' || needs.changes.outputs.doctor == 'true' || needs.changes.outputs.dns == 'true') }}
         uses: actions/setup-go@v7
         with:
           go-version: '1.27.1'
@@ -66,31 +178,32 @@ jobs:
           cache: true
 
       - name: Test with unix
-        if: ${{ matrix.os != 'windows-latest' }}
+        if: ${{ needs.changes.outputs.go == 'true' && (matrix.os != 'windows-latest') }}
         shell: bash
         run: go test -v -covermode=count -coverprofile='coverage.out' ./...
 
       - name: Test alternate flavors with unix
-        if: ${{ matrix.os != 'windows-latest' }}
+        if: ${{ needs.changes.outputs.go == 'true' && (matrix.os != 'windows-latest') }}
         shell: bash
         run: |
           go test -tags flavor_tiny ./cmd ./server
           go test -tags flavor_ntr ./cmd ./server
 
       - name: Doctor native loopback route smoke
+        if: ${{ needs.changes.outputs.doctor == 'true' }}
         env:
           NEXTTRACE_DOCTOR_INTEGRATION: '1'
         run: go test ./internal/doctor -run '^TestNativeLoopbackRoute$' -count=1
 
       - name: Doctor privileged backend smoke
-        if: ${{ matrix.os != 'windows-latest' }}
+        if: ${{ needs.changes.outputs.doctor == 'true' && (matrix.os != 'windows-latest') }}
         shell: bash
         run: |
           go test -c -o "${RUNNER_TEMP}/doctor-backend.test" ./trace/internal
           sudo env NEXTTRACE_DOCTOR_BACKEND_INTEGRATION=1 "${RUNNER_TEMP}/doctor-backend.test" -test.run '^TestDoctorNativeBackend$' -test.v
 
       - name: Verify q v0.19.12 adapter parity
-        if: ${{ matrix.os == 'ubuntu-latest' }}
+        if: ${{ needs.changes.outputs.dns == 'true' && (matrix.os == 'ubuntu-latest') }}
         shell: bash
         run: |
           go mod download github.com/natesales/q@v0.19.12
@@ -100,7 +213,7 @@ jobs:
             go test ./internal/dnsclient -run '^TestPinnedQ' -count=1
 
       - name: Smoke test nt_install.sh
-        if: ${{ matrix.os != 'windows-latest' }}
+        if: ${{ needs.changes.outputs.install == 'true' && (matrix.os != 'windows-latest') }}
         shell: bash
         run: |
           bash -n nt_install.sh
@@ -108,31 +221,18 @@ jobs:
           bash scripts/test_nt_install.sh
 
       - name: Verify module state
-        if: ${{ matrix.os == 'ubuntu-latest' }}
+        if: ${{ needs.changes.outputs.go == 'true' && (matrix.os == 'ubuntu-latest') }}
         shell: bash
         run: |
           go mod verify
           go mod tidy -diff
 
       - name: Run go vet
-        if: ${{ matrix.os == 'ubuntu-latest' }}
+        if: ${{ needs.changes.outputs.go == 'true' && (matrix.os == 'ubuntu-latest') }}
         run: go vet ./...
 
-      - name: Test WebUI assets
-        if: ${{ matrix.os == 'ubuntu-latest' }}
-        shell: bash
-        run: node --test server/web/assets/*.test.cjs
-
-      - name: Check shell syntax
-        if: ${{ matrix.os == 'ubuntu-latest' }}
-        shell: bash
-        run: |
-          for script in .cross_compile.sh scripts/perf/*.sh; do
-            bash -n "${script}"
-          done
-
       - name: Build all flavors on Linux
-        if: ${{ matrix.os == 'ubuntu-latest' }}
+        if: ${{ needs.changes.outputs.go == 'true' && (matrix.os == 'ubuntu-latest') }}
         shell: bash
         run: |
           go build -buildvcs=false -trimpath -o "${RUNNER_TEMP}/nexttrace" .
@@ -140,14 +240,14 @@ jobs:
           go build -buildvcs=false -trimpath -tags flavor_ntr -o "${RUNNER_TEMP}/ntr" .
 
       - name: MTR column editor PTY smoke
-        if: ${{ matrix.os != 'windows-latest' }}
+        if: ${{ needs.changes.outputs.pty == 'true' && (matrix.os != 'windows-latest') }}
         shell: bash
         run: |
           go build -o "${RUNNER_TEMP}/nexttrace-mtr-columns" .
           sudo python3 scripts/test_mtr_columns_pty.py "${RUNNER_TEMP}/nexttrace-mtr-columns"
 
       - name: MTR column editor ConPTY smoke
-        if: ${{ matrix.os == 'windows-latest' }}
+        if: ${{ needs.changes.outputs.pty == 'true' && (matrix.os == 'windows-latest') }}
         shell: pwsh
         run: |
           python -m pip install pywinpty==3.0.5
@@ -155,7 +255,7 @@ jobs:
           python scripts/test_mtr_columns_pty.py "$env:RUNNER_TEMP/nexttrace-mtr-columns.exe"
 
       - name: MTR session recording and replay PTY smoke
-        if: ${{ matrix.os != 'windows-latest' }}
+        if: ${{ needs.changes.outputs.pty == 'true' && (matrix.os != 'windows-latest') }}
         shell: bash
         run: |
           for flavor in full tiny ntr; do
@@ -170,7 +270,7 @@ jobs:
           done
 
       - name: MTR session recording and replay ConPTY smoke
-        if: ${{ matrix.os == 'windows-latest' }}
+        if: ${{ needs.changes.outputs.pty == 'true' && (matrix.os == 'windows-latest') }}
         shell: pwsh
         run: |
           foreach ($flavor in @("full", "tiny", "ntr")) {
@@ -188,18 +288,20 @@ jobs:
           }
 
       - name: Test with windows
-        if: ${{ matrix.os == 'windows-latest' }}
+        if: ${{ needs.changes.outputs.go == 'true' && (matrix.os == 'windows-latest') }}
         run: go test -v -covermode=count -coverprofile="coverage.out" ./...
 
       - name: Test tiny flavor with windows
-        if: ${{ matrix.os == 'windows-latest' }}
+        if: ${{ needs.changes.outputs.go == 'true' && (matrix.os == 'windows-latest') }}
         run: go test -tags flavor_tiny ./cmd ./server
 
       - name: Test ntr flavor with windows
-        if: ${{ matrix.os == 'windows-latest' }}
+        if: ${{ needs.changes.outputs.go == 'true' && (matrix.os == 'windows-latest') }}
         run: go test -tags flavor_ntr ./cmd ./server
 
   test-nojsonv2:
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     name: JSON compatibility (nojsonv2)
     runs-on: ubuntu-latest
     env:
@@ -223,6 +325,8 @@ jobs:
           go test -tags flavor_ntr ./cmd ./server
 
   race:
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     name: Race detector (Ubuntu)
     runs-on: ubuntu-latest
     env:
@@ -240,3 +344,30 @@ jobs:
 
       - name: Run race detector
         run: go test -race -count=1 ./...
+
+  web:
+    name: WebUI assets
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - run: node --test server/web/assets/*.test.cjs
+
+  shell:
+    name: Shell syntax
+    needs: changes
+    if: needs.changes.outputs.shell == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Check shell syntax
+        shell: bash
+        run: |
+          for script in .cross_compile.sh scripts/perf/*.sh; do
+            bash -n "${script}"
+          done
