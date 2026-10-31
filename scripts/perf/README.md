@@ -73,7 +73,9 @@ go tool benchstat .cache/perf/pgo-off.guardrail.bench.txt .cache/perf/pgo-on.gua
 ```
 
 The scripts use the default Go JSON runtime, `GOMAXPROCS=10`, and seed
-`20260905` by default. If a threshold is crossed without statistical confidence,
+`20260905` by default. PGO scripts clear inherited `GOEXPERIMENT` settings so
+profile generation and evaluation use the same default runtime.
+If a threshold is crossed without statistical confidence,
 rerun both sides with `BENCH_COUNT=20`.
 
 Set `PERF_BINARY_DIR` to keep the exact binaries built by
