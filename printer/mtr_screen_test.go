@@ -18,22 +18,27 @@ import (
 )
 
 func TestMTRTUIPrinterPreservesTerminalHistory(t *testing.T) {
+	originalWidth := getTermWidth
+	getTermWidth = func() int { return tuiDefaultTerm }
+	defer func() { getTermWidth = originalWidth }()
+	screen := mtrTestScreen{width: tuiDefaultTerm, rows: make([]string, 24)}
 	printFrame := MTRTUIPrinter("192.0.2.1", "", "192.0.2.1", "test", time.Now(),
 		"host", "192.0.2.2", "en", nil, false,
 		nil, nil, nil, nil, nil, nil, nil)
-	output := captureStdout(t, func() {
-		for sent := 1; sent <= 3; sent++ {
+	for sent := 1; sent <= 3; sent++ {
+		output := captureStdout(t, func() {
 			printFrame(sent, []trace.MTRHopStat{{TTL: 1, IP: "192.0.2.3", Snt: sent, Received: sent}})
+		})
+		if regexp.MustCompile(`\x1b\[[0-9;]*J`).MatchString(output) {
+			t.Fatal("interactive refresh must not erase the display and move old frames into terminal history")
 		}
-	})
-	if !strings.Contains(output, "192.0.2.3") {
-		t.Fatal("interactive refresh must render the visible hop")
+		if strings.ContainsAny(output, "\r\n") {
+			t.Fatal("interactive refresh must use absolute positions without scrolling line feeds")
+		}
+		screen.apply(t, output)
 	}
-	if regexp.MustCompile(`\x1b\[[0-9;]*J`).MatchString(output) {
-		t.Fatal("interactive refresh must not erase the display and move old frames into terminal history")
-	}
-	if strings.ContainsAny(output, "\r\n") {
-		t.Fatal("interactive refresh must use absolute positions without scrolling line feeds")
+	if !strings.Contains(strings.Join(screen.rows, "\n"), "192.0.2.3") {
+		t.Fatal("interactive refresh must retain the hop on the final visible screen")
 	}
 }
 
