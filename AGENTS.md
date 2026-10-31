@@ -136,6 +136,7 @@
 - 标记与非零 TOS 参与 Linux 会话选源，保留显式 source/device 约束，不标记 DNS/Geo/API 请求；初始化失败停止探测，不变成 MTR 丢包。
 - Linux IPv4 UDP 使用 raw connect 选源且不发送报文；只能确认源地址，Doctor 不据此推断出口接口/网关。netlink DONE 无匹配路由立即返回错误。
 - Windows amd64 非零 ICMP TOS 使用 WinDivert 发送；默认/零仍为原生 socket。详见中英文 README 的平台限制与参数说明。
+- Windows ARM64、386 与 Linux 等平台共用 `trace/internal/*_socket.go` 后端，IPv6 Traffic Class 的平台差异由独立 helper 按 build tag 选择。
 
 ### MTR 中 `-q/-i/-y` 的新语义
 
@@ -429,7 +430,7 @@
   - `trace/internal/icmp_common.go`、`tcp_common.go`、`udp_common.go` 已改成“读包循环 + 共享解码 helper + 回调派发”结构。
   - 新增 `trace/internal/icmp_decode.go`，集中处理 ICMPv4/v6 解析、echo reply 匹配、内嵌目标 IP 校验、内嵌 ICMP seq 提取。
   - 新增 `trace/internal/icmp_decode_test.go`，覆盖 IPv4/IPv6 echo reply、error payload、目标 IP 校验、内嵌 seq 提取。
-  - `trace/internal/udp_unix.go` 的 `SendUDP` 已拆成 IPv4/IPv6 独立发送 helper；`trace/udp_ipv4.go` 的 `send()` 也已拆成配额检查、构包、超时守护、发送记账四段。
+  - `trace/internal/udp_socket.go` 的 `SendUDP` 已拆成 IPv4/IPv6 独立发送 helper；`trace/udp_ipv4.go` 的 `send()` 也已拆成配额检查、构包、超时守护、发送记账四段。
   - Windows 协议层新增 `trace/internal/windivert_sniff_windows.go`，把 WinDivert sniff handle 打开、收包、ICMP/TCP 解码下沉为共享 helper；`icmp_windows.go` / `tcp_windows.go` / `udp_windows.go` 的 sniff 入口已变成薄协调器。
   - Darwin `trace/internal/icmp_darwin.go:ListenPacket` 已拆成 socket spec、接口绑定、bind sockaddr、finalize packet conn 四段；`trace/internal/tcp_darwin.go:ListenTCP` 也改成设备选择 + BPF + 共享 TCP reply 解码 helper。
   - 新增 `trace/internal/tcp_probe_decode.go` 与 `trace/internal/tcp_probe_decode_test.go`，集中处理 TCP probe reply 的 seq 还原、peer IP 提取与 IPv4/IPv6 解析，供 Darwin/Windows TCP sniff 共用。
