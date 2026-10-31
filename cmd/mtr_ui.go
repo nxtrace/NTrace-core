@@ -71,9 +71,12 @@ func (u *mtrUI) IsTTY() bool {
 func (u *mtrUI) setProbeError(err error) {
 	message := sanitizeMTRReplayText(err.Error())
 	u.probeError.Store(&message)
-	select {
-	case u.redraw <- struct{}{}:
-	default:
+	u.requestRedraw()
+}
+
+func (u *mtrUI) clearProbeError() {
+	if u.probeError.Swap(nil) != nil {
+		u.requestRedraw()
 	}
 }
 

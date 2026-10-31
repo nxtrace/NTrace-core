@@ -23,10 +23,10 @@ func TestMTRTUIPrinterPreservesTerminalHistory(t *testing.T) {
 		nil, nil, nil, nil, nil, nil, nil)
 	output := captureStdout(t, func() {
 		for sent := 1; sent <= 3; sent++ {
-			printFrame(sent, []trace.MTRHopStat{{TTL: 1, IP: "192.0.2.1", Snt: sent, Received: sent}})
+			printFrame(sent, []trace.MTRHopStat{{TTL: 1, IP: "192.0.2.3", Snt: sent, Received: sent}})
 		}
 	})
-	if !strings.Contains(output, "192.0.2.1") {
+	if !strings.Contains(output, "192.0.2.3") {
 		t.Fatal("interactive refresh must render the visible hop")
 	}
 	if regexp.MustCompile(`\x1b\[[0-9;]*J`).MatchString(output) {
@@ -51,6 +51,14 @@ func TestMTRTUIProbeErrorRepaintsPausedHeader(t *testing.T) {
 	}
 	if update := output.String(); !strings.Contains(update, header.ProbeError) || strings.Contains(update, header.APIInfo) || strings.ContainsAny(update, "\r\n") {
 		t.Fatalf("diagnostic was not rendered as a non-scrolling header update: %q", update)
+	}
+	output.Reset()
+	header.ProbeError = ""
+	if err := renderer.renderWithSize(&output, header, nil, 150, 24); err != nil {
+		t.Fatal(err)
+	}
+	if update := output.String(); !strings.Contains(update, header.APIInfo) || strings.Contains(update, "unavailable") {
+		t.Fatalf("clearing the diagnostic must restore API information: %q", update)
 	}
 }
 
