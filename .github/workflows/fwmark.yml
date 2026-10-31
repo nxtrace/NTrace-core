@@ -1,9 +1,89 @@
 name: Linux fwmark
 on:
-  pull_request:
+  workflow_dispatch:
   push:
     branches: [main]
-  workflow_dispatch:
+    paths:
+      - ".cross_compile.sh"
+      - ".github/ci-paths.json"
+      - ".github/workflows/fwmark.yml"
+      - "assets/windivert/**"
+      - "cmd/cmd*.go"
+      - "cmd/doctor*.go"
+      - "cmd/flavor*.go"
+      - "cmd/fwmark*.go"
+      - "cmd/mtr_json*.go"
+      - "cmd/mtr_json_run*.go"
+      - "cmd/mtr_mode*.go"
+      - "cmd/tos*.go"
+      - "cmd/trace_mode*.go"
+      - "config/**/*.go"
+      - "config/**/testdata/**"
+      - "default.pgo"
+      - "dn42/**/*.go"
+      - "dn42/**/testdata/**"
+      - "go.mod"
+      - "go.sum"
+      - "internal/mtrsession/**/*.go"
+      - "internal/mtrsession/**/testdata/**"
+      - "internal/routeprobe/**/*.go"
+      - "internal/routeprobe/**/testdata/**"
+      - "ipgeo/**/*.go"
+      - "ipgeo/**/testdata/**"
+      - "main.go"
+      - "pow/**/*.go"
+      - "pow/**/testdata/**"
+      - "printer/mtr_raw*.go"
+      - "scripts/ci/**"
+      - "scripts/regression/fwmark*"
+      - "trace/**/*.go"
+      - "trace/**/testdata/**"
+      - "util/**/*.go"
+      - "util/**/testdata/**"
+      - "wshandle/**/*.go"
+      - "wshandle/**/testdata/**"
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - ".cross_compile.sh"
+      - ".github/ci-paths.json"
+      - ".github/workflows/fwmark.yml"
+      - "assets/windivert/**"
+      - "cmd/cmd*.go"
+      - "cmd/doctor*.go"
+      - "cmd/flavor*.go"
+      - "cmd/fwmark*.go"
+      - "cmd/mtr_json*.go"
+      - "cmd/mtr_json_run*.go"
+      - "cmd/mtr_mode*.go"
+      - "cmd/tos*.go"
+      - "cmd/trace_mode*.go"
+      - "config/**/*.go"
+      - "config/**/testdata/**"
+      - "default.pgo"
+      - "dn42/**/*.go"
+      - "dn42/**/testdata/**"
+      - "go.mod"
+      - "go.sum"
+      - "internal/mtrsession/**/*.go"
+      - "internal/mtrsession/**/testdata/**"
+      - "internal/routeprobe/**/*.go"
+      - "internal/routeprobe/**/testdata/**"
+      - "ipgeo/**/*.go"
+      - "ipgeo/**/testdata/**"
+      - "main.go"
+      - "pow/**/*.go"
+      - "pow/**/testdata/**"
+      - "printer/mtr_raw*.go"
+      - "scripts/ci/**"
+      - "scripts/regression/fwmark*"
+      - "trace/**/*.go"
+      - "trace/**/testdata/**"
+      - "util/**/*.go"
+      - "util/**/testdata/**"
+      - "wshandle/**/*.go"
+      - "wshandle/**/testdata/**"
+
 permissions:
   contents: read
 concurrency:
@@ -20,7 +100,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@v7
         with:
-          go-version: '1.27.1'
+          go-version: '1.27.3'
       - name: Install fixture dependencies
         run: sudo apt-get update && sudo apt-get install -y iproute2 tcpdump
       - name: Build

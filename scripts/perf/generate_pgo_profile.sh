@@ -9,10 +9,10 @@ RESULT_DIR="${PERF_RESULT_DIR:-${ROOT_DIR}/.cache/perf}"
 PROFILE_COMPONENT_TIME="${PROFILE_COMPONENT_TIME:-10s}"
 BENCH_GOMAXPROCS="${BENCH_GOMAXPROCS:-10}"
 PGO_SEED=20260905
-PGO_GOEXPERIMENT="${PGO_GOEXPERIMENT:-nojsonv2}"
-REQUIRED_GO_VERSION=go1.27.1
+REQUIRED_GO_VERSION=go1.27.3
 
 export GOTOOLCHAIN="${REQUIRED_GO_VERSION}"
+export GOEXPERIMENT=
 
 if [[ "${RESULT_DIR}" != /* ]]; then
   RESULT_DIR="${CALLER_DIR}/${RESULT_DIR}"
@@ -20,7 +20,6 @@ fi
 
 mkdir -p "${RESULT_DIR}"
 export GOMAXPROCS="${BENCH_GOMAXPROCS}"
-export GOEXPERIMENT="${PGO_GOEXPERIMENT}"
 
 actual_go_version="$(go env GOVERSION)"
 if [[ "${actual_go_version}" != "${REQUIRED_GO_VERSION}" ]]; then
@@ -93,7 +92,7 @@ manifest="${RESULT_DIR}/${RESULT_NAME}.profile.txt"
 {
   printf 'commit=%s\n' "$(git -C "${ROOT_DIR}" rev-parse HEAD)"
   printf 'go_version=%s\n' "$(go version)"
-  printf 'goexperiment=%s\n' "${GOEXPERIMENT}"
+  printf 'goexperiment=%s\n' "$(go env GOEXPERIMENT)"
   printf 'gomaxprocs=%s\n' "${GOMAXPROCS}"
   printf 'seed=%s\n' "${PGO_SEED}"
   printf 'component_time=%s\n' "${PROFILE_COMPONENT_TIME}"

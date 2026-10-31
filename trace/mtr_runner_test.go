@@ -196,6 +196,7 @@ func TestMTRLoopCancel(t *testing.T) {
 func TestMTRLoopErrorBackoff(t *testing.T) {
 	errProbe := errors.New("temporary error")
 	var callTimes []time.Time
+	var diagnostics []error
 
 	prober := &mockProber{
 		roundFn: func(_ context.Context) (*Result, error) {
@@ -213,6 +214,9 @@ func TestMTRLoopErrorBackoff(t *testing.T) {
 
 	err := mtrLoop(context.Background(), prober, Config{}, MTROptions{
 		Interval: time.Millisecond,
+		OnProbeError: func(err error) {
+			diagnostics = append(diagnostics, err)
+		},
 	}, agg, func(_ int, _ []MTRHopStat) {}, false, bo)
 
 	if err == nil {
@@ -220,6 +224,14 @@ func TestMTRLoopErrorBackoff(t *testing.T) {
 	}
 	if len(callTimes) != bo.MaxConsec {
 		t.Errorf("expected %d probe calls, got %d", bo.MaxConsec, len(callTimes))
+	}
+	if len(diagnostics) != bo.MaxConsec {
+		t.Fatalf("expected %d retry diagnostics, got %d", bo.MaxConsec, len(diagnostics))
+	}
+	for _, diagnostic := range diagnostics {
+		if !errors.Is(diagnostic, errProbe) {
+			t.Fatalf("diagnostic lost the probe error: %v", diagnostic)
+		}
 	}
 
 	// 验证退避间隔递增（至少前几两次差值应递增）

@@ -133,10 +133,11 @@ func runMTRTUI(method trace.Method, conf trace.Config, hopIntervalMs int, maxPer
 		var frameEditor printer.MTRColumnEditor
 		var frameSave printer.MTRSaveDialog
 		var frameHelp printer.MTRHelpDialog
-		render := printer.MTRTUIPrinterWithDialogs(target, domain, target, config.Version, startTime,
-			srcHost, srcIP, lang, func() string { return buildAPIInfo(dataOrigin) }, showIPs, ui.IsPaused,
-			ui.CurrentDisplayMode, ui.CurrentNameMode, ui.IsMPLSDisabled,
-			ui.IsHistoryMode, ui.CurrentHistoryChartMode, history.Snapshot, func() ([]printer.MTRColumn, printer.MTRColumnEditor) { return frameColumns, frameEditor },
+		render := newMTRTUIPrinter(ui, printer.MTRTUIHeader{
+			Target: target, Domain: domain, TargetIP: target, Version: config.Version,
+			StartTime: startTime, SrcHost: srcHost, SrcIP: srcIP, Lang: lang, ShowIPs: showIPs,
+		}, dataOrigin, history.Snapshot,
+			func() ([]printer.MTRColumn, printer.MTRColumnEditor) { return frameColumns, frameEditor },
 			func() (printer.MTRSaveDialog, printer.MTRHelpDialog) { return frameSave, frameHelp })
 		pasteEnabled := false
 		var stopRedraw func()
@@ -170,6 +171,16 @@ func runMTRTUI(method trace.Method, conf trace.Config, hopIntervalMs int, maxPer
 	return mtrRunError(ctx, probeErr)
 }
 
+func newMTRTUIPrinter(ui *mtrUI, header printer.MTRTUIHeader, dataOrigin string,
+	historySnapshot func(time.Time) []printer.MTRHistoryTTL,
+	columnState func() ([]printer.MTRColumn, printer.MTRColumnEditor),
+	dialogState func() (printer.MTRSaveDialog, printer.MTRHelpDialog)) trace.MTROnSnapshot {
+	return printer.MTRTUIPrinterWithDialogs(header.Target, header.Domain, header.TargetIP, header.Version, header.StartTime,
+		header.SrcHost, header.SrcIP, header.Lang, func() string { return buildAPIInfo(dataOrigin) }, header.ShowIPs,
+		ui.IsPaused, ui.CurrentDisplayMode, ui.CurrentNameMode, ui.IsMPLSDisabled,
+		ui.IsHistoryMode, ui.CurrentHistoryChartMode, historySnapshot, columnState, dialogState, ui.probeErrorText)
+}
+
 func newMTRTraceUI(cancel context.CancelFunc, initialDisplayMode int, disableMPLS bool, columns []printer.MTRColumn) *mtrUI {
 	ui := newMTRUI(cancel, initialDisplayMode)
 	ui.columns = append([]printer.MTRColumn(nil), columns...)
@@ -187,6 +198,9 @@ func buildMTRInteractiveOptions(ui *mtrUI, hopIntervalMs int, maxPerHop int) tra
 	}
 	opts.IsResetRequested = ui.ConsumeRestartRequest
 	opts.AsyncMetadata = ui.IsTTY()
+	if ui.IsTTY() {
+		opts.OnProbeError = ui.setProbeError
+	}
 	return opts
 }
 
@@ -195,7 +209,12 @@ func attachMTRHistoryIfTTY(ui *mtrUI, opts *trace.MTROptions) *printer.MTRHistor
 		return nil
 	}
 	history := printer.NewMTRHistoryStore(printer.MTRHistoryWindow)
-	opts.OnProbe = history.AddProbeEvent
+	opts.OnProbe = func(event trace.MTRProbeEvent) {
+		if event.Success {
+			ui.clearProbeError()
+		}
+		history.AddProbeEvent(event)
+	}
 	if opts.IsResetRequested != nil {
 		resetRequested := opts.IsResetRequested
 		opts.IsResetRequested = func() bool {
@@ -203,6 +222,7 @@ func attachMTRHistoryIfTTY(ui *mtrUI, opts *trace.MTROptions) *printer.MTRHistor
 				return false
 			}
 			history.Reset()
+			ui.clearProbeError()
 			return true
 		}
 	}

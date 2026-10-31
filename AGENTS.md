@@ -7,7 +7,7 @@
 - 名称：NextTrace (NTrace-core)
 - 仓库：github.com/nxtrace/NTrace-core
 - 模块：`github.com/nxtrace/NTrace-core`
-- 语言：Go（`go 1.27.1`）
+- 语言：Go（`go 1.27.3`）
 - 入口：`main.go -> cmd.Execute()`
 - 核心能力：ICMP/TCP/UDP traceroute、GeoIP/RDNS、MTR 连续探测、Web/API、多平台构建
 
@@ -136,6 +136,7 @@
 - 标记与非零 TOS 参与 Linux 会话选源，保留显式 source/device 约束，不标记 DNS/Geo/API 请求；初始化失败停止探测，不变成 MTR 丢包。
 - Linux IPv4 UDP 使用 raw connect 选源且不发送报文；只能确认源地址，Doctor 不据此推断出口接口/网关。netlink DONE 无匹配路由立即返回错误。
 - Windows amd64 非零 ICMP TOS 使用 WinDivert 发送；默认/零仍为原生 socket。详见中英文 README 的平台限制与参数说明。
+- Windows ARM64、386 与 Linux 等平台共用 `trace/internal/*_socket.go` 后端，IPv6 Traffic Class 的平台差异由独立 helper 按 build tag 选择。
 
 ### MTR 中 `-q/-i/-y` 的新语义
 
@@ -380,16 +381,16 @@
 
 ## CI 与工具链（当前）
 
-- `go.mod`: `go 1.27.1`；通过 `tool` directive 固定 `golang.org/x/perf/cmd/benchstat` 版本。
+- `go.mod`: `go 1.27.3`；通过 `tool` directive 固定 `golang.org/x/perf/cmd/benchstat` 版本。
 - GitHub Actions：
-  - `.github/workflows/build.yml` 使用 `setup-go@v7` + `go-version: 1.27.1`
-  - `.github/workflows/test.yml` 使用 `setup-go@v7` + `go-version: 1.27.1`
-  - `.github/workflows/regression.yml` 使用 `setup-go@v7` + `go-version: 1.27.1`
-  - `.github/workflows/golangci-lint.yml` 使用 `setup-go@v7` + `go-version: 1.27.1`
-  - test workflow 同时覆盖 Go 1.27 默认 JSON 与 `GOEXPERIMENT=nojsonv2`
-  - 正式发布构建暂用 `GOEXPERIMENT=nojsonv2`
+  - `.github/workflows/build.yml` 使用 `setup-go@v7` + `go-version: 1.27.3`
+  - `.github/workflows/test.yml` 使用 `setup-go@v7` + `go-version: 1.27.3`
+  - `.github/workflows/regression.yml` 使用 `setup-go@v7` + `go-version: 1.27.3`
+  - `.github/workflows/golangci-lint.yml` 使用 `setup-go@v7` + `go-version: 1.27.3`
+  - test workflow 使用 Go 默认 JSON 运行时，并在 `windows-11-arm` 上运行 IPv6 Traffic Class 专项回归
+  - 正式发布、性能脚本与 CI 统一使用默认 JSON 后端，不再固定旧实现或维护旧实现测试 lane；源码继续使用 `encoding/json` v1 API
   - build matrix 已移除 `windows/arm`
-- `.cross_compile.sh` 固定 `GOTOOLCHAIN=go1.27.1` 与 `GOEXPERIMENT=nojsonv2`；脚本与 workflow 里的 `go build` 都用数组构造 `-tags` 参数，避免 shell word-splitting；脚本也会把当前 `GOARM` 传给 `compress_with_upx`，使 linux/armv7 目标能命中对应压缩分支。
+- `.cross_compile.sh` 固定 `GOTOOLCHAIN=go1.27.3`，使用默认 JSON 运行时；脚本与 workflow 里的 `go build` 都用数组构造 `-tags` 参数，避免 shell word-splitting；脚本也会把当前 `GOARM` 传给 `compress_with_upx`，使 linux/armv7 目标能命中对应压缩分支。
 - Darwin 正式构建最低支持 macOS 13.0：CGO 编译/链接使用 `-mmacosx-version-min=13.0`，Go linker 显式传 `-macos=13.0`。
 - `ipgeo/ipdbone.go` 不再原地修改全局 `defaultClient.httpClient.Timeout`；超时覆盖会通过克隆 client（复用 token cache / token init，同步替换整个 HTTP client）实现，避免 dial timeout 与 client timeout 脱节。
 
@@ -429,7 +430,7 @@
   - `trace/internal/icmp_common.go`、`tcp_common.go`、`udp_common.go` 已改成“读包循环 + 共享解码 helper + 回调派发”结构。
   - 新增 `trace/internal/icmp_decode.go`，集中处理 ICMPv4/v6 解析、echo reply 匹配、内嵌目标 IP 校验、内嵌 ICMP seq 提取。
   - 新增 `trace/internal/icmp_decode_test.go`，覆盖 IPv4/IPv6 echo reply、error payload、目标 IP 校验、内嵌 seq 提取。
-  - `trace/internal/udp_unix.go` 的 `SendUDP` 已拆成 IPv4/IPv6 独立发送 helper；`trace/udp_ipv4.go` 的 `send()` 也已拆成配额检查、构包、超时守护、发送记账四段。
+  - `trace/internal/udp_socket.go` 的 `SendUDP` 已拆成 IPv4/IPv6 独立发送 helper；`trace/udp_ipv4.go` 的 `send()` 也已拆成配额检查、构包、超时守护、发送记账四段。
   - Windows 协议层新增 `trace/internal/windivert_sniff_windows.go`，把 WinDivert sniff handle 打开、收包、ICMP/TCP 解码下沉为共享 helper；`icmp_windows.go` / `tcp_windows.go` / `udp_windows.go` 的 sniff 入口已变成薄协调器。
   - Darwin `trace/internal/icmp_darwin.go:ListenPacket` 已拆成 socket spec、接口绑定、bind sockaddr、finalize packet conn 四段；`trace/internal/tcp_darwin.go:ListenTCP` 也改成设备选择 + BPF + 共享 TCP reply 解码 helper。
   - 新增 `trace/internal/tcp_probe_decode.go` 与 `trace/internal/tcp_probe_decode_test.go`，集中处理 TCP probe reply 的 seq 还原、peer IP 提取与 IPv4/IPv6 解析，供 Darwin/Windows TCP sniff 共用。

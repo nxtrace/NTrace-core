@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"time"
 )
 
@@ -211,7 +210,7 @@ func (rt *mtrLoopRuntime) handleProbeError(err error) (bool, error) {
 	}
 
 	rt.consecutiveErrors++
-	fmt.Fprintf(os.Stderr, "mtr: probe error (%d/%d): %v\n", rt.consecutiveErrors, rt.bo.MaxConsec, err)
+	reportMTRProbeError(rt.opts.OnProbeError, rt.consecutiveErrors, rt.bo.MaxConsec, err)
 	if rt.consecutiveErrors >= rt.bo.MaxConsec {
 		return false, fmt.Errorf("mtr: too many consecutive errors (%d), last: %w", rt.consecutiveErrors, err)
 	}

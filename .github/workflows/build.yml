@@ -14,28 +14,34 @@ concurrency:
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
-    tags: [ "v*" ]
+    branches: [main]
+    tags: ["v*"]
     paths:
       - "**/*.go"
       - "**/testdata/**"
+      - ".cross_compile.sh"
+      - ".github/ci-paths.json"
+      - ".github/workflows/build.yml"
+      - "assets/windivert/**"
+      - "default.pgo"
       - "go.mod"
       - "go.sum"
-      - "default.pgo"
-      - ".cross_compile.sh"
-      - "scripts/perf/**"
-      - ".github/workflows/*.yml"
+      - "scripts/ci/**"
+      - "server/web/**"
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
       - "**/*.go"
       - "**/testdata/**"
+      - ".cross_compile.sh"
+      - ".github/ci-paths.json"
+      - ".github/workflows/build.yml"
+      - "assets/windivert/**"
+      - "default.pgo"
       - "go.mod"
       - "go.sum"
-      - "default.pgo"
-      - ".cross_compile.sh"
-      - "scripts/perf/**"
-      - ".github/workflows/*.yml"
+      - "scripts/ci/**"
+      - "server/web/**"
 
 jobs:
   build:
@@ -73,8 +79,7 @@ jobs:
           - { goos: openbsd, goarch: arm64 }
           - { goos: openbsd, goarch: arm,    goarm: 7 }
     env:
-      GOTOOLCHAIN: go1.27.1
-      GOEXPERIMENT: nojsonv2
+      GOTOOLCHAIN: go1.27.3
       CGO_ENABLED: ${{ matrix.goos == 'android' && 1 || 0 }}
       GOOS:   ${{ matrix.goos }}
       GOARCH: ${{ matrix.goarch }}
@@ -90,7 +95,7 @@ jobs:
       - name: Set up Go (built-in cache)
         uses: actions/setup-go@v7
         with:
-          go-version: '1.27.1'
+          go-version: '1.27.3'
           check-latest: true
           cache: true
 
@@ -221,8 +226,7 @@ jobs:
       fail-fast: false
       matrix: { goarch: [ amd64, arm64 ] }
     env:
-      GOTOOLCHAIN: go1.27.1
-      GOEXPERIMENT: nojsonv2
+      GOTOOLCHAIN: go1.27.3
       CGO_ENABLED: 1
       GOOS: darwin
       GOARCH: ${{ matrix.goarch }}
@@ -236,7 +240,7 @@ jobs:
       - name: Set up Go (built-in cache)
         uses: actions/setup-go@v7
         with:
-          go-version: '1.27.1'
+          go-version: '1.27.3'
           check-latest: true
           cache: true
 

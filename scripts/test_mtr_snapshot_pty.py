@@ -27,6 +27,7 @@ SUMMARY = "NextTrace MTR snapshot"
 
 
 def resize(terminal, width, height):
+    terminal.screen.resize(width, height)
     if terminal.windows:
         terminal.process.setwinsize(height, width)
     else:
@@ -154,6 +155,7 @@ def quit_with_summary(terminal, enabled, expected_code=0):
         assert terminal.process.returncode == expected_code, terminal.process.returncode
         assert termios.tcgetattr(terminal.slave) == terminal.original, "Terminal attributes not restored"
     terminal.read(0.2)
+    terminal.assert_no_display_erase()
     output = terminal.log[start:].decode(errors="replace")
     restored = output.index("\x1b[?1049l")
     assert SUMMARY not in output[:restored], "Summary printed before terminal restoration"

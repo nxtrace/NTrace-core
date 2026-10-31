@@ -47,6 +47,7 @@ type MTRTUIHeader struct {
 	NameMode         int    // Host 基础显示 0=PTR/IP, 1=IP only
 	ShowIPs          bool   // 是否显示 PTR+IP（nameMode=0 时生效）
 	APIInfo          string // preferred API 信息（纯文本，可为空）
+	ProbeError       string // latest retry diagnostic, displayed by the rendering worker
 	DisableMPLS      bool   // 是否隐藏 MPLS 行（运行时 toggle）
 	HistoryMode      bool
 	HistoryChartMode int
@@ -368,8 +369,8 @@ var getTermWidth = func() int {
 	return w
 }
 
-// MTRTUIRender 将 MTR TUI 帧渲染到 w。
-// 每帧重新获取终端宽度并计算自适应布局。
+// MTRTUIRender writes a standalone full frame. Interactive sessions use
+// MTRTUIRenderer to preserve terminal history and selection across refreshes.
 func MTRTUIRender(w io.Writer, header MTRTUIHeader, stats []trace.MTRHopStat) {
 	_, height, err := term.GetSize(int(os.Stdout.Fd()))
 	if err != nil || height <= 0 {
@@ -384,30 +385,33 @@ func mtrTUIRenderWithWidth(w io.Writer, header MTRTUIHeader, stats []trace.MTRHo
 }
 
 func mtrTUIRenderWithSize(w io.Writer, header MTRTUIHeader, stats []trace.MTRHopStat, termWidth, termHeight int) {
+	var b strings.Builder
+	writeMTRTUIFramePrefix(&b)
+	b.WriteString(buildMTRTUIFrame(header, stats, termWidth, termHeight))
+	_, _ = fmt.Fprint(w, b.String())
+}
+
+// buildMTRTUIFrame produces styled CRLF-separated rows without cursor or erase commands.
+func buildMTRTUIFrame(header MTRTUIHeader, stats []trace.MTRHopStat, termWidth, termHeight int) string {
 	lo := buildMTRTUILayout(stats, termWidth)
 	var b strings.Builder
 
-	writeMTRTUIFramePrefix(&b)
 	if header.SaveDialog.Active {
 		renderMTRSaveDialog(&b, header.SaveDialog, lo.termWidth, termHeight)
-		_, _ = fmt.Fprint(w, b.String())
-		return
+		return b.String()
 	}
 	if header.HelpDialog.Active {
 		renderMTRHelpDialog(&b, header.HelpDialog, header.Replay != nil, lo.termWidth, termHeight)
-		_, _ = fmt.Fprint(w, b.String())
-		return
+		return b.String()
 	}
 	if header.ReplayEditor.Active {
 		tuiLine(&b, "%s", buildMTRTUITitleLine(header, lo.termWidth))
 		renderMTRReplayEditor(&b, header.ReplayEditor, lo.termWidth)
-		_, _ = fmt.Fprint(w, b.String())
-		return
+		return b.String()
 	}
 	if header.ColumnEditor.Active {
 		renderMTRColumnEditor(&b, header, lo.termWidth, termHeight)
-		_, _ = fmt.Fprint(w, b.String())
-		return
+		return b.String()
 	}
 	if header.Columns != nil && !header.HistoryMode {
 		renderMTRSelectedHeader(&b, header, lo.termWidth)
@@ -421,8 +425,7 @@ func mtrTUIRenderWithSize(w io.Writer, header MTRTUIHeader, stats []trace.MTRHop
 	}
 	if header.HistoryMode {
 		renderMTRTUIHistory(&b, header, stats, lo.termWidth)
-		fmt.Fprint(w, b.String())
-		return
+		return b.String()
 	}
 	if header.Columns != nil {
 		renderMTRSelectedColumns(&b, header, stats, lo.termWidth)
@@ -430,7 +433,7 @@ func mtrTUIRenderWithSize(w io.Writer, header MTRTUIHeader, stats []trace.MTRHop
 		renderDualHeader(&b, lo)
 		renderMTRTUIRows(&b, header, stats, lo)
 	}
-	fmt.Fprint(w, b.String())
+	return b.String()
 }
 
 func buildMTRTUILayout(stats []trace.MTRHopStat, termWidth int) mtrTUILayout {
@@ -493,6 +496,9 @@ func resolveMTRTUITitleParts(header MTRTUIHeader) (string, string) {
 	titlePart := fmt.Sprintf("NextTrace [%s]", ver)
 	if header.Replay != nil {
 		titlePart += " Replay"
+	}
+	if header.ProbeError != "" {
+		return titlePart, "  " + header.ProbeError
 	}
 	if header.APIInfo == "" {
 		return titlePart, ""
@@ -1153,7 +1159,8 @@ func MTRTUIPrinterWithDialogs(target, domain, targetIP, version string, startTim
 	srcHost, srcIP, lang string, apiInfo func() string, showIPs bool,
 	isPaused func() bool, displayMode func() int, nameMode func() int, isMPLSDisabled func() bool,
 	isHistoryMode func() bool, historyChartMode func() int, historySnapshot func(time.Time) []MTRHistoryTTL,
-	columnState func() ([]MTRColumn, MTRColumnEditor), dialogState func() (MTRSaveDialog, MTRHelpDialog)) func(iteration int, stats []trace.MTRHopStat) {
+	columnState func() ([]MTRColumn, MTRColumnEditor), dialogState func() (MTRSaveDialog, MTRHelpDialog), probeError ...func() string) func(iteration int, stats []trace.MTRHopStat) {
+	var renderer MTRTUIRenderer
 	var apiInfoMu sync.Mutex
 	var cachedAPIInfo string
 	var cachedAPIInfoAt time.Time
@@ -1214,7 +1221,11 @@ func MTRTUIPrinterWithDialogs(target, domain, targetIP, version string, startTim
 		if dialogState != nil {
 			saveDialog, helpDialog = dialogState()
 		}
-		MTRTUIRender(os.Stdout, MTRTUIHeader{
+		var probeErrorText string
+		if len(probeError) > 0 && probeError[0] != nil {
+			probeErrorText = probeError[0]()
+		}
+		_ = renderer.Render(os.Stdout, MTRTUIHeader{
 			Columns:          columns,
 			ColumnEditor:     editor,
 			SaveDialog:       saveDialog,
@@ -1233,6 +1244,7 @@ func MTRTUIPrinterWithDialogs(target, domain, targetIP, version string, startTim
 			NameMode:         nm,
 			ShowIPs:          showIPs,
 			APIInfo:          headerAPIInfo,
+			ProbeError:       probeErrorText,
 			DisableMPLS:      noMPLS,
 			HistoryMode:      historyMode,
 			HistoryChartMode: chartMode,

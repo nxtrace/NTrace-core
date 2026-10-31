@@ -1,5 +1,8 @@
 # Go 1.27.1 JSON 运行时评估
 
+> 历史测量记录。2026-11-01 起统一使用默认 JSON 后端，当前决策见
+> [JSON 运行时 ADR](../adr/0001-go127-json-runtime.md)。
+
 ## 范围与结论
 
 - 历史源码点：`2cab379924bdfdcfe0cb927156cceadd9b545ced`

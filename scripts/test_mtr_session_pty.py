@@ -18,6 +18,8 @@ import sys
 import tempfile
 import time
 
+from mtr_pty_screen import Screen
+
 if os.name != "nt":
     import fcntl
     import pty
@@ -27,6 +29,8 @@ if os.name != "nt":
 class Terminal:
     def __init__(self, command, log):
         self.log = log
+        self.start = len(log)
+        self.screen = Screen()
         self.windows = os.name == "nt"
         if self.windows:
             from winpty import PtyProcess
@@ -54,15 +58,18 @@ class Terminal:
                 except (OSError, EOFError):
                     break
         self.log.extend(data)
-        return data.decode(errors="replace")
+        text = data.decode(errors="replace")
+        self.screen.feed(text)
+        return text
 
     def expect(self, *needles, timeout=5):
         text = ""
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             text += self.read()
-            if all(needle in text for needle in needles):
-                return text
+            visible = self.screen.text()
+            if all(needle in (text if "\x1b" in needle else visible) for needle in needles):
+                return visible
         raise AssertionError(f"Missing {needles!r}: {text[-12000:]!r}")
 
     def send(self, keys):
@@ -84,6 +91,16 @@ class Terminal:
             self.process.wait(timeout=3)
             assert self.process.returncode == 0, self.process.returncode
             assert termios.tcgetattr(self.slave) == self.original, "Terminal attributes not restored"
+        self.assert_no_display_erase()
+
+    def assert_no_display_erase(self):
+        # ConPTY may synthesize its own screen updates, so inspect the direct
+        # application byte stream only on Unix. Go tests cover both platforms.
+        if not self.windows:
+            output = self.log[self.start:].decode(errors="replace")
+            assert not re.search(r"\x1b\[[0-9;]*J", output), "TUI erased display/history"
+            body = output.split("\x1b[?1049h", 1)[1].split("\x1b[?1049l", 1)[0]
+            assert "\n" not in body, "TUI emitted scrolling line feeds"
 
     def close(self):
         if self.windows:

@@ -9,36 +9,40 @@ concurrency:
   cancel-in-progress: true
 
 on:
+  workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
       - "**/*.go"
       - "**/testdata/**"
+      - ".cross_compile.sh"
+      - ".github/ci-paths.json"
+      - ".github/workflows/golangci-lint.yml"
+      - ".golangci.yml"
+      - "default.pgo"
       - "go.mod"
       - "go.sum"
-      - "default.pgo"
-      - "scripts/perf/**"
-      - ".golangci.yml"
-      - ".github/workflows/golangci-lint.yml"
+      - "scripts/ci/**"
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
       - "**/*.go"
       - "**/testdata/**"
+      - ".cross_compile.sh"
+      - ".github/ci-paths.json"
+      - ".github/workflows/golangci-lint.yml"
+      - ".golangci.yml"
+      - "default.pgo"
       - "go.mod"
       - "go.sum"
-      - "default.pgo"
-      - "scripts/perf/**"
-      - ".golangci.yml"
-      - ".github/workflows/golangci-lint.yml"
+      - "scripts/ci/**"
 
 jobs:
   lint:
     name: lint
     runs-on: ubuntu-latest
     env:
-      GOTOOLCHAIN: go1.27.1
+      GOTOOLCHAIN: go1.27.3
     steps:
       - name: Checkout codebase
         uses: actions/checkout@v7
@@ -49,14 +53,14 @@ jobs:
       - name: Set up Go (built-in cache)
         uses: actions/setup-go@v7
         with:
-          go-version: "1.27.1"
+          go-version: "1.27.3"
           check-latest: true
           cache: true
 
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.13.2
+          version: v2.15.0
           install-mode: goinstall
           # Large PRs exceed GitHub's diff API limit; compare the local Git history instead.
           only-new-issues: ${{ github.event_name != 'pull_request' }}

@@ -82,6 +82,7 @@ func runMTRReplayTUI(parent context.Context, reader *mtrsession.Reader, current 
 	var stopSeek context.CancelFunc
 	var queuedSeek *time.Duration
 	output := &mtrReplayOutput{w: stdout}
+	var renderer printer.MTRTUIRenderer
 	baseCursor, baseTime := current.cursor, time.Now()
 	beginSeek := func(at time.Duration) {
 		seekCtx, stop := context.WithCancel(ctx)
@@ -129,7 +130,9 @@ func runMTRReplayTUI(parent context.Context, reader *mtrsession.Reader, current 
 		snapshot := current.state.Snapshot()
 		h.Iteration = snapshot.Iteration
 		publishMTRReplaySnapshot(&snapshots, current, duration, complete, playing && !ui.IsPaused())
-		printer.MTRTUIRender(output, h, sanitizeMTRReplayStats(snapshot.Stats))
+		if err := renderer.Render(output, h, sanitizeMTRReplayStats(snapshot.Stats)); err != nil {
+			return err
+		}
 		return output.err
 	}
 	if err := render(); err != nil {

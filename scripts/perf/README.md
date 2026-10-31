@@ -5,22 +5,21 @@ settings. The scripts default to `GOMAXPROCS=10`, ten samples, one second per
 sample, and store raw results below the ignored `.cache/perf` directory.
 
 ```sh
-GOEXPERIMENT=nojsonv2 scripts/perf/run_benchmarks.sh base
-GOEXPERIMENT=nojsonv2 scripts/perf/run_benchmarks.sh head
+scripts/perf/run_benchmarks.sh base
+scripts/perf/run_benchmarks.sh head
 scripts/perf/compare_benchmarks.sh .cache/perf/base.bench.txt .cache/perf/head.bench.txt
-GOEXPERIMENT=nojsonv2 scripts/perf/measure_binaries.sh head
+scripts/perf/measure_binaries.sh head
 ```
 
-These commands select the release JSON runtime explicitly. Set
-`GOEXPERIMENT=` instead when measuring the Go 1.27 default JSON runtime.
+Release builds, CI, and performance scripts use the default Go JSON runtime.
 
 Use `run_json_benchmarks.sh` to compare the WebSocket marshal/unmarshal hot
 paths without running unrelated benchmarks:
 
 ```sh
-GOEXPERIMENT= scripts/perf/run_json_benchmarks.sh default-json
-GOEXPERIMENT=nojsonv2 scripts/perf/run_json_benchmarks.sh nojsonv2
-go tool benchstat .cache/perf/nojsonv2.bench.txt .cache/perf/default-json.bench.txt
+scripts/perf/run_json_benchmarks.sh base-json
+scripts/perf/run_json_benchmarks.sh head-json
+go tool benchstat .cache/perf/base-json.bench.txt .cache/perf/head-json.bench.txt
 ```
 
 If a result crosses a merge threshold without a statistically clear result,
@@ -28,7 +27,7 @@ repeat both sides with `BENCH_COUNT=20`. Generate CPU and heap profiles for a
 single representative benchmark with:
 
 ```sh
-GOEXPERIMENT=nojsonv2 scripts/perf/profile_benchmark.sh ./trace BenchmarkMTRAggregatorSnapshot64TTL4Paths profile-name
+scripts/perf/profile_benchmark.sh ./trace BenchmarkMTRAggregatorSnapshot64TTL4Paths profile-name
 ```
 
 Record `go version`, `go env GOEXPERIMENT`, the exact commit IDs, machine,
@@ -73,16 +72,18 @@ go tool benchstat .cache/perf/pgo-off.workload.bench.txt .cache/perf/pgo-on.work
 go tool benchstat .cache/perf/pgo-off.guardrail.bench.txt .cache/perf/pgo-on.guardrail.bench.txt
 ```
 
-The scripts fix `GOEXPERIMENT=nojsonv2`, `GOMAXPROCS=10`, and seed `20260905`
-by default. If a threshold is crossed without statistical confidence, rerun
-both sides with `BENCH_COUNT=20`.
+The scripts use the default Go JSON runtime, `GOMAXPROCS=10`, and seed
+`20260905` by default. PGO scripts clear inherited `GOEXPERIMENT` settings so
+profile generation and evaluation use the same default runtime.
+If a threshold is crossed without statistical confidence,
+rerun both sides with `BENCH_COUNT=20`.
 
 Set `PERF_BINARY_DIR` to keep the exact binaries built by
 `measure_binaries.sh` for startup and RSS comparison:
 
 ```sh
-GOEXPERIMENT=nojsonv2 GOFLAGS=-pgo=off \
+GOFLAGS=-pgo=off \
   PERF_BINARY_DIR=.cache/perf/pgo-off-bin scripts/perf/measure_binaries.sh pgo-off
-GOEXPERIMENT=nojsonv2 GOFLAGS=-pgo=$PWD/.cache/perf/candidate.candidate.pgo \
+GOFLAGS=-pgo=$PWD/.cache/perf/candidate.candidate.pgo \
   PERF_BINARY_DIR=.cache/perf/pgo-on-bin scripts/perf/measure_binaries.sh pgo-on
 ```

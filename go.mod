@@ -1,6 +1,6 @@
 module github.com/nxtrace/NTrace-core
 
-go 1.27.1
+go 1.27.3
 
 tool golang.org/x/perf/cmd/benchstat
 
@@ -8,6 +8,7 @@ require (
 	github.com/akamensky/argparse v1.4.0
 	github.com/ameshkov/dnscrypt/v2 v2.4.0
 	github.com/charmbracelet/log v1.0.0
+	github.com/charmbracelet/x/ansi v0.11.6
 	github.com/fatih/color v1.19.0
 	github.com/gin-gonic/gin v1.12.0
 	github.com/google/gopacket v1.1.19
@@ -15,25 +16,25 @@ require (
 	github.com/jedisct1/go-dnsstamps v0.0.0-20251112173516-191fc465df31
 	github.com/jessevdk/go-flags v1.6.1
 	github.com/jsdelivr/globalping-cli v1.5.1
-	github.com/mattn/go-runewidth v0.0.29
+	github.com/mattn/go-runewidth v0.0.31
 	github.com/miekg/dns v1.1.73
-	github.com/modelcontextprotocol/go-sdk v1.7.0
+	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/natesales/q v0.19.12
 	github.com/oschwald/maxminddb-golang v1.13.1
-	github.com/quic-go/quic-go v0.62.0
-	github.com/rodaine/table v1.3.1
+	github.com/quic-go/quic-go v0.64.1
+	github.com/rodaine/table v1.4.1
 	github.com/spf13/viper v1.21.0
 	github.com/sthorne/odoh-go v1.0.4
 	github.com/stretchr/testify v1.12.1
 	github.com/syndtr/gocapability v0.0.0-20200815063812-42c35b437635
-	github.com/tidwall/gjson v1.19.0
+	github.com/tidwall/gjson v1.20.0
 	github.com/tsosunchia/powclient v0.3.0
 	github.com/xjasonlyu/windivert-go v0.0.0-20201010013527-4239d0afa76f
-	golang.org/x/mod v0.40.0
-	golang.org/x/net v0.58.0
-	golang.org/x/sync v0.22.0
-	golang.org/x/sys v0.47.0
-	golang.org/x/term v0.45.0
+	golang.org/x/mod v0.42.0
+	golang.org/x/net v0.61.0
+	golang.org/x/sync v0.24.0
+	golang.org/x/sys v0.49.0
+	golang.org/x/term v0.47.0
 )
 
 require (
@@ -47,7 +48,6 @@ require (
 	github.com/bytedance/sonic/loader v0.5.0 // indirect
 	github.com/charmbracelet/colorprofile v0.4.2 // indirect
 	github.com/charmbracelet/lipgloss v1.1.0 // indirect
-	github.com/charmbracelet/x/ansi v0.11.6 // indirect
 	github.com/charmbracelet/x/cellbuf v0.0.15 // indirect
 	github.com/charmbracelet/x/term v0.2.2 // indirect
 	github.com/cisco/go-hpke v0.0.0-20230407100446-246075f83609 // indirect
@@ -97,11 +97,11 @@ require (
 	go.mongodb.org/mongo-driver/v2 v2.5.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/arch v0.22.0 // indirect
-	golang.org/x/crypto v0.55.0 // indirect
+	golang.org/x/crypto v0.58.0 // indirect
 	golang.org/x/exp v0.0.0-20260812173653-3d80eb74bc5b // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/perf v0.0.0-20260825160852-19be9d8e6c70 // indirect
-	golang.org/x/text v0.41.0 // indirect
+	golang.org/x/text v0.43.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

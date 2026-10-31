@@ -37,6 +37,7 @@ type mtrUI struct {
 	replayEditor    printer.MTRReplayEditor
 	replay          *mtrReplayControls
 	redraw          chan struct{}
+	probeError      atomic.Pointer[string]
 	isTTY           bool
 	oldState        *term.State // raw mode 之前的终端状态
 	paused          atomic.Bool
@@ -65,6 +66,25 @@ func newMTRUI(cancel context.CancelFunc, initialDisplayMode int) *mtrUI {
 // IsTTY 返回 stdin 和 stdout 是否都是终端。
 func (u *mtrUI) IsTTY() bool {
 	return u.isTTY
+}
+
+func (u *mtrUI) setProbeError(err error) {
+	message := sanitizeMTRReplayText(err.Error())
+	u.probeError.Store(&message)
+	u.requestRedraw()
+}
+
+func (u *mtrUI) clearProbeError() {
+	if u.probeError.Swap(nil) != nil {
+		u.requestRedraw()
+	}
+}
+
+func (u *mtrUI) probeErrorText() string {
+	if message := u.probeError.Load(); message != nil {
+		return *message
+	}
+	return ""
 }
 
 // CheckTTY 检查给定的 fd 是否都是终端（可测试）。

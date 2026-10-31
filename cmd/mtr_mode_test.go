@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/nxtrace/NTrace-core/ipgeo"
+	"github.com/nxtrace/NTrace-core/printer"
 	"github.com/nxtrace/NTrace-core/trace"
 	"github.com/nxtrace/NTrace-core/util"
 )
@@ -373,6 +375,97 @@ func TestBuildMTRInteractiveOptions_AsyncMetadataFollowsTTY(t *testing.T) {
 	}
 	if buildMTRInteractiveOptions(nonTTYUI, 1000, 0).AsyncMetadata {
 		t.Fatal("non-TTY MTR should keep synchronous metadata")
+	}
+}
+
+func TestMTRProbeErrorQueuesSanitizedNoticeWhilePaused(t *testing.T) {
+	ui := &mtrUI{isTTY: true, redraw: make(chan struct{}, 1)}
+	ui.paused.Store(true)
+	opts := buildMTRInteractiveOptions(ui, 1000, 0)
+	if opts.OnProbeError == nil {
+		t.Fatal("TTY MTR must route probe diagnostics through the rendering worker")
+	}
+	opts.OnProbeError(errors.New("probe failed\n\x1b[2J\u202e"))
+	if message := ui.probeErrorText(); !strings.Contains(message, "probe failed") || strings.ContainsAny(message, "\n\x1b\u202e") {
+		t.Fatalf("unsafe probe diagnostic: %q", message)
+	}
+	select {
+	case <-ui.redraw:
+	default:
+		t.Fatal("probe error did not request a redraw while paused")
+	}
+	if buildMTRInteractiveOptions(&mtrUI{}, 1000, 0).OnProbeError != nil {
+		t.Fatal("non-TTY MTR must retain stderr diagnostics")
+	}
+}
+
+func TestMTRProbeErrorClearsOnSuccessAndReset(t *testing.T) {
+	ui := &mtrUI{isTTY: true, redraw: make(chan struct{}, 1)}
+	ui.paused.Store(true)
+	opts := buildMTRInteractiveOptions(ui, 1000, 0)
+	history := attachMTRHistoryIfTTY(ui, &opts)
+	now := time.Now()
+	opts.OnProbeError(errors.New("probe failed"))
+	<-ui.redraw
+	opts.OnProbe(trace.MTRProbeEvent{TTL: 1, Timestamp: now})
+	if ui.probeErrorText() == "" {
+		t.Fatal("synthetic timeout must retain the retry diagnostic")
+	}
+	opts.OnProbe(trace.MTRProbeEvent{TTL: 1, Success: true, Timestamp: now})
+	if ui.probeErrorText() != "" {
+		t.Fatal("successful probe must clear the retry diagnostic")
+	}
+	select {
+	case <-ui.redraw:
+	default:
+		t.Fatal("recovery must request a redraw")
+	}
+	if snap := history.Snapshot(now); len(snap) != 1 || len(snap[0].Samples) != 2 {
+		t.Fatalf("probe history lost events: %+v", snap)
+	}
+	opts.OnProbeError(errors.New("probe failed again"))
+	<-ui.redraw
+	if opts.IsResetRequested() || ui.probeErrorText() == "" {
+		t.Fatal("polling without a reset must preserve the retry diagnostic")
+	}
+	ui.restartReq.Store(true)
+	if !opts.IsResetRequested() || ui.probeErrorText() != "" {
+		t.Fatal("accepted reset must clear the retry diagnostic")
+	}
+	select {
+	case <-ui.redraw:
+	default:
+		t.Fatal("reset must request a redraw even while paused")
+	}
+	if snap := history.Snapshot(now); len(snap) != 0 {
+		t.Fatalf("reset must still clear probe history: %+v", snap)
+	}
+}
+
+func TestMTRTUIPrinterReadsProbeErrorAtRenderTime(t *testing.T) {
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldStdout := os.Stdout
+	os.Stdout = w
+	t.Cleanup(func() { os.Stdout = oldStdout; _ = w.Close(); _ = r.Close() })
+	ui := &mtrUI{isTTY: true, redraw: make(chan struct{}, 1)}
+	ui.paused.Store(true)
+	opts := buildMTRInteractiveOptions(ui, 1000, 0)
+	render := newMTRTUIPrinter(ui, printer.MTRTUIHeader{StartTime: time.Now()}, "", nil, nil, nil)
+	render(0, nil)
+	opts.OnProbeError(errors.New("probe failed\n\x1b[2J\u202e"))
+	render(0, nil)
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	output, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(output, []byte("probe failed")) || bytes.Contains(output, []byte("\x1b[2J")) || bytes.Contains(output, []byte("\u202e")) {
+		t.Fatalf("probe error was not safely connected to the live renderer: %q", output)
 	}
 }
 

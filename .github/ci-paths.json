@@ -1,0 +1,273 @@
+{
+  "shared": [
+    "go.mod",
+    "go.sum",
+    "default.pgo",
+    ".cross_compile.sh",
+    ".github/ci-paths.json",
+    "scripts/ci/**"
+  ],
+  "groups": {
+    "go": [
+      "**/*.go",
+      "**/testdata/**",
+      "assets/windivert/**"
+    ],
+    "probe": [
+      "config/**/*.go",
+      "config/**/testdata/**",
+      "util/**/*.go",
+      "util/**/testdata/**",
+      "dn42/**/*.go",
+      "dn42/**/testdata/**",
+      "ipgeo/**/*.go",
+      "ipgeo/**/testdata/**",
+      "pow/**/*.go",
+      "pow/**/testdata/**",
+      "wshandle/**/*.go",
+      "wshandle/**/testdata/**",
+      "main.go",
+      "cmd/cmd*.go",
+      "cmd/flavor*.go",
+      "cmd/trace_mode*.go",
+      "trace/**/*.go",
+      "trace/**/testdata/**",
+      "internal/routeprobe/**/*.go",
+      "internal/routeprobe/**/testdata/**",
+      "cmd/mtr_mode*.go",
+      "cmd/mtr_json_run*.go",
+      "cmd/fwmark*.go",
+      "cmd/tos*.go",
+      "cmd/mtr_json*.go",
+      "cmd/doctor*.go",
+      "internal/mtrsession/**/*.go",
+      "internal/mtrsession/**/testdata/**",
+      "printer/mtr_raw*.go",
+      "assets/windivert/**"
+    ],
+    "pty": [
+      "config/**/*.go",
+      "config/**/testdata/**",
+      "util/**/*.go",
+      "util/**/testdata/**",
+      "dn42/**/*.go",
+      "dn42/**/testdata/**",
+      "ipgeo/**/*.go",
+      "ipgeo/**/testdata/**",
+      "pow/**/*.go",
+      "pow/**/testdata/**",
+      "wshandle/**/*.go",
+      "wshandle/**/testdata/**",
+      "main.go",
+      "cmd/cmd*.go",
+      "cmd/flavor*.go",
+      "cmd/trace_mode*.go",
+      "trace/**/*.go",
+      "trace/**/testdata/**",
+      "printer/**/*.go",
+      "printer/**/testdata/**",
+      "internal/mtrsession/**/*.go",
+      "internal/mtrsession/**/testdata/**",
+      "internal/hoprender/**/*.go",
+      "internal/hoprender/**/testdata/**",
+      "cmd/mtr*.go",
+      "scripts/test_mtr*_pty.py",
+      "scripts/mtr_pty_screen.py",
+      "cmd/fwmark*.go",
+      "cmd/doctor*.go",
+      "assets/windivert/**"
+    ],
+    "doctor": [
+      "config/**/*.go",
+      "config/**/testdata/**",
+      "util/**/*.go",
+      "util/**/testdata/**",
+      "dn42/**/*.go",
+      "dn42/**/testdata/**",
+      "ipgeo/**/*.go",
+      "ipgeo/**/testdata/**",
+      "pow/**/*.go",
+      "pow/**/testdata/**",
+      "wshandle/**/*.go",
+      "wshandle/**/testdata/**",
+      "main.go",
+      "cmd/cmd*.go",
+      "cmd/flavor*.go",
+      "cmd/trace_mode*.go",
+      "trace/**/*.go",
+      "trace/**/testdata/**",
+      "internal/routeprobe/**/*.go",
+      "internal/routeprobe/**/testdata/**",
+      "cmd/mtr_mode*.go",
+      "cmd/mtr_json_run*.go",
+      "cmd/fwmark*.go",
+      "cmd/tos*.go",
+      "internal/doctor/**/*.go",
+      "internal/doctor/**/testdata/**",
+      "cmd/doctor*.go"
+    ],
+    "dns": [
+      "main.go",
+      "cmd/cmd*.go",
+      "cmd/flavor*.go",
+      "cmd/trace_mode*.go",
+      "internal/dnsclient/**/*.go",
+      "internal/dnsclient/**/testdata/**",
+      "config/**/*.go",
+      "config/**/testdata/**",
+      "cmd/dns*.go"
+    ],
+    "install": [
+      "nt_install.sh",
+      "scripts/test_nt_install.sh"
+    ],
+    "web": [
+      "server/web/**"
+    ],
+    "shell": [
+      ".cross_compile.sh",
+      "scripts/perf/*.sh"
+    ],
+    "build": [
+      "**/*.go",
+      "**/testdata/**",
+      "server/web/**",
+      ".cross_compile.sh",
+      "assets/windivert/**"
+    ],
+    "lint": [
+      "**/*.go",
+      "**/testdata/**",
+      ".golangci.yml"
+    ],
+    "tos_scripts": [
+      "scripts/regression/tos*",
+      "scripts/regression/test_tos*"
+    ],
+    "fwmark_scripts": [
+      "scripts/regression/fwmark*"
+    ],
+    "regression": [
+      "cmd/**/*.go",
+      "cmd/**/testdata/**",
+      "trace/**/*.go",
+      "trace/**/testdata/**",
+      "printer/**/*.go",
+      "printer/**/testdata/**",
+      "config/**/*.go",
+      "config/**/testdata/**",
+      "util/**/*.go",
+      "util/**/testdata/**",
+      "dn42/**/*.go",
+      "dn42/**/testdata/**",
+      "ipgeo/**/*.go",
+      "ipgeo/**/testdata/**",
+      "pow/**/*.go",
+      "pow/**/testdata/**",
+      "wshandle/**/*.go",
+      "wshandle/**/testdata/**",
+      "reporter/**/*.go",
+      "reporter/**/testdata/**",
+      "tracelog/**/*.go",
+      "tracelog/**/testdata/**",
+      "tracemap/**/*.go",
+      "tracemap/**/testdata/**",
+      "fast_trace/**/*.go",
+      "fast_trace/**/testdata/**",
+      "server/**/*.go",
+      "server/**/testdata/**",
+      "internal/**/*.go",
+      "internal/**/testdata/**",
+      "main.go",
+      "server/web/**",
+      "scripts/regression/unix.sh",
+      "scripts/regression/linux.sh",
+      "scripts/regression/macos.sh",
+      "scripts/regression/windows.ps1",
+      "assets/windivert/**"
+    ],
+    "performance": [
+      "main.go",
+      "cmd/**/*.go",
+      "cmd/**/testdata/**",
+      "dn42/**/*.go",
+      "dn42/**/testdata/**",
+      "util/**/*.go",
+      "util/**/testdata/**",
+      "trace/**/*.go",
+      "trace/**/testdata/**",
+      "server/**/*.go",
+      "server/**/testdata/**",
+      "internal/nali/**/*.go",
+      "internal/nali/**/testdata/**",
+      "config/**/*.go",
+      "config/**/testdata/**",
+      "pow/**/*.go",
+      "pow/**/testdata/**",
+      "wshandle/**/*.go",
+      "wshandle/**/testdata/**",
+      "ipgeo/**/*.go",
+      "ipgeo/**/testdata/**",
+      "internal/speedtest/**/*.go",
+      "internal/speedtest/**/testdata/**",
+      "internal/hoprender/**/*.go",
+      "internal/hoprender/**/testdata/**",
+      "internal/mtrsession/**/*.go",
+      "internal/mtrsession/**/testdata/**",
+      "printer/**/*.go",
+      "printer/**/testdata/**",
+      "internal/service/**/*.go",
+      "internal/service/**/testdata/**",
+      "tracemap/**/*.go",
+      "tracemap/**/testdata/**",
+      "internal/routeprobe/**/*.go",
+      "internal/routeprobe/**/testdata/**",
+      "server/web/**",
+      "scripts/perf/*.sh",
+      "assets/windivert/**"
+    ]
+  },
+  "checks": {
+    "go": [
+      "go"
+    ],
+    "pty": [
+      "pty"
+    ],
+    "doctor": [
+      "doctor"
+    ],
+    "dns": [
+      "dns"
+    ],
+    "install": [
+      "install"
+    ],
+    "web": [
+      "web"
+    ],
+    "shell": [
+      "shell"
+    ],
+    "build": [
+      "build"
+    ],
+    "lint": [
+      "lint"
+    ],
+    "regression": [
+      "regression"
+    ],
+    "performance": [
+      "performance"
+    ],
+    "tos": [
+      "probe",
+      "tos_scripts"
+    ],
+    "fwmark": [
+      "probe",
+      "fwmark_scripts"
+    ]
+  }
+}
