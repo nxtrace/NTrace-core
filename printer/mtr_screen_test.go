@@ -36,17 +36,17 @@ func TestMTRTUIPrinterPreservesTerminalHistory(t *testing.T) {
 			t.Fatal("interactive refresh must use absolute positions without scrolling line feeds")
 		}
 		screen.apply(t, output)
-	}
-	var hopRow string
-	for _, row := range screen.rows {
-		if strings.Contains(row, "192.0.2.3") {
-			hopRow = row
-			break
+		var hopRow string
+		for _, row := range screen.rows {
+			if strings.Contains(row, "192.0.2.3") {
+				hopRow = row
+				break
+			}
 		}
-	}
-	fields := strings.Fields(hopRow)
-	if len(fields) < 4 || fields[1] != "192.0.2.3" || fields[3] != "3" {
-		t.Fatalf("final visible hop must contain the latest Snt=3: %q", hopRow)
+		fields := strings.Fields(hopRow)
+		if len(fields) < 4 || fields[1] != "192.0.2.3" || fields[3] != strconv.Itoa(sent) {
+			t.Fatalf("visible hop after refresh %d must contain Snt=%d: %q", sent, sent, hopRow)
+		}
 	}
 }
 
