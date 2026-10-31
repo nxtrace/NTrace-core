@@ -37,8 +37,16 @@ func TestMTRTUIPrinterPreservesTerminalHistory(t *testing.T) {
 		}
 		screen.apply(t, output)
 	}
-	if !strings.Contains(strings.Join(screen.rows, "\n"), "192.0.2.3") {
-		t.Fatal("interactive refresh must retain the hop on the final visible screen")
+	var hopRow string
+	for _, row := range screen.rows {
+		if strings.Contains(row, "192.0.2.3") {
+			hopRow = row
+			break
+		}
+	}
+	fields := strings.Fields(hopRow)
+	if len(fields) < 4 || fields[1] != "192.0.2.3" || fields[3] != "3" {
+		t.Fatalf("final visible hop must contain the latest Snt=3: %q", hopRow)
 	}
 }
 
