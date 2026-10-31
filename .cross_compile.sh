@@ -2,8 +2,7 @@
 
 set -Eeuo pipefail
 
-export GOTOOLCHAIN=go1.27.1
-export GOEXPERIMENT=nojsonv2
+export GOTOOLCHAIN=go1.27.3
 
 # -------- Config --------
 # Usage: .cross_compile.sh [full|tiny|ntr|all] [debug]

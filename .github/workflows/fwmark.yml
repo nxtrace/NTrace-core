@@ -100,7 +100,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@v7
         with:
-          go-version: '1.27.1'
+          go-version: '1.27.3'
       - name: Install fixture dependencies
         run: sudo apt-get update && sudo apt-get install -y iproute2 tcpdump
       - name: Build

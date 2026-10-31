@@ -7,7 +7,7 @@
 - 名称：NextTrace (NTrace-core)
 - 仓库：github.com/nxtrace/NTrace-core
 - 模块：`github.com/nxtrace/NTrace-core`
-- 语言：Go（`go 1.27.1`）
+- 语言：Go（`go 1.27.3`）
 - 入口：`main.go -> cmd.Execute()`
 - 核心能力：ICMP/TCP/UDP traceroute、GeoIP/RDNS、MTR 连续探测、Web/API、多平台构建
 
@@ -381,16 +381,16 @@
 
 ## CI 与工具链（当前）
 
-- `go.mod`: `go 1.27.1`；通过 `tool` directive 固定 `golang.org/x/perf/cmd/benchstat` 版本。
+- `go.mod`: `go 1.27.3`；通过 `tool` directive 固定 `golang.org/x/perf/cmd/benchstat` 版本。
 - GitHub Actions：
-  - `.github/workflows/build.yml` 使用 `setup-go@v7` + `go-version: 1.27.1`
-  - `.github/workflows/test.yml` 使用 `setup-go@v7` + `go-version: 1.27.1`
-  - `.github/workflows/regression.yml` 使用 `setup-go@v7` + `go-version: 1.27.1`
-  - `.github/workflows/golangci-lint.yml` 使用 `setup-go@v7` + `go-version: 1.27.1`
-  - test workflow 同时覆盖 Go 1.27 默认 JSON 与 `GOEXPERIMENT=nojsonv2`，并在 `windows-11-arm` 上运行 IPv6 Traffic Class 专项回归
-  - 正式发布构建暂用 `GOEXPERIMENT=nojsonv2`
+  - `.github/workflows/build.yml` 使用 `setup-go@v7` + `go-version: 1.27.3`
+  - `.github/workflows/test.yml` 使用 `setup-go@v7` + `go-version: 1.27.3`
+  - `.github/workflows/regression.yml` 使用 `setup-go@v7` + `go-version: 1.27.3`
+  - `.github/workflows/golangci-lint.yml` 使用 `setup-go@v7` + `go-version: 1.27.3`
+  - test workflow 使用 Go 默认 JSON 运行时，并在 `windows-11-arm` 上运行 IPv6 Traffic Class 专项回归
+  - 正式发布、性能脚本与 CI 统一使用默认 JSON 后端，不再固定旧实现或维护旧实现测试 lane；源码继续使用 `encoding/json` v1 API
   - build matrix 已移除 `windows/arm`
-- `.cross_compile.sh` 固定 `GOTOOLCHAIN=go1.27.1` 与 `GOEXPERIMENT=nojsonv2`；脚本与 workflow 里的 `go build` 都用数组构造 `-tags` 参数，避免 shell word-splitting；脚本也会把当前 `GOARM` 传给 `compress_with_upx`，使 linux/armv7 目标能命中对应压缩分支。
+- `.cross_compile.sh` 固定 `GOTOOLCHAIN=go1.27.3`，使用默认 JSON 运行时；脚本与 workflow 里的 `go build` 都用数组构造 `-tags` 参数，避免 shell word-splitting；脚本也会把当前 `GOARM` 传给 `compress_with_upx`，使 linux/armv7 目标能命中对应压缩分支。
 - Darwin 正式构建最低支持 macOS 13.0：CGO 编译/链接使用 `-mmacosx-version-min=13.0`，Go linker 显式传 `-macos=13.0`。
 - `ipgeo/ipdbone.go` 不再原地修改全局 `defaultClient.httpClient.Timeout`；超时覆盖会通过克隆 client（复用 token cache / token init，同步替换整个 HTTP client）实现，避免 dial timeout 与 client timeout 脱节。
 

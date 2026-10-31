@@ -236,13 +236,11 @@ Windows 的 `--dev` 仅用于源地址选择，不能表述为设备绑定已验
 
 ### 手动编译
 
-需要 Go 1.27.1+ 环境。与正式发布一致的构建使用
-`GOEXPERIMENT=nojsonv2`；CI 仍覆盖 Go 1.27 默认 JSON 运行时，但其 WebSocket
-编码开销未达到发布性能门槛。详见 [JSON 运行时 ADR](docs/adr/0001-go127-json-runtime.md)。
+需要 Go 1.27.3+ 环境。正式发布与 CI 统一使用 Go 默认 JSON 运行时。
+详见 [JSON 运行时 ADR](docs/adr/0001-go127-json-runtime.md)。
 
 ```bash
-export GOTOOLCHAIN=go1.27.1
-export GOEXPERIMENT=nojsonv2
+export GOTOOLCHAIN=go1.27.3
 
 # 完整版（所有功能）
 go build -trimpath -o dist/nexttrace -ldflags "-w -s" .
@@ -260,7 +258,7 @@ macOS 源码编译需要 macOS 13.0 或更高版本、Xcode Command Line Tools �
 
 ```bash
 # Linux arm64 精简版
-GOTOOLCHAIN=go1.27.1 GOEXPERIMENT=nojsonv2 \
+GOTOOLCHAIN=go1.27.3 \
   GOOS=linux GOARCH=arm64 CGO_ENABLED=0 \
   go build -tags flavor_tiny -trimpath -o dist/nexttrace-tiny_linux_arm64 -ldflags "-w -s" .
 ```

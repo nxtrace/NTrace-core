@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
-      GOTOOLCHAIN: go1.27.1
+      GOTOOLCHAIN: go1.27.3
     strategy:
       fail-fast: false
       matrix:
@@ -50,7 +50,7 @@ jobs:
       - name: Set up Go (built-in cache)
         uses: actions/setup-go@v7
         with:
-          go-version: '1.27.1'
+          go-version: '1.27.3'
           check-latest: true
           cache: true
 

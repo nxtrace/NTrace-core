@@ -110,7 +110,6 @@ jobs:
       BENCH_TIME: "1s"
       BENCH_GOMAXPROCS: "10"
       PROFILE_TIME: "30s"
-      GOEXPERIMENT: nojsonv2
     steps:
       - name: Checkout head history
         uses: actions/checkout@v7
@@ -177,8 +176,8 @@ jobs:
                 reference_toolchain="go1.26.8"
                 ;;
               1.27*)
-                reference_go_version="1.27.1"
-                reference_toolchain="go1.27.1"
+                reference_go_version="${reference_go_directive}"
+                reference_toolchain="go${reference_go_directive}"
                 ;;
               *)
                 echo "FAIL: unsupported comparison go directive: ${reference_go_directive:-missing}" >&2
@@ -320,17 +319,17 @@ jobs:
             exit 1
           fi
 
-      - name: Set up head Go 1.27.1
+      - name: Set up head Go 1.27.3
         uses: actions/setup-go@v7
         with:
-          go-version: "1.27.1"
+          go-version: "1.27.3"
           check-latest: true
           cache: false
 
       - name: Record head environment
         shell: bash
         env:
-          GOTOOLCHAIN: go1.27.1
+          GOTOOLCHAIN: go1.27.3
         run: |
           set -Eeuo pipefail
           result_dir="${RUNNER_TEMP}/performance-evidence/head"
@@ -352,7 +351,7 @@ jobs:
         continue-on-error: true
         shell: bash
         env:
-          GOTOOLCHAIN: go1.27.1
+          GOTOOLCHAIN: go1.27.3
           PERF_RESULT_DIR: ${{ runner.temp }}/performance-evidence/head
         run: bash scripts/perf/run_benchmarks.sh head
 
@@ -361,7 +360,7 @@ jobs:
         continue-on-error: true
         shell: bash
         env:
-          GOTOOLCHAIN: go1.27.1
+          GOTOOLCHAIN: go1.27.3
         run: |
           set -Eeuo pipefail
           result_dir="${RUNNER_TEMP}/performance-evidence/head"
@@ -374,7 +373,7 @@ jobs:
         continue-on-error: true
         shell: bash
         env:
-          GOTOOLCHAIN: go1.27.1
+          GOTOOLCHAIN: go1.27.3
           PERF_RESULT_DIR: ${{ runner.temp }}/performance-evidence/head
         run: bash scripts/perf/profile_benchmark.sh ./trace BenchmarkMTRAggregatorSnapshot64TTL4Paths head-mtr
 
@@ -383,7 +382,7 @@ jobs:
         continue-on-error: true
         shell: bash
         env:
-          GOTOOLCHAIN: go1.27.1
+          GOTOOLCHAIN: go1.27.3
           MTR_GOROUTINE_ACTIVE_PROFILE: ${{ runner.temp }}/performance-evidence/head/head-mtr-workers-active.goroutine.pprof
           MTR_GOROUTINE_LEAK_PROFILE: ${{ runner.temp }}/performance-evidence/head/head-mtr-workers-final.goroutine.pprof
         run: go test -count=1 -run '^(TestMTRSchedulerJoinsSessionListener|TestMTRWorkerGoroutineProfileCarriesOwnerLabel)$' ./trace
@@ -393,7 +392,7 @@ jobs:
         continue-on-error: true
         shell: bash
         env:
-          GOTOOLCHAIN: go1.27.1
+          GOTOOLCHAIN: go1.27.3
         run: |
           set -Eeuo pipefail
           result_dir="${RUNNER_TEMP}/performance-evidence/head"
@@ -418,7 +417,7 @@ jobs:
         continue-on-error: true
         shell: bash
         env:
-          GOTOOLCHAIN: go1.27.1
+          GOTOOLCHAIN: go1.27.3
           REFERENCE_SHA: ${{ steps.refs.outputs.reference_sha }}
         run: |
           set -Eeuo pipefail

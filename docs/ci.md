@@ -7,7 +7,7 @@ PR 和 main push 使用相同的路径规则；发版 tag 仍运行完整构建�
 
 | 检查 | 相关改动 |
 | --- | --- |
-| 三平台 Go 测试、race、JSON 兼容、全平台构建 | Go 文件、testdata、依赖、PGO、WinDivert 嵌入资源和各自配置；构建另包含嵌入的 Web 资源 |
+| 三平台 Go 测试、race、JSON golden、全平台构建 | Go 文件、testdata、依赖、PGO、WinDivert 嵌入资源和各自配置；构建另包含嵌入的 Web 资源 |
 | lint | Go 文件、testdata、依赖、PGO 及 lint 配置 |
 | TOS、fwmark | trace、routeprobe、公共配置及工具、探测 CLI、MTR JSON / RAW 输出契约、WinDivert 资源、各自验收脚本 |
 | MTR PTY / ConPTY | MTR CLI、printer、hoprender、mtrsession、trace、公共初始化依赖、所有 PTY 脚本及共享屏幕模型 |
@@ -30,7 +30,7 @@ PR 和 main push 使用相同的路径规则；发版 tag 仍运行完整构建�
 路径策略保存在 `.github/ci-paths.json`。独立 workflow 使用原生 `paths`，没有相关改动时不创建运行。
 Test workflow 内的专项由 `scripts/ci/select_checks.py` 选择：只改 PTY 脚本时运行三平台 PTY，
 只改安装脚本时运行 Linux/macOS 安装验收，只改 Web 资源时不启动 Go 测试矩阵。
-Go 源码修改始终保留三平台基础测试、race 和 JSON 兼容检查。
+Go 源码修改始终保留三平台基础测试、race 和 JSON golden 检查。
 
 修改策略后同步原生路径过滤，并验证：
 
