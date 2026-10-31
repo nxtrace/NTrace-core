@@ -26,11 +26,31 @@ func TestMTRTUIPrinterPreservesTerminalHistory(t *testing.T) {
 			printFrame(sent, []trace.MTRHopStat{{TTL: 1, IP: "192.0.2.1", Snt: sent, Received: sent}})
 		}
 	})
+	if !strings.Contains(output, "192.0.2.1") {
+		t.Fatal("interactive refresh must render the visible hop")
+	}
 	if regexp.MustCompile(`\x1b\[[0-9;]*J`).MatchString(output) {
 		t.Fatal("interactive refresh must not erase the display and move old frames into terminal history")
 	}
 	if strings.ContainsAny(output, "\r\n") {
 		t.Fatal("interactive refresh must use absolute positions without scrolling line feeds")
+	}
+}
+
+func TestMTRTUIProbeErrorRepaintsPausedHeader(t *testing.T) {
+	var renderer MTRTUIRenderer
+	var output strings.Builder
+	header := MTRTUIHeader{Status: MTRTUIPaused, APIInfo: "preferred API IP: cached"}
+	if err := renderer.renderWithSize(&output, header, nil, 150, 24); err != nil {
+		t.Fatal(err)
+	}
+	output.Reset()
+	header.ProbeError = "mtr: probe error (1/10): unavailable"
+	if err := renderer.renderWithSize(&output, header, nil, 150, 24); err != nil {
+		t.Fatal(err)
+	}
+	if update := output.String(); !strings.Contains(update, header.ProbeError) || strings.Contains(update, header.APIInfo) || strings.ContainsAny(update, "\r\n") {
+		t.Fatalf("diagnostic was not rendered as a non-scrolling header update: %q", update)
 	}
 }
 

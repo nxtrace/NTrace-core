@@ -376,6 +376,27 @@ func TestBuildMTRInteractiveOptions_AsyncMetadataFollowsTTY(t *testing.T) {
 	}
 }
 
+func TestMTRProbeErrorQueuesSanitizedNoticeWhilePaused(t *testing.T) {
+	ui := &mtrUI{isTTY: true, redraw: make(chan struct{}, 1)}
+	ui.paused.Store(true)
+	opts := buildMTRInteractiveOptions(ui, 1000, 0)
+	if opts.OnProbeError == nil {
+		t.Fatal("TTY MTR must route probe diagnostics through the rendering worker")
+	}
+	opts.OnProbeError(errors.New("probe failed\n\x1b[2J\u202e"))
+	if message := ui.probeErrorText(); !strings.Contains(message, "probe failed") || strings.ContainsAny(message, "\n\x1b\u202e") {
+		t.Fatalf("unsafe probe diagnostic: %q", message)
+	}
+	select {
+	case <-ui.redraw:
+	default:
+		t.Fatal("probe error did not request a redraw while paused")
+	}
+	if buildMTRInteractiveOptions(&mtrUI{}, 1000, 0).OnProbeError != nil {
+		t.Fatal("non-TTY MTR must retain stderr diagnostics")
+	}
+}
+
 func TestAttachMTRHistoryIfTTY(t *testing.T) {
 	nonTTYUI := &mtrUI{isTTY: false}
 	nonTTYOpts := buildMTRInteractiveOptions(nonTTYUI, 1000, 0)

@@ -47,6 +47,7 @@ type MTRTUIHeader struct {
 	NameMode         int    // Host 基础显示 0=PTR/IP, 1=IP only
 	ShowIPs          bool   // 是否显示 PTR+IP（nameMode=0 时生效）
 	APIInfo          string // preferred API 信息（纯文本，可为空）
+	ProbeError       string // latest retry diagnostic, displayed by the rendering worker
 	DisableMPLS      bool   // 是否隐藏 MPLS 行（运行时 toggle）
 	HistoryMode      bool
 	HistoryChartMode int
@@ -495,6 +496,9 @@ func resolveMTRTUITitleParts(header MTRTUIHeader) (string, string) {
 	titlePart := fmt.Sprintf("NextTrace [%s]", ver)
 	if header.Replay != nil {
 		titlePart += " Replay"
+	}
+	if header.ProbeError != "" {
+		return titlePart, "  " + header.ProbeError
 	}
 	if header.APIInfo == "" {
 		return titlePart, ""
@@ -1155,7 +1159,7 @@ func MTRTUIPrinterWithDialogs(target, domain, targetIP, version string, startTim
 	srcHost, srcIP, lang string, apiInfo func() string, showIPs bool,
 	isPaused func() bool, displayMode func() int, nameMode func() int, isMPLSDisabled func() bool,
 	isHistoryMode func() bool, historyChartMode func() int, historySnapshot func(time.Time) []MTRHistoryTTL,
-	columnState func() ([]MTRColumn, MTRColumnEditor), dialogState func() (MTRSaveDialog, MTRHelpDialog)) func(iteration int, stats []trace.MTRHopStat) {
+	columnState func() ([]MTRColumn, MTRColumnEditor), dialogState func() (MTRSaveDialog, MTRHelpDialog), probeError ...func() string) func(iteration int, stats []trace.MTRHopStat) {
 	var renderer MTRTUIRenderer
 	var apiInfoMu sync.Mutex
 	var cachedAPIInfo string
@@ -1217,6 +1221,10 @@ func MTRTUIPrinterWithDialogs(target, domain, targetIP, version string, startTim
 		if dialogState != nil {
 			saveDialog, helpDialog = dialogState()
 		}
+		var probeErrorText string
+		if len(probeError) > 0 && probeError[0] != nil {
+			probeErrorText = probeError[0]()
+		}
 		_ = renderer.Render(os.Stdout, MTRTUIHeader{
 			Columns:          columns,
 			ColumnEditor:     editor,
@@ -1236,6 +1244,7 @@ func MTRTUIPrinterWithDialogs(target, domain, targetIP, version string, startTim
 			NameMode:         nm,
 			ShowIPs:          showIPs,
 			APIInfo:          headerAPIInfo,
+			ProbeError:       probeErrorText,
 			DisableMPLS:      noMPLS,
 			HistoryMode:      historyMode,
 			HistoryChartMode: chartMode,

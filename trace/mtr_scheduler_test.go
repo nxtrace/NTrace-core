@@ -619,6 +619,7 @@ func TestScheduler_ErrorBudgetEmitsOnProbe(t *testing.T) {
 
 	var mu sync.Mutex
 	var rawRecords []mtrProbeResult
+	var diagnostics []error
 
 	err := runMTRScheduler(context.Background(), prober, agg, mtrSchedulerConfig{
 		BeginHop:         1,
@@ -626,6 +627,7 @@ func TestScheduler_ErrorBudgetEmitsOnProbe(t *testing.T) {
 		HopInterval:      time.Millisecond,
 		MaxPerHop:        2,
 		MaxConsecErrors:  3,
+		OnProbeError:     func(err error) { diagnostics = append(diagnostics, err) },
 		ParallelRequests: 1,
 		ProgressThrottle: time.Millisecond,
 	}, nil, func(result mtrProbeResult, _ int, _ time.Time) {
@@ -636,6 +638,14 @@ func TestScheduler_ErrorBudgetEmitsOnProbe(t *testing.T) {
 
 	if err != nil {
 		t.Fatalf("expected nil (completed), got %v", err)
+	}
+	if len(diagnostics) != 6 {
+		t.Fatalf("expected 6 retry diagnostics, got %d", len(diagnostics))
+	}
+	for _, diagnostic := range diagnostics {
+		if !errors.Is(diagnostic, errAlways) {
+			t.Fatalf("diagnostic lost the probe error: %v", diagnostic)
+		}
 	}
 
 	mu.Lock()

@@ -51,6 +51,8 @@ type MTROptions struct {
 	OnPathEnd func(*StopReason)
 	// OnEvent records applied per-hop session changes. An error stops probing.
 	OnEvent func(MTRSessionEvent) error
+	// OnProbeError handles retry diagnostics instead of writing them to stderr.
+	OnProbeError func(error)
 }
 
 // MTROnSnapshot 每轮完成后的回调，用于刷新 CLI 表格。
@@ -170,8 +172,18 @@ func runMTRPerHop(ctx context.Context, method Method, baseConfig Config, opts MT
 		IsResetRequested: opts.IsResetRequested,
 		OnPathEnd:        opts.OnPathEnd,
 		OnEvent:          opts.OnEvent,
+		OnProbeError:     opts.OnProbeError,
 		StartErrorPrefix: "mtr",
 	}, onSnapshot, mtrProbeCallbackFromOptions(opts))
+}
+
+func reportMTRProbeError(handler func(error), consecutive, limit int, err error) {
+	message := fmt.Errorf("mtr: probe error (%d/%d): %w", consecutive, limit, err)
+	if handler != nil {
+		handler(message)
+		return
+	}
+	fmt.Fprintln(os.Stderr, message)
 }
 
 func mtrProbeCallbackFromOptions(opts MTROptions) func(mtrProbeResult, int, time.Time) {

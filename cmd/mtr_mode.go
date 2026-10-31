@@ -137,7 +137,7 @@ func runMTRTUI(method trace.Method, conf trace.Config, hopIntervalMs int, maxPer
 			srcHost, srcIP, lang, func() string { return buildAPIInfo(dataOrigin) }, showIPs, ui.IsPaused,
 			ui.CurrentDisplayMode, ui.CurrentNameMode, ui.IsMPLSDisabled,
 			ui.IsHistoryMode, ui.CurrentHistoryChartMode, history.Snapshot, func() ([]printer.MTRColumn, printer.MTRColumnEditor) { return frameColumns, frameEditor },
-			func() (printer.MTRSaveDialog, printer.MTRHelpDialog) { return frameSave, frameHelp })
+			func() (printer.MTRSaveDialog, printer.MTRHelpDialog) { return frameSave, frameHelp }, ui.probeErrorText)
 		pasteEnabled := false
 		var stopRedraw func()
 		onSnapshot, stopRedraw = startMTRRedraw(ui.redraw, func() (int, int) { w, h, _ := term.GetSize(int(os.Stdout.Fd())); return w, h }, func(n int, stats []trace.MTRHopStat) {
@@ -187,6 +187,9 @@ func buildMTRInteractiveOptions(ui *mtrUI, hopIntervalMs int, maxPerHop int) tra
 	}
 	opts.IsResetRequested = ui.ConsumeRestartRequest
 	opts.AsyncMetadata = ui.IsTTY()
+	if ui.IsTTY() {
+		opts.OnProbeError = ui.setProbeError
+	}
 	return opts
 }
 

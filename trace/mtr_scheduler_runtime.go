@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"os"
 	"sync/atomic"
 	"time"
 )
@@ -342,7 +341,7 @@ func (rt *mtrSchedulerRuntime) processProbeError(ttl int, err error, doneAt time
 
 	state := &rt.states[ttl]
 	state.consecutiveErrs++
-	fmt.Fprintf(os.Stderr, "mtr: probe error (%d/%d): %v\n", state.consecutiveErrs, rt.maxConsecErrs, err)
+	reportMTRProbeError(rt.cfg.OnProbeError, state.consecutiveErrs, rt.maxConsecErrs, err)
 	if state.consecutiveErrs < rt.maxConsecErrs {
 		return
 	}
