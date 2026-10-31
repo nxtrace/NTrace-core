@@ -179,7 +179,7 @@ func (s *UDPSpec) sendUDPIPv6(ipHdr *layers.IPv6, udpHdr *layers.UDP, payload []
 	s.hopLimitLock.Lock()
 	defer s.hopLimitLock.Unlock()
 
-	if err := s.udp6.SetTrafficClass(int(ipHdr.TrafficClass)); err != nil {
+	if err := setIPv6TrafficClass(s.udp6, ipHdr.TrafficClass); err != nil {
 		return time.Time{}, &InitializationError{Err: fmt.Errorf("set IPv6 Traffic Class %d: %w", ipHdr.TrafficClass, err)}
 	}
 	if err := s.udp6.SetHopLimit(int(ipHdr.HopLimit)); err != nil {

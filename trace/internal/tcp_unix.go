@@ -191,7 +191,7 @@ func (s *TCPSpec) SendTCP(ctx context.Context, ipHdr gopacket.NetworkLayer, tcpH
 	s.hopLimitLock.Lock()
 	defer s.hopLimitLock.Unlock()
 
-	if err := s.tcp6.SetTrafficClass(int(ip6.TrafficClass)); err != nil {
+	if err := setIPv6TrafficClass(s.tcp6, ip6.TrafficClass); err != nil {
 		return time.Time{}, &InitializationError{Err: fmt.Errorf("set IPv6 Traffic Class %d: %w", ip6.TrafficClass, err)}
 	}
 	if err := s.tcp6.SetHopLimit(ttl); err != nil {

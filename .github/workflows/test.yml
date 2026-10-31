@@ -299,6 +299,27 @@ jobs:
         if: ${{ needs.changes.outputs.go == 'true' && (matrix.os == 'windows-latest') }}
         run: go test -tags flavor_ntr ./cmd ./server
 
+  test-windows-arm64:
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
+    name: Windows ARM64 IPv6 Traffic Class
+    runs-on: windows-11-arm
+    env:
+      GOTOOLCHAIN: go1.27.1
+    steps:
+      - name: Checkout codebase
+        uses: actions/checkout@v7
+
+      - name: Set up Go (built-in cache)
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.27.1'
+          check-latest: true
+          cache: true
+
+      - name: Test IPv6 Traffic Class callers
+        run: go test -v ./trace/internal -run '^(TestSetIPv6TrafficClassSkipsOnlyZeroOnWindows|TestIPv6SendersSkipZeroTrafficClassOnWindows)$' -count=1
+
   test-nojsonv2:
     needs: changes
     if: needs.changes.outputs.go == 'true'

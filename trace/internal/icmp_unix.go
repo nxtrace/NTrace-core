@@ -119,7 +119,7 @@ func (s *ICMPSpec) SendICMP(ctx context.Context, ipHdr gopacket.NetworkLayer, ic
 	s.hopLimitLock.Lock()
 	defer s.hopLimitLock.Unlock()
 
-	if err := s.icmp6.SetTrafficClass(int(ip6.TrafficClass)); err != nil {
+	if err := setIPv6TrafficClass(s.icmp6, ip6.TrafficClass); err != nil {
 		return time.Time{}, &InitializationError{Err: fmt.Errorf("set IPv6 Traffic Class %d: %w", ip6.TrafficClass, err)}
 	}
 	if err := s.icmp6.SetHopLimit(ttl); err != nil {

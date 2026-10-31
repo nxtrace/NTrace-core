@@ -386,7 +386,7 @@
   - `.github/workflows/test.yml` 使用 `setup-go@v7` + `go-version: 1.27.1`
   - `.github/workflows/regression.yml` 使用 `setup-go@v7` + `go-version: 1.27.1`
   - `.github/workflows/golangci-lint.yml` 使用 `setup-go@v7` + `go-version: 1.27.1`
-  - test workflow 同时覆盖 Go 1.27 默认 JSON 与 `GOEXPERIMENT=nojsonv2`
+  - test workflow 同时覆盖 Go 1.27 默认 JSON 与 `GOEXPERIMENT=nojsonv2`，并在 `windows-11-arm` 上运行 IPv6 Traffic Class 专项回归
   - 正式发布构建暂用 `GOEXPERIMENT=nojsonv2`
   - build matrix 已移除 `windows/arm`
 - `.cross_compile.sh` 固定 `GOTOOLCHAIN=go1.27.1` 与 `GOEXPERIMENT=nojsonv2`；脚本与 workflow 里的 `go build` 都用数组构造 `-tags` 参数，避免 shell word-splitting；脚本也会把当前 `GOARM` 传给 `compress_with_upx`，使 linux/armv7 目标能命中对应压缩分支。
