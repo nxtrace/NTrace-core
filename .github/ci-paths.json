@@ -187,6 +187,9 @@
       "assets/windivert/**"
     ],
     "performance": [
+      "main.go",
+      "cmd/**/*.go",
+      "cmd/**/testdata/**",
       "dn42/**/*.go",
       "dn42/**/testdata/**",
       "util/**/*.go",

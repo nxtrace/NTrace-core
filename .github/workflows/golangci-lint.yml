@@ -60,7 +60,7 @@ jobs:
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.13.2
+          version: v2.15.0
           install-mode: goinstall
           # Large PRs exceed GitHub's diff API limit; compare the local Git history instead.
           only-new-issues: ${{ github.event_name != 'pull_request' }}

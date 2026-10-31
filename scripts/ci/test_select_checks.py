@@ -72,6 +72,12 @@ class SelectionTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertEqual(self.selected(path), set(ci.TEST_CHECKS))
 
+    def test_cli_changes_trigger_binary_performance_evidence(self):
+        for path in ("main.go", "cmd/cmd.go", "cmd/nested/entry.go",
+                     "cmd/testdata/cli.json", "cmd/nested/testdata/input"):
+            with self.subTest(path=path):
+                self.assertTrue(any(ci.matches(path, p) for p in self.rules["performance"]))
+
     def test_native_filters_are_synchronized(self):
         self.assertEqual(ci.sync_workflows(self.rules), [])
 
@@ -109,10 +115,14 @@ class SelectionTests(unittest.TestCase):
         self.assertFalse(ci.matches("trace/README.md", "trace/**/*.go"))
 
     def test_only_needed_platforms_start(self):
-        for path, want in (("scripts/test_mtr_columns_pty.py", 3),
-                           ("nt_install.sh", 2), ("internal/dnsclient/query.go", 3),
-                           ("scripts/test_nt_install.sh", 2)):
-            self.assertEqual(len(ci.platforms(ci.classify([path], self.rules))), want)
+        all_platforms = ["windows-latest", "ubuntu-latest", "macos-latest"]
+        install_platforms = ["ubuntu-latest", "macos-latest"]
+        for path, want in (("scripts/test_mtr_columns_pty.py", all_platforms),
+                           ("nt_install.sh", install_platforms),
+                           ("internal/dnsclient/query.go", all_platforms),
+                           ("scripts/test_nt_install.sh", install_platforms)):
+            with self.subTest(path=path):
+                self.assertEqual(ci.platforms(ci.classify([path], self.rules)), want)
 
     def test_cli_writes_flags_and_fallback_reason(self):
         with tempfile.TemporaryDirectory() as directory:
