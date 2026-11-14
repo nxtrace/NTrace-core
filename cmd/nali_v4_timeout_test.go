@@ -48,13 +48,13 @@ func TestRunNaliModeV4WaitsForSlowLookup(t *testing.T) {
 					t.Error(err)
 					return
 				}
-				defer remote.Close()
+				defer func() { _ = remote.Close() }()
 				client, _, err := w.(http.Hijacker).Hijack()
 				if err != nil {
 					t.Error(err)
 					return
 				}
-				defer client.Close()
+				defer func() { _ = client.Close() }()
 				_, _ = io.WriteString(client, "HTTP/1.1 200 Connection Established\r\n\r\n")
 				go func() { _, _ = io.Copy(remote, client) }()
 				_, _ = io.Copy(client, remote)
