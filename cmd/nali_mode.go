@@ -235,9 +235,15 @@ func runNaliMode(ctx context.Context, opts naliRunOptions) error {
 	} else if opts.ipv6Only {
 		family = nali.Family6
 	}
+	descriptor := ipgeo.GetSourceDescriptorWithGeoDNS(opts.data, opts.dot)
+	timeout := time.Duration(opts.timeoutMs) * time.Millisecond
+	if descriptor.Backend == ipgeo.SourceBackendNextTraceAPIV4 && timeout < ipgeo.NextTraceAPIV4MinTimeout {
+		// The cache waiter must allow the same minimum budget as the v4 client.
+		timeout = ipgeo.NextTraceAPIV4MinTimeout
+	}
 	return nali.Run(ctx, nali.Config{
-		Source:  trace.CachedGeoSource(ipgeo.GetSourceDescriptorWithGeoDNS(opts.data, opts.dot)),
-		Timeout: time.Duration(opts.timeoutMs) * time.Millisecond,
+		Source:  trace.CachedGeoSource(descriptor),
+		Timeout: timeout,
 		Lang:    opts.lang,
 		Family:  family,
 		DN42:    isDN42Provider(opts.data),

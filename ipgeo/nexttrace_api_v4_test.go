@@ -1273,8 +1273,8 @@ func TestNewNextTraceAPIV4ClientDefaultsBoundedHTTPClient(t *testing.T) {
 	if client.httpClient == nil {
 		t.Fatal("httpClient = nil, want bounded default client")
 	}
-	if client.httpClient.Timeout < nextTraceAPIV4MinTimeout {
-		t.Fatalf("httpClient.Timeout = %s, want at least %s", client.httpClient.Timeout, nextTraceAPIV4MinTimeout)
+	if client.httpClient.Timeout < NextTraceAPIV4MinTimeout {
+		t.Fatalf("httpClient.Timeout = %s, want at least %s", client.httpClient.Timeout, NextTraceAPIV4MinTimeout)
 	}
 	if client.httpClient == http.DefaultClient {
 		t.Fatal("httpClient = http.DefaultClient, want bounded default client")
