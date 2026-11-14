@@ -236,11 +236,11 @@ Windows 的 `--dev` 仅用于源地址选择，不能表述为设备绑定已验
 
 ### 手动编译
 
-需要 Go 1.27.3+ 环境。正式发布与 CI 统一使用 Go 默认 JSON 运行时。
+需要 Go 1.27.4+ 环境。正式发布与 CI 统一使用 Go 默认 JSON 运行时。
 详见 [JSON 运行时 ADR](docs/adr/0001-go127-json-runtime.md)。
 
 ```bash
-export GOTOOLCHAIN=go1.27.3
+export GOTOOLCHAIN=go1.27.4
 
 # 完整版（所有功能）
 go build -trimpath -o dist/nexttrace -ldflags "-w -s" .
@@ -258,7 +258,7 @@ macOS 源码编译需要 macOS 13.0 或更高版本、Xcode Command Line Tools �
 
 ```bash
 # Linux arm64 精简版
-GOTOOLCHAIN=go1.27.3 \
+GOTOOLCHAIN=go1.27.4 \
   GOOS=linux GOARCH=arm64 CGO_ENABLED=0 \
   go build -tags flavor_tiny -trimpath -o dist/nexttrace-tiny_linux_arm64 -ldflags "-w -s" .
 ```
@@ -614,7 +614,7 @@ export NO_COLOR=1
 | `--parallel-requests` | 跨 TTL 的总并发 in-flight 探测数 | `18` | 多路径/负载均衡链路用 `1`；稳定链路一般 `6-18` |
 | `--send-time` | 同一 TTL 组内相邻探测包间隔 | `50ms` | 设备限速时升到 `100-200ms`；MTR 下忽略 |
 | `--ttl-time` | 常规 traceroute 的 TTL 组间隔；MTR 的每跳探测间隔 | traceroute: `300ms`；MTR: 未指定时 `1000ms` | 想加速就调低；远程/限速链路调高 |
-| `--timeout` | 单个探测包超时 | `1000ms` | 跨洲或高丢包链路升到 `2000-3000ms` |
+| `--timeout` | 单个探测包超时 | `3000ms` | 跨洲或高丢包链路可适当调高 |
 | `--psize` | 探测包大小 | 按协议/IP 族自动取最小合法值 | 含 IP + 探测协议头；负值表示每个 probe 在 `abs(value)` 内随机；超过出接口/路径 MTU 时，链路上可能看到分片 |
 | `-Q`, `--tos` | IP TOS / traffic class | `0` | 设置完整 8 位字段（DSCP*4+ECN）；Windows amd64 非零 ICMP TOS 依赖 `WinDivert` |
 
@@ -1058,9 +1058,9 @@ Arguments:
                                      (--mtr/-r/-w, including --raw), this
                                      becomes per-hop probe interval. 500-1000ms
                                      is a good MTR starting range
-      --timeout                      Per-probe timeout [ms]. Raise to 2000-3000
-                                     on slow intercontinental or high-loss
-                                     paths. Default: 1000
+      --timeout                      Per-probe timeout [ms]. Increase on slow
+                                     intercontinental or high-loss paths.
+                                     Default: 3000
       --psize                        Probe packet size in bytes, inclusive IP
                                      and active probe headers. Default is the
                                      minimum legal size for the chosen protocol

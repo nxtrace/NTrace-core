@@ -18,6 +18,9 @@ import (
 	"golang.org/x/net/http/httpproxy"
 )
 
+// NextTraceAPIV4MinTimeout is the minimum total budget for a v4 GeoIP lookup.
+const NextTraceAPIV4MinTimeout = 2 * time.Second
+
 const (
 	NextTraceAPIV4TokenPageURL  = "https://api.nxtrace.org/v4/api-tokens"
 	nextTraceAPIV4APIHost       = "api.nxtrace.org"
@@ -26,7 +29,6 @@ const (
 	nextTraceAPIV4TokenHeader   = "X-NextTrace-Token"
 	nextTraceAPIV4MaxErrorBody  = 512
 	nextTraceAPIV4MaxGeoBody    = 1 << 20
-	nextTraceAPIV4MinTimeout    = 2 * time.Second
 	nextTraceAPIV4FastIPTimeout = time.Second
 	nextTraceAPIV4MaxAttempts   = 3
 	nextTraceAPIV4CacheMaxSize  = 32
@@ -76,7 +78,7 @@ type NextTraceAPIV4Client struct {
 func NewNextTraceAPIV4Client(endpoint string, token string, httpClient *http.Client) *NextTraceAPIV4Client {
 	endpoint = normalizeNextTraceAPIV4Endpoint(endpoint)
 	if httpClient == nil {
-		httpClient = defaultNextTraceAPIV4HTTPClient(endpoint, nextTraceAPIV4MinTimeout)
+		httpClient = defaultNextTraceAPIV4HTTPClient(endpoint, NextTraceAPIV4MinTimeout)
 	}
 	return &NextTraceAPIV4Client{
 		endpoint:   endpoint,
@@ -514,8 +516,8 @@ func sleepBeforeNextTraceAPIV4Retry(ctx context.Context, delay time.Duration) er
 }
 
 func normalizeNextTraceAPIV4Timeout(timeout time.Duration) time.Duration {
-	if timeout < nextTraceAPIV4MinTimeout {
-		return nextTraceAPIV4MinTimeout
+	if timeout < NextTraceAPIV4MinTimeout {
+		return NextTraceAPIV4MinTimeout
 	}
 	return timeout
 }

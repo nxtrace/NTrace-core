@@ -26,7 +26,7 @@ var (
 		"protocol":          "icmp",
 		"queries":           3,
 		"max_hops":          30,
-		"timeout_ms":        1000,
+		"timeout_ms":        3000,
 		"packet_size":       nil,
 		"tos":               0,
 		"parallel_requests": 18,

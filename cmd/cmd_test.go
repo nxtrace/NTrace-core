@@ -1166,7 +1166,7 @@ func TestAdvancedHelpTextMentionsTuningGuidance(t *testing.T) {
 	registerPacketIntervalFlag(parser)
 	parser.Int("", "max-attempts", &argparse.Options{Help: buildMaxAttemptsHelp()})
 	parser.Int("", "parallel-requests", &argparse.Options{Default: 18, Help: buildParallelRequestsHelp()})
-	parser.Int("", "timeout", &argparse.Options{Default: 1000, Help: buildTimeoutHelp()})
+	parser.Int("", "timeout", &argparse.Options{Default: 3000, Help: buildTimeoutHelp()})
 	parser.Int("", "psize", &argparse.Options{Help: buildPayloadSizeHelp()})
 
 	usage := parser.Usage(nil)

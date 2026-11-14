@@ -440,6 +440,13 @@ function Check-JsonPure {
         Write-Record $Name SKIP "$Note; external service unavailable"
         return
     }
+    if ($Name -eq "json_globalping" -and ([string]$content).Trim() -in @(
+        "globalping measurement results did not include hop data",
+        "no matching IPv4 probes available - please try a different location"
+    )) {
+        Write-Record $Name SKIP "$Note; external Globalping probe unavailable"
+        return
+    }
     $sanitizedContent = [regex]::Replace($content, $powLogPattern, "")
     $bytes = [System.Text.Encoding]::UTF8.GetBytes($sanitizedContent)
     $first = ""
@@ -883,7 +890,7 @@ try {
         }
         if ($icmp4Capability.Supported) {
             try {
-                $body = '{"target":"1.1.1.1","queries":1,"max_hops":3,"timeout_ms":1000}'
+                $body = '{"target":"1.1.1.1","queries":1,"max_hops":3,"timeout_ms":1000,"data_provider":"disable-geoip","disable_rdns":true,"disable_maptrace":true}'
                 Invoke-WebRequest -UseBasicParsing -Method Post -ContentType "application/json" -Body $body -Uri "$deployBaseUrl/api/trace" -TimeoutSec 15 | Select-Object -ExpandProperty Content | Tee-Object -FilePath (Join-Path $ArtifactsDir "deploy_trace.txt") | Out-Null
                 $traceBody = Get-Content -Raw -Path (Join-Path $ArtifactsDir "deploy_trace.txt")
                 if ($traceBody.Contains('"resolved_ip"')) {

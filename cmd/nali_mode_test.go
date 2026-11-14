@@ -126,7 +126,7 @@ func TestBuildNaliModeOptionsDetectsExplicitDefaults(t *testing.T) {
 	parser.Int("", "source-port", &argparse.Options{Default: 0})
 	parser.Flag("", "show-ips", &argparse.Options{})
 	parser.Int("y", "ipinfo", &argparse.Options{Default: 0})
-	parser.Int("", "timeout", &argparse.Options{Default: 1000})
+	parser.Int("", "timeout", &argparse.Options{Default: 3000})
 	if err := parser.Parse([]string{"nexttrace", "-q", "3", "--max-hops", "30", "-i", "300", "--source-port", "0", "--show-ips", "-y", "0"}); err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}

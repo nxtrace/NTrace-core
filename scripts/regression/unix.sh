@@ -271,6 +271,14 @@ check_json_pure() {
     record "${name}" SKIP "${note}; external service unavailable"
     return
   fi
+  if [[ "${name}" == json_globalping ]]; then
+    case "$(tr -d '\r' < "${out}")" in
+      'globalping measurement results did not include hop data'|'no matching IPv4 probes available - please try a different location')
+        record "${name}" SKIP "${note}; external Globalping probe unavailable"
+        return
+        ;;
+    esac
+  fi
   if ! allowed_exit_matches "${rc}" "${allowed_csv}"; then
     record "${name}" FAIL "${note}; exit=${rc}"
     return
@@ -622,7 +630,7 @@ if DEPLOY_BASE_URL="$(wait_deploy_base_url "${DEPLOY_LOG}")" && wait_http_ready 
   else
     record deploy_options FAIL 'Options API check failed'
   fi
-  if curl -fsS --connect-timeout 2 --max-time 5 -X POST -H 'Content-Type: application/json' --data '{"target":"1.1.1.1","queries":1,"max_hops":3,"timeout_ms":1000}' "${DEPLOY_BASE_URL}/api/trace" >"${ART_DIR}/deploy_trace.txt" 2>&1 && grep -Fq '"resolved_ip"' "${ART_DIR}/deploy_trace.txt"; then
+  if curl -fsS --connect-timeout 2 --max-time 5 -X POST -H 'Content-Type: application/json' --data '{"target":"1.1.1.1","queries":1,"max_hops":3,"timeout_ms":1000,"data_provider":"disable-geoip","disable_rdns":true,"disable_maptrace":true}' "${DEPLOY_BASE_URL}/api/trace" >"${ART_DIR}/deploy_trace.txt" 2>&1 && grep -Fq '"resolved_ip"' "${ART_DIR}/deploy_trace.txt"; then
     record deploy_trace PASS 'REST trace endpoint works'
   else
     record deploy_trace FAIL 'REST trace endpoint failed'
