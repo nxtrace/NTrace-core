@@ -2,7 +2,7 @@
 
 set -Eeuo pipefail
 
-export GOTOOLCHAIN=go1.27.3
+export GOTOOLCHAIN=go1.27.4
 
 # -------- Config --------
 # Usage: .cross_compile.sh [full|tiny|ntr|all] [debug]

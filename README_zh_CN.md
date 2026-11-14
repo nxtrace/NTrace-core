@@ -236,11 +236,11 @@ Windows 的 `--dev` 仅用于源地址选择，不能表述为设备绑定已验
 
 ### 手动编译
 
-需要 Go 1.27.3+ 环境。正式发布与 CI 统一使用 Go 默认 JSON 运行时。
+需要 Go 1.27.4+ 环境。正式发布与 CI 统一使用 Go 默认 JSON 运行时。
 详见 [JSON 运行时 ADR](docs/adr/0001-go127-json-runtime.md)。
 
 ```bash
-export GOTOOLCHAIN=go1.27.3
+export GOTOOLCHAIN=go1.27.4
 
 # 完整版（所有功能）
 go build -trimpath -o dist/nexttrace -ldflags "-w -s" .
@@ -258,7 +258,7 @@ macOS 源码编译需要 macOS 13.0 或更高版本、Xcode Command Line Tools �
 
 ```bash
 # Linux arm64 精简版
-GOTOOLCHAIN=go1.27.3 \
+GOTOOLCHAIN=go1.27.4 \
   GOOS=linux GOARCH=arm64 CGO_ENABLED=0 \
   go build -tags flavor_tiny -trimpath -o dist/nexttrace-tiny_linux_arm64 -ldflags "-w -s" .
 ```

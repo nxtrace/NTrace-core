@@ -157,7 +157,7 @@ jobs:
     name: Default JSON (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     env:
-      GOTOOLCHAIN: go1.27.3
+      GOTOOLCHAIN: go1.27.4
     strategy:
       fail-fast: false
       matrix:
@@ -173,7 +173,7 @@ jobs:
         if: ${{ (needs.changes.outputs.go == 'true' || needs.changes.outputs.pty == 'true' || needs.changes.outputs.doctor == 'true' || needs.changes.outputs.dns == 'true') }}
         uses: actions/setup-go@v7
         with:
-          go-version: '1.27.3'
+          go-version: '1.27.4'
           check-latest: true
           cache: true
 
@@ -305,7 +305,7 @@ jobs:
     name: Windows ARM64 IPv6 Traffic Class
     runs-on: windows-11-arm
     env:
-      GOTOOLCHAIN: go1.27.3
+      GOTOOLCHAIN: go1.27.4
     steps:
       - name: Checkout codebase
         uses: actions/checkout@v7
@@ -313,7 +313,7 @@ jobs:
       - name: Set up Go (built-in cache)
         uses: actions/setup-go@v7
         with:
-          go-version: '1.27.3'
+          go-version: '1.27.4'
           check-latest: true
           cache: true
 
@@ -326,7 +326,7 @@ jobs:
     name: Race detector (Ubuntu)
     runs-on: ubuntu-latest
     env:
-      GOTOOLCHAIN: go1.27.3
+      GOTOOLCHAIN: go1.27.4
     steps:
       - name: Checkout codebase
         uses: actions/checkout@v7
@@ -334,7 +334,7 @@ jobs:
       - name: Set up Go (built-in cache)
         uses: actions/setup-go@v7
         with:
-          go-version: '1.27.3'
+          go-version: '1.27.4'
           check-latest: true
           cache: true
 

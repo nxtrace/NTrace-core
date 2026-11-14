@@ -214,11 +214,11 @@ Starting from this release, NextTrace is published in **three flavors** under th
 
 ### Manual Build
 
-Build from source with Go 1.27.3+ installed. Release builds and CI use the
+Build from source with Go 1.27.4+ installed. Release builds and CI use the
 default Go JSON runtime. See the [JSON runtime ADR](docs/adr/0001-go127-json-runtime.md).
 
 ```bash
-export GOTOOLCHAIN=go1.27.3
+export GOTOOLCHAIN=go1.27.4
 
 # Full (all features)
 go build -trimpath -o dist/nexttrace -ldflags "-w -s" .
@@ -236,7 +236,7 @@ Cross-compile example:
 
 ```bash
 # Linux arm64, Tiny flavor
-GOTOOLCHAIN=go1.27.3 \
+GOTOOLCHAIN=go1.27.4 \
   GOOS=linux GOARCH=arm64 CGO_ENABLED=0 \
   go build -tags flavor_tiny -trimpath -o dist/nexttrace-tiny_linux_arm64 -ldflags "-w -s" .
 ```

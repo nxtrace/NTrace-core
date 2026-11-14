@@ -1,6 +1,6 @@
 module github.com/nxtrace/NTrace-core
 
-go 1.27.3
+go 1.27.4
 
 tool golang.org/x/perf/cmd/benchstat
 

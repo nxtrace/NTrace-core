@@ -2,7 +2,7 @@
 
 - 状态：接受
 - 日期：2026-11-01（修订 2026-09-05 决策）
-- 工具链：Go 1.27.3
+- 工具链：Go 1.27.4
 - Darwin 最低版本：macOS 13.0
 
 ## 背景
@@ -21,7 +21,7 @@ golden 验证字节和语义。JSON 后端的性能取舍结合实际调用量�
 
 ## 决策
 
-1. 项目固定使用 Go 1.27.3，Darwin 正式产物最低支持 macOS 13.0。
+1. 项目固定使用 Go 1.27.4，Darwin 正式产物最低支持 macOS 13.0。
 2. 源码继续使用 `encoding/json` v1 API，不直接导入 `encoding/json/v2`。
 3. 正式发布、`.cross_compile.sh`、性能和 PGO 脚本统一使用 Go 默认 JSON 后端，
    移除 `nojsonv2` 固定项和 PGO 专用 JSON 后端配置。
