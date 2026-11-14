@@ -29,7 +29,7 @@ const (
 	defaultLanguage         = "cn"
 	defaultQueries          = 3
 	defaultMaxHops          = 30
-	defaultTimeoutMs        = 1000
+	defaultTimeoutMs        = 3000
 	defaultParallelRequests = 18
 	defaultBeginHop         = 1
 	defaultPacketIntervalMs = 50

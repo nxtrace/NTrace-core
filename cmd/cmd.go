@@ -431,7 +431,7 @@ func buildPacketIntervalHelp() string {
 }
 
 func buildTimeoutHelp() string {
-	return "Per-probe timeout [ms]. Raise to 2000-3000 on slow intercontinental or high-loss paths"
+	return "Per-probe timeout [ms]. Increase on slow intercontinental or high-loss paths"
 }
 
 func buildPayloadSizeHelp() string {
@@ -1465,7 +1465,7 @@ func Execute() {
 	// ── Send-time: hidden in ntr (always ignored in MTR mode) ──
 	packetInterval := registerPacketIntervalFlag(parser)
 	ttlInterval := registerTTLIntervalFlag(parser)
-	timeout := parser.Int("", "timeout", &argparse.Options{Default: 1000, Help: buildTimeoutHelp()})
+	timeout := parser.Int("", "timeout", &argparse.Options{Default: 3000, Help: buildTimeoutHelp()})
 	packetSize := parser.Int("", "psize", &argparse.Options{Help: buildPayloadSizeHelp()})
 	tos := parser.Int("Q", "tos", &argparse.Options{Default: 0, Help: buildTOSHelp()})
 	dot := parser.Selector("", "dot-server", []string{"dnssb", "aliyun", "dnspod", "google", "cloudflare"}, &argparse.Options{

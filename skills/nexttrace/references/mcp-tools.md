@@ -33,7 +33,7 @@ Supported:
   "port": 443,
   "queries": 3,
   "max_hops": 30,
-  "timeout_ms": 1000,
+  "timeout_ms": 3000,
   "packet_size": 64,
   "tos": 0,
   "parallel_requests": 18,

@@ -622,7 +622,7 @@ export NO_COLOR=1
 | `--parallel-requests` | Total in-flight probes across TTLs | `18` | Use `1` on multipath/load-balanced paths; keep `6-18` on stable links |
 | `--send-time` | Gap between packets inside one TTL group | `50ms` | Raise to `100-200ms` on rate-limited devices; ignored in MTR |
 | `--ttl-time` | Gap between TTL groups in traceroute; per-hop interval in MTR | traceroute: `300ms`; MTR: `1000ms` when omitted | Lower to speed up; raise on remote/rate-limited paths |
-| `--timeout` | Per-probe timeout | `1000ms` | Raise to `2000-3000ms` for intercontinental or high-loss paths |
+| `--timeout` | Per-probe timeout | `3000ms` | Increase for intercontinental or high-loss paths |
 | `--psize` | Probe packet size | Protocol/IP-family minimum | Inclusive IP + probe headers; negative values randomize each probe up to `abs(value)`; sizes above the egress/path MTU may fragment on wire |
 | `-Q`, `--tos` | IP TOS / traffic class | `0` | Set the full 8-bit IP field (DSCP*4+ECN); nonzero ICMP on Windows amd64 requires `WinDivert` |
 
@@ -1082,9 +1082,9 @@ Arguments:
                                      (--mtr/-r/-w, including --raw), this
                                      becomes per-hop probe interval. 500-1000ms
                                      is a good MTR starting range
-      --timeout                      Per-probe timeout [ms]. Raise to 2000-3000
-                                     on slow intercontinental or high-loss
-                                     paths. Default: 1000
+      --timeout                      Per-probe timeout [ms]. Increase on slow
+                                     intercontinental or high-loss paths.
+                                     Default: 3000
       --psize                        Probe packet size in bytes, inclusive IP
                                      and active probe headers. Default is the
                                      minimum legal size for the chosen protocol
