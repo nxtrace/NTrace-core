@@ -50,6 +50,7 @@ type mtrSchedulerRuntime struct {
 	progressDelay        time.Duration
 	maxConsecErrs        int
 	maxInFlightHop       int
+	nextProbeTTL         int
 	states               []mtrHopState
 	generation           uint64
 	knownFinalTTL        atomic.Int32
@@ -167,6 +168,7 @@ func newMTRSchedulerRuntimeWithSession(
 		progressDelay:        progressDelay,
 		maxConsecErrs:        maxConsecErrs,
 		maxInFlightHop:       maxInFlightHop,
+		nextProbeTTL:         beginHop,
 		states:               make([]mtrHopState, maxHops+1),
 		resultCh:             make(chan mtrCompletedProbe, parallelism*2),
 		metadataCh:           make(chan mtrMetadataResult, parallelism*2),
@@ -816,12 +818,22 @@ func (rt *mtrSchedulerRuntime) scheduleReady() {
 
 	now := time.Now()
 	eMax := rt.effectiveMax()
-	for ttl := rt.beginHop; ttl <= eMax; ttl++ {
+	if rt.nextProbeTTL < rt.beginHop || rt.nextProbeTTL > eMax {
+		rt.nextProbeTTL = rt.beginHop
+	}
+	ttl := rt.nextProbeTTL
+	for scanned := 0; scanned <= eMax-rt.beginHop; scanned++ {
 		if rt.inFlight >= rt.parallelism {
 			return
 		}
 		if rt.canLaunchProbe(ttl, now) {
 			rt.launchProbe(ttl)
+			// Resume after the last launch so saturated slots are shared across TTLs.
+			rt.nextProbeTTL = ttl + 1
+		}
+		ttl++
+		if ttl > eMax {
+			ttl = rt.beginHop
 		}
 	}
 }
@@ -880,6 +892,7 @@ func (rt *mtrSchedulerRuntime) handleReset() {
 	for idx := range rt.states {
 		rt.states[idx] = mtrHopState{}
 	}
+	rt.nextProbeTTL = rt.beginHop
 	clear(rt.metadataGeoInFlight)
 	clear(rt.metadataHostInFlight)
 	clear(rt.metadataCache)

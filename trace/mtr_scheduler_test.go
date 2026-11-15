@@ -3128,6 +3128,83 @@ func TestScheduler_FinalHopSntNotInflated_WithLowering(t *testing.T) {
 // Multi in-flight per hop: high-loss hops should accumulate Snt equally
 // ---------------------------------------------------------------------------
 
+func TestScheduler_SaturatedCapacitySharesProbesAcrossReadyHops(t *testing.T) {
+	prober := &mockTTLProber{}
+	workers := newMTRWorkerSession(t.Context())
+	defer workers.shutdown(func() { _ = prober.Close() })
+	rt, err := newMTRSchedulerRuntimeWithSession(workers, prober, NewMTRAggregator(), mtrSchedulerConfig{
+		BeginHop:          5,
+		MaxHops:           8,
+		HopInterval:       time.Second,
+		MaxInFlightPerHop: 3,
+		ParallelRequests:  2,
+	}, nil, nil)
+	if err != nil {
+		t.Fatalf("newMTRSchedulerRuntimeWithSession returned error: %v", err)
+	}
+
+	rt.scheduleReady()
+	for launched := rt.inFlight; launched < 12; launched++ {
+		select {
+		case completed := <-rt.resultCh:
+			rt.processResult(completed)
+		case <-time.After(time.Second):
+			t.Fatal("probe did not finish")
+		}
+		// All hops become due while the previous probes occupy the global slots.
+		for ttl := rt.beginHop; ttl <= rt.maxHops; ttl++ {
+			rt.states[ttl].nextAt = time.Time{}
+		}
+		rt.scheduleReady()
+		if got := rt.inFlight; got != rt.parallelism {
+			t.Fatalf("in-flight probes = %d, want %d", got, rt.parallelism)
+		}
+	}
+
+	for ttl := rt.beginHop; ttl <= rt.maxHops; ttl++ {
+		state := rt.states[ttl]
+		if got := state.completed + state.inFlightCount; got != 3 {
+			t.Errorf("TTL %d: dispatched probes = %d, want 3 under saturated capacity", ttl, got)
+		}
+	}
+}
+
+func TestScheduler_SchedulingContinuesAfterDestinationBoundsShrink(t *testing.T) {
+	prober := &mockTTLProber{}
+	workers := newMTRWorkerSession(t.Context())
+	defer workers.shutdown(func() { _ = prober.Close() })
+	rt, err := newMTRSchedulerRuntimeWithSession(workers, prober, NewMTRAggregator(), mtrSchedulerConfig{
+		BeginHop:         5,
+		MaxHops:          8,
+		HopInterval:      time.Second,
+		ParallelRequests: 2,
+	}, nil, nil)
+	if err != nil {
+		t.Fatalf("newMTRSchedulerRuntimeWithSession returned error: %v", err)
+	}
+
+	rt.scheduleReady()
+	for range 2 {
+		select {
+		case completed := <-rt.resultCh:
+			rt.processResult(completed)
+		case <-time.After(time.Second):
+			t.Fatal("probe did not finish")
+		}
+	}
+	rt.observeProbeResponse(5, &MTRProbeResponse{Kind: MTRResponseDestination})
+	rt.states[5].nextAt = time.Time{}
+	rt.scheduleReady()
+	if got := rt.states[5].inFlightCount; got != 1 {
+		t.Fatalf("destination in-flight probes = %d, want 1 after the active TTL range shrinks", got)
+	}
+	for ttl := 6; ttl <= rt.maxHops; ttl++ {
+		if got := rt.states[ttl].inFlightCount; got != 0 {
+			t.Errorf("disabled TTL %d: in-flight probes = %d, want 0", ttl, got)
+		}
+	}
+}
+
 func TestScheduler_MultiInFlightPerHop_HighLossEqualSnt(t *testing.T) {
 	// This test reproduces the original bug: when each TTL allows only 1
 	// in-flight probe and nextAt is based on completion time, a TTL with
