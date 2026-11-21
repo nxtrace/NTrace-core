@@ -1180,6 +1180,8 @@ nexttrace --deploy --mcp --listen 0.0.0.0:1080 --deploy-token "$TOKEN"
 
 Loopback listen addresses (`127.0.0.1`, `::1`, `localhost`) are tokenless by default. External listen addresses require a token; if none is set with `--deploy-token` or `NEXTTRACE_DEPLOY_TOKEN`, NextTrace generates one and prints it to stdout. API, WebSocket, and MCP clients may use `Authorization: Bearer <token>` or `X-NextTrace-Token`; browser WebUI users can sign in at `/auth/login`.
 
+In tokenless mode, the request `Host` must be `localhost` or a loopback IP address. A custom hostname requires deploy token authentication.
+
 ### Register MCP in Agent clients
 
 Start NextTrace first. The MCP endpoint is Streamable HTTP, not stdio:

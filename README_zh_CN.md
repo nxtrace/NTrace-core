@@ -1180,6 +1180,8 @@ nexttrace --deploy --mcp --listen 0.0.0.0:1080 --deploy-token "$TOKEN"
 
 监听 loopback 地址（`127.0.0.1`、`::1`、`localhost`）时默认免 token。监听外网地址时必须启用 token；如果没有通过 `--deploy-token` 或 `NEXTTRACE_DEPLOY_TOKEN` 设置，NextTrace 会启动时随机生成 token 并输出到 stdout。若 stdout 会被日志系统、CI 控制台或平台采集，建议通过 `--deploy-token` 或 `NEXTTRACE_DEPLOY_TOKEN` 显式提供 token，避免泄漏。API、WebSocket 与 MCP 客户端可使用 `Authorization: Bearer <token>` 或 `X-NextTrace-Token`；浏览器 WebUI 用户可访问 `/auth/login` 登录。
 
+免 token 模式只接受 `Host` 为 `localhost` 或回环 IP 地址的请求。自定义域名须启用 token 鉴权。
+
 ### 在 Agent 客户端注册 MCP
 
 先启动 NextTrace。MCP endpoint 是 Streamable HTTP，不是 stdio：

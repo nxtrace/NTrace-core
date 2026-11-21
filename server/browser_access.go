@@ -1,6 +1,7 @@
 package server
 
 import (
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -33,8 +34,24 @@ func browserOriginAllowed(r *http.Request) bool {
 	return strings.EqualFold(u.Host, r.Host)
 }
 
-func browserAccessMiddleware() gin.HandlerFunc {
+func isLoopbackRequestHost(authority string) bool {
+	host, _, err := net.SplitHostPort(authority)
+	if err != nil {
+		host = authority
+		if strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]") {
+			return net.ParseIP(host[1 : len(host)-1]).IsLoopback()
+		}
+	}
+	return strings.EqualFold(host, "localhost") || net.ParseIP(host).IsLoopback()
+}
+
+func browserAccessMiddleware(requireLoopbackHost bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Matching Origin and Host alone does not protect tokenless deploy from DNS rebinding.
+		if requireLoopbackHost && !isLoopbackRequestHost(c.Request.Host) {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "deploy without a token requires a loopback host"})
+			return
+		}
 		if !browserOriginAllowed(c.Request) {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "cross-origin browser access is disabled"})
 			return
