@@ -60,15 +60,11 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
 ### Automated Install
 
 - Debian / Ubuntu
-  - Recommended: install from the official `nexttrace-debs` APT repository
+  - Recommended: install from the official APT repository at `apt.nxtrace.org`
     - Supports: `amd64`, `i386`, `arm64`, `armel`, `armhf`, `loong64`, `mipsel`, `mips64el`, `ppc64el`, `riscv64`, `s390x`
-    - Add the repository and install the default package:
+    - Set up the repository, then refresh APT and install NextTrace. Requires `curl`, Bash, and `sudo` privileges:
       ```shell
-      sudo install -d -m 0755 /etc/apt/keyrings
-      curl -fsSL -o /tmp/nexttrace-archive-keyring.gpg https://github.com/nxtrace/nexttrace-debs/releases/latest/download/nexttrace-archive-keyring.gpg
-      sudo install -m 0644 /tmp/nexttrace-archive-keyring.gpg /etc/apt/keyrings/nexttrace.gpg
-      rm -f /tmp/nexttrace-archive-keyring.gpg
-      printf '%s\n' 'Types: deb' 'URIs: https://github.com/nxtrace/nexttrace-debs/releases/latest/download/' 'Suites: ./' 'Signed-By: /etc/apt/keyrings/nexttrace.gpg' | sudo tee /etc/apt/sources.list.d/nexttrace.sources >/dev/null
+      curl -fsSL https://apt.nxtrace.org/setup-apt.sh | bash
       sudo apt update
       sudo apt install nexttrace
       ```
@@ -78,6 +74,8 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
       sudo apt install ntr
       ```
     - Packages can be installed side by side. Commands: `nexttrace`, `nexttrace-tiny`, `ntr`
+    - To switch from GitHub, run the setup script. It backs up the standard `nexttrace.sources` entry before switching. For custom entries or legacy `.list` files, back up and disable the old entry first. See the [manual APT setup and switching guide](https://github.com/nxtrace/nexttrace-debs/blob/main/README.md).
+    - The [legacy GitHub APT source](https://github.com/nxtrace/nexttrace-debs/releases/latest/download/) remains available. To switch back, disable the new source, restore the backup, and run `sudo apt update`. To configure the legacy source manually, use the GitHub URL in `URIs`, omit `By-Hash: force`, and install the [GitHub archive key](https://github.com/nxtrace/nexttrace-debs/releases/latest/download/nexttrace-archive-keyring.gpg) if needed.
 
 - Linux / macOS / BSD
   - One-click installation script (Full, default)
