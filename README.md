@@ -60,17 +60,21 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
 ### Automated Install
 
 - Debian / Ubuntu
-  - Recommended: install from the official `nexttrace-debs` APT repository
+  - Recommended: install from the official APT repository at `apt.nxtrace.org`
     - Supports: `amd64`, `i386`, `arm64`, `armel`, `armhf`, `loong64`, `mipsel`, `mips64el`, `ppc64el`, `riscv64`, `s390x`
     - Add the repository and install the default package:
       ```shell
-      sudo install -d -m 0755 /etc/apt/keyrings
-      curl -fsSL -o /tmp/nexttrace-archive-keyring.gpg https://github.com/nxtrace/nexttrace-debs/releases/latest/download/nexttrace-archive-keyring.gpg
-      sudo install -m 0644 /tmp/nexttrace-archive-keyring.gpg /etc/apt/keyrings/nexttrace.gpg
-      rm -f /tmp/nexttrace-archive-keyring.gpg
-      printf '%s\n' 'Types: deb' 'URIs: https://github.com/nxtrace/nexttrace-debs/releases/latest/download/' 'Suites: ./' 'Signed-By: /etc/apt/keyrings/nexttrace.gpg' | sudo tee /etc/apt/sources.list.d/nexttrace.sources >/dev/null
-      sudo apt update
-      sudo apt install nexttrace
+      (
+        set -e
+        key_tmp=$(mktemp)
+        trap 'rm -f "$key_tmp"' EXIT
+        curl -fsSL -o "$key_tmp" https://apt.nxtrace.org/nexttrace-archive-keyring.gpg
+        sudo install -d -m 0755 /etc/apt/keyrings
+        sudo install -m 0644 "$key_tmp" /etc/apt/keyrings/nexttrace.gpg
+        printf '%s\n' 'Types: deb' 'URIs: https://apt.nxtrace.org/' 'Suites: ./' 'Signed-By: /etc/apt/keyrings/nexttrace.gpg' 'By-Hash: force' | sudo tee /etc/apt/sources.list.d/nexttrace.sources >/dev/null
+        sudo apt update
+        sudo apt install nexttrace
+      )
       ```
     - Optionally install additional flavors:
       ```shell
@@ -78,6 +82,8 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
       sudo apt install ntr
       ```
     - Packages can be installed side by side. Commands: `nexttrace`, `nexttrace-tiny`, `ntr`
+    - To switch from GitHub, back up and disable the old NextTrace entry. Use the `printf` command above to write the new source, then run `sudo apt update`. Reuse the installed keyring. If the old entry used `Trusted: yes` or `trusted=yes`, install the keyring as shown above first.
+    - The [legacy GitHub APT source](https://github.com/nxtrace/nexttrace-debs/releases/latest/download/) remains available. To switch back, disable the new source, restore the backup, and run `sudo apt update`. For a fresh legacy configuration, use the GitHub URL in `URIs`, omit `By-Hash: force`, and install the [GitHub archive key](https://github.com/nxtrace/nexttrace-debs/releases/latest/download/nexttrace-archive-keyring.gpg) if needed.
 
 - Linux / macOS / BSD
   - One-click installation script (Full, default)
