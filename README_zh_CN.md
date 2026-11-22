@@ -66,19 +66,11 @@ Document Language: [English](README.md) | 简体中文
 - Debian / Ubuntu
   - 推荐：通过 `apt.nxtrace.org` 官方 APT 源安装
     - 当前支持：`amd64`、`i386`、`arm64`、`armel`、`armhf`、`loong64`、`mipsel`、`mips64el`、`ppc64el`、`riscv64`、`s390x`
-    - 添加源并安装默认包：
+    - 需要 `curl`、Bash 和 `sudo` 权限。先配置源，再刷新索引并安装 NextTrace。
       ```shell
-      (
-        set -e
-        key_tmp=$(mktemp)
-        trap 'rm -f "$key_tmp"' EXIT
-        curl -fsSL -o "$key_tmp" https://apt.nxtrace.org/nexttrace-archive-keyring.gpg
-        sudo install -d -m 0755 /etc/apt/keyrings
-        sudo install -m 0644 "$key_tmp" /etc/apt/keyrings/nexttrace.gpg
-        printf '%s\n' 'Types: deb' 'URIs: https://apt.nxtrace.org/' 'Suites: ./' 'Signed-By: /etc/apt/keyrings/nexttrace.gpg' 'By-Hash: force' | sudo tee /etc/apt/sources.list.d/nexttrace.sources >/dev/null
-        sudo apt update
-        sudo apt install nexttrace
-      )
+      curl -fsSL https://apt.nxtrace.org/setup-apt.sh | bash
+      sudo apt update
+      sudo apt install nexttrace
       ```
     - 可选：安装额外的 flavor：
       ```shell
@@ -86,8 +78,8 @@ Document Language: [English](README.md) | 简体中文
       sudo apt install ntr
       ```
     - 三个包可以共存安装，对应命令分别是：`nexttrace`、`nexttrace-tiny`、`ntr`
-    - 从 GitHub 切换时，先备份并停用原 NextTrace 条目，再用上方的 `printf` 命令写入新源，运行 `sudo apt update`。可继续使用已安装的公钥。旧条目使用 `Trusted: yes` 或 `trusted=yes` 时，先按上方步骤安装公钥。
-    - [GitHub 旧源](https://github.com/nxtrace/nexttrace-debs/releases/latest/download/)仍可继续使用。回退时停用新源、恢复备份，再运行 `sudo apt update`。首次配置旧源时，将 `URIs` 改为 GitHub 地址，省略 `By-Hash: force`。尚未安装公钥时，改用 [GitHub 公钥下载地址](https://github.com/nxtrace/nexttrace-debs/releases/latest/download/nexttrace-archive-keyring.gpg)。
+    - 从 GitHub 切换时，可直接运行配置脚本，标准 `nexttrace.sources` 会先备份再迁移。自定义条目或旧 `.list` 文件，请先备份并停用。详见 [APT 手动配置和切换说明](https://github.com/nxtrace/nexttrace-debs/blob/main/README.md)。
+    - [GitHub 旧源](https://github.com/nxtrace/nexttrace-debs/releases/latest/download/)仍可继续使用。回退时停用新源、恢复备份，再运行 `sudo apt update`。手动配置旧源时，将 `URIs` 改为 GitHub 地址，省略 `By-Hash: force`。尚未安装公钥时，可使用 [GitHub 公钥下载地址](https://github.com/nxtrace/nexttrace-debs/releases/latest/download/nexttrace-archive-keyring.gpg)。
 
 - Linux / macOS / BSD
   - 一键安装脚本（完整版，默认）
