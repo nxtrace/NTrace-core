@@ -69,7 +69,7 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
         trap 'rm -f "$setup_script"' EXIT
         curl -fsSL -o "$setup_script" https://apt.nxtrace.org/setup-apt.sh &&
           bash "$setup_script" &&
-          sudo apt update &&
+          sudo apt-get update --error-on=any &&
           sudo apt install nexttrace
       )
       ```

@@ -73,7 +73,7 @@ Document Language: [English](README.md) | 简体中文
         trap 'rm -f "$setup_script"' EXIT
         curl -fsSL -o "$setup_script" https://apt.nxtrace.org/setup-apt.sh &&
           bash "$setup_script" &&
-          sudo apt update &&
+          sudo apt-get update --error-on=any &&
           sudo apt install nexttrace
       )
       ```
