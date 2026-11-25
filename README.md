@@ -64,9 +64,14 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
     - Supports: `amd64`, `i386`, `arm64`, `armel`, `armhf`, `loong64`, `mipsel`, `mips64el`, `ppc64el`, `riscv64`, `s390x`
     - Set up the repository, then refresh APT and install NextTrace. Requires `curl`, Bash, and `sudo` privileges:
       ```shell
-      curl -fsSL https://apt.nxtrace.org/setup-apt.sh | bash
-      sudo apt update
-      sudo apt install nexttrace
+      (
+        setup_script=$(mktemp) || exit
+        trap 'rm -f "$setup_script"' EXIT
+        curl -fsSL -o "$setup_script" https://apt.nxtrace.org/setup-apt.sh &&
+          bash "$setup_script" &&
+          sudo apt update &&
+          sudo apt install nexttrace
+      )
       ```
     - Optionally install additional flavors:
       ```shell

@@ -68,9 +68,14 @@ Document Language: [English](README.md) | 简体中文
     - 当前支持：`amd64`、`i386`、`arm64`、`armel`、`armhf`、`loong64`、`mipsel`、`mips64el`、`ppc64el`、`riscv64`、`s390x`
     - 需要 `curl`、Bash 和 `sudo` 权限。先配置源，再刷新索引并安装 NextTrace。
       ```shell
-      curl -fsSL https://apt.nxtrace.org/setup-apt.sh | bash
-      sudo apt update
-      sudo apt install nexttrace
+      (
+        setup_script=$(mktemp) || exit
+        trap 'rm -f "$setup_script"' EXIT
+        curl -fsSL -o "$setup_script" https://apt.nxtrace.org/setup-apt.sh &&
+          bash "$setup_script" &&
+          sudo apt update &&
+          sudo apt install nexttrace
+      )
       ```
     - 可选：安装额外的 flavor：
       ```shell
