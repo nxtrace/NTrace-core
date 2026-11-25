@@ -8,7 +8,7 @@ require (
 	github.com/akamensky/argparse v1.4.0
 	github.com/ameshkov/dnscrypt/v2 v2.4.0
 	github.com/charmbracelet/log v1.0.0
-	github.com/charmbracelet/x/ansi v0.11.9
+	github.com/charmbracelet/x/ansi v0.11.10
 	github.com/fatih/color v1.19.0
 	github.com/gin-gonic/gin v1.12.0
 	github.com/google/gopacket v1.1.19
