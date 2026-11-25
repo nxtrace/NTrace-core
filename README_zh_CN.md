@@ -66,7 +66,7 @@ Document Language: [English](README.md) | 简体中文
 - Debian / Ubuntu
   - 推荐：通过 `apt.nxtrace.org` 官方 APT 源安装
     - 当前支持：`amd64`、`i386`、`arm64`、`armel`、`armhf`、`loong64`、`mipsel`、`mips64el`、`ppc64el`、`riscv64`、`s390x`
-    - 需要 `curl`、Bash 和 `sudo` 权限。先配置源，再刷新索引并安装 NextTrace。
+    - 需要 `curl`、Bash、`sudo` 权限，以及支持 `--error-on=any` 的 APT。旧版 APT 可使用下方的一键安装脚本。
       ```shell
       (
         setup_script=$(mktemp) || exit

@@ -62,7 +62,7 @@ Please note, there are exceptions to this synchronization. If a version of NTrac
 - Debian / Ubuntu
   - Recommended: install from the official APT repository at `apt.nxtrace.org`
     - Supports: `amd64`, `i386`, `arm64`, `armel`, `armhf`, `loong64`, `mipsel`, `mips64el`, `ppc64el`, `riscv64`, `s390x`
-    - Set up the repository, then refresh APT and install NextTrace. Requires `curl`, Bash, and `sudo` privileges:
+    - Requires `curl`, Bash, `sudo` privileges, and APT with `--error-on=any` support. For APT versions without this option, use the one-click installer below.
       ```shell
       (
         setup_script=$(mktemp) || exit
