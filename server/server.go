@@ -68,34 +68,7 @@ func RunWithOptions(opts Options, onReady func(net.Addr)) error {
 
 	auth := deployAuth{Enabled: opts.AuthEnabled, Token: deployToken}
 	gin.SetMode(gin.ReleaseMode)
-	router := gin.New()
-	router.Use(gin.Logger(), gin.Recovery())
-	router.Use(browserAccessMiddleware())
-	registerDeployAuthRoutes(router, auth)
-	router.Use(deployAuthMiddleware(auth))
-
-	router.OPTIONS("/*path", func(c *gin.Context) {
-		c.Status(http.StatusNoContent)
-	})
-
-	router.GET("/", func(c *gin.Context) {
-		c.Data(http.StatusOK, "text/html; charset=utf-8", indexPage)
-	})
-
-	router.StaticFS("/assets", http.FS(assetsFS))
-
-	router.GET("/api/options", optionsHandler)
-	router.POST("/api/trace", traceHandler)
-	router.POST("/api/cache/clear", cacheClearHandler)
-	router.GET("/ws/trace", traceWebsocketHandler)
-	if opts.EnableMCP {
-		mcpHandler := gin.WrapH(newMCPHTTPHandler())
-		router.GET("/mcp", mcpHandler)
-		router.POST("/mcp", mcpHandler)
-		router.DELETE("/mcp", mcpHandler)
-	}
-
-	srv := newHTTPServer(listenAddr, router)
+	srv := newHTTPServer(listenAddr, newDeployRouter(auth, opts.EnableMCP))
 	listener, err := listenHTTP(listenAddr)
 	if err != nil {
 		return err
@@ -120,6 +93,37 @@ func RunWithOptions(opts Options, onReady func(net.Addr)) error {
 	}
 
 	return nil
+}
+
+func newDeployRouter(auth deployAuth, enableMCP bool) *gin.Engine {
+	router := gin.New()
+	router.Use(gin.Logger(), gin.Recovery())
+	router.Use(browserAccessMiddleware(!auth.Enabled))
+	registerDeployAuthRoutes(router, auth)
+	router.Use(deployAuthMiddleware(auth))
+
+	router.OPTIONS("/*path", func(c *gin.Context) {
+		c.Status(http.StatusNoContent)
+	})
+
+	router.GET("/", func(c *gin.Context) {
+		c.Data(http.StatusOK, "text/html; charset=utf-8", indexPage)
+	})
+
+	router.StaticFS("/assets", http.FS(assetsFS))
+
+	router.GET("/api/options", optionsHandler)
+	router.POST("/api/trace", traceHandler)
+	router.POST("/api/cache/clear", cacheClearHandler)
+	router.GET("/ws/trace", traceWebsocketHandler)
+	if enableMCP {
+		mcpHandler := gin.WrapH(newMCPHTTPHandler())
+		router.GET("/mcp", mcpHandler)
+		router.POST("/mcp", mcpHandler)
+		router.DELETE("/mcp", mcpHandler)
+	}
+
+	return router
 }
 
 func newHTTPServer(listenAddr string, handler http.Handler) *http.Server {

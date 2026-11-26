@@ -64,15 +64,11 @@ Document Language: [English](README.md) | 简体中文
 ### Automated Install
 
 - Debian / Ubuntu
-  - 推荐：通过官方 `nexttrace-debs` APT 源安装
+  - 推荐：通过 `apt.nxtrace.org` 官方 APT 源安装
     - 当前支持：`amd64`、`i386`、`arm64`、`armel`、`armhf`、`loong64`、`mipsel`、`mips64el`、`ppc64el`、`riscv64`、`s390x`
-    - 添加源并安装默认包：
+    - 需要 `curl`、Bash 和 `sudo` 权限。先配置源，再刷新索引并安装 NextTrace。
       ```shell
-      sudo install -d -m 0755 /etc/apt/keyrings
-      curl -fsSL -o /tmp/nexttrace-archive-keyring.gpg https://github.com/nxtrace/nexttrace-debs/releases/latest/download/nexttrace-archive-keyring.gpg
-      sudo install -m 0644 /tmp/nexttrace-archive-keyring.gpg /etc/apt/keyrings/nexttrace.gpg
-      rm -f /tmp/nexttrace-archive-keyring.gpg
-      printf '%s\n' 'Types: deb' 'URIs: https://github.com/nxtrace/nexttrace-debs/releases/latest/download/' 'Suites: ./' 'Signed-By: /etc/apt/keyrings/nexttrace.gpg' | sudo tee /etc/apt/sources.list.d/nexttrace.sources >/dev/null
+      curl -fsSL https://apt.nxtrace.org/setup-apt.sh | bash
       sudo apt update
       sudo apt install nexttrace
       ```
@@ -82,6 +78,8 @@ Document Language: [English](README.md) | 简体中文
       sudo apt install ntr
       ```
     - 三个包可以共存安装，对应命令分别是：`nexttrace`、`nexttrace-tiny`、`ntr`
+    - 从 GitHub 切换时，可直接运行配置脚本，标准 `nexttrace.sources` 会先备份再迁移。自定义条目或旧 `.list` 文件，请先备份并停用。详见 [APT 手动配置和切换说明](https://github.com/nxtrace/nexttrace-debs/blob/main/README.md)。
+    - [GitHub 旧源](https://github.com/nxtrace/nexttrace-debs/releases/latest/download/)仍可继续使用。回退时停用新源、恢复备份，再运行 `sudo apt update`。手动配置旧源时，将 `URIs` 改为 GitHub 地址，省略 `By-Hash: force`。尚未安装公钥时，可使用 [GitHub 公钥下载地址](https://github.com/nxtrace/nexttrace-debs/releases/latest/download/nexttrace-archive-keyring.gpg)。
 
 - Linux / macOS / BSD
   - 一键安装脚本（完整版，默认）
@@ -1179,6 +1177,8 @@ nexttrace --deploy --mcp --listen 0.0.0.0:1080 --deploy-token "$TOKEN"
 ```
 
 监听 loopback 地址（`127.0.0.1`、`::1`、`localhost`）时默认免 token。监听外网地址时必须启用 token；如果没有通过 `--deploy-token` 或 `NEXTTRACE_DEPLOY_TOKEN` 设置，NextTrace 会启动时随机生成 token 并输出到 stdout。若 stdout 会被日志系统、CI 控制台或平台采集，建议通过 `--deploy-token` 或 `NEXTTRACE_DEPLOY_TOKEN` 显式提供 token，避免泄漏。API、WebSocket 与 MCP 客户端可使用 `Authorization: Bearer <token>` 或 `X-NextTrace-Token`；浏览器 WebUI 用户可访问 `/auth/login` 登录。
+
+免 token 模式只接受 `Host` 为 `localhost` 或回环 IP 地址的请求。自定义域名须启用 token 鉴权。
 
 ### 在 Agent 客户端注册 MCP
 

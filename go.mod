@@ -8,7 +8,7 @@ require (
 	github.com/akamensky/argparse v1.4.0
 	github.com/ameshkov/dnscrypt/v2 v2.4.0
 	github.com/charmbracelet/log v1.0.0
-	github.com/charmbracelet/x/ansi v0.11.9
+	github.com/charmbracelet/x/ansi v0.11.10
 	github.com/fatih/color v1.19.0
 	github.com/gin-gonic/gin v1.12.0
 	github.com/google/gopacket v1.1.19
@@ -27,14 +27,14 @@ require (
 	github.com/sthorne/odoh-go v1.0.4
 	github.com/stretchr/testify v1.12.1
 	github.com/syndtr/gocapability v0.0.0-20200815063812-42c35b437635
-	github.com/tidwall/gjson v1.20.1
+	github.com/tidwall/gjson v1.20.5
 	github.com/tsosunchia/powclient v0.3.0
 	github.com/xjasonlyu/windivert-go v0.0.0-20201010013527-4239d0afa76f
-	golang.org/x/mod v0.42.0
-	golang.org/x/net v0.62.0
+	golang.org/x/mod v0.43.0
+	golang.org/x/net v0.63.0
 	golang.org/x/sync v0.25.0
-	golang.org/x/sys v0.49.0
-	golang.org/x/term v0.47.0
+	golang.org/x/sys v0.50.0
+	golang.org/x/term v0.48.0
 )
 
 require (
@@ -89,7 +89,7 @@ require (
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/tidwall/match v1.2.0 // indirect
-	github.com/tidwall/pretty v1.2.1 // indirect
+	github.com/tidwall/pretty v1.3.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.3.1 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
@@ -97,11 +97,11 @@ require (
 	go.mongodb.org/mongo-driver/v2 v2.5.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/arch v0.22.0 // indirect
-	golang.org/x/crypto v0.58.0 // indirect
+	golang.org/x/crypto v0.59.0 // indirect
 	golang.org/x/exp v0.0.0-20260812173653-3d80eb74bc5b // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/perf v0.0.0-20260825160852-19be9d8e6c70 // indirect
-	golang.org/x/text v0.43.0 // indirect
+	golang.org/x/text v0.44.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
